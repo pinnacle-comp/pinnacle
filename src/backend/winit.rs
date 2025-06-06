@@ -289,16 +289,6 @@ impl Winit {
             );
         }
 
-        self.output.with_state_mut(|state| {
-            if state
-                .layout_transaction
-                .as_ref()
-                .is_some_and(|ts| ts.ready())
-            {
-                state.layout_transaction.take();
-            }
-        });
-
         let should_blank = pinnacle.lock_state.is_locking()
             || (pinnacle.lock_state.is_locked()
                 && self.output.with_state(|state| state.lock_surface.is_none()));
@@ -328,6 +318,7 @@ impl Winit {
                 &self.output,
                 self.backend.renderer(),
                 &pinnacle.space,
+                &pinnacle.z_index_stack,
             ));
         }
 

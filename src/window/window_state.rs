@@ -4,7 +4,6 @@ use std::sync::atomic::{AtomicU32, Ordering};
 
 use indexmap::IndexSet;
 use smithay::{
-    backend::renderer::element::Id,
     desktop::{layer_map_for_output, WindowSurface},
     reexports::wayland_protocols::xdg::{
         decoration::zv1::server::zxdg_toplevel_decoration_v1, shell::server::xdg_toplevel,
@@ -15,9 +14,10 @@ use smithay::{
 use tracing::warn;
 
 use crate::{
-    layout::transaction::LayoutSnapshot,
+    render::util::snapshot::WindowSnapshot,
     state::{Pinnacle, WithState},
     tag::Tag,
+    util::transaction::Transaction,
 };
 
 use super::{Unmapped, WindowElement};
@@ -328,24 +328,14 @@ pub struct WindowElementState {
     pub tags: IndexSet<Tag>,
     pub layout_mode: LayoutMode,
     pub minimized: bool,
-    /// The most recent serial that has been committed.
-    pub committed_serial: Option<Serial>,
-    pub snapshot: Option<LayoutSnapshot>,
-    pub snapshot_hook_id: Option<HookId>,
+    pub snapshot: Option<WindowSnapshot>,
+    pub mapped_hook_id: Option<HookId>,
     pub decoration_mode: Option<zxdg_toplevel_decoration_v1::Mode>,
-    pub floating_loc: Option<Point<f64, Logical>>,
+    pub floating_x: Option<i32>,
+    pub floating_y: Option<i32>,
     pub floating_size: Size<i32, Logical>,
 
-    /// The id of a snapshot element if any.
-    ///
-    /// When updating the primary scanout output, Smithay looks at the ids of all elements drawn on
-    /// screen. If it matches the ids of this window's elements, the primary output is updated.
-    /// However, when a snapshot is rendering, the snapshot's element id is different from this
-    /// window's ids. Therefore, we clone that snapshot's id into this field and use it to update
-    /// the primary output when necessary.
-    ///
-    /// See [`Pinnacle::update_primary_scanout_output`] for more details.
-    pub offscreen_elem_id: Option<Id>,
+    pub pending_transactions: Vec<(Serial, Transaction)>,
 }
 
 impl WindowElement {
@@ -468,7 +458,7 @@ impl Pinnacle {
                 window.set_floating_states();
 
                 let (size, loc) =
-                    window.with_state(|state| (state.floating_size, state.floating_loc));
+                    window.with_state(|state| (state.floating_size, state.floating_loc()));
 
                 match window.underlying_surface() {
                     WindowSurface::Wayland(toplevel) => {
@@ -482,10 +472,8 @@ impl Pinnacle {
                             // Setting a zero size seems to be a nono
                             return;
                         }
-                        let loc = loc.unwrap_or_else(|| surface.geometry().loc.to_f64());
-                        if let Err(err) =
-                            surface.configure(Some(Rectangle::new(loc.to_i32_round(), size)))
-                        {
+                        let loc = loc.unwrap_or_else(|| surface.geometry().loc);
+                        if let Err(err) = surface.configure(Some(Rectangle::new(loc, size))) {
                             warn!("Failed to configure xwayland window: {err}");
                         }
                     }
@@ -592,15 +580,29 @@ impl WindowElementState {
             id: WindowId::next(),
             tags: Default::default(),
             layout_mode: LayoutMode::new_tiled(),
-            floating_loc: None,
+            floating_x: Default::default(),
+            floating_y: Default::default(),
             floating_size: Default::default(),
             minimized: false,
-            committed_serial: None,
             snapshot: None,
-            snapshot_hook_id: None,
+            mapped_hook_id: None,
             decoration_mode: None,
-            offscreen_elem_id: None,
+            pending_transactions: Default::default(),
         }
+    }
+
+    pub fn floating_loc(&self) -> Option<Point<i32, Logical>> {
+        if let (Some(x), Some(y)) = (self.floating_x, self.floating_y) {
+            Some(Point::from((x, y)))
+        } else {
+            None
+        }
+    }
+
+    pub fn set_floating_loc(&mut self, loc: impl Into<Option<Point<i32, Logical>>>) {
+        let loc: Option<Point<_, _>> = loc.into();
+        self.floating_x = loc.map(|loc| loc.x);
+        self.floating_y = loc.map(|loc| loc.y);
     }
 }
 

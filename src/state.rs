@@ -26,14 +26,14 @@ use crate::{
         output_power_management::OutputPowerManagementState,
         screencopy::ScreencopyManagerState,
     },
-    window::{rules::WindowRuleState, Unmapped, WindowElement},
+    window::{rules::WindowRuleState, Unmapped, WindowElement, ZIndexElement},
 };
 use anyhow::Context;
 use indexmap::IndexMap;
 use smithay::{
     backend::renderer::element::{
-        default_primary_scanout_output_compare, utils::select_dmabuf_feedback, Id,
-        PrimaryScanoutOutput, RenderElementState, RenderElementStates,
+        default_primary_scanout_output_compare, utils::select_dmabuf_feedback, RenderElementState,
+        RenderElementStates,
     },
     desktop::{
         layer_map_for_output,
@@ -59,10 +59,11 @@ use smithay::{
             Client, Display, DisplayHandle,
         },
     },
-    utils::{Clock, Logical, Monotonic, Point},
+    utils::{Clock, HookId, Logical, Monotonic, Point},
     wayland::{
         compositor::{
-            self, with_surface_tree_downward, CompositorClientState, CompositorState, SurfaceData,
+            self, with_surface_tree_downward, CompositorClientState, CompositorHandler,
+            CompositorState, SurfaceData,
         },
         cursor_shape::CursorShapeManagerState,
         fractional_scale::{with_fractional_scale, FractionalScaleManagerState},
@@ -100,7 +101,7 @@ use std::{
     collections::{HashMap, HashSet},
     ffi::OsString,
     path::PathBuf,
-    sync::{Arc, Mutex},
+    sync::Arc,
     time::Duration,
 };
 use sysinfo::{ProcessRefreshKind, RefreshKind};
@@ -176,8 +177,9 @@ pub struct Pinnacle {
     pub input_state: InputState,
 
     pub output_focus_stack: OutputFocusStack,
+
     /// The z-index stack, bottom to top
-    pub z_index_stack: Vec<WindowElement>,
+    pub z_index_stack: Vec<ZIndexElement>,
 
     pub popup_manager: PopupManager,
 
@@ -222,6 +224,11 @@ pub struct Pinnacle {
     pub cursor_state: CursorState,
 
     pub pointer_focus: Option<(<State as SeatHandler>::PointerFocus, Point<f64, Logical>)>,
+
+    pub blocker_cleared_tx: std::sync::mpsc::Sender<Client>,
+    pub blocker_cleared_rx: std::sync::mpsc::Receiver<Client>,
+
+    pub dmabuf_hooks: HashMap<WlSurface, HookId>,
 }
 
 #[cfg(feature = "snowcap")]
@@ -237,6 +244,9 @@ impl State {
     pub fn on_event_loop_cycle_completion(&mut self) {
         let _span = tracy_client::span!("State::on_event_loop_cycle_completion");
 
+        self.notify_blocker_cleared();
+        self.update_layout();
+
         self.pinnacle.fixup_z_layering();
         self.pinnacle.space.refresh();
         self.pinnacle.update_window_tags();
@@ -247,22 +257,6 @@ impl State {
         self.pinnacle.refresh_idle_inhibit();
 
         self.backend.render_scheduled_outputs(&mut self.pinnacle);
-
-        {
-            let _span = tracy_client::span!("Check for ready layout transactions");
-
-            // FIXME: Don't poll this every cycle
-            for output in self.pinnacle.space.outputs().cloned().collect::<Vec<_>>() {
-                if output.with_state_mut(|state| {
-                    state
-                        .layout_transaction
-                        .as_ref()
-                        .is_some_and(|ts| ts.ready())
-                }) {
-                    self.schedule_render(&output);
-                }
-            }
-        }
 
         #[cfg(feature = "snowcap")]
         if self
@@ -281,6 +275,14 @@ impl State {
             .display_handle
             .flush_clients()
             .expect("failed to flush client buffers");
+    }
+
+    fn notify_blocker_cleared(&mut self) {
+        let dh = self.pinnacle.display_handle.clone();
+        while let Ok(client) = self.pinnacle.blocker_cleared_rx.try_recv() {
+            self.client_compositor_state(&client)
+                .blocker_cleared(self, &dh);
+        }
     }
 }
 
@@ -366,6 +368,8 @@ impl Pinnacle {
             .map_err(|err| {
                 anyhow::anyhow!("failed to insert xdg activation token cleanup source: {err}")
             })?;
+
+        let (blocker_cleared_tx, blocker_cleared_rx) = std::sync::mpsc::channel();
 
         let pinnacle = Pinnacle {
             loop_signal,
@@ -494,6 +498,11 @@ impl Pinnacle {
             cursor_state: CursorState::new(),
 
             pointer_focus: None,
+
+            blocker_cleared_tx,
+            blocker_cleared_rx,
+
+            dmabuf_hooks: Default::default(),
         };
 
         Ok(pinnacle)
@@ -648,28 +657,14 @@ impl Pinnacle {
         let _span = tracy_client::span!("Pinnacle::update_primary_scanout_output");
 
         for window in self.space.elements() {
-            let offscreen_id = window.with_state(|state| state.offscreen_elem_id.clone());
-
             window.with_surfaces(|surface, states| {
-                let surface_primary_scanout_output = states
-                    .data_map
-                    .get_or_insert_threadsafe(Mutex::<PrimaryScanoutOutput>::default);
-
-                let primary_scanout_output = surface_primary_scanout_output
-                    .lock()
-                    .unwrap()
-                    .update_from_render_element_states(
-                        // Update the primary scanout using the snapshot of the window, if there is one.
-                        // Otherwise just use the ids of this window's surfaces.
-                        //
-                        // Without this, the element id of the snapshot would be different from all
-                        // this window's surfaces, preventing their primary scanout outputs from
-                        // properly updating and potentially causing rendering to get stuck.
-                        offscreen_id.clone().unwrap_or_else(|| Id::from(surface)),
-                        output,
-                        render_element_states,
-                        self.primary_scanout_output_compare(),
-                    );
+                let primary_scanout_output = update_surface_primary_scanout_output(
+                    surface,
+                    output,
+                    states,
+                    render_element_states,
+                    self.primary_scanout_output_compare(),
+                );
 
                 if let Some(output) = primary_scanout_output {
                     with_fractional_scale(states, |fraction_scale| {

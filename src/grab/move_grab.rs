@@ -71,13 +71,12 @@ impl PointerGrab<State> for MoveSurfaceGrab {
                 .map_element(self.window.clone(), new_loc.to_i32_round(), true);
 
             self.window.with_state_mut(|state| {
-                state.floating_loc = Some(new_loc);
+                state.set_floating_loc(new_loc.to_i32_round());
             });
 
             if let Some(surface) = self.window.x11_surface() {
                 if !surface.is_override_redirect() {
                     let geo = surface.geometry();
-                    // FIXME: prolly not fixable but xwayland configures with loc i32 not f64
                     let new_geo = Rectangle::new(new_loc.to_i32_round(), geo.size);
                     surface
                         .configure(new_geo)
@@ -93,17 +92,11 @@ impl PointerGrab<State> for MoveSurfaceGrab {
             let tag_output = self.window.output(&state.pinnacle);
             if let Some(focused_output) = state.pinnacle.focused_output().cloned() {
                 if Some(&focused_output) != tag_output.as_ref() {
-                    state.capture_snapshots_on_output(&focused_output, []);
-                    if let Some(tag_output) = tag_output.as_ref() {
-                        state.capture_snapshots_on_output(tag_output, []);
-                    }
-
                     self.window.set_tags_to_output(&focused_output);
 
-                    state.pinnacle.begin_layout_transaction(&focused_output);
                     state.pinnacle.request_layout(&focused_output);
+
                     if let Some(tag_output) = tag_output {
-                        state.pinnacle.begin_layout_transaction(&tag_output);
                         state.pinnacle.request_layout(&tag_output);
                     }
                 }
@@ -143,18 +136,6 @@ impl PointerGrab<State> for MoveSurfaceGrab {
 
                 let output = self.window.output(&state.pinnacle);
 
-                // HACK: Snapshots may not be cleared and updated when swapping two windows of the same size;
-                // this causes new snapshots attempts to fizzle and the currently stored snapshot
-                // will have the wrong location. We're just gonna invalidate all window snapshots here
-                // because I'm too lazy to rearchitect stuff to make it more sensible.
-                for window in state.pinnacle.windows.iter() {
-                    window.with_state_mut(|state| state.snapshot.take());
-                }
-
-                if let Some(output) = output.as_ref() {
-                    state.capture_snapshots_on_output(output, [self.window.clone()]);
-                }
-
                 debug!("Swapping window positions");
                 state
                     .pinnacle
@@ -163,7 +144,6 @@ impl PointerGrab<State> for MoveSurfaceGrab {
                 state.pinnacle.layout_state.pending_swap = true;
 
                 if let Some(output) = output.as_ref() {
-                    state.pinnacle.begin_layout_transaction(output);
                     state.pinnacle.request_layout(output);
                 }
             }

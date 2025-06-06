@@ -28,8 +28,6 @@ pub fn set_active(state: &mut State, tag: &Tag, set: Option<bool>) {
         return;
     };
 
-    state.capture_snapshots_on_output(&output, []);
-
     let active = set.unwrap_or(!tag.active());
 
     if tag.set_active(active) {
@@ -38,7 +36,6 @@ pub fn set_active(state: &mut State, tag: &Tag, set: Option<bool>) {
 
     state.pinnacle.update_xwayland_stacking_order();
 
-    state.pinnacle.begin_layout_transaction(&output);
     state.pinnacle.request_layout(&output);
 
     state.update_keyboard_focus(&output);
@@ -49,8 +46,6 @@ pub fn switch_to(state: &mut State, tag: &Tag) {
     let Some(output) = tag.output(&state.pinnacle) else {
         return;
     };
-
-    state.capture_snapshots_on_output(&output, []);
 
     output.with_state(|op_state| {
         for op_tag in op_state.tags.iter() {
@@ -65,7 +60,6 @@ pub fn switch_to(state: &mut State, tag: &Tag) {
 
     state.pinnacle.update_xwayland_stacking_order();
 
-    state.pinnacle.begin_layout_transaction(&output);
     state.pinnacle.request_layout(&output);
 
     state.update_keyboard_focus(&output);

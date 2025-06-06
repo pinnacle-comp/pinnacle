@@ -161,11 +161,9 @@ fn handle_event(event: WlcsEvent, state: &mut State) {
 
             if let Some(window) = window {
                 window.with_state_mut(|state| {
-                    state.floating_loc = Some(location.to_f64());
+                    state.set_floating_loc(location);
                     // state.window_state.set_floating(true);
                 });
-
-                // state.pinnacle.set_window_floating(&window, true);
 
                 state
                     .pinnacle

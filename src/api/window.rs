@@ -8,12 +8,10 @@ use smithay::{
     utils::{Point, SERIAL_COUNTER},
     wayland::seat::WaylandFocus,
 };
-use tracing::warn;
 
 use crate::{
     state::{State, WithState},
     tag::Tag,
-    util::centered_loc,
     window::WindowElement,
 };
 
@@ -42,45 +40,24 @@ pub fn set_geometry(
     let w: Option<u32> = w.into();
     let h: Option<u32> = h.into();
 
-    let mut window_size = window.geometry().size;
+    let mut window_size = window.with_state(|state| state.floating_size);
+    if window_size.w == 0 {
+        window_size.w = window.geometry().size.w;
+    }
+    if window_size.h == 0 {
+        window_size.h = window.geometry().size.h;
+    }
+
     window_size.w = w.map(|w| w as i32).unwrap_or(window_size.w);
     window_size.h = h.map(|h| h as i32).unwrap_or(window_size.h);
 
-    let window_loc = state
-        .pinnacle
-        .space
-        .element_location(window)
-        .or_else(|| window.with_state(|state| state.floating_loc.map(|loc| loc.to_i32_round())))
-        .or_else(|| {
-            let output = window.output(&state.pinnacle)?;
-            let output_geo = state.pinnacle.space.output_geometry(&output)?;
-            Some(centered_loc(output_geo, window_size))
-        });
-
-    let Some(mut window_loc) = window_loc else {
-        warn!("Tried to `set_geometry` but window had no tags");
-        return;
-    };
-
-    window_loc.x = x.unwrap_or(window_loc.x);
-    window_loc.y = y.unwrap_or(window_loc.y);
-
     window.with_state_mut(|state| {
-        state.floating_loc = Some(window_loc.to_f64());
+        state.floating_x = x.or(state.floating_x);
+        state.floating_y = y.or(state.floating_y);
         state.floating_size = window_size;
     });
 
-    state.pinnacle.configure_window_if_nontiled(window);
-    if let Some(toplevel) = window.toplevel() {
-        toplevel.send_pending_configure();
-    }
-
-    if window.with_state(|state| state.layout_mode.is_floating()) && window.is_on_active_tag() {
-        state
-            .pinnacle
-            .space
-            .map_element(window.clone(), window_loc, false);
-    }
+    state.update_window_layout_mode_and_layout(window, |_| ());
 }
 
 // TODO: minimized
@@ -152,18 +129,12 @@ pub fn set_decoration_mode(
 pub fn move_to_tag(state: &mut State, window: &WindowElement, tag: &Tag) {
     let source_output = window.output(&state.pinnacle);
 
-    if let Some(output) = source_output.as_ref() {
-        state.capture_snapshots_on_output(output, [window.clone()]);
-    }
-
     window.with_state_mut(|state| {
         state.tags = std::iter::once(tag.clone()).collect();
     });
 
     if let Some(output) = source_output.as_ref() {
-        state.pinnacle.begin_layout_transaction(output);
         state.pinnacle.request_layout(output);
-
         state.schedule_render(output);
     }
 
@@ -173,11 +144,7 @@ pub fn move_to_tag(state: &mut State, window: &WindowElement, tag: &Tag) {
     };
 
     if source_output.as_ref() != Some(&target_output) && tag.active() {
-        state.capture_snapshots_on_output(&target_output, [window.clone()]);
-
-        state.pinnacle.begin_layout_transaction(&target_output);
         state.pinnacle.request_layout(&target_output);
-
         state.schedule_render(&target_output);
     }
 
@@ -186,12 +153,6 @@ pub fn move_to_tag(state: &mut State, window: &WindowElement, tag: &Tag) {
 
 pub fn set_tag(state: &mut State, window: &WindowElement, tag: &Tag, set: impl Into<Option<bool>>) {
     let set = set.into();
-
-    let output = window.output(&state.pinnacle);
-
-    if let Some(output) = output.as_ref() {
-        state.capture_snapshots_on_output(output, [window.clone()]);
-    }
 
     match set {
         Some(true) => {
@@ -218,11 +179,8 @@ pub fn set_tag(state: &mut State, window: &WindowElement, tag: &Tag, set: impl I
         return;
     };
 
-    state.pinnacle.begin_layout_transaction(&output);
     state.pinnacle.request_layout(&output);
-
     state.schedule_render(&output);
-
     state.pinnacle.update_xwayland_stacking_order();
 }
 

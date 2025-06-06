@@ -30,14 +30,13 @@ use smithay::{
     utils::{Logical, Physical, Point, Scale},
     wayland::shell::wlr_layer,
 };
-use util::surface::WlSurfaceTextureRenderElement;
+use util::{snapshot::SnapshotRenderElement, surface::WlSurfaceTextureRenderElement};
 
 use crate::{
     backend::{udev::UdevRenderer, Backend},
-    layout::transaction::SnapshotRenderElement,
     pinnacle_render_elements,
     state::{State, WithState},
-    window::WindowElement,
+    window::{WindowElement, ZIndexElement},
 };
 
 use self::{
@@ -52,7 +51,7 @@ pinnacle_render_elements! {
     pub enum OutputRenderElement<R> {
         Surface = WaylandSurfaceRenderElement<R>,
         Pointer = PointerRenderElement<R>,
-        Snapshot = SnapshotRenderElement<R>,
+        Snapshot = SnapshotRenderElement,
         SolidColor = SolidColorRenderElement,
     }
 }
@@ -336,11 +335,12 @@ struct WindowRenderElements<R: PRenderer> {
 }
 
 /// Renders surface and popup elements for windows on active tags.
-fn window_render_elements<R: PRenderer>(
+fn window_render_elements<R: PRenderer + AsGlesRenderer>(
     output: &Output,
     space: &Space<WindowElement>,
     renderer: &mut R,
     scale: Scale<f64>,
+    z_index_stack: &[ZIndexElement],
 ) -> WindowRenderElements<R> {
     let _span = tracy_client::span!("window_render_elements");
 
@@ -348,29 +348,67 @@ fn window_render_elements<R: PRenderer>(
 
     let mut last_fullscreen_split_at = 0;
 
+    let mut renderables = Vec::new();
+
+    let mut z_index_elements = z_index_stack.iter();
+
+    for window in windows {
+        let mut unmapping_windows = Vec::new();
+        let found = z_index_elements.any(|elem| match elem {
+            ZIndexElement::Window(win) => win == window,
+            ZIndexElement::Unmapping(weak) => {
+                if let Some(strong) = weak.upgrade() {
+                    unmapping_windows.push(strong);
+                }
+                false
+            }
+        });
+        assert!(found);
+        renderables.extend(unmapping_windows.into_iter().map(itertools::Either::Right));
+        renderables.push(itertools::Either::Left(window));
+    }
+
+    renderables.extend(z_index_elements.filter_map(|z| match z {
+        ZIndexElement::Window(_) => None,
+        ZIndexElement::Unmapping(weak) => weak.upgrade().map(itertools::Either::Right),
+    }));
+
     let mut popups = Vec::new();
 
-    let mut fullscreen_and_up = windows
+    let mut fullscreen_and_up = renderables
+        .into_iter()
         .rev()
-        .filter(|win| win.is_on_active_tag())
         .enumerate()
-        .map(|(i, win)| {
-            win.with_state_mut(|state| state.offscreen_elem_id.take());
+        .map(|(i, win)| match win {
+            itertools::Either::Left(win) => {
+                if win.with_state(|state| state.layout_mode.is_fullscreen()) {
+                    last_fullscreen_split_at = i + 1;
+                }
 
-            if win.with_state(|state| state.layout_mode.is_fullscreen()) {
-                last_fullscreen_split_at = i + 1;
+                let loc =
+                    space.element_location(win).unwrap_or_default() - output.current_location();
+
+                let SplitRenderElements {
+                    surface_elements,
+                    popup_elements,
+                } = win.render_elements(renderer, loc, scale, 1.0);
+
+                popups.extend(popup_elements.into_iter().map(OutputRenderElement::from));
+
+                let iter = surface_elements.into_iter().map(OutputRenderElement::from);
+                itertools::Either::Left(iter)
             }
-
-            let loc = space.element_location(win).unwrap_or_default() - output.current_location();
-
-            let SplitRenderElements {
-                surface_elements,
-                popup_elements,
-            } = win.render_elements(renderer, loc, scale, 1.0);
-
-            popups.extend(popup_elements.into_iter().map(OutputRenderElement::from));
-
-            surface_elements.into_iter().map(OutputRenderElement::from)
+            itertools::Either::Right(snap) => {
+                if snap.fullscreen {
+                    last_fullscreen_split_at = i + 1;
+                }
+                let space_loc = snap.space_loc;
+                let loc = space_loc - output.current_location();
+                let loc = loc.to_f64().to_physical_precise_round(scale);
+                let snap = snap.snapshot.render_elements(renderer, loc, scale, 1.0);
+                let iter = snap.into_iter().map(OutputRenderElement::from);
+                itertools::Either::Right(iter)
+            }
         })
         .collect::<Vec<_>>();
 
@@ -383,48 +421,18 @@ fn window_render_elements<R: PRenderer>(
     }
 }
 
-/// Renders *only* popup elements for windows on active tags.
-fn window_popup_render_elements<R: PRenderer>(
-    output: &Output,
-    space: &Space<WindowElement>,
-    renderer: &mut R,
-    scale: Scale<f64>,
-) -> Vec<WaylandSurfaceRenderElement<R>> {
-    let _span = tracy_client::span!("window_popup_render_elements");
-
-    let windows = space.elements_for_output(output);
-
-    windows
-        .rev()
-        .filter(|win| win.is_on_active_tag())
-        .flat_map(|win| {
-            let loc = space.element_location(win).unwrap_or_default() - output.current_location();
-            let loc = loc.to_f64().to_physical_precise_round(scale);
-
-            win.toplevel()
-                .map(|toplevel| {
-                    let surface = toplevel.wl_surface();
-                    let popups = popup_render_elements(surface, renderer, loc, scale, 1.0);
-                    popups
-                })
-                .unwrap_or_default()
-        })
-        .collect::<Vec<_>>()
-}
-
 /// Renders elements for the given output.
 pub fn output_render_elements<R: PRenderer + AsGlesRenderer>(
     output: &Output,
     renderer: &mut R,
     space: &Space<WindowElement>,
+    z_index_stack: &[ZIndexElement],
 ) -> Vec<OutputRenderElement<R>> {
     let _span = tracy_client::span!("output_render_elements");
 
     let scale = Scale::from(output.current_scale().fractional_scale());
 
     let mut output_render_elements: Vec<OutputRenderElement<_>> = Vec::new();
-
-    let output_loc = output.current_location();
 
     let LayerRenderElements {
         popup: layer_popups,
@@ -434,36 +442,11 @@ pub fn output_render_elements<R: PRenderer + AsGlesRenderer>(
         overlay,
     } = layer_render_elements(output, renderer, scale);
 
-    let window_popups;
-    let fullscreen_and_up_elements;
-    let rest_of_window_elements;
-
-    // If there is a snapshot, render its elements instead
-    if let Some((fs_and_up_elements, under_fs_elements)) = output.with_state(|state| {
-        state
-            .layout_transaction
-            .as_ref()
-            .map(|ts| ts.render_elements(renderer, space, output_loc, scale, 1.0))
-    }) {
-        window_popups = window_popup_render_elements(output, space, renderer, scale)
-            .into_iter()
-            .map(OutputRenderElement::from)
-            .collect();
-        fullscreen_and_up_elements = fs_and_up_elements
-            .into_iter()
-            .map(OutputRenderElement::from)
-            .collect();
-        rest_of_window_elements = under_fs_elements
-            .into_iter()
-            .map(OutputRenderElement::from)
-            .collect();
-    } else {
-        WindowRenderElements {
-            popups: window_popups,
-            fullscreen_and_up: fullscreen_and_up_elements,
-            rest: rest_of_window_elements,
-        } = window_render_elements::<R>(output, space, renderer, scale);
-    }
+    let WindowRenderElements {
+        popups: window_popups,
+        fullscreen_and_up: fullscreen_and_up_elements,
+        rest: rest_of_window_elements,
+    } = window_render_elements::<R>(output, space, renderer, scale, z_index_stack);
 
     // Elements render from top to bottom
 

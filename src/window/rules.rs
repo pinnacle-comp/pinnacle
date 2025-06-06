@@ -2,7 +2,7 @@ use indexmap::IndexSet;
 use smithay::{
     desktop::WindowSurface,
     reexports::wayland_protocols::xdg::decoration::zv1::server::zxdg_toplevel_decoration_v1,
-    utils::{Logical, Point, Size},
+    utils::{Logical, Size},
 };
 use tokio::sync::mpsc::UnboundedSender;
 use tracing::error;
@@ -36,7 +36,8 @@ pub struct WindowRuleState {
 pub struct WindowRules {
     pub layout_mode: Option<LayoutMode>,
     pub focused: Option<bool>,
-    pub floating_loc: Option<Point<f64, Logical>>,
+    pub floating_x: Option<i32>,
+    pub floating_y: Option<i32>,
     pub floating_size: Option<Size<i32, Logical>>,
     pub decoration_mode: Option<zxdg_toplevel_decoration_v1::Mode>,
     pub tags: Option<IndexSet<Tag>>,
@@ -164,7 +165,8 @@ impl Pinnacle {
         let WindowRules {
             layout_mode,
             focused,
-            floating_loc,
+            floating_x,
+            floating_y,
             floating_size,
             decoration_mode,
             tags,
@@ -188,7 +190,8 @@ impl Pinnacle {
 
         unmapped.window.with_state_mut(|state| {
             state.layout_mode = layout_mode;
-            state.floating_loc = *floating_loc;
+            state.floating_x = *floating_x;
+            state.floating_y = *floating_y;
             state.floating_size = floating_size.unwrap_or(state.floating_size);
             state.decoration_mode = (*decoration_mode).or(*client_decoration_mode);
             if let Some(tags) = tags {

@@ -235,8 +235,9 @@ impl XwmHandler for State {
         trace!(class = window.class(), "XwmHandler::maximize_request");
 
         if let Some(window) = self.pinnacle.window_for_x11_surface(&window).cloned() {
-            window.with_state_mut(|state| state.layout_mode.set_client_maximized(true));
-            self.update_window_state_and_layout(&window);
+            self.update_window_layout_mode_and_layout(&window, |layout_mode| {
+                layout_mode.set_client_maximized(true);
+            });
         } else if let Some(unmapped) = self.pinnacle.unmapped_window_for_x11_surface_mut(&window) {
             match &mut unmapped.state {
                 UnmappedState::WaitingForTags { client_requests } => {
@@ -265,8 +266,9 @@ impl XwmHandler for State {
         trace!(class = window.class(), "XwmHandler::unmaximize_request");
 
         if let Some(window) = self.pinnacle.window_for_x11_surface(&window).cloned() {
-            window.with_state_mut(|state| state.layout_mode.set_client_maximized(false));
-            self.update_window_state_and_layout(&window);
+            self.update_window_layout_mode_and_layout(&window, |layout_mode| {
+                layout_mode.set_client_maximized(false);
+            });
         } else if let Some(unmapped) = self.pinnacle.unmapped_window_for_x11_surface_mut(&window) {
             match &mut unmapped.state {
                 UnmappedState::WaitingForTags { client_requests } => {
@@ -295,8 +297,9 @@ impl XwmHandler for State {
         trace!(class = window.class(), "XwmHandler::fullscreen_request");
 
         if let Some(window) = self.pinnacle.window_for_x11_surface(&window).cloned() {
-            window.with_state_mut(|state| state.layout_mode.set_client_fullscreen(true));
-            self.update_window_state_and_layout(&window);
+            self.update_window_layout_mode_and_layout(&window, |layout_mode| {
+                layout_mode.set_client_fullscreen(true);
+            });
         } else if let Some(unmapped) = self.pinnacle.unmapped_window_for_x11_surface_mut(&window) {
             match &mut unmapped.state {
                 UnmappedState::WaitingForTags { client_requests } => {
@@ -325,8 +328,9 @@ impl XwmHandler for State {
         trace!(class = window.class(), "XwmHandler::unfullscreen_request");
 
         if let Some(window) = self.pinnacle.window_for_x11_surface(&window).cloned() {
-            window.with_state_mut(|state| state.layout_mode.set_client_fullscreen(false));
-            self.update_window_state_and_layout(&window);
+            self.update_window_layout_mode_and_layout(&window, |layout_mode| {
+                layout_mode.set_client_fullscreen(false);
+            });
         } else if let Some(unmapped) = self.pinnacle.unmapped_window_for_x11_surface_mut(&window) {
             match &mut unmapped.state {
                 UnmappedState::WaitingForTags { client_requests } => {
@@ -476,31 +480,39 @@ impl State {
     fn remove_xwayland_window(&mut self, surface: X11Surface) {
         let _span = tracy_client::span!("State::remove_xwayland_window");
 
-        let win = self.pinnacle.window_for_x11_surface(&surface).cloned();
-        if let Some(win) = win {
-            let should_layout = !win.is_x11_override_redirect()
-                && win.with_state(|state| state.layout_mode.is_tiled());
+        let Some(win) = self.pinnacle.window_for_x11_surface(&surface).cloned() else {
+            return;
+        };
 
-            let output = win.output(&self.pinnacle);
+        let should_layout =
+            !win.is_x11_override_redirect() && win.with_state(|state| state.layout_mode.is_tiled());
 
+        let output = win.output(&self.pinnacle);
+
+        if let Some(output) = output.as_ref() {
+            self.backend.with_renderer(|renderer| {
+                win.capture_snapshot_and_store(
+                    renderer,
+                    output.current_scale().fractional_scale().into(),
+                    1.0,
+                );
+            });
+        }
+
+        let outputs = self.pinnacle.space.outputs_for_element(&win);
+
+        self.pinnacle.remove_window(&win, false);
+
+        if let Some(output) = win.output(&self.pinnacle) {
             if should_layout {
-                if let Some(output) = output.as_ref() {
-                    self.capture_snapshots_on_output(output, []);
-                }
+                self.pinnacle.request_layout(&output);
             }
 
-            self.pinnacle.remove_window(&win, false);
+            self.update_keyboard_focus(&output);
+        }
 
-            if let Some(output) = win.output(&self.pinnacle) {
-                if should_layout {
-                    self.pinnacle.begin_layout_transaction(&output);
-                    self.pinnacle.request_layout(&output);
-                }
-
-                self.update_keyboard_focus(&output);
-                // FIXME: schedule renders on all the outputs this window intersected
-                self.schedule_render(&output);
-            }
+        for output in outputs {
+            self.schedule_render(&output);
         }
     }
 }
@@ -520,6 +532,7 @@ impl Pinnacle {
         let (active_windows, non_active_windows) = self
             .z_index_stack
             .iter()
+            .filter_map(|z| z.window())
             .filter(|win| !win.is_x11_override_redirect())
             .partition::<Vec<_>, _>(|win| win.is_on_active_tag());
 

@@ -96,6 +96,7 @@ export default defineVersionedConfig({
                     items: [
                         { text: "Packaging", link: "/development/packaging" },
                         { text: "API stability", link: "/development/api-stability" },
+                        { text: "Transactions", link: "/development/transactions" },
                     ]
                 },
             ],

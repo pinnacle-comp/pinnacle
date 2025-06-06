@@ -95,8 +95,7 @@ impl LayoutTree {
             Self::unprocess_leaves(tree, *child);
         }
 
-        let has_children = !children.is_empty();
-        if !has_children {
+        if children.is_empty() {
             let parent = tree.parent(node).unwrap();
 
             debug_assert_eq!(tree.children(parent).unwrap().len(), 1);

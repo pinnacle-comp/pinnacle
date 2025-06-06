@@ -1,36 +1,39 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-pub mod transaction;
 pub mod tree;
 
-use std::collections::{hash_map::Entry, HashMap};
+use std::{
+    collections::{hash_map::Entry, HashMap, HashSet},
+    rc::Rc,
+    time::Duration,
+};
 
 use indexmap::IndexSet;
 use smithay::{
-    desktop::{layer_map_for_output, WindowSurface},
-    output::Output,
-    utils::{Logical, Rectangle, Serial},
+    desktop::{layer_map_for_output, utils::surface_primary_scanout_output, WindowSurface},
+    output::{Output, WeakOutput},
+    utils::{Logical, Rectangle},
 };
 use tokio::sync::mpsc::UnboundedSender;
 use tracing::warn;
 use tree::{LayoutNode, LayoutTree};
 
 use crate::{
+    backend::Backend,
     output::OutputName,
     state::{Pinnacle, State, WithState},
     tag::TagId,
-    window::{window_state::LayoutModeKind, WindowElement},
+    util::transaction::{PendingTransaction, TransactionBuilder},
+    window::{UnmappingWindow, WindowElement, ZIndexElement},
 };
 
-use self::transaction::LayoutTransaction;
-
 impl Pinnacle {
-    // FIXME: make layout calls use f64 loc
     fn update_windows_with_geometries(
         &mut self,
         output: &Output,
         geometries: Vec<Rectangle<i32, Logical>>,
-    ) -> Vec<(WindowElement, Serial)> {
+        backend: &mut Backend,
+    ) {
         let (windows_on_foc_tags, to_unmap) = output.with_state(|state| {
             let focused_tags = state.focused_tags().cloned().collect::<IndexSet<_>>();
             self.windows
@@ -42,10 +45,53 @@ impl Pinnacle {
                 })
         });
 
+        let currently_mapped_wins = self.space.elements().collect::<HashSet<_>>();
+        let maybe_unmap_wins = to_unmap.iter().collect::<HashSet<_>>();
+
+        let to_unmap = currently_mapped_wins
+            .intersection(&maybe_unmap_wins)
+            .cloned()
+            .cloned()
+            .collect::<Vec<_>>();
+
+        let mut snapshot_windows = Vec::new();
+
         for win in to_unmap {
+            backend.with_renderer(|renderer| {
+                win.capture_snapshot_and_store(
+                    renderer,
+                    output.current_scale().fractional_scale().into(),
+                    1.0,
+                );
+            });
+
+            if let Some(snap) = win.with_state_mut(|state| state.snapshot.take()) {
+                let Some(loc) = self.space.element_location(&win) else {
+                    unreachable!();
+                };
+
+                let unmapping = Rc::new(UnmappingWindow {
+                    snapshot: snap,
+                    fullscreen: win.with_state(|state| state.layout_mode.is_fullscreen()),
+                    space_loc: loc,
+                });
+
+                let weak = Rc::downgrade(&unmapping);
+                snapshot_windows.push(unmapping);
+
+                let z_index = self
+                    .z_index_stack
+                    .iter()
+                    .position(|z| matches!(z, crate::window::ZIndexElement::Window(w) if w == win))
+                    .expect("window to be in the stack");
+
+                self.z_index_stack
+                    .insert(z_index, ZIndexElement::Unmapping(weak));
+            }
+
             if win.with_state(|state| state.layout_mode.is_floating()) {
                 if let Some(loc) = self.space.element_location(&win) {
-                    win.with_state_mut(|state| state.floating_loc = Some(loc.to_f64()));
+                    win.with_state_mut(|state| state.set_floating_loc(loc));
                 }
             }
             let to_schedule = self.space.outputs_for_element(&win);
@@ -75,8 +121,25 @@ impl Pinnacle {
             geo
         }));
 
-        for (win, geo) in zipped.by_ref() {
-            win.set_tiled_states();
+        let wins_and_geos_tiled = zipped.by_ref().map(|(win, geo)| (win, geo, true));
+        let wins_and_geos_other = self
+            .layout_state
+            .pending_window_updates
+            .take_next_for_output(output)
+            .unwrap_or_default()
+            .into_iter()
+            .map(|(win, geo)| (win, geo, false));
+
+        let wins_and_geos = wins_and_geos_tiled
+            .chain(wins_and_geos_other)
+            .collect::<Vec<_>>();
+
+        for (win, geo, is_tiled) in wins_and_geos.iter() {
+            if *is_tiled {
+                win.set_tiled_states();
+            } else {
+                self.configure_window_if_nontiled(win);
+            }
             match win.underlying_surface() {
                 WindowSurface::Wayland(toplevel) => {
                     toplevel.with_pending_state(|state| {
@@ -84,11 +147,43 @@ impl Pinnacle {
                     });
                 }
                 WindowSurface::X11(surface) => {
-                    let _ = surface.configure(geo);
+                    let _ = surface.configure(*geo);
                 }
             }
-            self.space.map_element(win, geo.loc, false);
         }
+
+        let mut transaction_builder = TransactionBuilder::new(self.layout_state.pending_swap);
+
+        for (win, geo, _) in wins_and_geos {
+            if let WindowSurface::Wayland(toplevel) = win.underlying_surface() {
+                let serial = toplevel.send_pending_configure();
+                transaction_builder.add(&win, geo.loc, serial, &self.loop_handle);
+
+                // Send a frame to get unmapped windows to update
+                win.send_frame(
+                    output,
+                    self.clock.now(),
+                    Some(Duration::ZERO),
+                    surface_primary_scanout_output,
+                );
+            } else {
+                transaction_builder.add(&win, geo.loc, None, &self.loop_handle);
+            }
+        }
+
+        let mut unmapping = self
+            .layout_state
+            .pending_unmaps
+            .take_next_for_output(output)
+            .unwrap_or_default();
+
+        unmapping.extend(snapshot_windows);
+
+        self.layout_state
+            .pending_transactions
+            .entry(output.downgrade())
+            .or_default()
+            .push(transaction_builder.into_pending(unmapping));
 
         let (remaining_wins, _remaining_geos) = zipped.unzip::<_, _, Vec<_>, Vec<_>>();
 
@@ -101,38 +196,6 @@ impl Pinnacle {
                 }
             });
         }
-
-        let mut pending_wins = Vec::<(WindowElement, Serial)>::new();
-
-        for win in windows_on_foc_tags.iter() {
-            if let WindowSurface::Wayland(toplevel) = win.underlying_surface() {
-                if let Some(serial) = toplevel.send_pending_configure() {
-                    pending_wins.push((win.clone(), serial));
-                }
-            }
-
-            match win.with_state(|state| state.layout_mode.current()) {
-                LayoutModeKind::Tiled => (),
-                LayoutModeKind::Floating => {
-                    let floating_loc = win.with_state(|state| state.floating_loc);
-                    if let Some(loc) = floating_loc {
-                        self.space
-                            .map_element(win.clone(), loc.to_i32_round(), false);
-                    }
-                }
-                LayoutModeKind::Maximized => {
-                    let loc = output_geo.loc + non_exclusive_geo.loc;
-                    self.space.map_element(win.clone(), loc, false);
-                }
-                LayoutModeKind::Fullscreen => {
-                    self.space.map_element(win.clone(), output_geo.loc, false);
-                }
-            }
-        }
-
-        self.fixup_z_layering();
-
-        pending_wins
     }
 
     pub fn swap_window_positions(&mut self, win1: &WindowElement, win2: &WindowElement) {
@@ -159,17 +222,86 @@ impl LayoutRequestId {
 pub struct LayoutState {
     pub layout_request_sender: Option<UnboundedSender<LayoutInfo>>,
     pub pending_swap: bool,
-    // TODO: make these outputs weak or something
-    pending_requests: HashMap<Output, LayoutRequestId>,
-    fulfilled_requests: HashMap<Output, LayoutRequestId>,
     current_id: LayoutRequestId,
     pub layout_trees: HashMap<u32, LayoutTree>,
+
+    /// Currently pending transactions.
+    pub pending_transactions: HashMap<WeakOutput, Vec<PendingTransaction>>,
+
+    pub pending_unmaps: PendingUnmaps,
+    pub pending_window_updates: PendingWindowUpdates,
+}
+
+/// Pending [`UnmappingWindow`][crate::window::UnmappingWindow]s from things like
+/// windows closing.
+///
+/// Pending unmapping windows are picked up by the next requested layout.
+/// Once that layout completes, these windows are dropped and no longer rendered.
+#[derive(Debug, Default)]
+pub struct PendingUnmaps {
+    pending: HashMap<WeakOutput, Vec<Vec<Rc<UnmappingWindow>>>>,
+}
+
+impl PendingUnmaps {
+    /// Adds a set of [`UnmappingWindow`]s that should be displayed until the next layout finishes.
+    pub fn add_for_output(&mut self, output: &Output, pending: Vec<Rc<UnmappingWindow>>) {
+        self.pending
+            .entry(output.downgrade())
+            .or_default()
+            .push(pending);
+    }
+
+    /// Takes the next set of [`UnmappingWindow`]s.
+    pub fn take_next_for_output(&mut self, output: &Output) -> Option<Vec<Rc<UnmappingWindow>>> {
+        let entry = self.pending.entry(output.downgrade()).or_default();
+
+        (!entry.is_empty()).then(|| entry.remove(0))
+    }
+}
+
+/// Pending window updates.
+///
+/// These are sets of windows and target geometries that are meant to be
+/// synchronized with the next incoming layout.
+#[derive(Debug, Default)]
+pub struct PendingWindowUpdates {
+    pending: HashMap<WeakOutput, Vec<Vec<(WindowElement, Rectangle<i32, Logical>)>>>,
+}
+
+impl PendingWindowUpdates {
+    /// Adds a set of windows and target geometries that should be updated in tandem
+    /// with the next incoming layout.
+    pub fn add_for_output(
+        &mut self,
+        output: &Output,
+        latched: Vec<(WindowElement, Rectangle<i32, Logical>)>,
+    ) {
+        self.pending
+            .entry(output.downgrade())
+            .or_default()
+            .push(latched);
+    }
+
+    /// Takes the next set of windows and target geometries.
+    pub fn take_next_for_output(
+        &mut self,
+        output: &Output,
+    ) -> Option<Vec<(WindowElement, Rectangle<i32, Logical>)>> {
+        let entry = self.pending.entry(output.downgrade()).or_default();
+
+        (!entry.is_empty()).then(|| entry.remove(0))
+    }
 }
 
 impl LayoutState {
     fn next_id(&mut self) -> LayoutRequestId {
         self.current_id.0 += 1;
         self.current_id
+    }
+
+    pub fn remove_output(&mut self, output: &Output) {
+        self.pending_transactions.remove(&output.downgrade());
+        self.pending_unmaps.pending.remove(&output.downgrade());
     }
 }
 
@@ -179,6 +311,66 @@ pub struct LayoutInfo {
     pub output_name: OutputName,
     pub window_count: u32,
     pub tag_ids: Vec<TagId>,
+}
+
+impl State {
+    /// Updates the layouts of outputs whose transactions have completed.
+    pub fn update_layout(&mut self) {
+        let _span = tracy_client::span!("State::update_layout");
+
+        for output in self.pinnacle.outputs.keys().cloned().collect::<Vec<_>>() {
+            let mut transactions = Vec::new();
+
+            let txs = self
+                .pinnacle
+                .layout_state
+                .pending_transactions
+                .entry(output.downgrade())
+                .or_default();
+
+            while txs
+                .first()
+                .is_some_and(|t| t.is_completed() || t.is_cancelled())
+            {
+                let tx = txs.remove(0);
+                if tx.is_swap {
+                    self.pinnacle.layout_state.pending_swap = false;
+                }
+                if tx.is_completed() {
+                    transactions.push(tx);
+                }
+            }
+
+            for transaction in transactions {
+                let mut outputs = Vec::new();
+                for (window, loc) in transaction.target_locs {
+                    if !window.is_on_active_tag() {
+                        warn!("Attempted to map a window without active tags");
+                        continue;
+                    }
+                    outputs.extend(window.output(&self.pinnacle));
+                    self.pinnacle.space.map_element(window, loc, false);
+                }
+                for output in outputs {
+                    self.schedule_render(&output);
+                }
+            }
+        }
+
+        let mut wins_to_update = Vec::new();
+
+        for win in self.pinnacle.windows.iter() {
+            let is_tiled = win.with_state(|state| state.layout_mode.is_tiled());
+            let is_on_active_tag = win.is_on_active_tag();
+            if !is_tiled && is_on_active_tag && !self.pinnacle.space.elements().any(|w| w == win) {
+                wins_to_update.push(win.clone());
+            }
+        }
+
+        for win in wins_to_update {
+            self.update_window_layout_mode_and_layout(&win, |_| ());
+        }
+    }
 }
 
 impl Pinnacle {
@@ -216,10 +408,6 @@ impl Pinnacle {
 
         let tag_ids = output.with_state(|state| state.focused_tags().map(|tag| tag.id()).collect());
 
-        self.layout_state
-            .pending_requests
-            .insert(output.clone(), id);
-
         let _ = sender.send(LayoutInfo {
             request_id: id,
             output_name: OutputName(output.name()),
@@ -234,7 +422,7 @@ impl State {
         &mut self,
         tree_id: u32,
         root_node: LayoutNode,
-        request_id: u32,
+        _request_id: u32,
         output_name: String,
     ) -> anyhow::Result<()> {
         let Some(output) = OutputName(output_name).output(&self.pinnacle) else {
@@ -251,25 +439,6 @@ impl State {
             Entry::Vacant(vacant_entry) => vacant_entry.insert(LayoutTree::new(root_node)),
         };
 
-        let request_id = LayoutRequestId(request_id);
-
-        let Some(current_pending) = self
-            .pinnacle
-            .layout_state
-            .pending_requests
-            .get(&output)
-            .copied()
-        else {
-            anyhow::bail!("attempted to layout without request");
-        };
-
-        if current_pending > request_id {
-            anyhow::bail!("Attempted to layout but a new request came in");
-        }
-        if current_pending < request_id {
-            anyhow::bail!("Attempted to layout but request is newer");
-        }
-
         let (output_width, output_height) = {
             let map = layer_map_for_output(&output);
             let zone = map.non_exclusive_zone();
@@ -278,32 +447,10 @@ impl State {
 
         let geometries = tree.compute_geos(output_width as u32, output_height as u32);
 
-        self.pinnacle.layout_state.pending_requests.remove(&output);
         self.pinnacle
-            .layout_state
-            .fulfilled_requests
-            .insert(output.clone(), current_pending);
-
-        let pending_windows = self
-            .pinnacle
-            .update_windows_with_geometries(&output, geometries);
-
-        output.with_state_mut(|state| {
-            if let Some(ts) = state.layout_transaction.as_mut() {
-                ts.update_pending(pending_windows);
-            } else {
-                state.layout_transaction = Some(LayoutTransaction::new(
-                    self.pinnacle.loop_handle.clone(),
-                    std::mem::take(&mut state.snapshots.fullscreen_and_above),
-                    std::mem::take(&mut state.snapshots.under_fullscreen),
-                    pending_windows,
-                ));
-            }
-        });
+            .update_windows_with_geometries(&output, geometries, &mut self.backend);
 
         self.schedule_render(&output);
-
-        self.pinnacle.layout_state.pending_swap = false;
 
         Ok(())
     }

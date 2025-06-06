@@ -7,7 +7,7 @@ use smithay::{
     backend::renderer::damage::OutputDamageTracker,
     desktop::layer_map_for_output,
     output::{Mode, Output, Scale},
-    reexports::{calloop::LoopHandle, drm},
+    reexports::drm,
     utils::{Logical, Point, Size, Transform},
     wayland::session_lock::LockSurface,
 };
@@ -18,9 +18,7 @@ use crate::{
     backend::BackendData,
     config::ConnectorSavedState,
     focus::WindowKeyboardFocusStack,
-    layout::transaction::{LayoutTransaction, SnapshotTarget},
     protocol::screencopy::Screencopy,
-    render::util::snapshot::OutputSnapshots,
     state::{Pinnacle, State, WithState},
     tag::Tag,
     util::centered_loc,
@@ -71,14 +69,11 @@ pub struct OutputState {
     pub modes: Vec<Mode>,
     pub lock_surface: Option<LockSurface>,
     pub blanking_state: BlankingState,
-    /// A pending layout transaction.
-    pub layout_transaction: Option<LayoutTransaction>,
     /// Whether the monitor is powered.
     ///
     /// Unpowered monitors aren't drawn to but their tags and windows
     /// still exist and can be interacted with.
     pub powered: bool,
-    pub snapshots: OutputSnapshots,
     /// Damage tracker for debugging damage.
     pub debug_damage_tracker: OutputDamageTracker,
 }
@@ -93,9 +88,7 @@ impl Default for OutputState {
             modes: Default::default(),
             lock_surface: Default::default(),
             blanking_state: Default::default(),
-            layout_transaction: Default::default(),
             powered: true,
-            snapshots: OutputSnapshots::default(),
             debug_damage_tracker: OutputDamageTracker::new(
                 Size::default(),
                 1.0,
@@ -142,25 +135,6 @@ impl OutputState {
         self.tags.iter().filter(|tag| tag.active())
     }
 
-    fn new_wait_layout_transaction(
-        &mut self,
-        loop_handle: LoopHandle<'static, State>,
-        fullscreen_and_up_snapshots: impl IntoIterator<Item = SnapshotTarget>,
-        under_fullscreen_snapshots: impl IntoIterator<Item = SnapshotTarget>,
-    ) {
-        let _span = tracy_client::span!("OutputState::new_wait_layout_transaction");
-
-        if let Some(ts) = self.layout_transaction.as_mut() {
-            ts.wait();
-        } else {
-            self.layout_transaction = Some(LayoutTransaction::new_and_wait(
-                loop_handle,
-                fullscreen_and_up_snapshots,
-                under_fullscreen_snapshots,
-            ));
-        }
-    }
-
     /// Add tags to this output, replacing defunct ones first.
     pub fn add_tags(&mut self, tags: impl IntoIterator<Item = Tag>) {
         let defunct_tags = self.tags.iter().skip_while(|tag| !tag.defunct());
@@ -174,20 +148,6 @@ impl OutputState {
         }
 
         self.tags.extend(new_tags);
-    }
-}
-
-impl Pinnacle {
-    pub fn begin_layout_transaction(&self, output: &Output) {
-        let _span = tracy_client::span!("Pinnacle::begin_layout_transaction");
-
-        output.with_state_mut(|state| {
-            let (fullscreen_and_up, under) = (
-                std::mem::take(&mut state.snapshots.under_fullscreen),
-                std::mem::take(&mut state.snapshots.fullscreen_and_above),
-            );
-            state.new_wait_layout_transaction(self.loop_handle.clone(), fullscreen_and_up, under);
-        })
     }
 }
 
@@ -259,12 +219,12 @@ impl Pinnacle {
                 .cloned()
                 .collect::<Vec<_>>()
             {
-                let old_floating_loc = win.with_state(|state| state.floating_loc);
+                let old_floating_loc = win.with_state(|state| state.floating_loc());
 
                 let loc = self
                     .space
                     .element_location(&win)
-                    .or(old_floating_loc.map(|loc| loc.to_i32_round()))
+                    .or(old_floating_loc)
                     .map(|loc| {
                         let rescaled_loc = (loc - output_loc)
                             .to_f64()
@@ -277,11 +237,11 @@ impl Pinnacle {
 
                 if let Some(loc) = loc {
                     self.space.map_element(win.clone(), loc, false);
+                    win.with_state_mut(|state| state.set_floating_loc(loc));
                 }
-
-                win.with_state_mut(|state| state.floating_loc = loc.map(|loc| loc.to_f64()));
             }
 
+            // FIXME: why is this in an idle
             self.loop_handle.insert_idle(|state| {
                 state.pinnacle.update_xwayland_scale();
             });
@@ -398,6 +358,8 @@ impl Pinnacle {
                 scale: Some(output.current_scale()),
             },
         );
+
+        self.layout_state.remove_output(output);
     }
 }
 
