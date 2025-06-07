@@ -13,11 +13,11 @@ use smithay::{
     desktop::{layer_map_for_output, utils::surface_primary_scanout_output, WindowSurface},
     output::{Output, WeakOutput},
     reexports::wayland_protocols::xdg::shell::server::xdg_toplevel,
-    utils::{Logical, Rectangle},
+    utils::{Logical, Rectangle, Size},
 };
 use tokio::sync::mpsc::UnboundedSender;
 use tracing::warn;
-use tree::{LayoutNode, LayoutTree};
+use tree::{LayoutNode, LayoutTree, ResizeDir};
 
 use crate::{
     backend::Backend,
@@ -29,12 +29,36 @@ use crate::{
 };
 
 impl Pinnacle {
-    fn update_windows_with_geometries(
+    fn update_windows_from_tree(
         &mut self,
         output: &Output,
-        geometries: Vec<Rectangle<i32, Logical>>,
         backend: &mut Backend,
+        tree_id: u32,
+        is_resize: bool,
     ) {
+        let tree = self
+            .layout_state
+            .layout_trees
+            .get_mut(&tree_id)
+            .expect("no tree");
+
+        let (output_width, output_height) = {
+            let map = layer_map_for_output(output);
+            let zone = map.non_exclusive_zone();
+            (zone.size.w, zone.size.h)
+        };
+
+        let (geometries, nodes): (Vec<_>, Vec<_>) = tree
+            .compute_geos(output_width as u32, output_height as u32)
+            .into_iter()
+            .unzip();
+
+        let mut nodes = nodes.into_iter();
+
+        for win in self.windows.iter() {
+            win.with_state_mut(|state| state.layout_node.take());
+        }
+
         let (windows_on_foc_tags, to_unmap) = output.with_state(|state| {
             let focused_tags = state.focused_tags().cloned().collect::<IndexSet<_>>();
             self.windows
@@ -122,7 +146,17 @@ impl Pinnacle {
             geo
         }));
 
-        let wins_and_geos_tiled = zipped.by_ref().map(|(win, geo)| (win, geo, true));
+        let wins_and_geos_tiled = zipped
+            .by_ref()
+            .map(|(win, geo)| (win, geo, true))
+            .collect::<Vec<_>>();
+
+        let just_wins = wins_and_geos_tiled.iter().map(|thin| &thin.0);
+
+        for win in just_wins {
+            win.with_state_mut(|state| state.layout_node = nodes.next());
+        }
+
         let wins_and_geos_other = self
             .layout_state
             .pending_window_updates
@@ -132,6 +166,7 @@ impl Pinnacle {
             .map(|(win, geo)| (win, geo, false));
 
         let wins_and_geos = wins_and_geos_tiled
+            .into_iter()
             .chain(wins_and_geos_other)
             .collect::<Vec<_>>();
 
@@ -187,7 +222,7 @@ impl Pinnacle {
             .push(transaction_builder.into_pending(
                 unmapping,
                 self.layout_state.pending_swap,
-                false,
+                is_resize,
             ));
 
         let (remaining_wins, _remaining_geos) = zipped.unzip::<_, _, Vec<_>, Vec<_>>();
@@ -468,7 +503,7 @@ impl State {
         };
 
         let tree_entry = self.pinnacle.layout_state.layout_trees.entry(tree_id);
-        let tree = match tree_entry {
+        match tree_entry {
             Entry::Occupied(occupied_entry) => {
                 let tree = occupied_entry.into_mut();
                 tree.diff(root_node);
@@ -477,19 +512,38 @@ impl State {
             Entry::Vacant(vacant_entry) => vacant_entry.insert(LayoutTree::new(root_node)),
         };
 
-        let (output_width, output_height) = {
-            let map = layer_map_for_output(&output);
-            let zone = map.non_exclusive_zone();
-            (zone.size.w, zone.size.h)
-        };
-
-        let geometries = tree.compute_geos(output_width as u32, output_height as u32);
-
         self.pinnacle
-            .update_windows_with_geometries(&output, geometries, &mut self.backend);
+            .update_windows_from_tree(&output, &mut self.backend, tree_id, false);
 
         self.schedule_render(&output);
 
         Ok(())
+    }
+
+    /// Resizes the tile corresponding to the given tiled window to the new size.
+    ///
+    /// If the window is not tiled, does nothing.
+    ///
+    /// Will resize in the provided directions.
+    pub fn resize_tile(
+        &mut self,
+        window: &WindowElement,
+        new_size: Size<i32, Logical>,
+        resize_x_dir: ResizeDir,
+        resize_y_dir: ResizeDir,
+    ) {
+        let Some(output) = window.output(&self.pinnacle) else {
+            return;
+        };
+
+        let Some(node) = window.with_state(|state| state.layout_node) else {
+            return;
+        };
+
+        let tree = self.pinnacle.layout_state.layout_trees.get_mut(&0).unwrap();
+        tree.resize_tile(node, new_size, resize_x_dir, resize_y_dir);
+
+        self.pinnacle
+            .update_windows_from_tree(&output, &mut self.backend, 0, true);
     }
 }
