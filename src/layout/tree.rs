@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
-use smithay::utils::{Logical, Rectangle};
+use smithay::utils::{Logical, Rectangle, Size};
 
 use crate::util::treediff::EditAction;
 
@@ -139,23 +139,13 @@ impl LayoutTree {
         }
     }
 
-    pub fn compute_geos(&mut self, width: u32, height: u32) -> Vec<Rectangle<i32, Logical>> {
-        if self.taffy_tree.dirty(self.taffy_root_id).unwrap() {
-            self.taffy_tree
-                .compute_layout(
-                    self.taffy_root_id,
-                    taffy::Size {
-                        width: taffy::AvailableSpace::Definite(width as f32),
-                        height: taffy::AvailableSpace::Definite(height as f32),
-                    },
-                )
-                .unwrap();
-        }
-
-        let mut geos = Vec::<Rectangle<i32, Logical>>::new();
-
+    pub fn compute_geos(
+        &mut self,
+        width: u32,
+        height: u32,
+    ) -> Vec<(Rectangle<i32, Logical>, taffy::NodeId)> {
         fn compute_geos_rec(
-            geos: &mut Vec<Rectangle<i32, Logical>>,
+            geos: &mut Vec<(Rectangle<i32, Logical>, taffy::NodeId)>,
             tree: &taffy::TaffyTree<NodeContext>,
             node: taffy::NodeId,
             offset_x: f64,
@@ -184,7 +174,7 @@ impl LayoutTree {
                     size: smithay::utils::Size::from((size.width, size.height)),
                 }
                 .to_i32_round();
-                geos.push(rect);
+                geos.push((rect, tree.parent(node).unwrap()));
 
                 *counters.entry(node).or_default() += 1;
 
@@ -236,6 +226,20 @@ impl LayoutTree {
 
             false
         }
+
+        if self.taffy_tree.dirty(self.taffy_root_id).unwrap() {
+            self.taffy_tree
+                .compute_layout(
+                    self.taffy_root_id,
+                    taffy::Size {
+                        width: taffy::AvailableSpace::Definite(width as f32),
+                        height: taffy::AvailableSpace::Definite(height as f32),
+                    },
+                )
+                .unwrap();
+        }
+
+        let mut geos = Vec::new();
 
         let mut node_assigned = HashSet::<taffy::NodeId>::new();
         let mut counters = HashMap::<taffy::NodeId, u32>::new();
@@ -365,6 +369,279 @@ impl LayoutTree {
 
         self.root = new_root;
     }
+
+    /// Calculates whether a node and its ancestors have `(immediate neighbors, ancestral neighbors)`
+    /// in the given [`ResizeDir`] (ahead or behind) in relation to the given layout direction.
+    fn calculate_neighbors(
+        &self,
+        node: taffy::NodeId,
+        layout_dir: LayoutDir,
+        resize_dir: ResizeDir,
+    ) -> HashMap<taffy::NodeId, (bool, bool)> {
+        /// Returns if there's a neighbor.
+        fn calculate_neighbors_rec(
+            tree: &taffy::TaffyTree<NodeContext>,
+            node: taffy::NodeId,
+            layout_dir: LayoutDir,
+            resize_dir: ResizeDir,
+            ret: &mut HashMap<taffy::NodeId, (bool, bool)>,
+        ) -> bool {
+            let mut has_neighbor = false;
+            if let Some(parent) = tree.parent(node) {
+                let sibling_direction = tree.style(parent).unwrap().flex_direction;
+                let in_same_layout_dir = match sibling_direction {
+                    taffy::FlexDirection::Row | taffy::FlexDirection::RowReverse => {
+                        layout_dir == LayoutDir::Row
+                    }
+                    taffy::FlexDirection::Column | taffy::FlexDirection::ColumnReverse => {
+                        layout_dir == LayoutDir::Col
+                    }
+                };
+
+                if !in_same_layout_dir {
+                    has_neighbor =
+                        calculate_neighbors_rec(tree, parent, layout_dir, resize_dir, ret);
+                    ret.insert(node, (false, has_neighbor));
+                } else {
+                    let siblings = tree.children(parent).unwrap();
+                    let node_idx = siblings.iter().position(|n| *n == node).unwrap();
+                    let has_immediate_siblings = if resize_dir == ResizeDir::Ahead {
+                        node_idx < siblings.len() - 1
+                    } else {
+                        node_idx > 0
+                    };
+                    has_neighbor =
+                        calculate_neighbors_rec(tree, parent, layout_dir, resize_dir, ret)
+                            || has_immediate_siblings;
+                    ret.insert(node, (has_immediate_siblings, has_neighbor));
+                }
+            }
+
+            has_neighbor
+        }
+
+        let mut ret = HashMap::new();
+
+        calculate_neighbors_rec(&self.taffy_tree, node, layout_dir, resize_dir, &mut ret);
+
+        ret
+    }
+
+    /// Walks the layout tree upward to resize a tile in a given direction.
+    fn resize_tile_in_direction(
+        &mut self,
+        node: taffy::NodeId,
+        old_size: f32,
+        mut new_size: i32,
+        layout_dir: LayoutDir,
+        resize_dir: ResizeDir,
+    ) {
+        let delta = new_size as f32 - old_size;
+
+        let neighbors = self.calculate_neighbors(node, layout_dir, resize_dir);
+
+        let mut current = node;
+        while let Some(parent) = self.taffy_tree.parent(current) {
+            let sibling_direction = self.taffy_tree.style(parent).unwrap().flex_direction;
+            let in_same_layout_dir = match sibling_direction {
+                taffy::FlexDirection::Row | taffy::FlexDirection::RowReverse => {
+                    layout_dir == LayoutDir::Row
+                }
+                taffy::FlexDirection::Column | taffy::FlexDirection::ColumnReverse => {
+                    layout_dir == LayoutDir::Col
+                }
+            };
+            if !in_same_layout_dir {
+                // Walk the tree upward to try to find neighboring nodes to resize
+                current = parent;
+            } else {
+                let &(immediate_neighbor, has_any_neighbors) = neighbors.get(&current).unwrap();
+
+                let siblings = self.taffy_tree.children(parent).unwrap();
+                let node_idx = siblings.iter().position(|n| *n == current).unwrap();
+                if !immediate_neighbor {
+                    // If there's no immediate neighbor (i.e. siblings with the same parent in the
+                    // given direction), we need to resize the layout nodes under the current
+                    // parent in the opposite direction to keep them in the same spot when
+                    // resizing ancestor nodes.
+                    //
+                    // However, we don't need to perform that resizing if there are no
+                    // neighbors *at all* (i.e. the tile is at the edge of the screen).
+                    if has_any_neighbors {
+                        let to_resize_opposing = if resize_dir == ResizeDir::Ahead {
+                            &siblings[..=node_idx]
+                        } else {
+                            &siblings[node_idx..]
+                        };
+
+                        let mut geos = to_resize_opposing
+                            .iter()
+                            .map(|node| self.taffy_tree.layout(*node).unwrap().size)
+                            .map(|size| match layout_dir {
+                                LayoutDir::Row => size.width,
+                                LayoutDir::Col => size.height,
+                            })
+                            .collect::<Vec<_>>();
+
+                        // Calculate the new total size of the parent node
+                        // after resizing for use in ancestor nodes
+                        let mut total_size: f32 = geos.iter().sum();
+                        total_size += new_size as f32
+                            - match resize_dir {
+                                ResizeDir::Ahead => geos[node_idx],
+                                ResizeDir::Behind => geos[0],
+                            };
+
+                        if resize_dir == ResizeDir::Ahead {
+                            geos[node_idx] = new_size as f32;
+                        } else {
+                            geos[0] = new_size as f32;
+                        }
+
+                        new_size = total_size.round() as i32;
+
+                        let basises_sum = to_resize_opposing
+                            .iter()
+                            .map(|node| self.taffy_tree.style(*node).unwrap().flex_basis.value())
+                            .sum();
+
+                        let new_basises = calculate_flex_basises(&geos, basises_sum);
+
+                        for (&node, new_basis) in to_resize_opposing.iter().zip(new_basises) {
+                            let mut style = self.taffy_tree.style(node).unwrap().clone();
+                            style.flex_basis = taffy::Dimension::percent(new_basis);
+                            self.taffy_tree.set_style(node, style).unwrap();
+                        }
+                    }
+
+                    current = parent;
+                } else {
+                    break;
+                }
+            }
+        }
+
+        // See below docs
+        self.resize_final(current, new_size, delta, layout_dir, resize_dir);
+    }
+
+    /// Performs a final resize on the top-most node that needs resizing
+    /// in the given direction.
+    ///
+    /// This is a modification of the above resizing logic that additionally
+    /// subtracts the `delta_from_original_size` from all nodes in the
+    /// opposite direction to keep the other edge of the original node
+    /// in the same spot.
+    fn resize_final(
+        &mut self,
+        node: taffy::NodeId,
+        new_size: i32,
+        delta_from_original_size: f32,
+        layout_dir: LayoutDir,
+        resize_dir: ResizeDir,
+    ) {
+        let Some(parent) = self.taffy_tree.parent(node) else {
+            return;
+        };
+
+        let siblings = self.taffy_tree.children(parent).unwrap();
+        let node_idx = siblings.iter().position(|n| *n == node).unwrap();
+
+        let to_resize = if resize_dir == ResizeDir::Ahead {
+            &siblings[node_idx..]
+        } else {
+            &siblings[..=node_idx]
+        };
+
+        let mut geos = to_resize
+            .iter()
+            .map(|node| self.taffy_tree.unrounded_layout(*node).size)
+            .map(|size| match layout_dir {
+                LayoutDir::Row => size.width,
+                LayoutDir::Col => size.height,
+            })
+            .collect::<Vec<_>>();
+
+        let num_next_to = geos.len() - 1;
+        if resize_dir == ResizeDir::Ahead {
+            geos[0] = new_size as f32;
+
+            // Offset nodes in the other direction to keep the edge opposing
+            // the resize in the same spot.
+            for geo in &mut geos[1..] {
+                *geo -= delta_from_original_size / num_next_to as f32;
+            }
+        } else {
+            geos[node_idx] = new_size as f32;
+
+            // Offset nodes in the other direction to keep the edge opposing
+            // the resize in the same spot.
+            for geo in &mut geos[..node_idx] {
+                *geo -= delta_from_original_size / num_next_to as f32;
+            }
+        }
+
+        let basises_sum = to_resize
+            .iter()
+            .map(|node| self.taffy_tree.style(*node).unwrap().flex_basis.value())
+            .sum();
+
+        let new_basises = calculate_flex_basises(&geos, basises_sum);
+
+        for (&node, new_basis) in to_resize.iter().zip(new_basises) {
+            let mut style = self.taffy_tree.style(node).unwrap().clone();
+            style.flex_basis = taffy::Dimension::percent(new_basis);
+            self.taffy_tree.set_style(node, style).unwrap();
+        }
+    }
+
+    pub fn resize_tile(
+        &mut self,
+        node: taffy::NodeId,
+        new_size: Size<i32, Logical>,
+        resize_x_dir: ResizeDir,
+        resize_y_dir: ResizeDir,
+    ) {
+        let old_width = self.taffy_tree.layout(node).unwrap().size.width;
+        let old_height = self.taffy_tree.layout(node).unwrap().size.height;
+
+        self.resize_tile_in_direction(node, old_width, new_size.w, LayoutDir::Row, resize_x_dir);
+
+        self.resize_tile_in_direction(node, old_height, new_size.h, LayoutDir::Col, resize_y_dir);
+    }
+}
+
+#[derive(PartialEq, Eq, Clone, Copy)]
+enum LayoutDir {
+    Row,
+    Col,
+}
+
+#[derive(PartialEq, Eq, Clone, Copy)]
+pub enum ResizeDir {
+    Ahead,
+    Behind,
+}
+
+/// Calculates new flex basises for the given lengths.
+///
+/// The sum of the new basises will equal `basises_sum`.
+fn calculate_flex_basises(new_lengths: &[f32], basises_sum: f32) -> Vec<f32> {
+    let new_sum = new_lengths.iter().sum::<f32>();
+
+    let new_proportions = new_lengths
+        .iter()
+        .map(|len| *len / new_sum)
+        .collect::<Vec<_>>();
+
+    let new_props_sum = new_proportions.iter().sum::<f32>();
+
+    let scale_amt = basises_sum / new_props_sum;
+
+    new_proportions
+        .into_iter()
+        .map(|prop| prop * scale_amt)
+        .collect()
 }
 
 #[derive(Default, Clone, PartialEq)]
