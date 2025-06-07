@@ -140,7 +140,7 @@ indexmap = { workspace = true }
 snowcap = { path = "./snowcap", optional = true }
 snowcap-api = { path = "./snowcap/api/rust", optional = true }
 assert_matches = "1.5.0"
-taffy = "0.8.0"
+taffy = "=0.8.2" # Patched below for rounding fixes
 slab_tree = "0.3.2"
 bimap = "0.6.3"
 itertools = "0.14.0"
@@ -175,3 +175,6 @@ lto = "thin"
 
 [lints]
 workspace = true
+
+[patch.crates-io]
+taffy = { git = "https://github.com/Ottatop/taffy", rev = "dcdaa42" } # Rounding fixes

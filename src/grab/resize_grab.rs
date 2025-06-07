@@ -22,6 +22,7 @@ use smithay::{
 use tracing::warn;
 
 use crate::{
+    layout::tree::ResizeDir,
     state::{State, WithState},
     util::transaction::{Location, TransactionBuilder},
     window::WindowElement,
@@ -117,31 +118,34 @@ impl PointerGrab<State> for ResizeSurfaceGrab {
 
     fn motion(
         &mut self,
-        data: &mut State,
+        state: &mut State,
         handle: &mut PointerInnerHandle<'_, State>,
         _focus: Option<(<State as SeatHandler>::PointerFocus, Point<f64, Logical>)>,
         event: &smithay::input::pointer::MotionEvent,
     ) {
-        handle.motion(data, None, event);
+        handle.motion(state, None, event);
 
-        if data.pinnacle.layout_state.pending_resize {
+        if state.pinnacle.layout_state.pending_resize {
             return;
         }
 
         // TODO: if-let chains in 1.88
-        let output = self.window.output(&data.pinnacle);
+        let output = self.window.output(&state.pinnacle);
 
         if !self.window.alive() || output.is_none() {
-            data.pinnacle
+            state
+                .pinnacle
                 .cursor_state
                 .set_cursor_image(CursorImageStatus::default_named());
-            handle.unset_grab(self, data, event.serial, event.time, true);
+            handle.unset_grab(self, state, event.serial, event.time, true);
             return;
         }
 
         let Some(output) = output else {
             unreachable!();
         };
+
+        state.pinnacle.layout_state.pending_resize = true;
 
         let delta = (event.location - self.start_data.location).to_i32_round::<i32>();
 
@@ -198,6 +202,29 @@ impl PointerGrab<State> for ResizeSurfaceGrab {
             new_window_height.clamp(min_height, max_height),
         ));
 
+        if self.window.with_state(|state| state.layout_mode.is_tiled()) {
+            let (resize_x_dir, resize_y_dir) = match self.edges.0 {
+                xdg_toplevel::ResizeEdge::Top => (ResizeDir::Ahead, ResizeDir::Behind),
+                xdg_toplevel::ResizeEdge::Bottom => (ResizeDir::Ahead, ResizeDir::Ahead),
+                xdg_toplevel::ResizeEdge::Left => (ResizeDir::Behind, ResizeDir::Ahead),
+                xdg_toplevel::ResizeEdge::TopLeft => (ResizeDir::Behind, ResizeDir::Behind),
+                xdg_toplevel::ResizeEdge::BottomLeft => (ResizeDir::Behind, ResizeDir::Ahead),
+                xdg_toplevel::ResizeEdge::Right => (ResizeDir::Ahead, ResizeDir::Ahead),
+                xdg_toplevel::ResizeEdge::TopRight => (ResizeDir::Ahead, ResizeDir::Behind),
+                xdg_toplevel::ResizeEdge::BottomRight => (ResizeDir::Ahead, ResizeDir::Ahead),
+                _ => (ResizeDir::Ahead, ResizeDir::Ahead),
+            };
+
+            state.resize_tile(
+                &self.window,
+                (new_window_width.max(1), new_window_height.max(1)).into(),
+                resize_x_dir,
+                resize_y_dir,
+            );
+
+            return;
+        }
+
         self.window
             .with_state_mut(|state| state.floating_size = self.last_window_size);
 
@@ -220,8 +247,6 @@ impl PointerGrab<State> for ResizeSurfaceGrab {
             }
         };
 
-        data.pinnacle.layout_state.pending_resize = true;
-
         let mut transaction_builder = TransactionBuilder::new();
         transaction_builder.add(
             &self.window,
@@ -230,9 +255,10 @@ impl PointerGrab<State> for ResizeSurfaceGrab {
                 initial_geo: self.initial_window_geo,
             },
             serial,
-            &data.pinnacle.loop_handle,
+            &state.pinnacle.loop_handle,
         );
-        data.pinnacle
+        state
+            .pinnacle
             .layout_state
             .pending_transactions
             .entry(output.downgrade())
@@ -374,7 +400,9 @@ impl State {
                 return;
             };
 
-            if window.with_state(|state| !state.layout_mode.is_floating()) {
+            if window.with_state(|state| {
+                !state.layout_mode.is_floating() && !state.layout_mode.is_tiled()
+            }) {
                 return;
             }
 
@@ -423,7 +451,9 @@ impl State {
             return;
         };
 
-        if window.with_state(|state| !state.layout_mode.is_floating()) {
+        if window
+            .with_state(|state| !state.layout_mode.is_floating() && !state.layout_mode.is_tiled())
+        {
             return;
         }
 
