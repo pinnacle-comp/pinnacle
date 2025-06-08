@@ -12,7 +12,7 @@ use tracing::error;
 
 use crate::{
     state::{State, WithState},
-    util::transaction::TransactionBuilder,
+    util::transaction::{Location, TransactionBuilder},
     window::{
         window_state::{LayoutMode, LayoutModeKind},
         WindowElement,
@@ -131,7 +131,7 @@ impl State {
             self.pinnacle.request_layout(&output);
         } else if let Some(geo) = geo {
             self.pinnacle.configure_window_if_nontiled(window);
-            let mut transaction_builder = TransactionBuilder::new(false, false);
+            let mut transaction_builder = TransactionBuilder::new();
             let serial = window
                 .toplevel()
                 .and_then(|toplevel| toplevel.send_pending_configure());
@@ -145,13 +145,18 @@ impl State {
                     surface_primary_scanout_output,
                 );
 
-                transaction_builder.add(window, geo.loc, serial, &self.pinnacle.loop_handle);
+                transaction_builder.add(
+                    window,
+                    Location::MapTo(geo.loc),
+                    serial,
+                    &self.pinnacle.loop_handle,
+                );
                 self.pinnacle
                     .layout_state
                     .pending_transactions
                     .entry(output.downgrade())
                     .or_default()
-                    .push(transaction_builder.into_pending(Vec::new()));
+                    .push(transaction_builder.into_pending(Vec::new(), false, false));
             } else {
                 // No changes were needed, we can map immediately here
                 self.pinnacle

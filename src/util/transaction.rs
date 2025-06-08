@@ -24,12 +24,13 @@ use smithay::{
         },
         wayland_server::Client,
     },
-    utils::{IsAlive, Logical, Point, Serial},
+    utils::{IsAlive, Logical, Point, Rectangle, Serial},
     wayland::compositor::{Blocker, BlockerState},
 };
 use tracing::{error, trace, trace_span, warn};
 
 use crate::{
+    grab::resize_grab::ResizeEdge,
     state::{State, WithState},
     window::{UnmappingWindow, WindowElement},
 };
@@ -44,9 +45,20 @@ const TIMEOUT: Duration = Duration::from_millis(150);
 pub struct TransactionBuilder {
     inner: Arc<Inner>,
     deadline: Rc<RefCell<Deadline>>,
-    map_tos: HashMap<WindowElement, Point<i32, Logical>>,
-    is_swap: bool,
-    is_resize: bool,
+    target_locs: HashMap<WindowElement, Location>,
+}
+
+/// The target location for a window.
+#[derive(Debug, Clone, Copy)]
+pub enum Location {
+    /// The window should be mapped directly to this point.
+    MapTo(Point<i32, Logical>),
+    /// The location should be calculated from the resize edges, initial geometry,
+    /// and current window geometry.
+    FloatingResize {
+        edges: ResizeEdge,
+        initial_geo: Rectangle<i32, Logical>,
+    },
 }
 
 /// A pending transaction that contains the target locations of windows once they finish
@@ -54,7 +66,7 @@ pub struct TransactionBuilder {
 #[derive(Debug)]
 pub struct PendingTransaction {
     /// The windows in this transactions along with their target locations.
-    pub target_locs: HashMap<WindowElement, Point<i32, Logical>>,
+    pub target_locs: HashMap<WindowElement, Location>,
     inner: Weak<Inner>,
     /// Whether this transaction was for a window swap.
     ///
@@ -86,18 +98,13 @@ impl PendingTransaction {
 
 impl TransactionBuilder {
     /// Creates a new `TransactionBuilder`.
-    ///
-    /// `is_swap` determines whether swapping will be unthrottled once this
-    /// transaction finishes.
-    pub fn new(is_swap: bool, is_resize: bool) -> Self {
+    pub fn new() -> Self {
         Self {
             inner: Arc::new(Inner::new()),
             deadline: Rc::new(RefCell::new(Deadline::NotRegistered(
                 Instant::now() + TIMEOUT,
             ))),
-            map_tos: Default::default(),
-            is_swap,
-            is_resize,
+            target_locs: Default::default(),
         }
     }
 
@@ -105,7 +112,7 @@ impl TransactionBuilder {
     pub fn add(
         &mut self,
         window: &WindowElement,
-        target_loc: Point<i32, Logical>,
+        target_loc: Location,
         serial: Option<Serial>,
         loop_handle: &LoopHandle<'static, State>,
     ) {
@@ -120,17 +127,25 @@ impl TransactionBuilder {
             window.with_state_mut(|state| state.pending_transactions.push((serial, txn)));
         }
 
-        self.map_tos.insert(window.clone(), target_loc);
+        self.target_locs.insert(window.clone(), target_loc);
     }
 
     /// Consumes this transaction builder and returns a pending transaction containing
     /// added windows and their target locations.
-    pub fn into_pending(self, unmapping: Vec<Rc<UnmappingWindow>>) -> PendingTransaction {
+    ///
+    /// `is_swap` and `is_resize` are used to unthrottle window swapping and resizing
+    /// when this transaction completes.
+    pub fn into_pending(
+        self,
+        unmapping: Vec<Rc<UnmappingWindow>>,
+        is_swap: bool,
+        is_resize: bool,
+    ) -> PendingTransaction {
         PendingTransaction {
-            target_locs: self.map_tos,
+            target_locs: self.target_locs,
             inner: Arc::downgrade(&self.inner),
-            is_swap: self.is_swap,
-            is_resize: self.is_resize,
+            is_swap,
+            is_resize,
             _unmapping: unmapping,
         }
     }

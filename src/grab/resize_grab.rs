@@ -23,7 +23,7 @@ use tracing::warn;
 
 use crate::{
     state::{State, WithState},
-    util::transaction::TransactionBuilder,
+    util::transaction::{Location, TransactionBuilder},
     window::WindowElement,
 };
 
@@ -222,13 +222,13 @@ impl PointerGrab<State> for ResizeSurfaceGrab {
 
         data.pinnacle.layout_state.pending_resize = true;
 
-        let mut transaction_builder = TransactionBuilder::new(false, true);
+        let mut transaction_builder = TransactionBuilder::new();
         transaction_builder.add(
             &self.window,
-            // We need the updated window size to correctly map the window, so set
-            // the target_loc to the bottom right corner then subtract the
-            // updated size when updating the layout.
-            self.initial_window_geo.loc + self.initial_window_geo.size,
+            Location::FloatingResize {
+                edges: self.edges,
+                initial_geo: self.initial_window_geo,
+            },
             serial,
             &data.pinnacle.loop_handle,
         );
@@ -237,7 +237,7 @@ impl PointerGrab<State> for ResizeSurfaceGrab {
             .pending_transactions
             .entry(output.downgrade())
             .or_default()
-            .push(transaction_builder.into_pending(Vec::new()));
+            .push(transaction_builder.into_pending(Vec::new(), false, true));
     }
 
     fn relative_motion(

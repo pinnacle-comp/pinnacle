@@ -12,6 +12,7 @@ use indexmap::IndexSet;
 use smithay::{
     desktop::{layer_map_for_output, utils::surface_primary_scanout_output, WindowSurface},
     output::{Output, WeakOutput},
+    reexports::wayland_protocols::xdg::shell::server::xdg_toplevel,
     utils::{Logical, Rectangle},
 };
 use tokio::sync::mpsc::UnboundedSender;
@@ -23,7 +24,7 @@ use crate::{
     output::OutputName,
     state::{Pinnacle, State, WithState},
     tag::TagId,
-    util::transaction::{PendingTransaction, TransactionBuilder},
+    util::transaction::{Location, PendingTransaction, TransactionBuilder},
     window::{UnmappingWindow, WindowElement, ZIndexElement},
 };
 
@@ -152,13 +153,12 @@ impl Pinnacle {
             }
         }
 
-        let mut transaction_builder =
-            TransactionBuilder::new(self.layout_state.pending_swap, false);
+        let mut transaction_builder = TransactionBuilder::new();
 
         for (win, geo, _) in wins_and_geos {
             if let WindowSurface::Wayland(toplevel) = win.underlying_surface() {
                 let serial = toplevel.send_pending_configure();
-                transaction_builder.add(&win, geo.loc, serial, &self.loop_handle);
+                transaction_builder.add(&win, Location::MapTo(geo.loc), serial, &self.loop_handle);
 
                 // Send a frame to get unmapped windows to update
                 win.send_frame(
@@ -168,7 +168,7 @@ impl Pinnacle {
                     surface_primary_scanout_output,
                 );
             } else {
-                transaction_builder.add(&win, geo.loc, None, &self.loop_handle);
+                transaction_builder.add(&win, Location::MapTo(geo.loc), None, &self.loop_handle);
             }
         }
 
@@ -184,7 +184,11 @@ impl Pinnacle {
             .pending_transactions
             .entry(output.downgrade())
             .or_default()
-            .push(transaction_builder.into_pending(unmapping));
+            .push(transaction_builder.into_pending(
+                unmapping,
+                self.layout_state.pending_swap,
+                false,
+            ));
 
         let (remaining_wins, _remaining_geos) = zipped.unzip::<_, _, Vec<_>, Vec<_>>();
 
@@ -348,19 +352,34 @@ impl State {
 
             for transaction in transactions {
                 let mut outputs = Vec::new();
-                for (window, mut loc) in transaction.target_locs {
+                for (window, loc) in transaction.target_locs {
                     if !window.is_on_active_tag() {
                         warn!("Attempted to map a window without active tags");
                         continue;
                     }
                     outputs.extend(window.output(&self.pinnacle));
 
-                    // Windows in resize transactions have their target loc set to the bottom right
-                    // corner of the geometry at the resize's start, so subtract the current
-                    // size here to get the location of the top left corner.
-                    if transaction.is_resize {
-                        loc = loc - window.geometry().size;
-                    }
+                    let loc = match loc {
+                        Location::MapTo(loc) => loc,
+                        Location::FloatingResize { edges, initial_geo } => {
+                            let mut loc = initial_geo.loc;
+
+                            if let xdg_toplevel::ResizeEdge::Left
+                            | xdg_toplevel::ResizeEdge::TopLeft
+                            | xdg_toplevel::ResizeEdge::BottomLeft = edges.0
+                            {
+                                loc.x += initial_geo.size.w - window.geometry().size.w;
+                            }
+                            if let xdg_toplevel::ResizeEdge::Top
+                            | xdg_toplevel::ResizeEdge::TopRight
+                            | xdg_toplevel::ResizeEdge::TopLeft = edges.0
+                            {
+                                loc.y += initial_geo.size.h - window.geometry().size.h;
+                            }
+
+                            loc
+                        }
+                    };
 
                     if let Some(surface) = window.x11_surface() {
                         let _ = surface.configure(Rectangle::new(loc, surface.geometry().size));
