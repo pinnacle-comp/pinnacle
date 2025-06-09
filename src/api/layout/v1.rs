@@ -7,7 +7,7 @@ use tonic::{Request, Streaming};
 
 use crate::{
     api::{run_bidirectional_streaming, ResponseStream, TonicResult},
-    layout::LayoutInfo,
+    layout::{tree::MIN_TILE_SIZE, LayoutInfo},
     output::OutputName,
 };
 
