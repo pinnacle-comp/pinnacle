@@ -1,8 +1,11 @@
 use std::collections::{HashMap, HashSet};
 
+use itertools::Itertools;
 use smithay::utils::{Logical, Rectangle, Size};
 
 use crate::util::treediff::EditAction;
+
+pub const MIN_TILE_SIZE: f32 = 50.0;
 
 #[derive(PartialEq, Clone)]
 pub struct LayoutNode {
@@ -31,12 +34,45 @@ pub struct LayoutTree {
     taffy_tree: taffy::TaffyTree<NodeContext>,
     root: LayoutNode,
     taffy_root_id: taffy::NodeId,
+    neighbor_info: HashMap<taffy::NodeId, NeighborInfo>,
 }
 
 #[derive(Debug, Clone, Default)]
 struct NodeContext {
     traversal_index: u32,
     traversal_overrides: HashMap<u32, Vec<u32>>,
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+struct NeighborInfo {
+    has_immediate_row_neighbor_ahead: bool,
+    has_immediate_row_neighbor_behind: bool,
+    has_immediate_col_neighbor_ahead: bool,
+    has_immediate_col_neighbor_behind: bool,
+    row_neighbors_ahead: u32,
+    row_neighbors_behind: u32,
+    col_neighbors_ahead: u32,
+    col_neighbors_behind: u32,
+}
+
+impl NeighborInfo {
+    fn has_immediate_neighbor(&self, layout_dir: LayoutDir, resize_dir: ResizeDir) -> bool {
+        match (layout_dir, resize_dir) {
+            (LayoutDir::Row, ResizeDir::Ahead) => self.has_immediate_row_neighbor_ahead,
+            (LayoutDir::Row, ResizeDir::Behind) => self.has_immediate_row_neighbor_behind,
+            (LayoutDir::Col, ResizeDir::Ahead) => self.has_immediate_col_neighbor_ahead,
+            (LayoutDir::Col, ResizeDir::Behind) => self.has_immediate_col_neighbor_behind,
+        }
+    }
+
+    fn neighbors(&self, layout_dir: LayoutDir, resize_dir: ResizeDir) -> u32 {
+        match (layout_dir, resize_dir) {
+            (LayoutDir::Row, ResizeDir::Ahead) => self.row_neighbors_ahead,
+            (LayoutDir::Row, ResizeDir::Behind) => self.row_neighbors_behind,
+            (LayoutDir::Col, ResizeDir::Ahead) => self.col_neighbors_ahead,
+            (LayoutDir::Col, ResizeDir::Behind) => self.col_neighbors_behind,
+        }
+    }
 }
 
 impl LayoutTree {
@@ -132,11 +168,16 @@ impl LayoutTree {
             )
             .unwrap();
 
-        Self {
+        let mut this = Self {
             taffy_tree: tree,
             root,
             taffy_root_id: actual_root,
-        }
+            neighbor_info: HashMap::new(),
+        };
+
+        this.update_neighbor_info();
+
+        this
     }
 
     pub fn compute_geos(
@@ -368,63 +409,170 @@ impl LayoutTree {
         Self::process_leaves(&mut self.taffy_tree, self.taffy_root_id);
 
         self.root = new_root;
+
+        self.update_neighbor_info();
     }
 
-    /// Calculates whether a node and its ancestors have `(immediate neighbors, ancestral neighbors)`
-    /// in the given [`ResizeDir`] (ahead or behind) in relation to the given layout direction.
-    fn calculate_neighbors(
-        &self,
-        node: taffy::NodeId,
-        layout_dir: LayoutDir,
-        resize_dir: ResizeDir,
-    ) -> HashMap<taffy::NodeId, (bool, bool)> {
-        /// Returns if there's a neighbor.
-        fn calculate_neighbors_rec(
+    fn update_neighbor_info(&mut self) {
+        /// Returns (row_nodes_under_node, col_nodes_under_node).
+        fn update_rec(
             tree: &taffy::TaffyTree<NodeContext>,
             node: taffy::NodeId,
-            layout_dir: LayoutDir,
-            resize_dir: ResizeDir,
-            ret: &mut HashMap<taffy::NodeId, (bool, bool)>,
-        ) -> bool {
-            let mut has_neighbor = false;
-            if let Some(parent) = tree.parent(node) {
-                let sibling_direction = tree.style(parent).unwrap().flex_direction;
-                let in_same_layout_dir = match sibling_direction {
-                    taffy::FlexDirection::Row | taffy::FlexDirection::RowReverse => {
-                        layout_dir == LayoutDir::Row
-                    }
-                    taffy::FlexDirection::Column | taffy::FlexDirection::ColumnReverse => {
-                        layout_dir == LayoutDir::Col
-                    }
-                };
-
-                if !in_same_layout_dir {
-                    has_neighbor =
-                        calculate_neighbors_rec(tree, parent, layout_dir, resize_dir, ret);
-                    ret.insert(node, (false, has_neighbor));
-                } else {
-                    let siblings = tree.children(parent).unwrap();
-                    let node_idx = siblings.iter().position(|n| *n == node).unwrap();
-                    let has_immediate_siblings = if resize_dir == ResizeDir::Ahead {
-                        node_idx < siblings.len() - 1
-                    } else {
-                        node_idx > 0
-                    };
-                    has_neighbor =
-                        calculate_neighbors_rec(tree, parent, layout_dir, resize_dir, ret)
-                            || has_immediate_siblings;
-                    ret.insert(node, (has_immediate_siblings, has_neighbor));
-                }
+            ahead: bool,
+            neighbors_row: u32,
+            neighbors_col: u32,
+            has_immediate_row_neighbor: bool,
+            has_immediate_col_neighbor: bool,
+            ret: &mut HashMap<taffy::NodeId, NeighborInfo>,
+        ) -> (u32, u32) {
+            let entry = ret.entry(node).or_default();
+            if ahead {
+                entry.row_neighbors_ahead = neighbors_row;
+                entry.col_neighbors_ahead = neighbors_col;
+                entry.has_immediate_row_neighbor_ahead = has_immediate_row_neighbor;
+                entry.has_immediate_col_neighbor_ahead = has_immediate_col_neighbor;
+            } else {
+                entry.row_neighbors_behind = neighbors_row;
+                entry.col_neighbors_behind = neighbors_col;
+                entry.has_immediate_row_neighbor_behind = has_immediate_row_neighbor;
+                entry.has_immediate_col_neighbor_behind = has_immediate_col_neighbor;
             }
 
-            has_neighbor
+            let children = tree.children(node).unwrap().into_iter();
+            let flex_direction = tree.style(node).unwrap().flex_direction;
+            let is_row = match flex_direction {
+                taffy::FlexDirection::Row | taffy::FlexDirection::RowReverse => true,
+                taffy::FlexDirection::Column | taffy::FlexDirection::ColumnReverse => false,
+            };
+            let children = match ahead {
+                true => itertools::Either::Left(children.rev().with_position()),
+                false => itertools::Either::Right(children.with_position()),
+            };
+
+            let mut row_nodes_under_this_node = neighbors_row;
+            let mut col_nodes_under_this_node = neighbors_col;
+
+            for (pos, child) in children {
+                let has_immediate_neighbor = match pos {
+                    itertools::Position::First | itertools::Position::Only => false,
+                    itertools::Position::Middle | itertools::Position::Last => true,
+                };
+                let has_immediate_row_neighbor = is_row && has_immediate_neighbor;
+                let has_immediate_col_neighbor = !is_row && has_immediate_neighbor;
+                let (row_nodes_under_child, col_nodes_under_child) = update_rec(
+                    tree,
+                    child,
+                    ahead,
+                    if is_row {
+                        row_nodes_under_this_node
+                    } else {
+                        neighbors_row
+                    },
+                    if !is_row {
+                        col_nodes_under_this_node
+                    } else {
+                        neighbors_col
+                    },
+                    has_immediate_row_neighbor,
+                    has_immediate_col_neighbor,
+                    ret,
+                );
+                row_nodes_under_this_node = u32::max(
+                    row_nodes_under_this_node + (is_row && pos != itertools::Position::Only) as u32,
+                    row_nodes_under_child,
+                );
+                col_nodes_under_this_node = u32::max(
+                    col_nodes_under_this_node
+                        + (!is_row && pos != itertools::Position::Only) as u32,
+                    col_nodes_under_child,
+                );
+            }
+
+            (row_nodes_under_this_node, col_nodes_under_this_node)
         }
 
         let mut ret = HashMap::new();
 
-        calculate_neighbors_rec(&self.taffy_tree, node, layout_dir, resize_dir, &mut ret);
+        update_rec(
+            &self.taffy_tree,
+            self.taffy_root_id,
+            true,
+            0,
+            0,
+            false,
+            false,
+            &mut ret,
+        );
 
-        ret
+        update_rec(
+            &self.taffy_tree,
+            self.taffy_root_id,
+            false,
+            0,
+            0,
+            false,
+            false,
+            &mut ret,
+        );
+
+        self.neighbor_info = ret;
+    }
+
+    /// Returns the amount of available space in the direction for a node with no
+    /// immediate siblings but that *does* have a neighboring node.
+    fn available_space_in_direction(
+        &self,
+        node: taffy::NodeId,
+        layout_dir: LayoutDir,
+        resize_dir: ResizeDir,
+    ) -> f32 {
+        let mut current = node;
+        while let Some(parent) = self.taffy_tree.parent(current) {
+            let sibling_direction = self.taffy_tree.style(parent).unwrap().flex_direction;
+            let in_same_layout_dir = match sibling_direction {
+                taffy::FlexDirection::Row | taffy::FlexDirection::RowReverse => {
+                    layout_dir == LayoutDir::Row
+                }
+                taffy::FlexDirection::Column | taffy::FlexDirection::ColumnReverse => {
+                    layout_dir == LayoutDir::Col
+                }
+            };
+            if !in_same_layout_dir {
+                current = parent;
+            } else {
+                let current_neighbor_info = self.neighbor_info.get(&current).unwrap();
+
+                if !current_neighbor_info.has_immediate_neighbor(layout_dir, resize_dir) {
+                    current = parent;
+                } else {
+                    break;
+                }
+            }
+        }
+
+        let parent = self.taffy_tree.parent(current).expect("ALALAL");
+
+        let siblings = self.taffy_tree.children(parent).unwrap();
+        let node_idx = siblings.iter().position(|n| *n == current).unwrap();
+
+        let to_resize = if resize_dir == ResizeDir::Ahead {
+            siblings.get(node_idx + 1..).unwrap_or_default()
+        } else {
+            &siblings[..node_idx]
+        };
+
+        let total_size = to_resize
+            .iter()
+            .map(|node| self.taffy_tree.unrounded_layout(*node).size)
+            .map(|size| match layout_dir {
+                LayoutDir::Row => size.width,
+                LayoutDir::Col => size.height,
+            })
+            .sum::<f32>()
+            .round();
+        let len = to_resize.len() as u32;
+
+        (total_size - MIN_TILE_SIZE * len as f32).max(0.0)
     }
 
     /// Walks the layout tree upward to resize a tile in a given direction.
@@ -436,9 +584,8 @@ impl LayoutTree {
         layout_dir: LayoutDir,
         resize_dir: ResizeDir,
     ) {
-        let delta = new_size as f32 - old_size;
-
-        let neighbors = self.calculate_neighbors(node, layout_dir, resize_dir);
+        new_size = new_size.max(MIN_TILE_SIZE as i32);
+        let mut delta = new_size as f32 - old_size;
 
         let mut current = node;
         while let Some(parent) = self.taffy_tree.parent(current) {
@@ -455,11 +602,11 @@ impl LayoutTree {
                 // Walk the tree upward to try to find neighboring nodes to resize
                 current = parent;
             } else {
-                let &(immediate_neighbor, has_any_neighbors) = neighbors.get(&current).unwrap();
+                let current_neighbor_info = self.neighbor_info.get(&current).unwrap();
 
                 let siblings = self.taffy_tree.children(parent).unwrap();
                 let node_idx = siblings.iter().position(|n| *n == current).unwrap();
-                if !immediate_neighbor {
+                if !current_neighbor_info.has_immediate_neighbor(layout_dir, resize_dir) {
                     // If there's no immediate neighbor (i.e. siblings with the same parent in the
                     // given direction), we need to resize the layout nodes under the current
                     // parent in the opposite direction to keep them in the same spot when
@@ -467,7 +614,7 @@ impl LayoutTree {
                     //
                     // However, we don't need to perform that resizing if there are no
                     // neighbors *at all* (i.e. the tile is at the edge of the screen).
-                    if has_any_neighbors {
+                    if current_neighbor_info.neighbors(layout_dir, resize_dir) > 0 {
                         let to_resize_opposing = if resize_dir == ResizeDir::Ahead {
                             &siblings[..=node_idx]
                         } else {
@@ -483,15 +630,35 @@ impl LayoutTree {
                             })
                             .collect::<Vec<_>>();
 
+                        let mut total_size: f32 = geos.iter().sum();
+
+                        // There are possibly non-sibling nodes neighboring this node in the resize
+                        // direction. We need to know how much space we have to resize them or else
+                        // this algorithm causes nodes in the *opposite* direction to shrink if we
+                        // resize "too far" (i.e. the nodes in the direction can't shrink anymore).
+                        //
+                        // Yes, this is not very performant as it walks up the tree again, but
+                        // we need that size information *now*.
+                        let available_space =
+                            self.available_space_in_direction(current, layout_dir, resize_dir);
+
+                        // Clamp the new size if we "over-resize"
+                        if delta > available_space {
+                            new_size -= (delta - available_space) as i32;
+                            delta = available_space;
+                        }
+
                         // Calculate the new total size of the parent node
                         // after resizing for use in ancestor nodes
-                        let mut total_size: f32 = geos.iter().sum();
                         total_size += new_size as f32
                             - match resize_dir {
                                 ResizeDir::Ahead => geos[node_idx],
                                 ResizeDir::Behind => geos[0],
                             };
 
+                        // Update the size of the current node.
+                        // Later on we'll shrink neighboring nodes in the resize direction
+                        // to keep this node's opposite edge in the same spot.
                         if resize_dir == ResizeDir::Ahead {
                             geos[node_idx] = new_size as f32;
                         } else {
@@ -562,23 +729,62 @@ impl LayoutTree {
             })
             .collect::<Vec<_>>();
 
-        let num_next_to = geos.len() - 1;
+        let num_to_shrink = geos.len() - 1;
+
         if resize_dir == ResizeDir::Ahead {
-            geos[0] = new_size as f32;
+            // Shrink nodes in the same direction to keep the edge opposing
+            // the resize in the same spot, making sure no tile shrinks
+            // below MIN_TILE_SIZE.
 
-            // Offset nodes in the other direction to keep the edge opposing
-            // the resize in the same spot.
-            for geo in &mut geos[1..] {
-                *geo -= delta_from_original_size / num_next_to as f32;
+            let mut shrink = |delta: f32| -> f32 {
+                let mut could_not_shrink_by = 0.0;
+                for geo in &mut geos[1..] {
+                    *geo -= delta / num_to_shrink as f32;
+                    if *geo < MIN_TILE_SIZE {
+                        could_not_shrink_by += MIN_TILE_SIZE - *geo;
+                        *geo = MIN_TILE_SIZE;
+                    }
+                }
+                could_not_shrink_by
+            };
+
+            let mut left_to_shrink = shrink(delta_from_original_size);
+
+            while left_to_shrink > 0.0 {
+                let old = left_to_shrink;
+                left_to_shrink = shrink(left_to_shrink);
+                if (old - left_to_shrink).abs() <= 0.001 {
+                    break;
+                }
             }
+
+            geos[0] = new_size as f32 - left_to_shrink;
         } else {
-            geos[node_idx] = new_size as f32;
+            // Same as above but in the other direction
 
-            // Offset nodes in the other direction to keep the edge opposing
-            // the resize in the same spot.
-            for geo in &mut geos[..node_idx] {
-                *geo -= delta_from_original_size / num_next_to as f32;
+            let mut shrink = |delta: f32| -> f32 {
+                let mut could_not_shrink_by = 0.0;
+                for geo in &mut geos[..node_idx] {
+                    *geo -= delta / num_to_shrink as f32;
+                    if *geo < MIN_TILE_SIZE {
+                        could_not_shrink_by += MIN_TILE_SIZE - *geo;
+                        *geo = MIN_TILE_SIZE;
+                    }
+                }
+                could_not_shrink_by
+            };
+
+            let mut left_to_shrink = shrink(delta_from_original_size);
+
+            while left_to_shrink > 0.0 {
+                let old = left_to_shrink;
+                left_to_shrink = shrink(left_to_shrink);
+                if (old - left_to_shrink).abs() <= 0.001 {
+                    break;
+                }
             }
+
+            geos[node_idx] = new_size as f32 - left_to_shrink;
         }
 
         let basises_sum = to_resize
