@@ -112,6 +112,7 @@ impl XwmHandler for State {
             .cloned()
             .unwrap_or_else(|| {
                 let window = WindowElement::new(Window::new_x11_window(surface));
+                window.with_state_mut(|state| state.layout_mode.set_floating(true));
                 self.pinnacle.windows.push(window.clone());
                 window
             });
