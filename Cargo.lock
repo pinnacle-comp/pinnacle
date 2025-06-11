@@ -1654,9 +1654,9 @@ dependencies = [
 
 [[package]]
 name = "grid"
-version = "0.16.1"
+version = "0.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fb6ae361963ea5fe52038156ea1729f3b4e4ccc0711c362ab2b2d2c0a259e7c3"
+checksum = "71b01d27060ad58be4663b9e4ac9e2d4806918e8876af8912afbddd1a91d5eaa"
 
 [[package]]
 name = "guillotiere"
@@ -4255,9 +4255,8 @@ dependencies = [
 
 [[package]]
 name = "taffy"
-version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "56a844965df28147d726ecc321bf67f287a9bdec5a655f53d4e7e5cad20443dc"
+version = "0.8.2"
+source = "git+https://github.com/Ottatop/taffy?rev=dcdaa42#dcdaa42e0ed220cac60da1455caf589907794e62"
 dependencies = [
  "arrayvec",
  "grid",

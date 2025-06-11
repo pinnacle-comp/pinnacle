@@ -7,7 +7,7 @@ use tonic::{Request, Streaming};
 
 use crate::{
     api::{run_bidirectional_streaming, ResponseStream, TonicResult},
-    layout::LayoutInfo,
+    layout::{tree::MIN_TILE_SIZE, LayoutInfo},
     output::OutputName,
 };
 
@@ -103,6 +103,7 @@ impl TryFrom<layout::v1::LayoutNode> for crate::layout::tree::LayoutNode {
                 layout::v1::FlexDir::Column => taffy::FlexDirection::Column,
             },
             flex_basis: taffy::Dimension::percent(style.size_proportion),
+            flex_grow: 1.0,
             margin: style
                 .gaps
                 .map(|gaps| taffy::Rect {
