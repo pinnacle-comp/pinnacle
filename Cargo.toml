@@ -160,6 +160,9 @@ test-log = { version = "0.2.17", default-features = false, features = ["trace"] 
 pinnacle = { path = ".", features = ["wlcs"], default-features = false }
 pinnacle-api = { path = "./api/rust", default-features = false }
 mlua = { version = "0.10.3", features = ["lua54", "send", "macros"] }
+proptest = "1.7.0"
+proptest-derive = "0.6.0"
+rand = "0.9.1"
 
 [features]
 default = ["snowcap"]

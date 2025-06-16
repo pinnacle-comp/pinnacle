@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod tests;
+
 use std::collections::{HashMap, HashSet};
 
 use itertools::Itertools;
@@ -245,8 +248,10 @@ impl LayoutTree {
             };
 
             if let Some(override_index) = traversal_index {
-                let child = children.remove(override_index as usize);
-                children.insert(0, child);
+                if children.get(override_index as usize).is_some() {
+                    let child = children.remove(override_index as usize);
+                    children.insert(0, child);
+                }
             }
 
             for child in children.into_iter() {
@@ -893,7 +898,8 @@ enum LayoutDir {
     Col,
 }
 
-#[derive(PartialEq, Eq, Clone, Copy)]
+#[derive(PartialEq, Eq, Clone, Copy, Debug)]
+#[cfg_attr(test, derive(proptest_derive::Arbitrary))]
 pub enum ResizeDir {
     Ahead,
     Behind,
