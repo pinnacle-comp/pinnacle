@@ -51,8 +51,6 @@ impl Pinnacle {
             .into_iter()
             .unzip();
 
-        let mut nodes = nodes.into_iter();
-
         let (windows_on_foc_tags, to_unmap) = output.with_state(|state| {
             let focused_tags = state.focused_tags().cloned().collect::<IndexSet<_>>();
             self.windows
@@ -128,12 +126,12 @@ impl Pinnacle {
             .filter(|win| win.with_state(|state| state.layout_mode.is_tiled()))
             .cloned();
 
-        let output_geo = self.space.output_geometry(output).expect("no output geo");
-
-        let non_exclusive_geo = {
-            let map = layer_map_for_output(output);
-            map.non_exclusive_zone()
+        let Some(output_geo) = self.space.output_geometry(output) else {
+            warn!("Cannot update_windows_from_tree without output geo");
+            return;
         };
+
+        let non_exclusive_geo = layer_map_for_output(output).non_exclusive_zone();
 
         let mut zipped = tiled_windows.zip(geometries.into_iter().map(|mut geo| {
             geo.loc += output_geo.loc + non_exclusive_geo.loc;
@@ -145,10 +143,10 @@ impl Pinnacle {
             .map(|(win, geo)| (win, geo, true))
             .collect::<Vec<_>>();
 
-        let just_wins = wins_and_geos_tiled.iter().map(|thin| &thin.0);
+        let just_wins = wins_and_geos_tiled.iter().map(|(win, ..)| win);
 
-        for win in just_wins {
-            win.with_state_mut(|state| state.layout_node = nodes.next());
+        for (win, node) in just_wins.zip(nodes) {
+            win.with_state_mut(|state| state.layout_node = Some(node));
         }
 
         let wins_and_geos_other = self
@@ -366,6 +364,7 @@ impl LayoutState {
         self.pending_window_updates
             .pending
             .remove(&output.downgrade());
+        self.layout_trees.remove(&output.downgrade());
     }
 
     pub fn current_tree_for_output(&mut self, output: &Output) -> Option<&mut LayoutTree> {
