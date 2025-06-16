@@ -190,12 +190,21 @@ Pinnacle.setup(function()
     local layout_requester = Layout.manage(function(args)
         local first_tag = args.tags[1]
         if not first_tag then
+            ---@type pinnacle.layout.LayoutResponse
             return {
-                children = {},
+                root_node = {},
+                tree_id = 0,
             }
         end
         layout_cycler.current_tag = first_tag
-        return layout_cycler:layout(args.window_count)
+        local root_node = layout_cycler:layout(args.window_count)
+        local tree_id = layout_cycler:current_tree_id()
+
+        ---@type pinnacle.layout.LayoutResponse
+        return {
+            root_node = root_node,
+            tree_id = tree_id,
+        }
     end)
 
     -- mod_key + space = Cycle forward one layout on the focused output

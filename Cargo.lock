@@ -3880,8 +3880,7 @@ dependencies = [
 [[package]]
 name = "slab_tree"
 version = "0.3.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f9e8b45abe77b7cab703054a11973cffe164c82c5ff5e211ae5a73af5e42e39f"
+source = "git+https://github.com/Ottatop/slab-tree?rev=d6adbbb#d6adbbbd0cdf097b9d652e4a8a04fe9304cb742f"
 dependencies = [
  "snowflake",
 ]
