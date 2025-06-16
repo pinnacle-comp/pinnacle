@@ -2,13 +2,17 @@
 // What you're looking at is the culmination of the two weeks I spent in the rabbit
 // hole of tree diffing algorithms.
 
+pub mod diffable;
+mod zs;
+
 use bimap::BiHashMap;
+use diffable::Diffable;
 use itertools::{EitherOrBoth, Itertools};
 use slab_tree::{NodeId, NodeMut, NodeRef, RemoveBehavior, Tree};
 
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, HashSet};
 
-pub fn diff<T: Clone + Default + PartialEq + std::fmt::Debug>(
+pub fn diff<T: Diffable + Clone + Default + PartialEq + std::fmt::Debug>(
     src_tree: &Tree<T>,
     dst_tree: &Tree<T>,
     cost_insert: fn(NodeRef<'_, T>) -> f64,
@@ -86,264 +90,6 @@ impl Extend<(NodeId, NodeId)> for MappingStore {
 }
 
 ////////////////////////////////////////////
-
-fn zhang_shasha<T, FC, FR, FU>(
-    t1: &NodeRef<'_, T>,
-    t2: &NodeRef<'_, T>,
-
-    src_tree: &Tree<T>,
-    dst_tree: &Tree<T>,
-    cost_insert: FC,
-    cost_remove: FR,
-    cost_update: FU,
-) -> (f64, Vec<Op>)
-where
-    FC: Fn(NodeRef<'_, T>) -> f64,
-    FR: Fn(NodeRef<'_, T>) -> f64,
-    FU: Fn(NodeRef<'_, T>, NodeRef<'_, T>) -> f64,
-{
-    let (id_to_node_i, node_to_id_i) = tree_id_map(t1);
-    let (id_to_node_j, node_to_id_j) = tree_id_map(t2);
-
-    let lr_kr_1 = lr_keyroots(t1);
-    let lr_kr_2 = lr_keyroots(t2);
-
-    let l_map_i = llds_map(t1, &node_to_id_i);
-    let l_map_j = llds_map(t2, &node_to_id_j);
-
-    let size_a = t1.traverse_post_order().count();
-    let size_b = t2.traverse_post_order().count();
-    let mut treedist = vec![vec![0.0f64; size_b]; size_a];
-    let mut ops = vec![vec![vec![]; size_b]; size_a];
-
-    for i in lr_kr_1 {
-        for j in lr_kr_2.iter().copied() {
-            tree_dist(
-                i,
-                j,
-                &id_to_node_i,
-                &id_to_node_j,
-                &l_map_i,
-                &l_map_j,
-                &mut treedist,
-                &mut ops,
-                src_tree,
-                dst_tree,
-                &cost_insert,
-                &cost_remove,
-                &cost_update,
-            );
-        }
-    }
-
-    (
-        *treedist.last().unwrap().last().unwrap(),
-        ops.last().unwrap().last().unwrap().clone(),
-    )
-}
-
-fn llds_map<T>(root: &NodeRef<'_, T>, node_to_id: &HashMap<NodeId, u32>) -> HashMap<u32, u32> {
-    let mut map = HashMap::new();
-    for node in root.traverse_post_order() {
-        let this_id = node_to_id[&node.node_id()];
-        let l_node = node
-            .traverse_pre_order()
-            .find(|node| node.children().next().is_none())
-            .unwrap();
-        let l_id = node_to_id[&l_node.node_id()];
-        map.insert(this_id, l_id);
-    }
-    map
-}
-
-fn tree_id_map<T>(root: &NodeRef<'_, T>) -> (HashMap<u32, NodeId>, HashMap<NodeId, u32>) {
-    let mut id_to_node = HashMap::new();
-    let mut node_to_id = HashMap::new();
-    for (idx, node) in root.traverse_post_order().enumerate() {
-        let idx = idx as u32;
-        id_to_node.insert(idx, node.node_id());
-        node_to_id.insert(node.node_id(), idx);
-    }
-    (id_to_node, node_to_id)
-}
-
-fn lr_keyroots<T>(tree: &NodeRef<'_, T>) -> Vec<u32> {
-    tree.traverse_post_order()
-        .enumerate()
-        .filter_map(
-            |(i, node)| match node.parent().is_none() || node.prev_sibling().is_some() {
-                true => Some(i as u32),
-                false => None,
-            },
-        )
-        .collect()
-}
-
-fn tree_dist<T, FC, FR, FU>(
-    i: u32,
-    j: u32,
-    src_id_map: &HashMap<u32, NodeId>,
-    dst_id_map: &HashMap<u32, NodeId>,
-    src_llds_map: &HashMap<u32, u32>,
-    dst_llds_map: &HashMap<u32, u32>,
-    tree_dist: &mut [Vec<f64>],
-    operations: &mut [Vec<Vec<Op>>],
-    src_tree: &Tree<T>,
-    dst_tree: &Tree<T>,
-    cost_insert: FC,
-    cost_remove: FR,
-    cost_update: FU,
-) where
-    FC: Fn(NodeRef<'_, T>) -> f64,
-    FR: Fn(NodeRef<'_, T>) -> f64,
-    FU: Fn(NodeRef<'_, T>, NodeRef<'_, T>) -> f64,
-{
-    let m = i - src_llds_map[&i] + 2;
-    let n = j - dst_llds_map[&j] + 2;
-    let mut forest_dist = vec![vec![0.0f64; n as usize]; m as usize];
-    let mut partial_ops = vec![vec![vec![]; n as usize]; m as usize];
-
-    let ioff: i32 = src_llds_map[&i] as i32 - 1;
-    let joff: i32 = dst_llds_map[&j] as i32 - 1;
-
-    for x in 1..m {
-        let x = x as usize;
-        let node_id = src_id_map[&((x as i32 + ioff) as u32)];
-        forest_dist[x][0] = forest_dist[x - 1][0] + cost_remove(src_tree.get(node_id).unwrap());
-        partial_ops[x][0] = partial_ops[x - 1][0]
-            .clone()
-            .into_iter()
-            .chain([Op::Remove])
-            .collect();
-    }
-    for y in 1..n {
-        let y = y as usize;
-        let node_id = dst_id_map[&((y as i32 + joff) as u32)];
-        forest_dist[0][y] = forest_dist[0][y - 1] + cost_insert(dst_tree.get(node_id).unwrap());
-        partial_ops[0][y] = partial_ops[0][y - 1]
-            .clone()
-            .into_iter()
-            .chain([Op::Add])
-            .collect();
-    }
-
-    for x in 1..m {
-        for y in 1..n {
-            if src_llds_map[&i] == src_llds_map[&((x as i32 + ioff) as u32)]
-                && dst_llds_map[&j] == dst_llds_map[&((y as i32 + joff) as u32)]
-            {
-                let x = x as usize;
-                let y = y as usize;
-
-                let src_node_id = src_id_map[&((x as i32 + ioff) as u32)];
-                let dst_node_id = dst_id_map[&((y as i32 + joff) as u32)];
-
-                let costs = [
-                    forest_dist[x - 1][y] + cost_remove(src_tree.get(src_node_id).unwrap()),
-                    forest_dist[x][y - 1] + cost_insert(dst_tree.get(dst_node_id).unwrap()),
-                    forest_dist[x - 1][y - 1]
-                        + cost_update(
-                            src_tree.get(src_node_id).unwrap(),
-                            dst_tree.get(dst_node_id).unwrap(),
-                        ),
-                ];
-                forest_dist[x][y] = costs.into_iter().min_by(|a, b| a.total_cmp(b)).unwrap();
-
-                let min_index = costs
-                    .into_iter()
-                    .position(|it| it == forest_dist[x][y])
-                    .unwrap();
-
-                match min_index {
-                    0 => {
-                        partial_ops[x][y] = partial_ops[x - 1][y]
-                            .clone()
-                            .into_iter()
-                            .chain([Op::Remove])
-                            .collect();
-                    }
-                    1 => {
-                        partial_ops[x][y] = partial_ops[x][y - 1]
-                            .clone()
-                            .into_iter()
-                            .chain([Op::Add])
-                            .collect();
-                    }
-                    2 => {
-                        partial_ops[x][y] = partial_ops[x - 1][y - 1]
-                            .clone()
-                            .into_iter()
-                            .chain([Op::Update(src_node_id, dst_node_id)])
-                            .collect();
-                    }
-                    _ => unreachable!(),
-                }
-
-                tree_dist[(x as i32 + ioff) as usize][(y as i32 + joff) as usize] =
-                    forest_dist[x][y];
-
-                operations[(x as i32 + ioff) as usize][(y as i32 + joff) as usize] =
-                    partial_ops[x][y].clone();
-            } else {
-                let p = src_llds_map[&((x as i32 + ioff) as u32)] as i32 - 1 - ioff;
-                let q = dst_llds_map[&((y as i32 + joff) as u32)] as i32 - 1 - joff;
-                let x = x as usize;
-                let y = y as usize;
-
-                let src_node_id = src_id_map[&((x as i32 + ioff) as u32)];
-                let dst_node_id = dst_id_map[&((y as i32 + joff) as u32)];
-
-                let costs = [
-                    forest_dist[x - 1][y] + cost_remove(src_tree.get(src_node_id).unwrap()),
-                    forest_dist[x][y - 1] + cost_insert(dst_tree.get(dst_node_id).unwrap()),
-                    forest_dist[p as usize][q as usize]
-                        + tree_dist[(x as i32 + ioff) as usize][(y as i32 + joff) as usize],
-                ];
-                forest_dist[x][y] = costs.into_iter().min_by(|a, b| a.total_cmp(b)).unwrap();
-
-                let min_index = costs
-                    .into_iter()
-                    .position(|it| it == forest_dist[x][y])
-                    .unwrap();
-
-                match min_index {
-                    0 => {
-                        partial_ops[x][y] = partial_ops[x - 1][y]
-                            .clone()
-                            .into_iter()
-                            .chain([Op::Remove])
-                            .collect();
-                    }
-                    1 => {
-                        partial_ops[x][y] = partial_ops[x][y - 1]
-                            .clone()
-                            .into_iter()
-                            .chain([Op::Add])
-                            .collect();
-                    }
-                    2 => {
-                        partial_ops[x][y] = partial_ops[p as usize][q as usize]
-                            .clone()
-                            .into_iter()
-                            .chain(
-                                operations[(x as i32 + ioff) as usize][(y as i32 + joff) as usize]
-                                    .clone(),
-                            )
-                            .collect();
-                    }
-                    _ => unreachable!(),
-                }
-            }
-        }
-    }
-}
-
-#[derive(Clone, Debug)]
-enum Op {
-    Add,
-    Remove,
-    Update(NodeId, NodeId),
-}
 
 fn gumtree<T: PartialEq + std::fmt::Debug>(
     tree1: &Tree<T>,
@@ -508,25 +254,19 @@ fn gumtree_bottom_up<T>(
             return;
         }
 
-        let (_, ops) = zhang_shasha(
-            src_node,
-            dst_node,
-            t1,
-            t2,
+        let zs_mappings = zs::zhang_shasha(
+            *src_node,
+            *dst_node,
+            MappingStore {
+                mappings: Default::default(),
+            },
             cost_insert,
             cost_remove,
             cost_update,
+            labels_same,
         );
-        let zs_mappings = ops
-            .into_iter()
-            .filter_map(|op| match op {
-                Op::Add => None,
-                Op::Remove => None,
-                Op::Update(node_id, node_id1) => Some((node_id, node_id1)),
-            })
-            .collect::<Vec<_>>();
 
-        for (src, dst) in zs_mappings {
+        for (src, dst) in zs_mappings.into_iter() {
             let ta_mapped = mappings.is_src_mapped(src);
             let tb_mapped = mappings.is_dst_mapped(dst);
             let labels_same = labels_same(t1.get(src).unwrap(), t2.get(dst).unwrap());
@@ -656,14 +396,14 @@ fn dice<T>(t1: &NodeRef<'_, T>, t2: &NodeRef<'_, T>, mappings: &MappingStore) ->
 }
 
 #[derive(Debug, Clone)]
-pub enum EditAction<T> {
+pub enum EditAction<T: Diffable> {
     Insert {
         val: T,
         dst: Vec<usize>,
         idx: usize,
     },
     Delete(Vec<usize>),
-    Update(Vec<usize>, T),
+    Update(Vec<usize>, T::Output),
     Move {
         src: Vec<usize>,
         dst: Vec<usize>,
@@ -683,11 +423,10 @@ fn clone_tree<T: Clone>(
     }
 }
 
-fn chawathe_edit_script<T: Clone + Default + PartialEq + std::fmt::Debug>(
-    t1: &Tree<T>,
-    t2: &Tree<T>,
-    mappings: MappingStore,
-) -> Vec<EditAction<T>> {
+fn chawathe_edit_script<T>(t1: &Tree<T>, t2: &Tree<T>, mappings: MappingStore) -> Vec<EditAction<T>>
+where
+    T: Diffable + Clone + Default + PartialEq + std::fmt::Debug,
+{
     // initWith
     let (mut t1, t1_orig_to_clone) = {
         let mut clone = Tree::new();
@@ -768,11 +507,9 @@ fn chawathe_edit_script<T: Clone + Default + PartialEq + std::fmt::Debug>(
             if x.node_id() == prev_root {
                 let mut w_mut = t1.get_mut(w).unwrap();
                 if w_mut.data() != x.data() {
+                    let style_diff = w_mut.data().diff(x.data());
                     *w_mut.data() = x.data().clone();
-                    edits.push(EditAction::Update(
-                        index_path_to_node(&t1, w),
-                        x.data().clone(),
-                    ));
+                    edits.push(EditAction::Update(index_path_to_node(&t1, w), style_diff));
                 }
             } else {
                 let v = {
@@ -780,11 +517,9 @@ fn chawathe_edit_script<T: Clone + Default + PartialEq + std::fmt::Debug>(
                     let v = w_mut.parent().unwrap().node_id();
 
                     if w_mut.data() != x.data() {
+                        let style_diff = w_mut.data().diff(x.data());
                         *w_mut.data() = x.data().clone();
-                        edits.push(EditAction::Update(
-                            index_path_to_node(&t1, w),
-                            x.data().clone(),
-                        ));
+                        edits.push(EditAction::Update(index_path_to_node(&t1, w), style_diff));
                     }
 
                     v
@@ -902,7 +637,7 @@ fn move_subtree<T: Clone>(
     dst_root_id
 }
 
-fn align_children<T>(
+fn align_children<T: Diffable>(
     w: NodeId,
     x: NodeId,
     src_tree_clone: &mut Tree<T>,

@@ -134,6 +134,7 @@ impl LayoutGenerator for MasterStack {
         };
 
         let master_side = line.layout(master_count);
+        master_side.set_label(Some("builtin.master_stack.master_side"));
         master_side.set_traversal_index(master_tv_idx);
         master_side.set_size_proportion(master_factor * 10.0);
 
@@ -144,6 +145,7 @@ impl LayoutGenerator for MasterStack {
 
         let stack_count = window_count - u32::min(self.master_count, window_count);
         let stack_side = line.layout(stack_count);
+        stack_side.set_label(Some("builtin.master_stack.stack_side"));
         stack_side.set_traversal_index(stack_tv_idx);
         stack_side.set_size_proportion((1.0 - master_factor) * 10.0);
 
@@ -199,7 +201,6 @@ impl LayoutGenerator for Dwindle {
 
         for i in 0..win_count - 1 {
             if current_node != root {
-                current_node.set_label(Some("builtin.dwindle.split"));
                 current_node.set_gaps(0.0);
             }
 
@@ -209,6 +210,7 @@ impl LayoutGenerator for Dwindle {
                 false => LayoutDir::Row,
             });
             child1.set_gaps(self.inner_gaps);
+            child1.set_label(Some(format!("builtin.dwindle.split.{i}.0")));
             current_node.add_child(child1);
 
             let child2 = LayoutNode::new_with_traversal_index(1);
@@ -217,6 +219,7 @@ impl LayoutGenerator for Dwindle {
                 false => LayoutDir::Row,
             });
             child2.set_gaps(self.inner_gaps);
+            child2.set_label(Some(format!("builtin.dwindle.split.{i}.1")));
             current_node.add_child(child2.clone());
 
             current_node = child2;
@@ -267,16 +270,16 @@ impl LayoutGenerator for Spiral {
 
         for i in 0..win_count - 1 {
             if current_node != root {
-                current_node.set_label(Some("builtin.spiral.split"));
                 current_node.set_gaps(0.0);
             }
 
-            let child1 = LayoutNode::new_with_traversal_index(0);
+            let child1 = LayoutNode::new();
             child1.set_dir(match i % 2 == 0 {
                 true => LayoutDir::Column,
                 false => LayoutDir::Row,
             });
             child1.set_gaps(self.inner_gaps);
+            child1.set_label(Some(format!("builtin.spiral.split.{i}.0")));
             current_node.add_child(child1.clone());
 
             let child2 = LayoutNode::new_with_traversal_index(1);
@@ -285,11 +288,20 @@ impl LayoutGenerator for Spiral {
                 false => LayoutDir::Row,
             });
             child2.set_gaps(self.inner_gaps);
+            child2.set_label(Some(format!("builtin.spiral.split.{i}.1")));
             current_node.add_child(child2.clone());
 
             current_node = match i % 4 {
-                0 | 1 => child2,
-                2 | 3 => child1,
+                0 | 1 => {
+                    child1.set_traversal_index(0);
+                    child2.set_traversal_index(1);
+                    child2
+                }
+                2 | 3 => {
+                    child1.set_traversal_index(1);
+                    child2.set_traversal_index(0);
+                    child1
+                }
                 _ => unreachable!(),
             };
         }
@@ -457,6 +469,7 @@ impl LayoutGenerator for Fair {
         if win_count == 1 {
             let child = LayoutNode::new();
             child.set_gaps(self.inner_gaps);
+            child.set_label(Some("builtin.fair.line.0"));
             root.add_child(child);
             return root;
         }
@@ -464,9 +477,11 @@ impl LayoutGenerator for Fair {
         if win_count == 2 {
             let child = LayoutNode::new();
             child.set_gaps(self.inner_gaps);
+            child.set_label(Some("builtin.fair.line.0"));
             root.add_child(child);
             let child2 = LayoutNode::new();
             child2.set_gaps(self.inner_gaps);
+            child2.set_label(Some("builtin.fair.line.1"));
             root.add_child(child2);
             return root;
         }
@@ -499,7 +514,11 @@ impl LayoutGenerator for Fair {
             reversed: false,
         };
 
-        let lines = wins_per_line.into_iter().map(|win_ct| line.layout(win_ct));
+        let lines = wins_per_line.into_iter().enumerate().map(|(i, win_ct)| {
+            let node = line.layout(win_ct);
+            node.set_label(Some(format!("builtin.fair.line.{i}")));
+            node
+        });
 
         root.set_children(lines);
 
@@ -539,7 +558,7 @@ impl<T: LayoutGenerator + ?Sized> LayoutGenerator for std::rc::Rc<T> {
     }
 }
 
-impl<T: LayoutGenerator> Cycle<T> {
+impl<T> Cycle<T> {
     /// Creates a new [`Cycle`] from the given [`LayoutGenerator`]s.
     ///
     /// # Examples
@@ -594,6 +613,19 @@ impl<T: LayoutGenerator> Cycle<T> {
     /// Sets the current tag to choose a layout for.
     pub fn set_current_tag(&mut self, tag: TagHandle) {
         self.current_tag = Some(tag);
+    }
+
+    /// Gets a (most-likely) unique identifier for the current layout tree.
+    /// This is guaranteed to be greater than zero.
+    pub fn current_tree_id(&self) -> u32 {
+        let tag_id = self
+            .current_tag
+            .as_ref()
+            .map(|tag| tag.id)
+            .unwrap_or_default();
+        let layout_id = self.tag_indices.get(&tag_id).copied().unwrap_or_default();
+
+        ((tag_id & u16::MAX as u32) | ((layout_id as u32 & u16::MAX as u32) << 16)) + 1
     }
 }
 

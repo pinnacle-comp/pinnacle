@@ -20,18 +20,29 @@ use tokio_stream::StreamExt;
 
 use crate::{client::Client, output::OutputHandle, tag::TagHandle, BlockOnTokio};
 
+/// A response to a layout request containing a layout tree.
+pub struct LayoutResponse {
+    /// The root node of the layout tree.
+    pub root_node: LayoutNode,
+    /// An identifier for the layout tree.
+    ///
+    /// Trees that are considered "the same", like trees for a certain tag and layout,
+    /// should have the same identifier to allow Pinnacle to remember tile sizing.
+    pub tree_id: u32,
+}
+
 /// Manages layout requests from the compositor.
 ///
 /// You must call this function to begin handling incoming layout requests.
 /// Whenever a layout request comes in, `on_layout` will be called with the arguments of the
-/// layout. The closure must then return the root of a layout tree through a [`LayoutNode`].
+/// layout. The closure must then return a [`LayoutResponse`] containing the root of a layout tree through a [`LayoutNode`], along with a unique identifier.
 ///
 /// This returns a [`LayoutRequester`] that allows you to force the compositor to emit a
 /// layout request.
 ///
 /// See the module level documentation for more information on how to generate layouts.
 pub fn manage(
-    mut on_layout: impl FnMut(LayoutArgs) -> LayoutNode + Send + 'static,
+    mut on_layout: impl FnMut(LayoutArgs) -> LayoutResponse + Send + 'static,
 ) -> LayoutRequester {
     let (from_client, to_server) = unbounded_channel::<LayoutRequest>();
     let to_server_stream = tokio_stream::wrappers::UnboundedReceiverStream::new(to_server);
@@ -60,15 +71,15 @@ pub fn manage(
                     .map(|id| TagHandle { id })
                     .collect(),
             };
-            let tree = on_layout(args);
+            let tree_response = on_layout(args);
             from_client
                 .send(LayoutRequest {
                     request: Some(layout_request::Request::TreeResponse(
                         layout_request::TreeResponse {
-                            tree_id: 0, // TODO:
+                            tree_id: tree_response.tree_id,
                             request_id: response.request_id,
                             output_name: response.output_name,
-                            root_node: Some(tree.into()),
+                            root_node: Some(tree_response.root_node.into()),
                         },
                     )),
                 })

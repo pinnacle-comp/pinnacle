@@ -35,7 +35,7 @@ local log = require("pinnacle.log")
 ---The proportion the node takes up relative to its siblings.
 ---@field size_proportion number?
 ---Child layout nodes.
----@field children pinnacle.layout.LayoutNode[]
+---@field children pinnacle.layout.LayoutNode[]?
 
 ---A layout generator.
 ---@class pinnacle.layout.LayoutGenerator
@@ -203,6 +203,7 @@ function builtin.master_stack(options)
 
             local master_side = line:layout(master_count)
 
+            master_side.label = "builtin.master_stack.master_side"
             master_side.traversal_index = master_tv_idx
             master_side.size_proportion = master_factor * 10.0
 
@@ -213,6 +214,7 @@ function builtin.master_stack(options)
 
             local stack_count = window_count - master_count
             local stack_side = line:layout(stack_count)
+            stack_side.label = "builtin.master_stack.stack_side"
             stack_side.traversal_index = stack_tv_idx
             stack_side.size_proportion = (1.0 - master_factor) * 10.0
 
@@ -278,7 +280,6 @@ function builtin.dwindle(options)
 
             for i = 0, window_count - 2 do
                 if current_node ~= root then
-                    current_node.label = "builtin.dwindle.split"
                     current_node.gaps = 0.0
                 end
 
@@ -287,6 +288,7 @@ function builtin.dwindle(options)
                     traversal_index = 0,
                     layout_dir = (i % 2 == 0) and "column" or "row",
                     gaps = self.inner_gaps,
+                    label = "builtin.dwindle.split." .. tostring(i) .. ".1",
                     children = {},
                 }
 
@@ -295,6 +297,7 @@ function builtin.dwindle(options)
                     traversal_index = 1,
                     layout_dir = (i % 2 == 0) and "column" or "row",
                     gaps = self.inner_gaps,
+                    label = "builtin.dwindle.split." .. tostring(i) .. ".2",
                     children = {},
                 }
 
@@ -359,31 +362,34 @@ function builtin.spiral(options)
 
             for i = 0, window_count - 2 do
                 if current_node ~= root then
-                    current_node.label = "builtin.dwindle.split"
                     current_node.gaps = 0.0
                 end
 
                 ---@type pinnacle.layout.LayoutNode
                 local child1 = {
-                    traversal_index = 0,
                     layout_dir = (i % 2 == 0) and "column" or "row",
                     gaps = self.inner_gaps,
+                    label = "builtin.spiral.split." .. tostring(i) .. ".1",
                     children = {},
                 }
 
                 ---@type pinnacle.layout.LayoutNode
                 local child2 = {
-                    traversal_index = 1,
                     layout_dir = (i % 2 == 0) and "column" or "row",
                     gaps = self.inner_gaps,
+                    label = "builtin.spiral.split." .. tostring(i) .. ".2",
                     children = {},
                 }
 
                 current_node.children = { child1, child2 }
 
                 if i % 4 == 0 or i % 4 == 1 then
+                    child1.traversal_index = 0
+                    child2.traversal_index = 1
                     current_node = child2
                 else
+                    child1.traversal_index = 1
+                    child2.traversal_index = 0
                     current_node = child1
                 end
             end
@@ -577,6 +583,7 @@ function builtin.fair(options)
                 ---@type pinnacle.layout.LayoutNode
                 local child = {
                     gaps = self.inner_gaps,
+                    label = "builtin.fair.line.1",
                     children = {},
                 }
                 root.children = { child }
@@ -587,11 +594,13 @@ function builtin.fair(options)
                 ---@type pinnacle.layout.LayoutNode
                 local child1 = {
                     gaps = self.inner_gaps,
+                    label = "builtin.fair.line.1",
                     children = {},
                 }
                 ---@type pinnacle.layout.LayoutNode
                 local child2 = {
                     gaps = self.inner_gaps,
+                    label = "builtin.fair.line.2",
                     children = {},
                 }
                 root.children = { child1, child2 }
@@ -619,9 +628,11 @@ function builtin.fair(options)
                 reversed = false,
             })
 
+            ---@type pinnacle.layout.LayoutNode[]
             local lines = {}
             for i = 1, line_count do
                 lines[i] = line:layout(wins_per_line[i])
+                lines[i].label = "builtin.fair.line." .. tostring(i)
             end
 
             root.children = lines
@@ -676,6 +687,18 @@ end
 ---@return pinnacle.layout.LayoutGenerator?
 function Cycle:current_layout(tag)
     return self.layouts[self.tag_indices[tag.id] or 1]
+end
+
+---Gets a (most-likely) unique identifier for the current layout tree.
+---This is guaranteed to be greater than zero.
+---
+---@return integer
+function Cycle:current_tree_id()
+    local tag_id = self.current_tag and self.current_tag.id or 0
+    local layout_id = self.tag_indices[tag_id] or 1
+    -- Can't use bit fiddling as bit32 doesn't exist on 5.4 and 5.2 doesn't have the syntax for
+    -- bitwise operators, so this is close enough
+    return tag_id + layout_id * 9999999 + 1
 end
 
 ---Creates a layout generator that delegates to other layout generators depending on the tag
@@ -792,11 +815,22 @@ local function layout_node_to_api_node(node)
     }
 end
 
+---A response to a layout request.
+---@class pinnacle.layout.LayoutResponse
+---The root node of the layout tree.
+---@field root_node pinnacle.layout.LayoutNode
+---A non-negative identifier.
+---
+---Trees that are considered "the same", like trees for a certain tag and layout,
+---should have the same identifier to allow Pinnacle to remember tile sizing.
+---@field tree_id integer
+
 ---Begins managing layout requests from the compositor.
 ---
----You must call this function to get windows to lay out.
+---You must call this function to get windows to tile.
 ---The provided function will be run with the arguments of the layout request.
----It must return a `LayoutNode` that represents the root of a layout tree.
+---It must return a `LayoutResponse` containing a `LayoutNode` that represents
+---the root of a layout tree, along with an identifier.
 ---
 ---#### Example
 ---
@@ -804,16 +838,25 @@ end
 ---local layout_requester = Layout.manage(function(args)
 ---    local first_tag = args.tags[1]
 ---    if not first_tag then
+---        ---@type pinnacle.layout.LayoutResponse
 ---        return {
----            children = {},
+---            root_node = {},
+---            tree_id = 0,
 ---        }
 ---    end
 ---    layout_cycler.current_tag = first_tag
----    return layout_cycler:layout(args.window_count)
+---    local root_node = layout_cycler:layout(args.window_count)
+---    local tree_id = layout_cycler:current_tree_id()
+---
+---    ---@type pinnacle.layout.LayoutResponse
+---    return {
+---        root_node = root_node,
+---        tree_id = tree_id,
+---    }
 ---end)
 ---```
 ---
----@param on_layout fun(args: pinnacle.layout.LayoutArgs): pinnacle.layout.LayoutNode A function that receives layout arguments and builds and returns a layout tree.
+---@param on_layout fun(args: pinnacle.layout.LayoutArgs): pinnacle.layout.LayoutResponse A function that receives layout arguments and builds and returns a layout response.
 ---
 ---@return pinnacle.layout.LayoutRequester # A requester that allows you to force the compositor to request a layout.
 ---@nodiscard
@@ -826,12 +869,25 @@ function layout.manage(on_layout)
             tags = require("pinnacle.tag").handle.new_from_table(response.tag_ids or {}),
         }
 
-        local node = on_layout(args)
+        local ret = on_layout(args)
+
+        ---@type pinnacle.layout.LayoutNode
+        local node
+
+        -- FORWARD-COMPAT: v0.1.0 allowed returning just a `pinnacle.layout.LayoutNode`.
+        -- Remove in v0.4.0
+        if not ret.root_node then
+            node = ret --[[@as pinnacle.layout.LayoutNode]]
+        else
+            node = ret.root_node
+        end
+
+        local tree_id = ret.tree_id or 0
 
         local chunk = require("pinnacle.grpc.protobuf").encode("pinnacle.layout.v1.LayoutRequest", {
             tree_response = {
                 request_id = response.request_id,
-                tree_id = 0, -- TODO:
+                tree_id = tree_id,
                 output_name = response.output_name,
                 root_node = layout_node_to_api_node(node),
             },
