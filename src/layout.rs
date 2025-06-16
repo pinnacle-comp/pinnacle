@@ -569,6 +569,14 @@ impl State {
         resize_x_dir: ResizeDir,
         resize_y_dir: ResizeDir,
     ) {
+        if window.with_state(|state| !state.layout_mode.is_tiled()) {
+            return;
+        }
+
+        if !window.is_on_active_tag() {
+            return;
+        }
+
         let Some(output) = window.output(&self.pinnacle) else {
             return;
         };

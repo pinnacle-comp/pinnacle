@@ -2,49 +2,49 @@ syntax = "proto3";
 
 package pinnacle.window.v1;
 
-import "pinnacle/util/v1/util.proto";
 import "google/protobuf/empty.proto";
+import "pinnacle/util/v1/util.proto";
 
 message GetRequest {}
 message GetResponse {
-    repeated uint32 window_ids = 1;
+  repeated uint32 window_ids = 1;
 }
 
 // Window properties
 
 message GetAppIdRequest {
-    uint32 window_id = 1;
+  uint32 window_id = 1;
 }
 message GetAppIdResponse {
-    string app_id = 1;
+  string app_id = 1;
 }
 
 message GetTitleRequest {
-    uint32 window_id = 1;
+  uint32 window_id = 1;
 }
 message GetTitleResponse {
-    string title = 1;
+  string title = 1;
 }
 
 message GetLocRequest {
-    uint32 window_id = 1;
+  uint32 window_id = 1;
 }
 message GetLocResponse {
-    optional pinnacle.util.v1.Point loc = 1;
+  optional pinnacle.util.v1.Point loc = 1;
 }
 
 message GetSizeRequest {
-    uint32 window_id = 1;
+  uint32 window_id = 1;
 }
 message GetSizeResponse {
-    optional pinnacle.util.v1.Size size = 1;
+  optional pinnacle.util.v1.Size size = 1;
 }
 
 message GetFocusedRequest {
-    uint32 window_id = 1;
+  uint32 window_id = 1;
 }
 message GetFocusedResponse {
-    bool focused = 1;
+  bool focused = 1;
 }
 
 enum LayoutMode {
@@ -56,130 +56,139 @@ enum LayoutMode {
 }
 
 message GetLayoutModeRequest {
-    uint32 window_id = 1;
+  uint32 window_id = 1;
 }
 message GetLayoutModeResponse {
-    LayoutMode layout_mode = 1;
+  LayoutMode layout_mode = 1;
 }
 
 message GetTagIdsRequest {
-    uint32 window_id = 1;
+  uint32 window_id = 1;
 }
 message GetTagIdsResponse {
-    repeated uint32 tag_ids = 1;
+  repeated uint32 tag_ids = 1;
 }
 
 /////////
 
 message CloseRequest {
-    uint32 window_id = 1;
+  uint32 window_id = 1;
 }
 
 message SetGeometryRequest {
-    uint32 window_id = 1;
-    optional int32 x = 2;
-    optional int32 y = 3;
-    optional uint32 w = 4;
-    optional uint32 h = 5;
+  uint32 window_id = 1;
+  optional int32 x = 2;
+  optional int32 y = 3;
+  optional uint32 w = 4;
+  optional uint32 h = 5;
+}
+
+message ResizeTileRequest {
+  uint32 window_id = 1;
+  int32 left = 2;
+  int32 right = 3;
+  int32 top = 4;
+  int32 bottom = 5;
 }
 
 message SetFullscreenRequest {
-    uint32 window_id = 1;
-    pinnacle.util.v1.SetOrToggle set_or_toggle = 2;
+  uint32 window_id = 1;
+  pinnacle.util.v1.SetOrToggle set_or_toggle = 2;
 }
 
 message SetMaximizedRequest {
-    uint32 window_id = 1;
-    pinnacle.util.v1.SetOrToggle set_or_toggle = 2;
+  uint32 window_id = 1;
+  pinnacle.util.v1.SetOrToggle set_or_toggle = 2;
 }
 
 message SetFloatingRequest {
-    uint32 window_id = 1;
-    pinnacle.util.v1.SetOrToggle set_or_toggle = 2;
+  uint32 window_id = 1;
+  pinnacle.util.v1.SetOrToggle set_or_toggle = 2;
 }
 
 message SetFocusedRequest {
-    uint32 window_id = 1;
-    pinnacle.util.v1.SetOrToggle set_or_toggle = 2;
+  uint32 window_id = 1;
+  pinnacle.util.v1.SetOrToggle set_or_toggle = 2;
 }
 
 enum DecorationMode {
-    DECORATION_MODE_UNSPECIFIED = 0;
-    DECORATION_MODE_CLIENT_SIDE = 1;
-    DECORATION_MODE_SERVER_SIDE = 2;
+  DECORATION_MODE_UNSPECIFIED = 0;
+  DECORATION_MODE_CLIENT_SIDE = 1;
+  DECORATION_MODE_SERVER_SIDE = 2;
 }
 
 message SetDecorationModeRequest {
-    uint32 window_id = 1;
-    DecorationMode decoration_mode = 2;
+  uint32 window_id = 1;
+  DecorationMode decoration_mode = 2;
 }
 
 message MoveToTagRequest {
-    uint32 window_id = 1;
-    uint32 tag_id = 2;
+  uint32 window_id = 1;
+  uint32 tag_id = 2;
 }
 
 message SetTagRequest {
-    uint32 window_id = 1;
-    uint32 tag_id = 2;
-    pinnacle.util.v1.SetOrToggle set_or_toggle = 3;
+  uint32 window_id = 1;
+  uint32 tag_id = 2;
+  pinnacle.util.v1.SetOrToggle set_or_toggle = 3;
 }
 
 message RaiseRequest {
-    uint32 window_id = 1;
+  uint32 window_id = 1;
 }
 
 message MoveGrabRequest {
-    uint32 button = 1;
+  uint32 button = 1;
 }
 
 message ResizeGrabRequest {
-    uint32 button = 1;
+  uint32 button = 1;
 }
 
 message WindowRuleRequest {
-    message Finished {
-        uint32 request_id = 1;
-    }
+  message Finished {
+    uint32 request_id = 1;
+  }
 
-    oneof request {
-        Finished finished = 1;
-    }
+  oneof request {
+    Finished finished = 1;
+  }
 }
 message WindowRuleResponse {
-    message NewWindowRequest {
-        uint32 request_id = 1;
-        uint32 window_id = 2;
-    }
+  message NewWindowRequest {
+    uint32 request_id = 1;
+    uint32 window_id = 2;
+  }
 
-    oneof response {
-        NewWindowRequest new_window = 1;
-    }
+  oneof response {
+    NewWindowRequest new_window = 1;
+  }
 }
 
 service WindowService {
-    rpc Get(GetRequest) returns (GetResponse);
+  rpc Get(GetRequest) returns (GetResponse);
 
-    rpc GetAppId(GetAppIdRequest) returns (GetAppIdResponse);
-    rpc GetTitle(GetTitleRequest) returns (GetTitleResponse);
-    rpc GetLoc(GetLocRequest) returns (GetLocResponse);
-    rpc GetSize(GetSizeRequest) returns (GetSizeResponse);
-    rpc GetFocused(GetFocusedRequest) returns (GetFocusedResponse);
-    rpc GetLayoutMode(GetLayoutModeRequest) returns (GetLayoutModeResponse);
-    rpc GetTagIds(GetTagIdsRequest) returns (GetTagIdsResponse);
+  rpc GetAppId(GetAppIdRequest) returns (GetAppIdResponse);
+  rpc GetTitle(GetTitleRequest) returns (GetTitleResponse);
+  rpc GetLoc(GetLocRequest) returns (GetLocResponse);
+  rpc GetSize(GetSizeRequest) returns (GetSizeResponse);
+  rpc GetFocused(GetFocusedRequest) returns (GetFocusedResponse);
+  rpc GetLayoutMode(GetLayoutModeRequest) returns (GetLayoutModeResponse);
+  rpc GetTagIds(GetTagIdsRequest) returns (GetTagIdsResponse);
 
-    rpc Close(CloseRequest) returns (google.protobuf.Empty);
-    rpc SetGeometry(SetGeometryRequest) returns (google.protobuf.Empty);
-    rpc SetFullscreen(SetFullscreenRequest) returns (google.protobuf.Empty);
-    rpc SetMaximized(SetMaximizedRequest) returns (google.protobuf.Empty);
-    rpc SetFloating(SetFloatingRequest) returns (google.protobuf.Empty);
-    rpc SetFocused(SetFocusedRequest) returns (google.protobuf.Empty);
-    rpc SetDecorationMode(SetDecorationModeRequest) returns (google.protobuf.Empty);
-    rpc MoveToTag(MoveToTagRequest) returns (google.protobuf.Empty);
-    rpc SetTag(SetTagRequest) returns (google.protobuf.Empty);
-    rpc Raise(RaiseRequest) returns (google.protobuf.Empty);
-    rpc MoveGrab(MoveGrabRequest) returns (google.protobuf.Empty);
-    rpc ResizeGrab(ResizeGrabRequest) returns (google.protobuf.Empty);
+  rpc Close(CloseRequest) returns (google.protobuf.Empty);
+  rpc SetGeometry(SetGeometryRequest) returns (google.protobuf.Empty);
+  rpc ResizeTile(ResizeTileRequest) returns (google.protobuf.Empty);
+  rpc SetFullscreen(SetFullscreenRequest) returns (google.protobuf.Empty);
+  rpc SetMaximized(SetMaximizedRequest) returns (google.protobuf.Empty);
+  rpc SetFloating(SetFloatingRequest) returns (google.protobuf.Empty);
+  rpc SetFocused(SetFocusedRequest) returns (google.protobuf.Empty);
+  rpc SetDecorationMode(SetDecorationModeRequest) returns (google.protobuf.Empty);
+  rpc MoveToTag(MoveToTagRequest) returns (google.protobuf.Empty);
+  rpc SetTag(SetTagRequest) returns (google.protobuf.Empty);
+  rpc Raise(RaiseRequest) returns (google.protobuf.Empty);
+  rpc MoveGrab(MoveGrabRequest) returns (google.protobuf.Empty);
+  rpc ResizeGrab(ResizeGrabRequest) returns (google.protobuf.Empty);
 
-    rpc WindowRule(stream WindowRuleRequest) returns (stream WindowRuleResponse);
+  rpc WindowRule(stream WindowRuleRequest) returns (stream WindowRuleResponse);
 }

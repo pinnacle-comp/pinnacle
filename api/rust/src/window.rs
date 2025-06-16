@@ -18,9 +18,9 @@ use pinnacle_api_defs::pinnacle::{
         v1::{
             GetAppIdRequest, GetFocusedRequest, GetLayoutModeRequest, GetLocRequest,
             GetSizeRequest, GetTagIdsRequest, GetTitleRequest, MoveGrabRequest, MoveToTagRequest,
-            RaiseRequest, ResizeGrabRequest, SetDecorationModeRequest, SetFloatingRequest,
-            SetFocusedRequest, SetFullscreenRequest, SetGeometryRequest, SetMaximizedRequest,
-            SetTagRequest,
+            RaiseRequest, ResizeGrabRequest, ResizeTileRequest, SetDecorationModeRequest,
+            SetFloatingRequest, SetFocusedRequest, SetFullscreenRequest, SetGeometryRequest,
+            SetMaximizedRequest, SetTagRequest,
         },
     },
 };
@@ -234,6 +234,45 @@ impl WindowHandle {
                 y: y.into(),
                 w: w.into(),
                 h: h.into(),
+            })
+            .block_on_tokio()
+            .unwrap();
+    }
+
+    /// If this window is tiled, resizes its tile by shifting the left, right,
+    /// top, and bottom edges by the provided pixel amounts.
+    ///
+    /// Positive amounts shift edges right/down, while negative amounts
+    /// shift edges left/up.
+    ///
+    /// If this resizes the tile in a direction that it can no longer resize
+    /// towards (e.g. it's at the edge of the screen), it will resize in the opposite
+    /// direction.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// # use pinnacle_api::window;
+    /// # || {
+    /// // Grow the focused tiled window 10 pixels leftward
+    /// window::get_focused()?.resize_tile(-10, 0, 0, 0);
+    ///
+    /// // Shrink the focused tiled window 10 pixels inward from the right
+    /// window::get_focused()?.resize_tile(0, -10, 0, 0);
+    ///
+    /// // Grow the focused tiled window 20 pixels centered vertically
+    /// window::get_focused()?.resize_tile(0, 0, -10, 10);
+    /// # Some(())
+    /// # };
+    /// ```
+    pub fn resize_tile(&self, left: i32, right: i32, top: i32, bottom: i32) {
+        Client::window()
+            .resize_tile(ResizeTileRequest {
+                window_id: self.id,
+                left,
+                right,
+                top,
+                bottom,
             })
             .block_on_tokio()
             .unwrap();

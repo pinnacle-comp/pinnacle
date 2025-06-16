@@ -12,7 +12,7 @@ use pinnacle_api_defs::pinnacle::{
             GetFocusedResponse, GetLayoutModeRequest, GetLayoutModeResponse, GetLocRequest,
             GetLocResponse, GetRequest, GetResponse, GetSizeRequest, GetSizeResponse,
             GetTagIdsRequest, GetTagIdsResponse, GetTitleRequest, GetTitleResponse,
-            MoveGrabRequest, MoveToTagRequest, RaiseRequest, ResizeGrabRequest,
+            MoveGrabRequest, MoveToTagRequest, RaiseRequest, ResizeGrabRequest, ResizeTileRequest,
             SetDecorationModeRequest, SetFloatingRequest, SetFocusedRequest, SetFullscreenRequest,
             SetGeometryRequest, SetMaximizedRequest, SetTagRequest, WindowRuleRequest,
             WindowRuleResponse,
@@ -31,6 +31,7 @@ use crate::{
         TonicResult,
     },
     focus::keyboard::KeyboardFocusTarget,
+    layout::tree::ResizeDir,
     state::WithState,
     tag::TagId,
     window::{
@@ -254,6 +255,33 @@ impl v1::window_service_server::WindowService for super::WindowService {
                         Size::from((w.unwrap_or_default() as i32, h.unwrap_or_default() as i32));
                     rules.floating_size = Some(size);
                 }
+            }
+        })
+        .await
+    }
+
+    async fn resize_tile(&self, request: Request<ResizeTileRequest>) -> TonicResult<()> {
+        let request = request.into_inner();
+
+        let window_id = WindowId(request.window_id);
+
+        run_unary_no_response(&self.sender, move |state| {
+            if let Some(window) = window_id.window(&state.pinnacle) {
+                if window.with_state(|state| !state.layout_mode.is_tiled()) {
+                    return;
+                }
+                let mut size = window.geometry().size;
+
+                size.w += request.right;
+                size.h += request.bottom;
+                state.resize_tile(&window, size, ResizeDir::Ahead, ResizeDir::Ahead);
+
+                size.w -= request.left;
+                size.h -= request.top;
+                state.resize_tile(&window, size, ResizeDir::Behind, ResizeDir::Behind);
+                // Perform one more resize ahead to grow in the other direction
+                // if we couldn't resize behind
+                state.resize_tile(&window, size, ResizeDir::Ahead, ResizeDir::Ahead);
             }
         })
         .await

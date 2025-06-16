@@ -1,6 +1,5 @@
 #![allow(unused)]
 
-pub mod grpc;
 pub mod lua;
 pub mod rust;
 
