@@ -209,15 +209,10 @@ impl Pinnacle {
 
         unmapping.extend(snapshot_windows);
 
-        self.layout_state
-            .pending_transactions
-            .entry(output.downgrade())
-            .or_default()
-            .push(transaction_builder.into_pending(
-                unmapping,
-                self.layout_state.pending_swap,
-                is_resize,
-            ));
+        self.layout_state.pending_transactions.add_for_output(
+            output,
+            transaction_builder.into_pending(unmapping, self.layout_state.pending_swap, is_resize),
+        );
 
         let (remaining_wins, _remaining_geos) = zipped.unzip::<_, _, Vec<_>, Vec<_>>();
 
@@ -262,11 +257,38 @@ pub struct LayoutState {
     pub current_layout_tree_ids: HashMap<WeakOutput, u32>,
     pub layout_trees: HashMap<WeakOutput, HashMap<u32, LayoutTree>>,
 
-    /// Currently pending transactions.
-    pub pending_transactions: HashMap<WeakOutput, Vec<PendingTransaction>>,
-
+    pub pending_transactions: PendingTransactions,
     pub pending_unmaps: PendingUnmaps,
     pub pending_window_updates: PendingWindowUpdates,
+}
+
+/// Currently pending transactions.
+#[derive(Debug, Default)]
+pub struct PendingTransactions {
+    pending: HashMap<WeakOutput, Vec<PendingTransaction>>,
+}
+
+impl PendingTransactions {
+    /// Adds a pending transaction.
+    pub fn add_for_output(&mut self, output: &Output, pending: PendingTransaction) {
+        self.pending
+            .entry(output.downgrade())
+            .or_default()
+            .push(pending);
+    }
+
+    /// Takes the next completed or cancelled transaction.
+    pub fn take_next_for_output(&mut self, output: &Output) -> Option<PendingTransaction> {
+        let entry = self.pending.entry(output.downgrade()).or_default();
+
+        let next = entry.first()?;
+
+        if next.is_completed() || next.is_cancelled() {
+            return Some(entry.remove(0));
+        }
+
+        None
+    }
 }
 
 /// Pending [`UnmappingWindow`][crate::window::UnmappingWindow]s from things like
@@ -337,8 +359,13 @@ impl LayoutState {
     }
 
     pub fn remove_output(&mut self, output: &Output) {
-        self.pending_transactions.remove(&output.downgrade());
+        self.pending_transactions
+            .pending
+            .remove(&output.downgrade());
         self.pending_unmaps.pending.remove(&output.downgrade());
+        self.pending_window_updates
+            .pending
+            .remove(&output.downgrade());
     }
 
     pub fn current_tree_for_output(&mut self, output: &Output) -> Option<&mut LayoutTree> {
@@ -365,18 +392,12 @@ impl State {
         for output in self.pinnacle.outputs.keys().cloned().collect::<Vec<_>>() {
             let mut transactions = Vec::new();
 
-            let txs = self
+            while let Some(tx) = self
                 .pinnacle
                 .layout_state
                 .pending_transactions
-                .entry(output.downgrade())
-                .or_default();
-
-            while txs
-                .first()
-                .is_some_and(|t| t.is_completed() || t.is_cancelled())
+                .take_next_for_output(&output)
             {
-                let tx = txs.remove(0);
                 if tx.is_swap {
                     self.pinnacle.layout_state.pending_swap = false;
                 }

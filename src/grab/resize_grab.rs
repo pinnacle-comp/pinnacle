@@ -261,9 +261,10 @@ impl PointerGrab<State> for ResizeSurfaceGrab {
             .pinnacle
             .layout_state
             .pending_transactions
-            .entry(output.downgrade())
-            .or_default()
-            .push(transaction_builder.into_pending(Vec::new(), false, true));
+            .add_for_output(
+                &output,
+                transaction_builder.into_pending(Vec::new(), false, true),
+            );
     }
 
     fn relative_motion(

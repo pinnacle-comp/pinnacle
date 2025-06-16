@@ -154,9 +154,10 @@ impl State {
                 self.pinnacle
                     .layout_state
                     .pending_transactions
-                    .entry(output.downgrade())
-                    .or_default()
-                    .push(transaction_builder.into_pending(Vec::new(), false, false));
+                    .add_for_output(
+                        &output,
+                        transaction_builder.into_pending(Vec::new(), false, false),
+                    );
             } else {
                 // No changes were needed, we can map immediately here
                 self.pinnacle
