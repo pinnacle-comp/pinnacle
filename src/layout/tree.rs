@@ -2,8 +2,12 @@ use std::collections::{HashMap, HashSet};
 
 use itertools::Itertools;
 use smithay::utils::{Logical, Rectangle, Size};
+use tracing::trace;
 
-use crate::util::treediff::EditAction;
+use crate::util::treediff::{
+    diffable::{Diffable, StyleDiff},
+    EditAction,
+};
 
 pub const MIN_TILE_SIZE: f32 = 50.0;
 
@@ -16,14 +20,13 @@ pub struct LayoutNode {
     pub children: Vec<LayoutNode>,
 }
 
-// TODO: debug used fields of style
 impl std::fmt::Debug for LayoutNode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("LayoutNode")
             .field("label", &self.label)
             .field("traversal_index", &self.traversal_index)
             .field("traversal_overrides", &self.traversal_overrides)
-            .field("style", &"...")
+            .field("style.flex_basis", &self.style.flex_basis)
             .field("children", &self.children)
             .finish()
     }
@@ -41,6 +44,7 @@ pub struct LayoutTree {
 struct NodeContext {
     traversal_index: u32,
     traversal_overrides: HashMap<u32, Vec<u32>>,
+    original_flex_basis: f32,
 }
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -83,12 +87,14 @@ impl LayoutTree {
             .map(|child| Self::build_node(tree, child))
             .collect::<Vec<_>>();
 
+        let original_flex_basis = node.style.flex_basis.value();
         let root_id = tree.new_with_children(node.style, &children).unwrap();
         tree.set_node_context(
             root_id,
             Some(NodeContext {
                 traversal_index: node.traversal_index,
                 traversal_overrides: node.traversal_overrides,
+                original_flex_basis,
             }),
         )
         .unwrap();
@@ -103,8 +109,7 @@ impl LayoutTree {
             Self::process_leaves(tree, *child);
         }
 
-        let has_children = !children.is_empty();
-        if !has_children {
+        if children.is_empty() {
             let mut new_node_style = tree.style(node).unwrap().clone();
             let prev_margin = new_node_style.margin;
             new_node_style.margin = taffy::Rect::length(0.0);
@@ -147,11 +152,7 @@ impl LayoutTree {
     }
 
     pub fn new(root: LayoutNode) -> Self {
-        let tree = taffy::TaffyTree::new();
-        Self::new_with_data(root, tree)
-    }
-
-    fn new_with_data(root: LayoutNode, mut tree: taffy::TaffyTree<NodeContext>) -> Self {
+        let mut tree = taffy::TaffyTree::new();
         let fake_root = Self::build_node(&mut tree, root.clone());
         Self::process_leaves(&mut tree, fake_root);
 
@@ -168,16 +169,16 @@ impl LayoutTree {
             )
             .unwrap();
 
-        let mut this = Self {
+        let mut layout_tree = Self {
             taffy_tree: tree,
             root,
             taffy_root_id: actual_root,
             neighbor_info: HashMap::new(),
         };
 
-        this.update_neighbor_info();
+        layout_tree.update_neighbor_info();
 
-        this
+        layout_tree
     }
 
     pub fn compute_geos(
@@ -328,10 +329,10 @@ impl LayoutTree {
                 let a = a.data();
                 let b = b.data();
 
-                if a != b {
+                if a.label == b.label {
                     1.0
                 } else {
-                    0.0
+                    f64::MAX
                 }
             },
             |a, b| a.data().label == b.data().label,
@@ -350,7 +351,9 @@ impl LayoutTree {
         for action in edit_script {
             match action {
                 EditAction::Insert { val, dst, idx } => {
+                    trace!(?dst, ?idx, "Layout insert");
                     let parent = node_id_for_path(&self.taffy_tree, &dst);
+                    let original_flex_basis = val.style.flex_basis.value();
                     let child = self
                         .taffy_tree
                         .new_leaf_with_context(
@@ -358,6 +361,7 @@ impl LayoutTree {
                             NodeContext {
                                 traversal_index: val.traversal_index,
                                 traversal_overrides: val.traversal_overrides,
+                                original_flex_basis,
                             },
                         )
                         .unwrap();
@@ -366,23 +370,78 @@ impl LayoutTree {
                         .unwrap();
                 }
                 EditAction::Delete(path) => {
+                    trace!(?path, "Layout delete");
                     let to_remove = node_id_for_path(&self.taffy_tree, &path);
+                    let parent = self.taffy_tree.parent(to_remove).unwrap();
+                    let original_flex_basis = self
+                        .taffy_tree
+                        .get_node_context(to_remove)
+                        .unwrap()
+                        .original_flex_basis;
+                    let target_sum = self
+                        .taffy_tree
+                        .children(parent)
+                        .unwrap()
+                        .into_iter()
+                        .map(|child| self.taffy_tree.style(child).unwrap().flex_basis.value())
+                        .sum::<f32>()
+                        - original_flex_basis;
+
                     self.taffy_tree.remove(to_remove).unwrap();
+
+                    let children = self.taffy_tree.children(parent).unwrap();
+
+                    let old_basises = children
+                        .iter()
+                        .map(|child| self.taffy_tree.style(*child).unwrap().flex_basis.value())
+                        .collect::<Vec<_>>();
+
+                    let new_basises = rescale_flex_basises(&old_basises, target_sum);
+
+                    for (child, basis) in children.into_iter().zip(new_basises) {
+                        let mut style = self.taffy_tree.style(child).unwrap().clone();
+                        style.flex_basis = taffy::Dimension::percent(basis);
+                        self.taffy_tree.set_style(child, style).unwrap();
+                    }
                 }
                 EditAction::Update(path, val) => {
+                    trace!(?path, "Layout update");
                     let to_update = node_id_for_path(&self.taffy_tree, &path);
-                    self.taffy_tree.set_style(to_update, val.style).unwrap();
-                    self.taffy_tree
-                        .set_node_context(
-                            to_update,
-                            Some(NodeContext {
-                                traversal_index: val.traversal_index,
-                                traversal_overrides: val.traversal_overrides,
-                            }),
-                        )
-                        .unwrap();
+
+                    let LayoutNodeDataDiff {
+                        traversal_index,
+                        traversal_overrides,
+                        style:
+                            StyleDiff {
+                                flex_direction,
+                                flex_basis,
+                                margin,
+                            },
+                    } = val;
+
+                    let mut style = self.taffy_tree.style(to_update).unwrap().clone();
+
+                    if let Some(flex_direction) = flex_direction {
+                        style.flex_direction = flex_direction;
+                    }
+                    if let Some(flex_basis) = flex_basis {
+                        style.flex_basis = flex_basis;
+                    }
+                    if let Some(margin) = margin {
+                        style.margin = margin;
+                    }
+                    self.taffy_tree.set_style(to_update, style).unwrap();
+
+                    let node_context = self.taffy_tree.get_node_context_mut(to_update).unwrap();
+                    if let Some(traversal_index) = traversal_index {
+                        node_context.traversal_index = traversal_index;
+                    }
+                    if let Some(traversal_overrides) = traversal_overrides {
+                        node_context.traversal_overrides = traversal_overrides;
+                    }
                 }
                 EditAction::Move { src, dst, idx } => {
+                    trace!(?src, ?dst, ?idx, "Layout move");
                     let to_move = node_id_for_path(&self.taffy_tree, &src);
                     let dst_parent_node = node_id_for_path(&self.taffy_tree, &dst);
 
@@ -804,10 +863,21 @@ impl LayoutTree {
     pub fn resize_tile(
         &mut self,
         node: taffy::NodeId,
-        new_size: Size<i32, Logical>,
+        mut new_size: Size<i32, Logical>,
         resize_x_dir: ResizeDir,
         resize_y_dir: ResizeDir,
     ) {
+        // Add the margins of the tile the window is in to get the
+        // actual new size
+        let child = self.taffy_tree.children(node).unwrap().remove(0);
+        let margin = self.taffy_tree.style(child).unwrap().margin;
+        let horiz_margin =
+            margin.left.into_raw().value() as i32 + margin.right.into_raw().value() as i32;
+        let vert_margin =
+            margin.top.into_raw().value() as i32 + margin.bottom.into_raw().value() as i32;
+        new_size.w += horiz_margin;
+        new_size.h += vert_margin;
+
         let old_width = self.taffy_tree.layout(node).unwrap().size.width;
         let old_height = self.taffy_tree.layout(node).unwrap().size.height;
 
@@ -850,12 +920,43 @@ fn calculate_flex_basises(new_lengths: &[f32], basises_sum: f32) -> Vec<f32> {
         .collect()
 }
 
+/// Rescales flex basises so that they sum up to `target_sum`.
+fn rescale_flex_basises(basises: &[f32], target_sum: f32) -> Vec<f32> {
+    let basises_sum = basises.iter().sum::<f32>();
+
+    let scale_by = target_sum / basises_sum;
+
+    basises.iter().map(|basis| *basis * scale_by).collect()
+}
+
 #[derive(Default, Clone, PartialEq)]
 struct LayoutNodeData {
     label: Option<String>,
     traversal_index: u32,
     traversal_overrides: HashMap<u32, Vec<u32>>,
     style: taffy::Style,
+}
+
+struct LayoutNodeDataDiff {
+    traversal_index: Option<u32>,
+    traversal_overrides: Option<HashMap<u32, Vec<u32>>>,
+    style: <taffy::Style as Diffable>::Output,
+}
+
+impl Diffable for LayoutNodeData {
+    type Output = LayoutNodeDataDiff;
+
+    fn diff(&self, newer: &Self) -> Self::Output {
+        let style_diff = self.style.diff(&newer.style);
+
+        LayoutNodeDataDiff {
+            traversal_index: (self.traversal_index != newer.traversal_index)
+                .then_some(newer.traversal_index),
+            traversal_overrides: (self.traversal_overrides != newer.traversal_overrides)
+                .then_some(newer.traversal_overrides.clone()),
+            style: style_diff,
+        }
+    }
 }
 
 impl std::fmt::Debug for LayoutNodeData {

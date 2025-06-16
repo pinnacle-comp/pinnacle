@@ -33,14 +33,12 @@ impl Pinnacle {
         &mut self,
         output: &Output,
         backend: &mut Backend,
-        tree_id: u32,
         is_resize: bool,
     ) {
-        let tree = self
-            .layout_state
-            .layout_trees
-            .get_mut(&tree_id)
-            .expect("no tree");
+        let Some(tree) = self.layout_state.current_tree_for_output(output) else {
+            warn!("no layout tree for output");
+            return;
+        };
 
         let (output_width, output_height) = {
             let map = layer_map_for_output(output);
@@ -54,10 +52,6 @@ impl Pinnacle {
             .unzip();
 
         let mut nodes = nodes.into_iter();
-
-        for win in self.windows.iter() {
-            win.with_state_mut(|state| state.layout_node.take());
-        }
 
         let (windows_on_foc_tags, to_unmap) = output.with_state(|state| {
             let focused_tags = state.focused_tags().cloned().collect::<IndexSet<_>>();
@@ -264,7 +258,9 @@ pub struct LayoutState {
     pub pending_swap: bool,
     pub pending_resize: bool,
     current_id: LayoutRequestId,
-    pub layout_trees: HashMap<u32, LayoutTree>,
+
+    pub current_layout_tree_ids: HashMap<WeakOutput, u32>,
+    pub layout_trees: HashMap<WeakOutput, HashMap<u32, LayoutTree>>,
 
     /// Currently pending transactions.
     pub pending_transactions: HashMap<WeakOutput, Vec<PendingTransaction>>,
@@ -343,6 +339,13 @@ impl LayoutState {
     pub fn remove_output(&mut self, output: &Output) {
         self.pending_transactions.remove(&output.downgrade());
         self.pending_unmaps.pending.remove(&output.downgrade());
+    }
+
+    pub fn current_tree_for_output(&mut self, output: &Output) -> Option<&mut LayoutTree> {
+        self.layout_trees
+            .entry(output.downgrade())
+            .or_default()
+            .get_mut(self.current_layout_tree_ids.get(&output.downgrade())?)
     }
 }
 
@@ -502,7 +505,13 @@ impl State {
             anyhow::bail!("Output was invalid");
         };
 
-        let tree_entry = self.pinnacle.layout_state.layout_trees.entry(tree_id);
+        let tree_entry = self
+            .pinnacle
+            .layout_state
+            .layout_trees
+            .entry(output.downgrade())
+            .or_default()
+            .entry(tree_id);
         match tree_entry {
             Entry::Occupied(occupied_entry) => {
                 let tree = occupied_entry.into_mut();
@@ -512,8 +521,15 @@ impl State {
             Entry::Vacant(vacant_entry) => vacant_entry.insert(LayoutTree::new(root_node)),
         };
 
+        *self
+            .pinnacle
+            .layout_state
+            .current_layout_tree_ids
+            .entry(output.downgrade())
+            .or_default() = tree_id;
+
         self.pinnacle
-            .update_windows_from_tree(&output, &mut self.backend, tree_id, false);
+            .update_windows_from_tree(&output, &mut self.backend, false);
 
         self.schedule_render(&output);
 
@@ -540,10 +556,14 @@ impl State {
             return;
         };
 
-        let tree = self.pinnacle.layout_state.layout_trees.get_mut(&0).unwrap();
+        let Some(tree) = self.pinnacle.layout_state.current_tree_for_output(&output) else {
+            warn!("No layout tree for output");
+            return;
+        };
+
         tree.resize_tile(node, new_size, resize_x_dir, resize_y_dir);
 
         self.pinnacle
-            .update_windows_from_tree(&output, &mut self.backend, 0, true);
+            .update_windows_from_tree(&output, &mut self.backend, true);
     }
 }
