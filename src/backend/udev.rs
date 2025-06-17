@@ -843,6 +843,7 @@ impl Udev {
             })
             .expect("failed to insert drm notifier into event loop");
 
+        // INFO: Anvil changes this as of c21ff35, figure that out
         // SAFETY: no clue lol just copied this from anvil
         let render_node = EGLDevice::device_for_display(&unsafe {
             EGLDisplay::new(gbm.clone()).expect("failed to create EGLDisplay")
@@ -876,7 +877,7 @@ impl Udev {
         let drm_output_manager = DrmOutputManager::new(
             drm,
             allocator,
-            GbmFramebufferExporter::new(gbm.clone()),
+            GbmFramebufferExporter::new(gbm.clone(), Some(render_node)),
             Some(gbm),
             color_formats.iter().copied(),
             render_formats,

@@ -27,7 +27,6 @@ use crate::{
     },
     window::{rules::WindowRuleState, Unmapped, WindowElement, ZIndexElement},
 };
-use anyhow::Context;
 use indexmap::IndexMap;
 use smithay::{
     backend::renderer::element::{
@@ -473,8 +472,7 @@ impl Pinnacle {
 
             grpc_server_join_handle: None,
 
-            xdg_base_dirs: BaseDirectories::with_prefix("pinnacle")
-                .context("couldn't create xdg BaseDirectories")?,
+            xdg_base_dirs: BaseDirectories::with_prefix("pinnacle"),
 
             signal_state: SignalState::default(),
 

@@ -16,7 +16,8 @@ use crate::{
 
 pub fn socket_dir() -> PathBuf {
     xdg::BaseDirectories::with_prefix("snowcap")
-        .and_then(|xdg| xdg.get_runtime_directory().cloned())
+        .get_runtime_directory()
+        .cloned()
         .unwrap_or(PathBuf::from("/tmp"))
 }
 

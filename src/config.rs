@@ -177,7 +177,7 @@ impl StartupConfig {
             socket_dir
         } else {
             // Otherwise, use $XDG_RUNTIME_DIR. If that doesn't exist, use /tmp.
-            BaseDirectories::with_prefix("pinnacle")?
+            BaseDirectories::with_prefix("pinnacle")
                 .get_runtime_directory()
                 .cloned()
                 .unwrap_or(PathBuf::from(DEFAULT_SOCKET_DIR))
@@ -322,7 +322,7 @@ pub fn get_config_dir(xdg_base_dirs: &BaseDirectories) -> PathBuf {
         .ok()
         .and_then(|s| Some(PathBuf::from(shellexpand::full(&s).ok()?.to_string())));
 
-    config_dir.unwrap_or(xdg_base_dirs.get_config_home())
+    config_dir.unwrap_or(xdg_base_dirs.get_config_home().expect("HOME wasn't set"))
 }
 
 impl Pinnacle {
@@ -598,7 +598,7 @@ mod tests {
         let relative_path = "api/rust/examples/default_config";
 
         temp_env::with_var("PINNACLE_CONFIG_DIR", Some(relative_path), || {
-            let xdg_base_dirs = BaseDirectories::with_prefix("pinnacle")?;
+            let xdg_base_dirs = BaseDirectories::with_prefix("pinnacle");
 
             // Prepending the relative path with the current dir *shouldn't* be necessary, me thinks
             let expected = PathBuf::from(relative_path);
@@ -612,7 +612,7 @@ mod tests {
     #[test]
     fn get_config_dir_with_tilde_env_works() -> anyhow::Result<()> {
         temp_env::with_var("PINNACLE_CONFIG_DIR", Some("~/some/dir/somewhere/"), || {
-            let xdg_base_dirs = BaseDirectories::with_prefix("pinnacle")?;
+            let xdg_base_dirs = BaseDirectories::with_prefix("pinnacle");
             let expected = PathBuf::from(var("HOME")?).join("some/dir/somewhere");
 
             assert_eq!(get_config_dir(&xdg_base_dirs), expected);
@@ -626,7 +626,7 @@ mod tests {
         let absolute_path = "/its/morbin/time";
 
         temp_env::with_var("PINNACLE_CONFIG_DIR", Some(absolute_path), || {
-            let xdg_base_dirs = BaseDirectories::with_prefix("pinnacle")?;
+            let xdg_base_dirs = BaseDirectories::with_prefix("pinnacle");
             let expected = PathBuf::from(absolute_path);
 
             assert_eq!(get_config_dir(&xdg_base_dirs), expected);
@@ -645,7 +645,7 @@ mod tests {
                 ("XDG_CONFIG_HOME", Some(xdg_config_home)),
             ],
             || {
-                let xdg_base_dirs = BaseDirectories::with_prefix("pinnacle")?;
+                let xdg_base_dirs = BaseDirectories::with_prefix("pinnacle");
                 let expected = PathBuf::from(xdg_config_home).join("pinnacle");
 
                 assert_eq!(get_config_dir(&xdg_base_dirs), expected);
@@ -663,7 +663,7 @@ mod tests {
                 ("XDG_CONFIG_HOME", None),
             ],
             || {
-                let xdg_base_dirs = BaseDirectories::with_prefix("pinnacle")?;
+                let xdg_base_dirs = BaseDirectories::with_prefix("pinnacle");
                 let expected = PathBuf::from(var("HOME")?).join(".config/pinnacle");
 
                 assert_eq!(get_config_dir(&xdg_base_dirs), expected);

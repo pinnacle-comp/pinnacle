@@ -48,8 +48,8 @@ async fn main() -> anyhow::Result<()> {
         REMOVE_RUST_LIB_BACKTRACE.store(true, Ordering::Relaxed);
     }
 
-    let base_dirs = BaseDirectories::with_prefix("pinnacle")?;
-    let xdg_state_dir = base_dirs.get_state_home();
+    let base_dirs = BaseDirectories::with_prefix("pinnacle");
+    let xdg_state_dir = base_dirs.get_state_home().expect("HOME wasn't set");
 
     let appender = tracing_appender::rolling::Builder::new()
         .rotation(Rotation::HOURLY)

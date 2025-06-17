@@ -3,6 +3,7 @@ use std::{
     path::PathBuf,
 };
 
+use anyhow::Context;
 use clap::{Parser, ValueHint};
 use tracing::warn;
 
@@ -248,7 +249,9 @@ pub fn generate_config(args: ConfigGen) -> anyhow::Result<()> {
         }
     };
 
-    let default_dir = xdg::BaseDirectories::with_prefix("pinnacle")?.get_config_home();
+    let default_dir = xdg::BaseDirectories::with_prefix("pinnacle")
+        .get_config_home()
+        .context("no HOME")?;
 
     let default_dir_clone = default_dir.clone();
 
