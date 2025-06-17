@@ -1108,6 +1108,13 @@ local pinnacle_window_v1_DecorationMode = {
 ---@field w integer?
 ---@field h integer?
 
+---@class pinnacle.window.v1.ResizeTileRequest
+---@field window_id integer?
+---@field left integer?
+---@field right integer?
+---@field top integer?
+---@field bottom integer?
+
 ---@class pinnacle.window.v1.SetFullscreenRequest
 ---@field window_id integer?
 ---@field set_or_toggle pinnacle.util.v1.SetOrToggle?
@@ -1337,6 +1344,7 @@ pinnacle.window.v1.GetTagIdsRequest = {}
 pinnacle.window.v1.GetTagIdsResponse = {}
 pinnacle.window.v1.CloseRequest = {}
 pinnacle.window.v1.SetGeometryRequest = {}
+pinnacle.window.v1.ResizeTileRequest = {}
 pinnacle.window.v1.SetFullscreenRequest = {}
 pinnacle.window.v1.SetMaximizedRequest = {}
 pinnacle.window.v1.SetFloatingRequest = {}
@@ -2839,6 +2847,23 @@ pinnacle.window.v1.WindowService.SetGeometry.response = ".google.protobuf.Empty"
 ---@return string | nil error An error string, if any
 function Client:pinnacle_window_v1_WindowService_SetGeometry(data)
     return self:unary_request(pinnacle.window.v1.WindowService.SetGeometry, data)
+end
+pinnacle.window.v1.WindowService.ResizeTile = {}
+pinnacle.window.v1.WindowService.ResizeTile.service = "pinnacle.window.v1.WindowService"
+pinnacle.window.v1.WindowService.ResizeTile.method = "ResizeTile"
+pinnacle.window.v1.WindowService.ResizeTile.request = ".pinnacle.window.v1.ResizeTileRequest"
+pinnacle.window.v1.WindowService.ResizeTile.response = ".google.protobuf.Empty"
+
+---Performs a unary request.
+---
+---@nodiscard
+---
+---@param data pinnacle.window.v1.ResizeTileRequest
+---
+---@return google.protobuf.Empty | nil response
+---@return string | nil error An error string, if any
+function Client:pinnacle_window_v1_WindowService_ResizeTile(data)
+    return self:unary_request(pinnacle.window.v1.WindowService.ResizeTile, data)
 end
 pinnacle.window.v1.WindowService.SetFullscreen = {}
 pinnacle.window.v1.WindowService.SetFullscreen.service = "pinnacle.window.v1.WindowService"

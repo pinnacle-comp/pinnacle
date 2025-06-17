@@ -140,8 +140,9 @@ indexmap = { workspace = true }
 snowcap = { path = "./snowcap", optional = true }
 snowcap-api = { path = "./snowcap/api/rust", optional = true }
 assert_matches = "1.5.0"
-taffy = "0.8.0"
-slab_tree = "0.3.2"
+taffy = "=0.8.2" # Patched below for rounding fixes
+# impl traits for NodeRef
+slab_tree = { git = "https://github.com/Ottatop/slab-tree", rev = "d6adbbb" }
 bimap = "0.6.3"
 itertools = "0.14.0"
 passfd = { workspace = true }
@@ -159,6 +160,9 @@ test-log = { version = "0.2.17", default-features = false, features = ["trace"] 
 pinnacle = { path = ".", features = ["wlcs"], default-features = false }
 pinnacle-api = { path = "./api/rust", default-features = false }
 mlua = { version = "0.10.3", features = ["lua54", "send", "macros"] }
+proptest = "1.7.0"
+proptest-derive = "0.6.0"
+rand = "0.9.1"
 
 [features]
 default = ["snowcap"]
@@ -175,3 +179,6 @@ lto = "thin"
 
 [lints]
 workspace = true
+
+[patch.crates-io]
+taffy = { git = "https://github.com/Ottatop/taffy", rev = "dcdaa42" } # Rounding fixes

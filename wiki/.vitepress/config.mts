@@ -83,7 +83,14 @@ export default defineVersionedConfig({
                         { text: "Tags", link: "/configuration/tags" },
                         { text: "Outputs", link: "/configuration/outputs" },
                         { text: "Windows", link: "/configuration/windows" },
-                        { text: "Layouts", link: "/configuration/layout" },
+                        {
+                            text: "Layouts",
+                            link: "/configuration/layout",
+                            items: [
+                                { text: "Custom layouts", link: "/configuration/layout/custom-layouts" },
+                                { text: "Resizing tiles", link: "/configuration/layout/resizing-tiles" },
+                            ]
+                        },
                         { text: "Processes", link: "/configuration/processes" },
                         { text: "Snowcap", link: "/configuration/snowcap" },
                         { text: "Integration with external applications", link: "/configuration/integration" },

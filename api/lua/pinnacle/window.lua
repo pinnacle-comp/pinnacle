@@ -297,6 +297,43 @@ function WindowHandle:set_geometry(geo)
     end
 end
 
+---If this window is tiled, resizes its tile by shifting the left, right,
+---top, and bottom edges by the provided pixel amounts.
+---
+---Positive amounts shift edges right/down, while negative amounts
+---shift edges left/up.
+---
+---If this resizes the tile in a direction that it can no longer resize
+---towards (e.g. it's at the edge of the screen), it will resize in the opposite
+---direction.
+---
+---#### Example
+---```lua
+----- Grow the focused tiled window 10 pixels leftward
+---Window.get_focused():resize_tile({ left = -10 })
+---
+----- Shrink the focused tiled window 10 pixels inward from the right
+---Window.get_focused():resize_tile({ right = -10 })
+---
+----- Grow the focused tiled window 20 pixels centered vertically
+---Window.get_focused():resize_tile({ top = -10, bottom = 10 })
+---```
+---
+---@param dimensions { left: integer?, right: integer?, top: integer?, bottom: integer? }
+function WindowHandle:resize_tile(dimensions)
+    local _, err = client:pinnacle_window_v1_WindowService_ResizeTile({
+        window_id = self.id,
+        left = dimensions.left,
+        right = dimensions.right,
+        top = dimensions.top,
+        bottom = dimensions.bottom,
+    })
+
+    if err then
+        log.error(err)
+    end
+end
+
 ---Sets this window to fullscreen or not.
 ---
 ---@param fullscreen boolean

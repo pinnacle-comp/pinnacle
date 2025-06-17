@@ -336,6 +336,8 @@ pub struct WindowElementState {
     pub floating_size: Size<i32, Logical>,
 
     pub pending_transactions: Vec<(Serial, Transaction)>,
+
+    pub layout_node: Option<taffy::NodeId>,
 }
 
 impl WindowElement {
@@ -588,6 +590,7 @@ impl WindowElementState {
             mapped_hook_id: None,
             decoration_mode: None,
             pending_transactions: Default::default(),
+            layout_node: None,
         }
     }
 

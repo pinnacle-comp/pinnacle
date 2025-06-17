@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc aee89cd5b0c769ac103f4b8708d0ec9b0c649fc55696893db84155fe1d5d4731 # shrinks to root_node = LayoutNode { label: None, traversal_index: 0, traversal_overrides: {0: [1]}, style.flex_basis: Dimension(CompactLength(CompactLengthInner { tagged_ptr: 0x2 })), children: [] }, w = 1, h = 1, resize_x_dir = Ahead, resize_y_dir = Ahead, new_size = Size<smithay::utils::geometry::Logical> { w: 1, h: 1 }

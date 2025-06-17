@@ -13,11 +13,11 @@ use smithay::{
     desktop::{layer_map_for_output, utils::surface_primary_scanout_output, WindowSurface},
     output::{Output, WeakOutput},
     reexports::wayland_protocols::xdg::shell::server::xdg_toplevel,
-    utils::{Logical, Rectangle},
+    utils::{Logical, Rectangle, Size},
 };
 use tokio::sync::mpsc::UnboundedSender;
 use tracing::warn;
-use tree::{LayoutNode, LayoutTree};
+use tree::{LayoutNode, LayoutTree, ResizeDir};
 
 use crate::{
     backend::Backend,
@@ -29,12 +29,28 @@ use crate::{
 };
 
 impl Pinnacle {
-    fn update_windows_with_geometries(
+    fn update_windows_from_tree(
         &mut self,
         output: &Output,
-        geometries: Vec<Rectangle<i32, Logical>>,
         backend: &mut Backend,
+        is_resize: bool,
     ) {
+        let Some(tree) = self.layout_state.current_tree_for_output(output) else {
+            warn!("no layout tree for output");
+            return;
+        };
+
+        let (output_width, output_height) = {
+            let map = layer_map_for_output(output);
+            let zone = map.non_exclusive_zone();
+            (zone.size.w, zone.size.h)
+        };
+
+        let (geometries, nodes): (Vec<_>, Vec<_>) = tree
+            .compute_geos(output_width as u32, output_height as u32)
+            .into_iter()
+            .unzip();
+
         let (windows_on_foc_tags, to_unmap) = output.with_state(|state| {
             let focused_tags = state.focused_tags().cloned().collect::<IndexSet<_>>();
             self.windows
@@ -110,19 +126,29 @@ impl Pinnacle {
             .filter(|win| win.with_state(|state| state.layout_mode.is_tiled()))
             .cloned();
 
-        let output_geo = self.space.output_geometry(output).expect("no output geo");
-
-        let non_exclusive_geo = {
-            let map = layer_map_for_output(output);
-            map.non_exclusive_zone()
+        let Some(output_geo) = self.space.output_geometry(output) else {
+            warn!("Cannot update_windows_from_tree without output geo");
+            return;
         };
+
+        let non_exclusive_geo = layer_map_for_output(output).non_exclusive_zone();
 
         let mut zipped = tiled_windows.zip(geometries.into_iter().map(|mut geo| {
             geo.loc += output_geo.loc + non_exclusive_geo.loc;
             geo
         }));
 
-        let wins_and_geos_tiled = zipped.by_ref().map(|(win, geo)| (win, geo, true));
+        let wins_and_geos_tiled = zipped
+            .by_ref()
+            .map(|(win, geo)| (win, geo, true))
+            .collect::<Vec<_>>();
+
+        let just_wins = wins_and_geos_tiled.iter().map(|(win, ..)| win);
+
+        for (win, node) in just_wins.zip(nodes) {
+            win.with_state_mut(|state| state.layout_node = Some(node));
+        }
+
         let wins_and_geos_other = self
             .layout_state
             .pending_window_updates
@@ -132,6 +158,7 @@ impl Pinnacle {
             .map(|(win, geo)| (win, geo, false));
 
         let wins_and_geos = wins_and_geos_tiled
+            .into_iter()
             .chain(wins_and_geos_other)
             .collect::<Vec<_>>();
 
@@ -180,15 +207,10 @@ impl Pinnacle {
 
         unmapping.extend(snapshot_windows);
 
-        self.layout_state
-            .pending_transactions
-            .entry(output.downgrade())
-            .or_default()
-            .push(transaction_builder.into_pending(
-                unmapping,
-                self.layout_state.pending_swap,
-                false,
-            ));
+        self.layout_state.pending_transactions.add_for_output(
+            output,
+            transaction_builder.into_pending(unmapping, self.layout_state.pending_swap, is_resize),
+        );
 
         let (remaining_wins, _remaining_geos) = zipped.unzip::<_, _, Vec<_>, Vec<_>>();
 
@@ -229,13 +251,42 @@ pub struct LayoutState {
     pub pending_swap: bool,
     pub pending_resize: bool,
     current_id: LayoutRequestId,
-    pub layout_trees: HashMap<u32, LayoutTree>,
 
-    /// Currently pending transactions.
-    pub pending_transactions: HashMap<WeakOutput, Vec<PendingTransaction>>,
+    pub current_layout_tree_ids: HashMap<WeakOutput, u32>,
+    pub layout_trees: HashMap<WeakOutput, HashMap<u32, LayoutTree>>,
 
+    pub pending_transactions: PendingTransactions,
     pub pending_unmaps: PendingUnmaps,
     pub pending_window_updates: PendingWindowUpdates,
+}
+
+/// Currently pending transactions.
+#[derive(Debug, Default)]
+pub struct PendingTransactions {
+    pending: HashMap<WeakOutput, Vec<PendingTransaction>>,
+}
+
+impl PendingTransactions {
+    /// Adds a pending transaction.
+    pub fn add_for_output(&mut self, output: &Output, pending: PendingTransaction) {
+        self.pending
+            .entry(output.downgrade())
+            .or_default()
+            .push(pending);
+    }
+
+    /// Takes the next completed or cancelled transaction.
+    pub fn take_next_for_output(&mut self, output: &Output) -> Option<PendingTransaction> {
+        let entry = self.pending.entry(output.downgrade()).or_default();
+
+        let next = entry.first()?;
+
+        if next.is_completed() || next.is_cancelled() {
+            return Some(entry.remove(0));
+        }
+
+        None
+    }
 }
 
 /// Pending [`UnmappingWindow`][crate::window::UnmappingWindow]s from things like
@@ -306,8 +357,21 @@ impl LayoutState {
     }
 
     pub fn remove_output(&mut self, output: &Output) {
-        self.pending_transactions.remove(&output.downgrade());
+        self.pending_transactions
+            .pending
+            .remove(&output.downgrade());
         self.pending_unmaps.pending.remove(&output.downgrade());
+        self.pending_window_updates
+            .pending
+            .remove(&output.downgrade());
+        self.layout_trees.remove(&output.downgrade());
+    }
+
+    pub fn current_tree_for_output(&mut self, output: &Output) -> Option<&mut LayoutTree> {
+        self.layout_trees
+            .entry(output.downgrade())
+            .or_default()
+            .get_mut(self.current_layout_tree_ids.get(&output.downgrade())?)
     }
 }
 
@@ -327,18 +391,12 @@ impl State {
         for output in self.pinnacle.outputs.keys().cloned().collect::<Vec<_>>() {
             let mut transactions = Vec::new();
 
-            let txs = self
+            while let Some(tx) = self
                 .pinnacle
                 .layout_state
                 .pending_transactions
-                .entry(output.downgrade())
-                .or_default();
-
-            while txs
-                .first()
-                .is_some_and(|t| t.is_completed() || t.is_cancelled())
+                .take_next_for_output(&output)
             {
-                let tx = txs.remove(0);
                 if tx.is_swap {
                     self.pinnacle.layout_state.pending_swap = false;
                 }
@@ -467,8 +525,14 @@ impl State {
             anyhow::bail!("Output was invalid");
         };
 
-        let tree_entry = self.pinnacle.layout_state.layout_trees.entry(tree_id);
-        let tree = match tree_entry {
+        let tree_entry = self
+            .pinnacle
+            .layout_state
+            .layout_trees
+            .entry(output.downgrade())
+            .or_default()
+            .entry(tree_id);
+        match tree_entry {
             Entry::Occupied(occupied_entry) => {
                 let tree = occupied_entry.into_mut();
                 tree.diff(root_node);
@@ -477,19 +541,57 @@ impl State {
             Entry::Vacant(vacant_entry) => vacant_entry.insert(LayoutTree::new(root_node)),
         };
 
-        let (output_width, output_height) = {
-            let map = layer_map_for_output(&output);
-            let zone = map.non_exclusive_zone();
-            (zone.size.w, zone.size.h)
-        };
-
-        let geometries = tree.compute_geos(output_width as u32, output_height as u32);
+        *self
+            .pinnacle
+            .layout_state
+            .current_layout_tree_ids
+            .entry(output.downgrade())
+            .or_default() = tree_id;
 
         self.pinnacle
-            .update_windows_with_geometries(&output, geometries, &mut self.backend);
+            .update_windows_from_tree(&output, &mut self.backend, false);
 
         self.schedule_render(&output);
 
         Ok(())
+    }
+
+    /// Resizes the tile corresponding to the given tiled window to the new size.
+    ///
+    /// If the window is not tiled, does nothing.
+    ///
+    /// Will resize in the provided directions.
+    pub fn resize_tile(
+        &mut self,
+        window: &WindowElement,
+        new_size: Size<i32, Logical>,
+        resize_x_dir: ResizeDir,
+        resize_y_dir: ResizeDir,
+    ) {
+        if window.with_state(|state| !state.layout_mode.is_tiled()) {
+            return;
+        }
+
+        if !window.is_on_active_tag() {
+            return;
+        }
+
+        let Some(output) = window.output(&self.pinnacle) else {
+            return;
+        };
+
+        let Some(node) = window.with_state(|state| state.layout_node) else {
+            return;
+        };
+
+        let Some(tree) = self.pinnacle.layout_state.current_tree_for_output(&output) else {
+            warn!("No layout tree for output");
+            return;
+        };
+
+        tree.resize_tile(node, new_size, resize_x_dir, resize_y_dir);
+
+        self.pinnacle
+            .update_windows_from_tree(&output, &mut self.backend, true);
     }
 }

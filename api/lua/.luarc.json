@@ -3,12 +3,6 @@
     "workspace.library": [
         "./",
         "../../snowcap/api/lua",
-        "~/.luarocks/share/lua/5.4/grpc_client.lua",
-        "~/.luarocks/share/lua/5.4/grpc_client",
-        "~/.luarocks/share/lua/5.3/grpc_client.lua",
-        "~/.luarocks/share/lua/5.3/grpc_client",
-        "~/.luarocks/share/lua/5.2/grpc_client.lua",
-        "~/.luarocks/share/lua/5.2/grpc_client",
     ],
     "runtime.version": "Lua 5.2",
 

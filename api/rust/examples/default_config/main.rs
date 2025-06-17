@@ -16,6 +16,7 @@ use pinnacle_api::layout::generators::MasterStack;
 use pinnacle_api::layout::generators::Spiral;
 use pinnacle_api::layout::LayoutGenerator;
 use pinnacle_api::layout::LayoutNode;
+use pinnacle_api::layout::LayoutResponse;
 use pinnacle_api::output;
 use pinnacle_api::pinnacle;
 use pinnacle_api::pinnacle::Backend;
@@ -215,11 +216,18 @@ async fn config() {
         let cycler = cycler.clone();
         move |args| {
             let Some(tag) = args.tags.first() else {
-                return LayoutNode::new();
+                return LayoutResponse {
+                    root_node: LayoutNode::new(),
+                    tree_id: 0,
+                };
             };
-            let mut generator = cycler.lock().unwrap();
-            generator.set_current_tag(tag.clone());
-            generator.layout(args.window_count)
+
+            let mut cycler = cycler.lock().unwrap();
+            cycler.set_current_tag(tag.clone());
+
+            let root_node = cycler.layout(args.window_count);
+            let tree_id = cycler.current_tree_id();
+            LayoutResponse { root_node, tree_id }
         }
     });
 
