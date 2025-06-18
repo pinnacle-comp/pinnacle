@@ -3040,6 +3040,8 @@ fn window_handle_tags() -> anyhow::Result<()> {
     })
 }
 
+// TODO: WindowHandle::in_direction
+
 #[test]
 fn window_spawned_without_tags_gets_tags_after_add() -> anyhow::Result<()> {
     test_api(|sender, lang| {

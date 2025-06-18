@@ -1,3 +1,4 @@
+pub mod rect;
 pub mod transaction;
 pub mod treediff;
 

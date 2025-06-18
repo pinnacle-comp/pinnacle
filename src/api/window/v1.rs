@@ -12,10 +12,10 @@ use pinnacle_api_defs::pinnacle::{
             GetFocusedResponse, GetLayoutModeRequest, GetLayoutModeResponse, GetLocRequest,
             GetLocResponse, GetRequest, GetResponse, GetSizeRequest, GetSizeResponse,
             GetTagIdsRequest, GetTagIdsResponse, GetTitleRequest, GetTitleResponse,
-            MoveGrabRequest, MoveToTagRequest, RaiseRequest, ResizeGrabRequest, ResizeTileRequest,
-            SetDecorationModeRequest, SetFloatingRequest, SetFocusedRequest, SetFullscreenRequest,
-            SetGeometryRequest, SetMaximizedRequest, SetTagRequest, WindowRuleRequest,
-            WindowRuleResponse,
+            GetWindowsInDirRequest, GetWindowsInDirResponse, MoveGrabRequest, MoveToTagRequest,
+            RaiseRequest, ResizeGrabRequest, ResizeTileRequest, SetDecorationModeRequest,
+            SetFloatingRequest, SetFocusedRequest, SetFullscreenRequest, SetGeometryRequest,
+            SetMaximizedRequest, SetTagRequest, WindowRuleRequest, WindowRuleResponse,
         },
     },
 };
@@ -34,6 +34,7 @@ use crate::{
     layout::tree::ResizeDir,
     state::WithState,
     tag::TagId,
+    util::rect::Direction,
     window::{
         window_state::{LayoutMode, LayoutModeKind, WindowId},
         UnmappedState,
@@ -214,6 +215,59 @@ impl v1::window_service_server::WindowService for super::WindowService {
                 .unwrap_or_default();
 
             Ok(GetTagIdsResponse { tag_ids })
+        })
+        .await
+    }
+
+    async fn get_windows_in_dir(
+        &self,
+        request: Request<GetWindowsInDirRequest>,
+    ) -> TonicResult<GetWindowsInDirResponse> {
+        let request = request.into_inner();
+        let window_id = WindowId(request.window_id);
+        let dir = request.dir();
+
+        if dir == util::v1::Dir::Unspecified {
+            return Err(Status::invalid_argument("no dir was specified"));
+        }
+
+        run_unary(&self.sender, move |state| {
+            let Some(win) = window_id.window(&state.pinnacle) else {
+                return Ok(GetWindowsInDirResponse {
+                    window_ids: Vec::new(),
+                });
+            };
+
+            let Some(win_rect) = state.pinnacle.space.element_geometry(&win) else {
+                return Ok(GetWindowsInDirResponse {
+                    window_ids: Vec::new(),
+                });
+            };
+
+            let candidates = state.pinnacle.space.elements().collect::<Vec<_>>();
+            let rects = candidates
+                .iter()
+                .map(|win| state.pinnacle.space.element_geometry(win).expect("mapped"))
+                .collect::<Vec<_>>();
+
+            let idxs = crate::util::rect::closest_in_dir(
+                win_rect,
+                &rects,
+                match dir {
+                    util::v1::Dir::Unspecified => unreachable!(),
+                    util::v1::Dir::Left => Direction::Left,
+                    util::v1::Dir::Right => Direction::Right,
+                    util::v1::Dir::Up => Direction::Up,
+                    util::v1::Dir::Down => Direction::Down,
+                },
+            );
+
+            let window_ids = idxs
+                .into_iter()
+                .map(|idx| candidates[idx].with_state(|state| state.id.0))
+                .collect();
+
+            Ok(GetWindowsInDirResponse { window_ids })
         })
         .await
     }

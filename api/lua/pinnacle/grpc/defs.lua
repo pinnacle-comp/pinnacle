@@ -416,6 +416,15 @@ local pinnacle_util_v1_AbsOrRel = {
     ABS_OR_REL_RELATIVE = 2,
 }
 
+---@enum pinnacle.util.v1.Dir
+local pinnacle_util_v1_Dir = {
+    DIR_UNSPECIFIED = 0,
+    DIR_LEFT = 1,
+    DIR_RIGHT = 2,
+    DIR_UP = 3,
+    DIR_DOWN = 4,
+}
+
 ---@enum pinnacle.input.v1.Modifier
 local pinnacle_input_v1_Modifier = {
     MODIFIER_UNSPECIFIED = 0,
@@ -1098,6 +1107,13 @@ local pinnacle_window_v1_DecorationMode = {
 ---@class pinnacle.window.v1.GetTagIdsResponse
 ---@field tag_ids integer[]?
 
+---@class pinnacle.window.v1.GetWindowsInDirRequest
+---@field window_id integer?
+---@field dir pinnacle.util.v1.Dir?
+
+---@class pinnacle.window.v1.GetWindowsInDirResponse
+---@field window_ids integer[]?
+
 ---@class pinnacle.window.v1.CloseRequest
 ---@field window_id integer?
 
@@ -1342,6 +1358,8 @@ pinnacle.window.v1.GetLayoutModeRequest = {}
 pinnacle.window.v1.GetLayoutModeResponse = {}
 pinnacle.window.v1.GetTagIdsRequest = {}
 pinnacle.window.v1.GetTagIdsResponse = {}
+pinnacle.window.v1.GetWindowsInDirRequest = {}
+pinnacle.window.v1.GetWindowsInDirResponse = {}
 pinnacle.window.v1.CloseRequest = {}
 pinnacle.window.v1.SetGeometryRequest = {}
 pinnacle.window.v1.ResizeTileRequest = {}
@@ -1361,6 +1379,7 @@ pinnacle.window.v1.WindowRuleResponse = {}
 pinnacle.window.v1.WindowRuleResponse.NewWindowRequest = {}
 pinnacle.util.v1.SetOrToggle = pinnacle_util_v1_SetOrToggle
 pinnacle.util.v1.AbsOrRel = pinnacle_util_v1_AbsOrRel
+pinnacle.util.v1.Dir = pinnacle_util_v1_Dir
 pinnacle.input.v1.Modifier = pinnacle_input_v1_Modifier
 pinnacle.input.v1.Edge = pinnacle_input_v1_Edge
 pinnacle.input.v1.ClickMethod = pinnacle_input_v1_ClickMethod
@@ -2813,6 +2832,23 @@ pinnacle.window.v1.WindowService.GetTagIds.response = ".pinnacle.window.v1.GetTa
 ---@return string | nil error An error string, if any
 function Client:pinnacle_window_v1_WindowService_GetTagIds(data)
     return self:unary_request(pinnacle.window.v1.WindowService.GetTagIds, data)
+end
+pinnacle.window.v1.WindowService.GetWindowsInDir = {}
+pinnacle.window.v1.WindowService.GetWindowsInDir.service = "pinnacle.window.v1.WindowService"
+pinnacle.window.v1.WindowService.GetWindowsInDir.method = "GetWindowsInDir"
+pinnacle.window.v1.WindowService.GetWindowsInDir.request = ".pinnacle.window.v1.GetWindowsInDirRequest"
+pinnacle.window.v1.WindowService.GetWindowsInDir.response = ".pinnacle.window.v1.GetWindowsInDirResponse"
+
+---Performs a unary request.
+---
+---@nodiscard
+---
+---@param data pinnacle.window.v1.GetWindowsInDirRequest
+---
+---@return pinnacle.window.v1.GetWindowsInDirResponse | nil response
+---@return string | nil error An error string, if any
+function Client:pinnacle_window_v1_WindowService_GetWindowsInDir(data)
+    return self:unary_request(pinnacle.window.v1.WindowService.GetWindowsInDir, data)
 end
 pinnacle.window.v1.WindowService.Close = {}
 pinnacle.window.v1.WindowService.Close.service = "pinnacle.window.v1.WindowService"

@@ -17,10 +17,10 @@ use pinnacle_api_defs::pinnacle::{
         self,
         v1::{
             GetAppIdRequest, GetFocusedRequest, GetLayoutModeRequest, GetLocRequest,
-            GetSizeRequest, GetTagIdsRequest, GetTitleRequest, MoveGrabRequest, MoveToTagRequest,
-            RaiseRequest, ResizeGrabRequest, ResizeTileRequest, SetDecorationModeRequest,
-            SetFloatingRequest, SetFocusedRequest, SetFullscreenRequest, SetGeometryRequest,
-            SetMaximizedRequest, SetTagRequest,
+            GetSizeRequest, GetTagIdsRequest, GetTitleRequest, GetWindowsInDirRequest,
+            MoveGrabRequest, MoveToTagRequest, RaiseRequest, ResizeGrabRequest, ResizeTileRequest,
+            SetDecorationModeRequest, SetFloatingRequest, SetFocusedRequest, SetFullscreenRequest,
+            SetGeometryRequest, SetMaximizedRequest, SetTagRequest,
         },
     },
 };
@@ -32,7 +32,7 @@ use crate::{
     input::MouseButton,
     signal::{SignalHandle, WindowSignal},
     tag::TagHandle,
-    util::{Batch, Point, Size},
+    util::{Batch, Direction, Point, Size},
     BlockOnTokio,
 };
 
@@ -671,6 +671,39 @@ impl WindowHandle {
             .await
             .batch_find(|tag| tag.active_async().boxed(), |active| *active)
             .is_some()
+    }
+
+    /// Gets all windows in the provided direction, sorted closest to farthest.
+    pub fn in_direction(&self, direction: Direction) -> impl Iterator<Item = WindowHandle> {
+        self.in_direction_async(direction).block_on_tokio()
+    }
+
+    /// Async impl for [`Self::in_direction`].
+    pub async fn in_direction_async(
+        &self,
+        direction: Direction,
+    ) -> impl Iterator<Item = WindowHandle> {
+        let window_id = self.id;
+
+        let mut request = GetWindowsInDirRequest {
+            window_id,
+            dir: Default::default(),
+        };
+
+        request.set_dir(match direction {
+            Direction::Left => pinnacle_api_defs::pinnacle::util::v1::Dir::Left,
+            Direction::Right => pinnacle_api_defs::pinnacle::util::v1::Dir::Right,
+            Direction::Up => pinnacle_api_defs::pinnacle::util::v1::Dir::Up,
+            Direction::Down => pinnacle_api_defs::pinnacle::util::v1::Dir::Down,
+        });
+
+        let response = Client::window()
+            .get_windows_in_dir(request)
+            .await
+            .unwrap()
+            .into_inner();
+
+        response.window_ids.into_iter().map(WindowHandle::from_id)
     }
 
     /// Gets this window's raw compositor id.

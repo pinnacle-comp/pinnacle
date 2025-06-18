@@ -21,6 +21,19 @@ pub enum Axis {
     Vertical,
 }
 
+/// A cardinal direction.
+#[derive(Copy, Clone, Hash, Eq, PartialEq, Debug)]
+pub enum Direction {
+    /// The left/west direction.
+    Left,
+    /// The right/east direction.
+    Right,
+    /// The up/north direction.
+    Up,
+    /// The down/south direction.
+    Down,
+}
+
 /// Batches a set of requests that will be sent to the compositor all at once.
 ///
 /// # Rationale

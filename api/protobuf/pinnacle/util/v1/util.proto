@@ -29,3 +29,11 @@ enum AbsOrRel {
   ABS_OR_REL_ABSOLUTE = 1;
   ABS_OR_REL_RELATIVE = 2;
 }
+
+enum Dir {
+  DIR_UNSPECIFIED = 0;
+  DIR_LEFT = 1;
+  DIR_RIGHT = 2;
+  DIR_UP = 3;
+  DIR_DOWN = 4;
+}

@@ -5,6 +5,7 @@
 local log = require("pinnacle.log")
 local client = require("pinnacle.grpc.client").client
 local window_v1 = require("pinnacle.grpc.defs").pinnacle.window.v1
+local util_v1 = require("pinnacle.grpc.defs").pinnacle.util.v1
 local defs = require("pinnacle.grpc.defs")
 
 local set_or_toggle = {
@@ -639,6 +640,34 @@ function WindowHandle:tags()
     local handles = require("pinnacle.tag").handle.new_from_table(tag_ids)
 
     return handles
+end
+
+---Gets all windows in the provided direction, sorted closest to farthest.
+---
+---@param direction "left" | "right" | "up" | "down"
+---@return pinnacle.window.WindowHandle[]
+function WindowHandle:in_direction(direction)
+    local dir = util_v1.Dir.DIR_UNSPECIFIED
+
+    if direction == "left" then
+        dir = util_v1.Dir.DIR_LEFT
+    end
+    if direction == "right" then
+        dir = util_v1.Dir.DIR_RIGHT
+    end
+    if direction == "up" then
+        dir = util_v1.Dir.DIR_UP
+    end
+    if direction == "down" then
+        dir = util_v1.Dir.DIR_DOWN
+    end
+
+    local response, err = client:pinnacle_window_v1_WindowService_GetWindowsInDir({
+        window_id = self.id,
+        dir = dir,
+    })
+
+    return response and window_handle.new_from_table(response.window_ids or {}) or {}
 end
 
 ---Creates a new `WindowHandle` from an id.
