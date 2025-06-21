@@ -172,6 +172,14 @@ message GetFocusStackWindowIdsResponse {
   repeated uint32 window_ids = 1;
 }
 
+message GetOutputsInDirRequest {
+  string output_name = 1;
+  pinnacle.util.v1.Dir dir = 2;
+}
+message GetOutputsInDirResponse {
+  repeated string output_names = 1;
+}
+
 service OutputService {
   rpc Get(GetRequest) returns (GetResponse);
 
@@ -196,4 +204,6 @@ service OutputService {
   rpc GetEnabled(GetEnabledRequest) returns (GetEnabledResponse);
   rpc GetPowered(GetPoweredRequest) returns (GetPoweredResponse);
   rpc GetFocusStackWindowIds(GetFocusStackWindowIdsRequest) returns (GetFocusStackWindowIdsResponse);
+  // Returns all outputs in the given direction.
+  rpc GetOutputsInDir(GetOutputsInDirRequest) returns (GetOutputsInDirResponse);
 }

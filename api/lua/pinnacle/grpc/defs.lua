@@ -901,6 +901,13 @@ local pinnacle_window_v1_DecorationMode = {
 ---@class pinnacle.output.v1.GetFocusStackWindowIdsResponse
 ---@field window_ids integer[]?
 
+---@class pinnacle.output.v1.GetOutputsInDirRequest
+---@field output_name string?
+---@field dir pinnacle.util.v1.Dir?
+
+---@class pinnacle.output.v1.GetOutputsInDirResponse
+---@field output_names string[]?
+
 ---@class pinnacle.process.v1.SpawnRequest
 ---@field cmd string[]?
 ---@field unique boolean?
@@ -1306,6 +1313,8 @@ pinnacle.output.v1.GetPoweredRequest = {}
 pinnacle.output.v1.GetPoweredResponse = {}
 pinnacle.output.v1.GetFocusStackWindowIdsRequest = {}
 pinnacle.output.v1.GetFocusStackWindowIdsResponse = {}
+pinnacle.output.v1.GetOutputsInDirRequest = {}
+pinnacle.output.v1.GetOutputsInDirResponse = {}
 pinnacle.process = {}
 pinnacle.process.v1 = {}
 pinnacle.process.v1.SpawnRequest = {}
@@ -2203,6 +2212,23 @@ pinnacle.output.v1.OutputService.GetFocusStackWindowIds.response = ".pinnacle.ou
 ---@return string | nil error An error string, if any
 function Client:pinnacle_output_v1_OutputService_GetFocusStackWindowIds(data)
     return self:unary_request(pinnacle.output.v1.OutputService.GetFocusStackWindowIds, data)
+end
+pinnacle.output.v1.OutputService.GetOutputsInDir = {}
+pinnacle.output.v1.OutputService.GetOutputsInDir.service = "pinnacle.output.v1.OutputService"
+pinnacle.output.v1.OutputService.GetOutputsInDir.method = "GetOutputsInDir"
+pinnacle.output.v1.OutputService.GetOutputsInDir.request = ".pinnacle.output.v1.GetOutputsInDirRequest"
+pinnacle.output.v1.OutputService.GetOutputsInDir.response = ".pinnacle.output.v1.GetOutputsInDirResponse"
+
+---Performs a unary request.
+---
+---@nodiscard
+---
+---@param data pinnacle.output.v1.GetOutputsInDirRequest
+---
+---@return pinnacle.output.v1.GetOutputsInDirResponse | nil response
+---@return string | nil error An error string, if any
+function Client:pinnacle_output_v1_OutputService_GetOutputsInDir(data)
+    return self:unary_request(pinnacle.output.v1.OutputService.GetOutputsInDir, data)
 end
 pinnacle.process.v1.ProcessService = {}
 pinnacle.process.v1.ProcessService.Spawn = {}

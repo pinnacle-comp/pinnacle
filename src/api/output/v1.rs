@@ -6,11 +6,11 @@ use pinnacle_api_defs::pinnacle::{
             GetFocusStackWindowIdsRequest, GetFocusStackWindowIdsResponse, GetFocusedRequest,
             GetFocusedResponse, GetInfoRequest, GetInfoResponse, GetLocRequest, GetLocResponse,
             GetLogicalSizeRequest, GetLogicalSizeResponse, GetModesRequest, GetModesResponse,
-            GetPhysicalSizeRequest, GetPhysicalSizeResponse, GetPoweredRequest, GetPoweredResponse,
-            GetRequest, GetResponse, GetScaleRequest, GetScaleResponse, GetTagIdsRequest,
-            GetTagIdsResponse, GetTransformRequest, GetTransformResponse, SetLocRequest,
-            SetModeRequest, SetModelineRequest, SetPoweredRequest, SetScaleRequest,
-            SetTransformRequest,
+            GetOutputsInDirRequest, GetOutputsInDirResponse, GetPhysicalSizeRequest,
+            GetPhysicalSizeResponse, GetPoweredRequest, GetPoweredResponse, GetRequest,
+            GetResponse, GetScaleRequest, GetScaleResponse, GetTagIdsRequest, GetTagIdsResponse,
+            GetTransformRequest, GetTransformResponse, SetLocRequest, SetModeRequest,
+            SetModelineRequest, SetPoweredRequest, SetScaleRequest, SetTransformRequest,
         },
     },
     util::{
@@ -28,6 +28,7 @@ use crate::{
     config::ConnectorSavedState,
     output::{OutputMode, OutputName},
     state::{State, WithState},
+    util::rect::Direction,
 };
 
 #[tonic::async_trait]
@@ -623,6 +624,52 @@ impl output::v1::output_service_server::OutputService for super::OutputService {
             Ok(GetFocusStackWindowIdsResponse {
                 window_ids: focus_stack_window_ids,
             })
+        })
+        .await
+    }
+
+    async fn get_outputs_in_dir(
+        &self,
+        request: Request<GetOutputsInDirRequest>,
+    ) -> TonicResult<GetOutputsInDirResponse> {
+        let request = request.into_inner();
+        let dir = request.dir();
+        let output_name = OutputName(request.output_name);
+
+        if dir == util::v1::Dir::Unspecified {
+            return Err(Status::invalid_argument("no dir was specified"));
+        }
+
+        run_unary(&self.sender, move |state| {
+            let Some(op) = output_name.output(&state.pinnacle) else {
+                return Ok(GetOutputsInDirResponse::default());
+            };
+
+            let Some(op_rect) = state.pinnacle.space.output_geometry(&op) else {
+                return Ok(GetOutputsInDirResponse::default());
+            };
+
+            let candidates = state.pinnacle.space.outputs().collect::<Vec<_>>();
+            let rects = candidates
+                .iter()
+                .map(|op| state.pinnacle.space.output_geometry(op).expect("mapped"))
+                .collect::<Vec<_>>();
+
+            let idxs = crate::util::rect::closest_in_dir(
+                op_rect,
+                &rects,
+                match dir {
+                    util::v1::Dir::Unspecified => unreachable!(),
+                    util::v1::Dir::Left => Direction::Left,
+                    util::v1::Dir::Right => Direction::Right,
+                    util::v1::Dir::Up => Direction::Up,
+                    util::v1::Dir::Down => Direction::Down,
+                },
+            );
+
+            let output_names = idxs.into_iter().map(|idx| candidates[idx].name()).collect();
+
+            Ok(GetOutputsInDirResponse { output_names })
         })
         .await
     }

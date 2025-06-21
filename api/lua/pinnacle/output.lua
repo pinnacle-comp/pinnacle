@@ -5,6 +5,7 @@
 local log = require("pinnacle.log")
 local client = require("pinnacle.grpc.client").client
 local output_v1 = require("pinnacle.grpc.defs").pinnacle.output.v1
+local util_v1 = require("pinnacle.grpc.defs").pinnacle.util.v1
 
 ---@lcat nodoc
 ---@class pinnacle.output.OutputHandleModule
@@ -858,6 +859,34 @@ function OutputHandle:keyboard_focus_stack_visible()
     return keyboard_focus_stack_visible
 end
 
+---Gets all outputs in the provided direction, sorted closest to farthest.
+---
+---@param direction "left" | "right" | "up" | "down"
+---@return pinnacle.output.OutputHandle[]
+function OutputHandle:in_direction(direction)
+    local dir = util_v1.Dir.DIR_UNSPECIFIED
+
+    if direction == "left" then
+        dir = util_v1.Dir.DIR_LEFT
+    end
+    if direction == "right" then
+        dir = util_v1.Dir.DIR_RIGHT
+    end
+    if direction == "up" then
+        dir = util_v1.Dir.DIR_UP
+    end
+    if direction == "down" then
+        dir = util_v1.Dir.DIR_DOWN
+    end
+
+    local response, err = client:pinnacle_output_v1_OutputService_GetOutputsInDir({
+        output_name = self.name,
+        dir = dir,
+    })
+
+    return response and output_handle.new_from_table(response.output_names or {}) or {}
+end
+
 ---Creates a new `OutputHandle` from its raw name.
 ---@param output_name string
 function output_handle.new(output_name)
@@ -867,6 +896,20 @@ function output_handle.new(output_name)
     }
     setmetatable(self, { __index = OutputHandle })
     return self
+end
+
+---@param output_names string[]
+---
+---@return pinnacle.output.OutputHandle[]
+function output_handle.new_from_table(output_names)
+    ---@type pinnacle.output.OutputHandle[]
+    local handles = {}
+
+    for _, name in ipairs(output_names) do
+        table.insert(handles, output_handle.new(name))
+    end
+
+    return handles
 end
 
 return output
