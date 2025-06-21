@@ -36,7 +36,7 @@ impl output::v1::output_service_server::OutputService for super::OutputService {
             let output_names = state
                 .pinnacle
                 .outputs
-                .keys()
+                .iter()
                 .map(|output| output.name())
                 .collect::<Vec<_>>();
 
@@ -552,16 +552,8 @@ impl output::v1::output_service_server::OutputService for super::OutputService {
         run_unary(&self.sender, move |state| {
             let output = output_name.output(&state.pinnacle);
 
-            // FIXME: Pinnacle::outputs does not make it obvious that disabled
-            // outputs are ones with no global
             let enabled = output
-                .map(|output| {
-                    state
-                        .pinnacle
-                        .outputs
-                        .get(&output)
-                        .is_some_and(|global| global.is_some())
-                })
+                .map(|output| output.with_state(|state| state.enabled_global_id.is_some()))
                 .unwrap_or_default();
 
             Ok(GetEnabledResponse { enabled })
@@ -602,13 +594,11 @@ impl output::v1::output_service_server::OutputService for super::OutputService {
             let focus_stack_window_ids = output
                 .as_ref()
                 .map(|output| {
-                    output.with_state(|state| {
-                        state
-                            .focus_stack
-                            .windows()
-                            .map(|win| win.with_state(|state| state.id.0))
-                            .collect::<Vec<_>>()
-                    })
+                    state
+                        .pinnacle
+                        .focus_stack_for_output(output)
+                        .map(|win| win.with_state(|state| state.id.0))
+                        .collect()
                 })
                 .unwrap_or_default();
 

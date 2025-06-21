@@ -276,7 +276,6 @@ impl CompositorHandler for State {
                         let output = window.output(&self.pinnacle);
 
                         if let Some(output) = output {
-                            self.update_keyboard_focus(&output);
                             self.pinnacle.request_layout(&output);
                         }
                     }
@@ -725,12 +724,6 @@ impl WlrLayerShellHandler for State {
         }) {
             map.unmap_layer(&layer);
             output = Some(op.clone());
-        }
-
-        let focused_output = self.pinnacle.focused_output().cloned();
-
-        if let Some(focused_output) = focused_output {
-            self.update_keyboard_focus(&focused_output);
         }
 
         if let Some(output) = output {

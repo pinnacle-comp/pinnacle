@@ -115,7 +115,9 @@ impl Pinnacle {
 
         let global = output.create_global::<State>(&self.display_handle);
 
-        self.outputs.insert(output.clone(), Some(global));
+        output.with_state_mut(|state| state.enabled_global_id = Some(global));
+
+        self.outputs.push(output.clone());
 
         self.space.map_output(&output, loc);
 

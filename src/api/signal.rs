@@ -53,6 +53,7 @@ impl SignalState {
         self.output_move.clear();
         self.window_pointer_enter.clear();
         self.window_pointer_leave.clear();
+        self.window_focused.clear();
         self.tag_active.clear();
         self.input_device_added.clear();
     }

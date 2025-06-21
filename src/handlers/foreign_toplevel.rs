@@ -21,8 +21,8 @@ impl ForeignToplevelHandler for State {
             return;
         };
 
-        output.with_state_mut(|state| state.focus_stack.set_focus(window.clone()));
-        self.pinnacle.raise_window(window.clone(), true);
+        self.pinnacle.keyboard_focus_stack.set_focus(window.clone());
+        self.pinnacle.raise_window(window.clone());
 
         if !window.is_on_active_tag() {
             let new_active_tag = window.with_state(|state| {
@@ -37,7 +37,6 @@ impl ForeignToplevelHandler for State {
                 crate::api::tag::switch_to(self, &tag);
             }
         } else {
-            self.update_keyboard_focus(&output);
             self.schedule_render(&output);
         }
     }

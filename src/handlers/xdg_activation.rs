@@ -10,7 +10,7 @@ use smithay::{
 };
 use tracing::debug;
 
-use crate::state::{State, WithState};
+use crate::state::State;
 
 pub const XDG_ACTIVATION_TOKEN_TIMEOUT: Duration = Duration::from_secs(10);
 
@@ -89,19 +89,14 @@ impl XdgActivationHandler for State {
                 ActivationContext::FocusIfPossible => {
                     if window.is_on_active_tag() {
                         let Some(output) = window.output(&self.pinnacle) else {
-                            // TODO: make "no tags" be all tags on an output
                             debug!("xdg-activation: focus-if-possible request on window but it had no tags");
                             self.pinnacle.xdg_activation_state.remove_token(&token);
                             return;
                         };
 
-                        self.pinnacle.raise_window(window.clone(), true);
+                        self.pinnacle.raise_window(window.clone());
 
-                        output.with_state_mut(|state| {
-                            state.focus_stack.set_focus(window);
-                        });
-
-                        self.update_keyboard_focus(&output);
+                        self.pinnacle.keyboard_focus_stack.set_focus(window);
 
                         self.schedule_render(&output);
                     }

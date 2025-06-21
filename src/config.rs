@@ -330,7 +330,7 @@ impl Pinnacle {
         // Clear state
 
         debug!("Clearing tags");
-        for output in self.outputs.keys() {
+        for output in self.outputs.iter() {
             output.with_state_mut(|state| {
                 for tag in state.tags.iter() {
                     tag.make_defunct();

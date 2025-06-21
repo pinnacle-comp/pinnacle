@@ -121,8 +121,8 @@ impl XwmHandler for State {
             window.set_tags_to_output(output);
         }
 
-        self.pinnacle.space.map_element(window.clone(), loc, true);
-        self.pinnacle.raise_window(window.clone(), true);
+        self.pinnacle.space.map_element(window.clone(), loc, false);
+        self.pinnacle.raise_window(window.clone());
 
         for output in self.pinnacle.space.outputs_for_element(&window) {
             self.schedule_render(&output);
@@ -229,7 +229,7 @@ impl XwmHandler for State {
             return;
         };
 
-        self.pinnacle.space.map_element(win, geometry.loc, true);
+        self.pinnacle.space.map_element(win, geometry.loc, false);
     }
 
     fn maximize_request(&mut self, _xwm: XwmId, window: X11Surface) {
@@ -508,8 +508,6 @@ impl State {
             if should_layout {
                 self.pinnacle.request_layout(&output);
             }
-
-            self.update_keyboard_focus(&output);
         }
 
         for output in outputs {
@@ -637,7 +635,7 @@ impl Pinnacle {
 
         let new_scale = if xwayland_state.should_clients_self_scale {
             self.outputs
-                .keys()
+                .iter()
                 .map(|op| op.current_scale().fractional_scale())
                 .max_by(|a, b| a.total_cmp(b))
                 .unwrap_or(1.0)
@@ -674,7 +672,7 @@ impl Pinnacle {
             .compositor_state
             .set_client_scale(new_scale);
 
-        for output in self.outputs.keys() {
+        for output in self.outputs.iter() {
             output.change_current_state(None, None, None, None);
         }
 

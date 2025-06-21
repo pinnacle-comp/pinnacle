@@ -55,7 +55,7 @@ impl PointerGrab<State> for MoveSurfaceGrab {
             return;
         }
 
-        state.pinnacle.raise_window(self.window.clone(), false);
+        state.pinnacle.raise_window(self.window.clone());
 
         let is_floating = self
             .window
@@ -68,7 +68,7 @@ impl PointerGrab<State> for MoveSurfaceGrab {
             state
                 .pinnacle
                 .space
-                .map_element(self.window.clone(), new_loc.to_i32_round(), true);
+                .map_element(self.window.clone(), new_loc.to_i32_round(), false);
 
             self.window.with_state_mut(|state| {
                 state.set_floating_loc(new_loc.to_i32_round());

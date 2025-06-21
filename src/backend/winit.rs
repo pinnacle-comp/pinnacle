@@ -185,10 +185,11 @@ impl Winit {
         let init = Box::new(move |pinnacle: &mut Pinnacle| {
             let output = winit.output.clone();
             let global = output.create_global::<State>(&display_handle);
+            output.with_state_mut(|state| state.enabled_global_id = Some(global));
 
             pinnacle.output_focus_stack.set_focus(output.clone());
 
-            pinnacle.outputs.insert(output.clone(), Some(global));
+            pinnacle.outputs.push(output.clone());
 
             pinnacle
                 .shm_state

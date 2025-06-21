@@ -39,7 +39,7 @@ use smithay::{
         keyboard_shortcuts_inhibit::KeyboardShortcutsInhibitorSeat,
         pointer_constraints::{with_pointer_constraint, PointerConstraint},
         seat::WaylandFocus,
-        shell::wlr_layer::{self, KeyboardInteractivity, LayerSurfaceCachedState},
+        shell::wlr_layer,
     },
 };
 use tracing::{error, info};
@@ -352,76 +352,13 @@ impl State {
     fn on_keyboard<I: InputBackend>(&mut self, event: I::KeyboardKeyEvent) {
         let _span = tracy_client::span!("State::on_keyboard");
 
+        let Some(keyboard) = self.pinnacle.seat.get_keyboard() else {
+            return;
+        };
+
         let serial = SERIAL_COUNTER.next_serial();
         let time = event.time_msec();
         let press_state = event.state();
-
-        let keyboard = self
-            .pinnacle
-            .seat
-            .get_keyboard()
-            .expect("Seat has no keyboard");
-
-        if self.pinnacle.lock_state.is_unlocked() {
-            // Focus the topmost exclusive layer, if any
-            for layer in self.pinnacle.layer_shell_state.layer_surfaces().rev() {
-                let data = compositor::with_states(layer.wl_surface(), |states| {
-                    *states
-                        .cached_state
-                        .get::<LayerSurfaceCachedState>()
-                        .current()
-                });
-                if data.keyboard_interactivity == KeyboardInteractivity::Exclusive
-                    && matches!(
-                        data.layer,
-                        wlr_layer::Layer::Top | wlr_layer::Layer::Overlay
-                    )
-                {
-                    let layer_surface = self.pinnacle.space.outputs().find_map(|op| {
-                        let map = layer_map_for_output(op);
-                        let layer = map.layers().find(|l| l.layer_surface() == &layer).cloned();
-                        layer
-                    });
-
-                    if let Some(layer_surface) = layer_surface {
-                        keyboard.set_focus(
-                            self,
-                            Some(KeyboardFocusTarget::LayerSurface(layer_surface)),
-                            serial,
-                        );
-                        break;
-                    }
-                }
-            }
-        } else {
-            // We don't want anything but lock surfaces getting keyboard input when locked.
-
-            if !matches!(
-                keyboard.current_focus(),
-                Some(KeyboardFocusTarget::LockSurface(_))
-            ) {
-                let pointer_focus = self.pinnacle.pointer_focus_target_under(
-                    self.pinnacle.seat.get_pointer().unwrap().current_location(),
-                );
-
-                let lock_surface = pointer_focus
-                    .and_then(|(focus, _loc)| focus.lock_surface_for(self))
-                    .or_else(|| {
-                        let lock_surface = self
-                            .pinnacle
-                            .space
-                            .outputs()
-                            .find_map(|op| op.with_state(|state| state.lock_surface.clone()));
-                        lock_surface
-                    });
-
-                keyboard.set_focus(
-                    self,
-                    lock_surface.map(KeyboardFocusTarget::LockSurface),
-                    serial,
-                );
-            }
-        }
 
         let shortcuts_inhibited = keyboard
             .current_focus()
@@ -559,19 +496,25 @@ impl State {
         }
 
         if button_state == ButtonState::Pressed {
+            let output_under = self
+                .pinnacle
+                .space
+                .output_under(pointer_loc)
+                .next()
+                .cloned();
+
+            if let Some(output_under) = output_under {
+                self.pinnacle.output_focus_stack.set_focus(output_under);
+            }
+
             if let Some((focus, _)) = self.pinnacle.pointer_focus_target_under(pointer_loc) {
                 if let Some(window) = focus.window_for(self) {
-                    self.pinnacle.raise_window(window.clone(), true);
-                    if !window.is_x11_override_redirect() {
-                        if let Some(output) = window.output(&self.pinnacle) {
-                            output.with_state_mut(|state| {
-                                state.focus_stack.set_focus(window.clone())
-                            });
-                            self.update_keyboard_focus(&output);
-                        }
-                    }
+                    self.pinnacle.raise_window(window.clone());
                     for output in self.pinnacle.space.outputs_for_element(&window) {
                         self.schedule_render(&output);
+                    }
+                    if !window.is_x11_override_redirect() {
+                        self.pinnacle.keyboard_focus_stack.set_focus(window.clone());
                     }
                 } else if let Some(layer) = focus.layer_for(self) {
                     if layer.can_receive_keyboard_focus() {
@@ -580,6 +523,8 @@ impl State {
                             Some(KeyboardFocusTarget::LayerSurface(layer)),
                             serial,
                         );
+                    } else {
+                        self.pinnacle.keyboard_focus_stack.unset_focus();
                     }
                 } else if !self.pinnacle.lock_state.is_unlocked() {
                     if let Some(lock_surface) = focus.lock_surface_for(self) {
@@ -588,13 +533,12 @@ impl State {
                             Some(KeyboardFocusTarget::LockSurface(lock_surface)),
                             serial,
                         );
+                    } else {
+                        self.pinnacle.keyboard_focus_stack.unset_focus();
                     }
                 }
-            } else if let Some(focused_op) = self.pinnacle.focused_output().cloned() {
-                focused_op.with_state_mut(|state| {
-                    state.focus_stack.unset_focus();
-                });
-                self.update_keyboard_focus(&focused_op);
+            } else {
+                self.pinnacle.keyboard_focus_stack.unset_focus();
             }
         };
 
@@ -694,7 +638,6 @@ impl State {
                 self.schedule_render(&old_output);
             }
             self.schedule_render(&new_output);
-            self.pinnacle.output_focus_stack.set_focus(new_output);
         }
 
         self.pinnacle.maybe_activate_pointer_constraint(pointer_loc);
@@ -871,7 +814,6 @@ impl State {
                 self.schedule_render(&old_output);
             }
             self.schedule_render(&new_output);
-            self.pinnacle.output_focus_stack.set_focus(new_output);
         }
 
         let focus_target = pointer_confined_to
@@ -1140,9 +1082,11 @@ impl State {
         let device = event.device();
 
         let map_region = self.map_region_for_device(&device).or_else(|| {
-            // FIXME: this might get an unmapped output when it's disabled
-            // Split outputs into outputs and unmapped_outputs like windows are or something
-            let next_output = self.pinnacle.outputs.keys().next()?;
+            let next_output = self
+                .pinnacle
+                .outputs
+                .iter()
+                .find(|op| op.with_state(|state| state.enabled_global_id.is_some()))?;
             self.pinnacle
                 .space
                 .output_geometry(next_output)
