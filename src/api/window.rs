@@ -230,19 +230,10 @@ pub fn raise(state: &mut State, window: WindowElement) {
 }
 
 pub fn move_grab(state: &mut State, button: u32) {
-    let Some(pointer_location) = state
-        .pinnacle
-        .seat
-        .get_pointer()
-        .map(|ptr| ptr.current_location())
-    else {
+    let Some((pointer_focus, _)) = state.pinnacle.pointer_contents.focus_under.as_ref() else {
         return;
     };
-    let Some((pointer_focus, _)) = state.pinnacle.pointer_focus_target_under(pointer_location)
-    else {
-        return;
-    };
-    let Some(window) = pointer_focus.window_for(state) else {
+    let Some(window) = pointer_focus.window_for(&state.pinnacle) else {
         return;
     };
     let Some(wl_surf) = window.wl_surface() else {
@@ -266,12 +257,11 @@ pub fn resize_grab(state: &mut State, button: u32) {
     else {
         return;
     };
-    let Some((pointer_focus, window_loc)) = state.pinnacle.pointer_focus_target_under(pointer_loc)
+    let Some((pointer_focus, window_loc)) = state.pinnacle.pointer_contents.focus_under.as_ref()
     else {
         return;
     };
-    let Some(window) = pointer_focus.window_for(state) else {
-        tracing::info!("Move grabs are currently not implemented for non-windows");
+    let Some(window) = pointer_focus.window_for(&state.pinnacle) else {
         return;
     };
     let Some(wl_surf) = window.wl_surface() else {

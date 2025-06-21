@@ -11,7 +11,7 @@ use crate::{
     cli::{self, Cli},
     config::Config,
     cursor::CursorState,
-    focus::{OutputFocusStack, WindowKeyboardFocusStack},
+    focus::{pointer::PointerContents, OutputFocusStack, WindowKeyboardFocusStack},
     handlers::{
         session_lock::LockState, xdg_activation::XDG_ACTIVATION_TOKEN_TIMEOUT,
         xwayland::XwaylandState,
@@ -40,7 +40,7 @@ use smithay::{
         },
         PopupManager, Space,
     },
-    input::{keyboard::XkbConfig, pointer::CursorImageStatus, Seat, SeatHandler, SeatState},
+    input::{keyboard::XkbConfig, pointer::CursorImageStatus, Seat, SeatState},
     output::Output,
     reexports::{
         calloop::{
@@ -56,7 +56,7 @@ use smithay::{
             Client, Display, DisplayHandle,
         },
     },
-    utils::{Clock, HookId, Logical, Monotonic, Point},
+    utils::{Clock, HookId, Monotonic},
     wayland::{
         compositor::{
             self, with_surface_tree_downward, CompositorClientState, CompositorHandler,
@@ -220,7 +220,7 @@ pub struct Pinnacle {
     pub cursor_shape_manager_state: CursorShapeManagerState,
     pub cursor_state: CursorState,
 
-    pub pointer_focus: Option<(<State as SeatHandler>::PointerFocus, Point<f64, Logical>)>,
+    pub pointer_contents: PointerContents,
 
     pub blocker_cleared_tx: std::sync::mpsc::Sender<Client>,
     pub blocker_cleared_rx: std::sync::mpsc::Receiver<Client>,
@@ -495,7 +495,7 @@ impl Pinnacle {
             cursor_shape_manager_state: CursorShapeManagerState::new::<State>(&display_handle),
             cursor_state: CursorState::new(),
 
-            pointer_focus: None,
+            pointer_contents: Default::default(),
 
             blocker_cleared_tx,
             blocker_cleared_rx,
