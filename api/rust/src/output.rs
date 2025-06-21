@@ -15,11 +15,11 @@ use pinnacle_api_defs::pinnacle::{
     output::{
         self,
         v1::{
-            GetEnabledRequest, GetFocusStackWindowIdsRequest, GetFocusedRequest, GetInfoRequest,
-            GetLocRequest, GetLogicalSizeRequest, GetModesRequest, GetPhysicalSizeRequest,
-            GetPoweredRequest, GetRequest, GetScaleRequest, GetTagIdsRequest, GetTransformRequest,
-            SetLocRequest, SetModeRequest, SetModelineRequest, SetPoweredRequest, SetScaleRequest,
-            SetTransformRequest,
+            FocusRequest, GetEnabledRequest, GetFocusStackWindowIdsRequest, GetFocusedRequest,
+            GetInfoRequest, GetLocRequest, GetLogicalSizeRequest, GetModesRequest,
+            GetPhysicalSizeRequest, GetPoweredRequest, GetRequest, GetScaleRequest,
+            GetTagIdsRequest, GetTransformRequest, SetLocRequest, SetModeRequest,
+            SetModelineRequest, SetPoweredRequest, SetScaleRequest, SetTransformRequest,
         },
     },
     util::v1::{AbsOrRel, SetOrToggle},
@@ -600,6 +600,16 @@ impl OutputHandle {
             .set_powered(SetPoweredRequest {
                 output_name: self.name(),
                 set_or_toggle: SetOrToggle::Toggle.into(),
+            })
+            .block_on_tokio()
+            .unwrap();
+    }
+
+    /// Focuses this output.
+    pub fn focus(&self) {
+        Client::output()
+            .focus(FocusRequest {
+                output_name: self.name(),
             })
             .block_on_tokio()
             .unwrap();

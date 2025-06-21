@@ -2,14 +2,15 @@ use pinnacle_api_defs::pinnacle::{
     output::{
         self,
         v1::{
-            GetEnabledRequest, GetEnabledResponse, GetFocusStackWindowIdsRequest,
-            GetFocusStackWindowIdsResponse, GetFocusedRequest, GetFocusedResponse, GetInfoRequest,
-            GetInfoResponse, GetLocRequest, GetLocResponse, GetLogicalSizeRequest,
-            GetLogicalSizeResponse, GetModesRequest, GetModesResponse, GetPhysicalSizeRequest,
-            GetPhysicalSizeResponse, GetPoweredRequest, GetPoweredResponse, GetRequest,
-            GetResponse, GetScaleRequest, GetScaleResponse, GetTagIdsRequest, GetTagIdsResponse,
-            GetTransformRequest, GetTransformResponse, SetLocRequest, SetModeRequest,
-            SetModelineRequest, SetPoweredRequest, SetScaleRequest, SetTransformRequest,
+            FocusRequest, FocusResponse, GetEnabledRequest, GetEnabledResponse,
+            GetFocusStackWindowIdsRequest, GetFocusStackWindowIdsResponse, GetFocusedRequest,
+            GetFocusedResponse, GetInfoRequest, GetInfoResponse, GetLocRequest, GetLocResponse,
+            GetLogicalSizeRequest, GetLogicalSizeResponse, GetModesRequest, GetModesResponse,
+            GetPhysicalSizeRequest, GetPhysicalSizeResponse, GetPoweredRequest, GetPoweredResponse,
+            GetRequest, GetResponse, GetScaleRequest, GetScaleResponse, GetTagIdsRequest,
+            GetTagIdsResponse, GetTransformRequest, GetTransformResponse, SetLocRequest,
+            SetModeRequest, SetModelineRequest, SetPoweredRequest, SetScaleRequest,
+            SetTransformRequest,
         },
     },
     util::{
@@ -317,6 +318,23 @@ impl output::v1::output_service_server::OutputService for super::OutputService {
             if powered {
                 state.schedule_render(&output);
             }
+        })
+        .await
+    }
+
+    async fn focus(&self, request: Request<FocusRequest>) -> TonicResult<FocusResponse> {
+        let request = request.into_inner();
+
+        let output_name = OutputName(request.output_name);
+
+        run_unary(&self.sender, move |state| {
+            let Some(output) = output_name.output(&state.pinnacle) else {
+                return Ok(FocusResponse {});
+            };
+
+            state.pinnacle.output_focus_stack.set_focus(output);
+
+            Ok(FocusResponse {})
         })
         .await
     }

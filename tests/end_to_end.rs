@@ -1146,6 +1146,50 @@ fn output_handle_powered() -> anyhow::Result<()> {
     })
 }
 
+#[test]
+fn output_handle_focus() -> anyhow::Result<()> {
+    test_api(|sender, lang| {
+        sender.with_state(|state| {
+            let new_op = state.pinnacle.new_output(
+                "pinnacle-2",
+                "",
+                "",
+                (10000, 10000).into(),
+                (2560, 1440).into(),
+                144000,
+                2.0,
+                smithay::utils::Transform::Normal,
+            );
+
+            assert_eq!(state.pinnacle.focused_output(), Some(&new_op));
+        });
+
+        match lang {
+            Lang::Lua => {
+                run_lua! {
+                    Output.get_by_name($PINNACLE_1_OUTPUT_NAME):focus()
+                }
+            }
+            Lang::Rust => run_rust(move || {
+                pinnacle_api::output::get_by_name(PINNACLE_1_OUTPUT_NAME)
+                    .unwrap()
+                    .focus();
+            }),
+        }?;
+
+        sleep(SLEEP_DURATION);
+
+        sender.with_state(|state| {
+            assert_eq!(
+                state.pinnacle.focused_output().unwrap().name(),
+                PINNACLE_1_OUTPUT_NAME
+            );
+        });
+
+        Ok(())
+    })
+}
+
 // TODO: keyboard_focus_stack
 // TODO: keyboard_focus_stack_visible
 

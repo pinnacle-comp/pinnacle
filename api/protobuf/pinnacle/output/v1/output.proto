@@ -65,6 +65,11 @@ message SetPoweredRequest {
   pinnacle.util.v1.SetOrToggle set_or_toggle = 2;
 }
 
+message FocusRequest {
+  string output_name = 1;
+}
+message FocusResponse {}
+
 ////////////////
 
 message GetRequest {}
@@ -176,6 +181,8 @@ service OutputService {
   rpc SetScale(SetScaleRequest) returns (google.protobuf.Empty);
   rpc SetTransform(SetTransformRequest) returns (google.protobuf.Empty);
   rpc SetPowered(SetPoweredRequest) returns (google.protobuf.Empty);
+  // Focuses the given output.
+  rpc Focus(FocusRequest) returns (FocusResponse);
 
   rpc GetInfo(GetInfoRequest) returns (GetInfoResponse);
   rpc GetLoc(GetLocRequest) returns (GetLocResponse);

@@ -571,6 +571,17 @@ function OutputHandle:toggle_powered()
     end
 end
 
+---Focuses this output.
+function OutputHandle:focus()
+    local _, err = client:pinnacle_output_v1_OutputService_Focus({
+        output_name = self.name,
+    })
+
+    if err then
+        log.error(err)
+    end
+end
+
 ---An output pixel dimension and refresh rate configuration.
 ---@class pinnacle.output.Mode
 ---The width of the mode, in pixels.

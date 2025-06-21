@@ -811,6 +811,11 @@ local pinnacle_window_v1_DecorationMode = {
 ---@field output_name string?
 ---@field set_or_toggle pinnacle.util.v1.SetOrToggle?
 
+---@class pinnacle.output.v1.FocusRequest
+---@field output_name string?
+
+---@class pinnacle.output.v1.FocusResponse
+
 ---@class pinnacle.output.v1.GetRequest
 
 ---@class pinnacle.output.v1.GetResponse
@@ -1254,6 +1259,8 @@ pinnacle.output.v1.SetModelineRequest = {}
 pinnacle.output.v1.SetScaleRequest = {}
 pinnacle.output.v1.SetTransformRequest = {}
 pinnacle.output.v1.SetPoweredRequest = {}
+pinnacle.output.v1.FocusRequest = {}
+pinnacle.output.v1.FocusResponse = {}
 pinnacle.output.v1.GetRequest = {}
 pinnacle.output.v1.GetResponse = {}
 pinnacle.output.v1.GetInfoRequest = {}
@@ -1951,6 +1958,23 @@ pinnacle.output.v1.OutputService.SetPowered.response = ".google.protobuf.Empty"
 ---@return string | nil error An error string, if any
 function Client:pinnacle_output_v1_OutputService_SetPowered(data)
     return self:unary_request(pinnacle.output.v1.OutputService.SetPowered, data)
+end
+pinnacle.output.v1.OutputService.Focus = {}
+pinnacle.output.v1.OutputService.Focus.service = "pinnacle.output.v1.OutputService"
+pinnacle.output.v1.OutputService.Focus.method = "Focus"
+pinnacle.output.v1.OutputService.Focus.request = ".pinnacle.output.v1.FocusRequest"
+pinnacle.output.v1.OutputService.Focus.response = ".pinnacle.output.v1.FocusResponse"
+
+---Performs a unary request.
+---
+---@nodiscard
+---
+---@param data pinnacle.output.v1.FocusRequest
+---
+---@return pinnacle.output.v1.FocusResponse | nil response
+---@return string | nil error An error string, if any
+function Client:pinnacle_output_v1_OutputService_Focus(data)
+    return self:unary_request(pinnacle.output.v1.OutputService.Focus, data)
 end
 pinnacle.output.v1.OutputService.GetInfo = {}
 pinnacle.output.v1.OutputService.GetInfo.service = "pinnacle.output.v1.OutputService"
