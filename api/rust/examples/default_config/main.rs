@@ -21,6 +21,7 @@ use pinnacle_api::output;
 use pinnacle_api::pinnacle;
 use pinnacle_api::pinnacle::Backend;
 use pinnacle_api::process::Command;
+use pinnacle_api::signal::OutputSignal;
 use pinnacle_api::signal::WindowSignal;
 use pinnacle_api::tag;
 use pinnacle_api::util::{Axis, Batch};
@@ -352,6 +353,11 @@ async fn config() {
     // Enable sloppy focus
     window::connect_signal(WindowSignal::PointerEnter(Box::new(|win| {
         win.set_focused(true);
+    })));
+
+    // Focus outputs when the pointer enters them
+    output::connect_signal(OutputSignal::PointerEnter(Box::new(|output| {
+        output.focus();
     })));
 
     #[cfg(feature = "snowcap")]

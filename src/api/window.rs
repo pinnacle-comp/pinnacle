@@ -121,17 +121,17 @@ pub fn set_focused(state: &mut State, window: &WindowElement, set: impl Into<Opt
         }
 
         if window_outputs.len() == 1 {
-            state.pinnacle.output_focus_stack.set_focus(output.clone());
+            state.pinnacle.focus_output(&output);
         } else {
             let currently_focused_op = state.pinnacle.focused_output();
             match currently_focused_op {
                 Some(op) => {
                     if !window_outputs.contains(&op) {
-                        state.pinnacle.output_focus_stack.set_focus(output.clone());
+                        state.pinnacle.focus_output(&output);
                     }
                 }
                 None => {
-                    state.pinnacle.output_focus_stack.set_focus(output.clone());
+                    state.pinnacle.focus_output(&output);
                 }
             }
         }

@@ -7,12 +7,16 @@ use pinnacle_api_defs::pinnacle::signal::{
     self,
     v1::{
         InputDeviceAddedRequest, InputDeviceAddedResponse, OutputConnectRequest,
-        OutputDisconnectRequest, OutputDisconnectResponse, OutputMoveRequest, OutputMoveResponse,
-        OutputResizeRequest, OutputResizeResponse, SignalRequest, StreamControl, TagActiveRequest,
-        TagActiveResponse, WindowFocusedRequest, WindowFocusedResponse, WindowPointerEnterRequest,
-        WindowPointerEnterResponse, WindowPointerLeaveRequest, WindowPointerLeaveResponse,
+        OutputConnectResponse, OutputDisconnectRequest, OutputDisconnectResponse,
+        OutputFocusedRequest, OutputFocusedResponse, OutputMoveRequest, OutputMoveResponse,
+        OutputPointerEnterRequest, OutputPointerEnterResponse, OutputPointerLeaveRequest,
+        OutputPointerLeaveResponse, OutputResizeRequest, OutputResizeResponse, SignalRequest,
+        StreamControl, TagActiveRequest, TagActiveResponse, WindowFocusedRequest,
+        WindowFocusedResponse, WindowPointerEnterRequest, WindowPointerEnterResponse,
+        WindowPointerLeaveRequest, WindowPointerLeaveResponse,
     },
 };
+use smithay::output::Output;
 use tokio::sync::mpsc::UnboundedSender;
 use tonic::{Request, Response, Status, Streaming};
 use tracing::warn;
@@ -32,6 +36,9 @@ pub struct SignalState {
     pub output_disconnect: OutputDisconnect,
     pub output_resize: OutputResize,
     pub output_move: OutputMove,
+    pub output_pointer_enter: OutputPointerEnter,
+    pub output_pointer_leave: OutputPointerLeave,
+    pub output_focused: OutputFocused,
 
     // Window
     pub window_pointer_enter: WindowPointerEnter,
@@ -51,10 +58,16 @@ impl SignalState {
         self.output_disconnect.clear();
         self.output_resize.clear();
         self.output_move.clear();
+        self.output_pointer_enter.clear();
+        self.output_pointer_leave.clear();
+        self.output_focused.clear();
+
         self.window_pointer_enter.clear();
         self.window_pointer_leave.clear();
         self.window_focused.clear();
+
         self.tag_active.clear();
+
         self.input_device_added.clear();
     }
 }
@@ -80,7 +93,7 @@ pub trait Signal {
 
 #[derive(Debug, Default)]
 pub struct OutputConnect {
-    v1: SignalData<signal::v1::OutputConnectResponse>,
+    v1: SignalData<OutputConnectResponse>,
 }
 
 impl Signal for OutputConnect {
@@ -88,7 +101,7 @@ impl Signal for OutputConnect {
 
     fn signal(&mut self, args: Self::Args<'_>) {
         self.v1.signal(|buf| {
-            buf.push_back(signal::v1::OutputConnectResponse {
+            buf.push_back(OutputConnectResponse {
                 output_name: args.name(),
             });
         });
@@ -159,6 +172,69 @@ impl Signal for OutputMove {
                 output_name: output.name(),
                 x: output.current_location().x,
                 y: output.current_location().y,
+            });
+        });
+    }
+
+    fn clear(&mut self) {
+        self.v1.instances.clear();
+    }
+}
+
+#[derive(Debug, Default)]
+pub struct OutputPointerEnter {
+    v1: SignalData<signal::v1::OutputPointerEnterResponse>,
+}
+
+impl Signal for OutputPointerEnter {
+    type Args<'a> = &'a Output;
+
+    fn signal(&mut self, output: Self::Args<'_>) {
+        self.v1.signal(|buf| {
+            buf.push_back(signal::v1::OutputPointerEnterResponse {
+                output_name: output.name(),
+            });
+        });
+    }
+
+    fn clear(&mut self) {
+        self.v1.instances.clear();
+    }
+}
+
+#[derive(Debug, Default)]
+pub struct OutputPointerLeave {
+    v1: SignalData<signal::v1::OutputPointerLeaveResponse>,
+}
+
+impl Signal for OutputPointerLeave {
+    type Args<'a> = &'a Output;
+
+    fn signal(&mut self, output: Self::Args<'_>) {
+        self.v1.signal(|buf| {
+            buf.push_back(signal::v1::OutputPointerLeaveResponse {
+                output_name: output.name(),
+            });
+        });
+    }
+
+    fn clear(&mut self) {
+        self.v1.instances.clear();
+    }
+}
+
+#[derive(Debug, Default)]
+pub struct OutputFocused {
+    v1: SignalData<signal::v1::OutputFocusedResponse>,
+}
+
+impl Signal for OutputFocused {
+    type Args<'a> = &'a Output;
+
+    fn signal(&mut self, output: Self::Args<'_>) {
+        self.v1.signal(|buf| {
+            buf.push_back(signal::v1::OutputFocusedResponse {
+                output_name: output.name(),
             });
         });
     }
@@ -379,10 +455,13 @@ impl SignalService {
 
 #[tonic::async_trait]
 impl signal::v1::signal_service_server::SignalService for SignalService {
-    type OutputConnectStream = ResponseStream<signal::v1::OutputConnectResponse>;
+    type OutputConnectStream = ResponseStream<OutputConnectResponse>;
     type OutputDisconnectStream = ResponseStream<OutputDisconnectResponse>;
     type OutputResizeStream = ResponseStream<OutputResizeResponse>;
     type OutputMoveStream = ResponseStream<OutputMoveResponse>;
+    type OutputPointerEnterStream = ResponseStream<OutputPointerEnterResponse>;
+    type OutputPointerLeaveStream = ResponseStream<OutputPointerLeaveResponse>;
+    type OutputFocusedStream = ResponseStream<OutputFocusedResponse>;
 
     type WindowPointerEnterStream = ResponseStream<WindowPointerEnterResponse>;
     type WindowPointerLeaveStream = ResponseStream<WindowPointerLeaveResponse>;
@@ -433,6 +512,39 @@ impl signal::v1::signal_service_server::SignalService for SignalService {
 
         start_signal_stream(self.sender.clone(), in_stream, |state| {
             &mut state.pinnacle.signal_state.output_move.v1
+        })
+    }
+
+    async fn output_pointer_enter(
+        &self,
+        request: Request<Streaming<OutputPointerEnterRequest>>,
+    ) -> Result<Response<Self::OutputPointerEnterStream>, Status> {
+        let in_stream = request.into_inner();
+
+        start_signal_stream(self.sender.clone(), in_stream, |state| {
+            &mut state.pinnacle.signal_state.output_pointer_enter.v1
+        })
+    }
+
+    async fn output_pointer_leave(
+        &self,
+        request: Request<Streaming<OutputPointerLeaveRequest>>,
+    ) -> Result<Response<Self::OutputPointerLeaveStream>, Status> {
+        let in_stream = request.into_inner();
+
+        start_signal_stream(self.sender.clone(), in_stream, |state| {
+            &mut state.pinnacle.signal_state.output_pointer_leave.v1
+        })
+    }
+
+    async fn output_focused(
+        &self,
+        request: Request<Streaming<OutputFocusedRequest>>,
+    ) -> Result<Response<Self::OutputFocusedStream>, Status> {
+        let in_stream = request.into_inner();
+
+        start_signal_stream(self.sender.clone(), in_stream, |state| {
+            &mut state.pinnacle.signal_state.output_focused.v1
         })
     }
 

@@ -187,7 +187,7 @@ impl Winit {
             let global = output.create_global::<State>(&display_handle);
             output.with_state_mut(|state| state.enabled_global_id = Some(global));
 
-            pinnacle.output_focus_stack.set_focus(output.clone());
+            pinnacle.focus_output(&output);
 
             pinnacle.outputs.push(output.clone());
 

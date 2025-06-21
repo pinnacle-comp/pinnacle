@@ -448,6 +448,21 @@ impl Pinnacle {
             }
         }
 
+        let old_op = old_contents.output_under.and_then(|op| op.upgrade());
+        let new_op = new_contents
+            .output_under
+            .as_ref()
+            .and_then(|op| op.upgrade());
+
+        if old_op != new_op {
+            if let Some(old) = old_op {
+                self.signal_state.output_pointer_leave.signal(&old);
+            }
+            if let Some(new) = new_op {
+                self.signal_state.output_pointer_enter.signal(&new);
+            }
+        }
+
         self.pointer_contents = new_contents;
     }
 }

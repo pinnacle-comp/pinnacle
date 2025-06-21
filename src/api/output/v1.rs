@@ -332,7 +332,7 @@ impl output::v1::output_service_server::OutputService for super::OutputService {
                 return Ok(FocusResponse {});
             };
 
-            state.pinnacle.output_focus_stack.set_focus(output);
+            state.pinnacle.focus_output(&output);
 
             Ok(FocusResponse {})
         })

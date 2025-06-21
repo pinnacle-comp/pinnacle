@@ -123,7 +123,7 @@ impl Pinnacle {
 
         self.signal_state.output_connect.signal(&output);
 
-        self.output_focus_stack.set_focus(output.clone());
+        self.focus_output(&output);
 
         output
     }

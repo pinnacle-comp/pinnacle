@@ -970,6 +970,24 @@ local pinnacle_window_v1_DecorationMode = {
 ---@field x integer?
 ---@field y integer?
 
+---@class pinnacle.signal.v1.OutputPointerEnterRequest
+---@field control pinnacle.signal.v1.StreamControl?
+
+---@class pinnacle.signal.v1.OutputPointerEnterResponse
+---@field output_name string?
+
+---@class pinnacle.signal.v1.OutputPointerLeaveRequest
+---@field control pinnacle.signal.v1.StreamControl?
+
+---@class pinnacle.signal.v1.OutputPointerLeaveResponse
+---@field output_name string?
+
+---@class pinnacle.signal.v1.OutputFocusedRequest
+---@field control pinnacle.signal.v1.StreamControl?
+
+---@class pinnacle.signal.v1.OutputFocusedResponse
+---@field output_name string?
+
 ---@class pinnacle.signal.v1.WindowPointerEnterRequest
 ---@field control pinnacle.signal.v1.StreamControl?
 
@@ -1311,6 +1329,12 @@ pinnacle.signal.v1.OutputResizeRequest = {}
 pinnacle.signal.v1.OutputResizeResponse = {}
 pinnacle.signal.v1.OutputMoveRequest = {}
 pinnacle.signal.v1.OutputMoveResponse = {}
+pinnacle.signal.v1.OutputPointerEnterRequest = {}
+pinnacle.signal.v1.OutputPointerEnterResponse = {}
+pinnacle.signal.v1.OutputPointerLeaveRequest = {}
+pinnacle.signal.v1.OutputPointerLeaveResponse = {}
+pinnacle.signal.v1.OutputFocusedRequest = {}
+pinnacle.signal.v1.OutputFocusedResponse = {}
 pinnacle.signal.v1.WindowPointerEnterRequest = {}
 pinnacle.signal.v1.WindowPointerEnterResponse = {}
 pinnacle.signal.v1.WindowPointerLeaveRequest = {}
@@ -2353,6 +2377,69 @@ pinnacle.signal.v1.SignalService.OutputMove.response = ".pinnacle.signal.v1.Outp
 ---@return string | nil An error string, if any
 function Client:pinnacle_signal_v1_SignalService_OutputMove(callback)
     return self:bidirectional_streaming_request(pinnacle.signal.v1.SignalService.OutputMove, callback)
+end
+pinnacle.signal.v1.SignalService.OutputPointerEnter = {}
+pinnacle.signal.v1.SignalService.OutputPointerEnter.service = "pinnacle.signal.v1.SignalService"
+pinnacle.signal.v1.SignalService.OutputPointerEnter.method = "OutputPointerEnter"
+pinnacle.signal.v1.SignalService.OutputPointerEnter.request = ".pinnacle.signal.v1.OutputPointerEnterRequest"
+pinnacle.signal.v1.SignalService.OutputPointerEnter.response = ".pinnacle.signal.v1.OutputPointerEnterResponse"
+
+---Performs a bidirectional-streaming request.
+---
+---`callback` will be called with every streamed response.
+---
+---The raw client-to-server stream is returned to allow you to send encoded messages.
+---
+---@nodiscard
+---
+---@param callback fun(response: pinnacle.signal.v1.OutputPointerEnterResponse, stream: grpc_client.h2.Stream)
+---
+---@return grpc_client.h2.Stream | nil
+---@return string | nil An error string, if any
+function Client:pinnacle_signal_v1_SignalService_OutputPointerEnter(callback)
+    return self:bidirectional_streaming_request(pinnacle.signal.v1.SignalService.OutputPointerEnter, callback)
+end
+pinnacle.signal.v1.SignalService.OutputPointerLeave = {}
+pinnacle.signal.v1.SignalService.OutputPointerLeave.service = "pinnacle.signal.v1.SignalService"
+pinnacle.signal.v1.SignalService.OutputPointerLeave.method = "OutputPointerLeave"
+pinnacle.signal.v1.SignalService.OutputPointerLeave.request = ".pinnacle.signal.v1.OutputPointerLeaveRequest"
+pinnacle.signal.v1.SignalService.OutputPointerLeave.response = ".pinnacle.signal.v1.OutputPointerLeaveResponse"
+
+---Performs a bidirectional-streaming request.
+---
+---`callback` will be called with every streamed response.
+---
+---The raw client-to-server stream is returned to allow you to send encoded messages.
+---
+---@nodiscard
+---
+---@param callback fun(response: pinnacle.signal.v1.OutputPointerLeaveResponse, stream: grpc_client.h2.Stream)
+---
+---@return grpc_client.h2.Stream | nil
+---@return string | nil An error string, if any
+function Client:pinnacle_signal_v1_SignalService_OutputPointerLeave(callback)
+    return self:bidirectional_streaming_request(pinnacle.signal.v1.SignalService.OutputPointerLeave, callback)
+end
+pinnacle.signal.v1.SignalService.OutputFocused = {}
+pinnacle.signal.v1.SignalService.OutputFocused.service = "pinnacle.signal.v1.SignalService"
+pinnacle.signal.v1.SignalService.OutputFocused.method = "OutputFocused"
+pinnacle.signal.v1.SignalService.OutputFocused.request = ".pinnacle.signal.v1.OutputFocusedRequest"
+pinnacle.signal.v1.SignalService.OutputFocused.response = ".pinnacle.signal.v1.OutputFocusedResponse"
+
+---Performs a bidirectional-streaming request.
+---
+---`callback` will be called with every streamed response.
+---
+---The raw client-to-server stream is returned to allow you to send encoded messages.
+---
+---@nodiscard
+---
+---@param callback fun(response: pinnacle.signal.v1.OutputFocusedResponse, stream: grpc_client.h2.Stream)
+---
+---@return grpc_client.h2.Stream | nil
+---@return string | nil An error string, if any
+function Client:pinnacle_signal_v1_SignalService_OutputFocused(callback)
+    return self:bidirectional_streaming_request(pinnacle.signal.v1.SignalService.OutputFocused, callback)
 end
 pinnacle.signal.v1.SignalService.WindowPointerEnter = {}
 pinnacle.signal.v1.SignalService.WindowPointerEnter.service = "pinnacle.signal.v1.SignalService"

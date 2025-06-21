@@ -534,7 +534,7 @@ impl State {
                 .cloned();
 
             if let Some(output_under) = output_under {
-                self.pinnacle.output_focus_stack.set_focus(output_under);
+                self.pinnacle.focus_output(&output_under);
             }
 
             if let Some((focus, _)) = self.pinnacle.pointer_contents.focus_under.as_ref() {
@@ -756,22 +756,12 @@ impl State {
         let mut new_pointer_loc = pointer_loc + event.delta();
 
         // Place the pointer inside the nearest output if it would be outside one
-        if self
+        let output_locs = self
             .pinnacle
             .space
-            .output_under(new_pointer_loc)
-            .next()
-            .is_none()
-        {
-            let output_locs = self
-                .pinnacle
-                .space
-                .outputs()
-                .flat_map(|op| self.pinnacle.space.output_geometry(op));
-            new_pointer_loc = constrain_point_inside_rects(new_pointer_loc, output_locs);
-        }
-
-        let mut new_contents = self.pinnacle.pointer_contents_under(new_pointer_loc);
+            .outputs()
+            .flat_map(|op| self.pinnacle.space.output_geometry(op));
+        new_pointer_loc = constrain_point_inside_rects(new_pointer_loc, output_locs);
 
         if let Some((focus, surf_loc, region)) = &pointer_confined_to {
             let region = region
@@ -822,6 +812,8 @@ impl State {
 
             new_pointer_loc = constrain_point_inside_rects(new_pointer_loc, region_rects);
         }
+
+        let mut new_contents = self.pinnacle.pointer_contents_under(new_pointer_loc);
 
         self.pinnacle
             .maybe_activate_pointer_constraint(new_pointer_loc);
@@ -1127,24 +1119,23 @@ fn constrain_point_inside_rects(
 ) -> Point<f64, Logical> {
     let _span = tracy_client::span!("constrain_point_inside_rects");
 
-    let (pos_x, pos_y) = pos.into();
-
     let nearest_points = rects.into_iter().map(|rect| {
         let pos = pos.constrain(rect.to_f64());
         (rect, pos.x, pos.y)
     });
 
+    let (pos_x, pos_y) = pos.into();
+
     let nearest_point = nearest_points.min_by(|(_, x1, y1), (_, x2, y2)| {
         f64::total_cmp(
-            &((pos_x - x1).powi(2) + (pos_y - y1).powi(2)).sqrt(),
-            &((pos_x - x2).powi(2) + (pos_y - y2).powi(2)).sqrt(),
+            &f64::hypot((pos_x - x1).abs(), (pos_y - y1).abs()),
+            &f64::hypot((pos_x - x2).abs(), (pos_y - y2).abs()),
         )
     });
 
     nearest_point
         .map(|(rect, mut x, mut y)| {
             let rect = rect.to_f64();
-
             // Clamp the point to actually be in the rect and not
             // touching its edge.
             x = f64::min(x, rect.loc.x + rect.size.w - 1.0);

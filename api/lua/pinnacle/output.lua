@@ -141,6 +141,9 @@ local signal_name_to_SignalName = {
     disconnect = "OutputDisconnect",
     resize = "OutputResize",
     move = "OutputMove",
+    pointer_enter = "OutputPointerEnter",
+    pointer_leave = "OutputPointerLeave",
+    focused = "OutputFocused",
 }
 
 ---@class pinnacle.output.OutputSignal Signals related to output events.
@@ -148,6 +151,9 @@ local signal_name_to_SignalName = {
 ---@field disconnect fun(output: pinnacle.output.OutputHandle)? An output was disconnected.
 ---@field resize fun(output: pinnacle.output.OutputHandle, logical_width: integer, logical_height: integer)? An output's logical size changed.
 ---@field move fun(output: pinnacle.output.OutputHandle, x: integer, y: integer)? An output moved.
+---@field pointer_enter fun(output: pinnacle.output.OutputHandle)? The pointer entered an output.
+---@field pointer_leave fun(output: pinnacle.output.OutputHandle)? The pointer left an output.
+---@field focused fun(output: pinnacle.output.OutputHandle)? An output was focused.
 
 ---Connects to an output signal.
 ---

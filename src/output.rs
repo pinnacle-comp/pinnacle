@@ -328,6 +328,9 @@ impl Pinnacle {
         self.space.unmap_output(output);
 
         self.output_focus_stack.remove(output);
+        if let Some(new_focused_output) = self.output_focus_stack.current_focus() {
+            self.signal_state.output_focused.signal(new_focused_output);
+        }
 
         self.gamma_control_manager_state.output_removed(output);
 

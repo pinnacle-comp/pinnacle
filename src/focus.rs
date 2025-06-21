@@ -209,6 +209,14 @@ impl Pinnacle {
             }
         })
     }
+
+    pub fn focus_output(&mut self, output: &Output) {
+        if self.output_focus_stack.current_focus() == Some(output) {
+            return;
+        }
+        self.output_focus_stack.set_focus(output.clone());
+        self.signal_state.output_focused.signal(output);
+    }
 }
 
 #[derive(Debug, Clone, Default)]
@@ -218,7 +226,7 @@ pub struct OutputFocusStack {
 
 impl OutputFocusStack {
     // Sets the new focused output.
-    pub fn set_focus(&mut self, output: Output) {
+    fn set_focus(&mut self, output: Output) {
         self.stack.retain(|op| op != &output);
         self.stack.push(output);
     }
@@ -232,7 +240,11 @@ impl OutputFocusStack {
         self.stack.retain(|op| op != output);
     }
 
-    pub fn outputs(&self) -> impl DoubleEndedIterator<Item = &Output> {
+    pub fn current_focus(&self) -> Option<&Output> {
+        self.outputs().last()
+    }
+
+    fn outputs(&self) -> impl DoubleEndedIterator<Item = &Output> {
         self.stack
             .iter()
             .filter(|op| op.with_state(|state| state.enabled_global_id.is_some()))
