@@ -15,11 +15,11 @@ use pinnacle_api_defs::pinnacle::{
     output::{
         self,
         v1::{
-            GetEnabledRequest, GetFocusStackWindowIdsRequest, GetFocusedRequest, GetInfoRequest,
-            GetLocRequest, GetLogicalSizeRequest, GetModesRequest, GetPhysicalSizeRequest,
-            GetPoweredRequest, GetRequest, GetScaleRequest, GetTagIdsRequest, GetTransformRequest,
-            SetLocRequest, SetModeRequest, SetModelineRequest, SetPoweredRequest, SetScaleRequest,
-            SetTransformRequest,
+            FocusRequest, GetEnabledRequest, GetFocusStackWindowIdsRequest, GetFocusedRequest,
+            GetInfoRequest, GetLocRequest, GetLogicalSizeRequest, GetModesRequest,
+            GetOutputsInDirRequest, GetPhysicalSizeRequest, GetPoweredRequest, GetRequest,
+            GetScaleRequest, GetTagIdsRequest, GetTransformRequest, SetLocRequest, SetModeRequest,
+            SetModelineRequest, SetPoweredRequest, SetScaleRequest, SetTransformRequest,
         },
     },
     util::v1::{AbsOrRel, SetOrToggle},
@@ -29,7 +29,7 @@ use crate::{
     client::Client,
     signal::{OutputSignal, SignalHandle},
     tag::TagHandle,
-    util::{Batch, Point, Size},
+    util::{Batch, Direction, Point, Size},
     window::WindowHandle,
     BlockOnTokio,
 };
@@ -159,6 +159,9 @@ pub fn connect_signal(signal: OutputSignal) -> SignalHandle {
         OutputSignal::Disconnect(f) => signal_state.output_disconnect.add_callback(f),
         OutputSignal::Resize(f) => signal_state.output_resize.add_callback(f),
         OutputSignal::Move(f) => signal_state.output_move.add_callback(f),
+        OutputSignal::PointerEnter(f) => signal_state.output_pointer_enter.add_callback(f),
+        OutputSignal::PointerLeave(f) => signal_state.output_pointer_leave.add_callback(f),
+        OutputSignal::Focused(f) => signal_state.output_focused.add_callback(f),
     }
 }
 
@@ -605,6 +608,16 @@ impl OutputHandle {
             .unwrap();
     }
 
+    /// Focuses this output.
+    pub fn focus(&self) {
+        Client::output()
+            .focus(FocusRequest {
+                output_name: self.name(),
+            })
+            .block_on_tokio()
+            .unwrap();
+    }
+
     /// Gets this output's make.
     pub fn make(&self) -> String {
         self.make_async().block_on_tokio()
@@ -959,6 +972,42 @@ impl OutputHandle {
             .unwrap()
             .into_inner()
             .powered
+    }
+
+    /// Gets all outputs in the provided direction, sorted closest to farthest.
+    pub fn in_direction(&self, direction: Direction) -> impl Iterator<Item = OutputHandle> {
+        self.in_direction_async(direction).block_on_tokio()
+    }
+
+    /// Async impl for [`Self::in_direction`].
+    pub async fn in_direction_async(
+        &self,
+        direction: Direction,
+    ) -> impl Iterator<Item = OutputHandle> {
+        let output_name = self.name();
+
+        let mut request = GetOutputsInDirRequest {
+            output_name,
+            dir: Default::default(),
+        };
+
+        request.set_dir(match direction {
+            Direction::Left => pinnacle_api_defs::pinnacle::util::v1::Dir::Left,
+            Direction::Right => pinnacle_api_defs::pinnacle::util::v1::Dir::Right,
+            Direction::Up => pinnacle_api_defs::pinnacle::util::v1::Dir::Up,
+            Direction::Down => pinnacle_api_defs::pinnacle::util::v1::Dir::Down,
+        });
+
+        let response = Client::output()
+            .get_outputs_in_dir(request)
+            .await
+            .unwrap()
+            .into_inner();
+
+        response
+            .output_names
+            .into_iter()
+            .map(OutputHandle::from_name)
     }
 
     /// Returns this output's unique name (the name of its connector).

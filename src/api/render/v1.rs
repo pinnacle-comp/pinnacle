@@ -29,7 +29,7 @@ impl render::v1::render_service_server::RenderService for super::RenderService {
 
         run_unary_no_response(&self.sender, move |state| {
             state.backend.set_upscale_filter(filter);
-            for output in state.pinnacle.outputs.keys().cloned().collect::<Vec<_>>() {
+            for output in state.pinnacle.outputs.clone() {
                 state.backend.reset_buffers(&output);
                 state.schedule_render(&output);
             }
@@ -54,7 +54,7 @@ impl render::v1::render_service_server::RenderService for super::RenderService {
 
         run_unary_no_response(&self.sender, move |state| {
             state.backend.set_downscale_filter(filter);
-            for output in state.pinnacle.outputs.keys().cloned().collect::<Vec<_>>() {
+            for output in state.pinnacle.outputs.clone() {
                 state.backend.reset_buffers(&output);
                 state.schedule_render(&output);
             }

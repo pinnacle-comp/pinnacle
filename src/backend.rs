@@ -14,7 +14,7 @@ use tracing::error;
 
 use crate::{
     output::OutputMode,
-    state::{Pinnacle, State},
+    state::{Pinnacle, State, WithState},
 };
 
 #[cfg(feature = "testing")]
@@ -117,8 +117,8 @@ impl Backend {
             for output in pinnacle
                 .outputs
                 .iter()
-                .filter(|(_, global)| global.is_some())
-                .map(|(op, _)| op.clone())
+                .filter(|op| op.with_state(|state| state.enabled_global_id.is_some()))
+                .cloned()
                 .collect::<Vec<_>>()
             {
                 udev.render_if_scheduled(pinnacle, &output);
@@ -157,7 +157,7 @@ impl Drop for State {
     fn drop(&mut self) {
         // Reset gamma when exiting
         if let Backend::Udev(udev) = &mut self.backend {
-            for output in self.pinnacle.outputs.keys() {
+            for output in self.pinnacle.outputs.iter() {
                 let _ = udev.set_gamma(output, None);
             }
         }

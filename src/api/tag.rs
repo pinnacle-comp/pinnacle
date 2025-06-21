@@ -38,7 +38,6 @@ pub fn set_active(state: &mut State, tag: &Tag, set: Option<bool>) {
 
     state.pinnacle.request_layout(&output);
 
-    state.update_keyboard_focus(&output);
     state.schedule_render(&output);
 }
 
@@ -62,7 +61,6 @@ pub fn switch_to(state: &mut State, tag: &Tag) {
 
     state.pinnacle.request_layout(&output);
 
-    state.update_keyboard_focus(&output);
     state.schedule_render(&output);
 }
 
@@ -115,7 +113,7 @@ pub fn remove(state: &mut State, tags_to_remove: Vec<Tag>) {
         })
     }
 
-    for output in state.pinnacle.outputs.keys().cloned().collect::<Vec<_>>() {
+    for output in state.pinnacle.outputs.clone() {
         output.with_state_mut(|state| {
             for tag_to_remove in tags_to_remove.iter() {
                 state.tags.shift_remove(tag_to_remove);

@@ -5,6 +5,7 @@
 local log = require("pinnacle.log")
 local client = require("pinnacle.grpc.client").client
 local output_v1 = require("pinnacle.grpc.defs").pinnacle.output.v1
+local util_v1 = require("pinnacle.grpc.defs").pinnacle.util.v1
 
 ---@lcat nodoc
 ---@class pinnacle.output.OutputHandleModule
@@ -141,6 +142,9 @@ local signal_name_to_SignalName = {
     disconnect = "OutputDisconnect",
     resize = "OutputResize",
     move = "OutputMove",
+    pointer_enter = "OutputPointerEnter",
+    pointer_leave = "OutputPointerLeave",
+    focused = "OutputFocused",
 }
 
 ---@class pinnacle.output.OutputSignal Signals related to output events.
@@ -148,6 +152,9 @@ local signal_name_to_SignalName = {
 ---@field disconnect fun(output: pinnacle.output.OutputHandle)? An output was disconnected.
 ---@field resize fun(output: pinnacle.output.OutputHandle, logical_width: integer, logical_height: integer)? An output's logical size changed.
 ---@field move fun(output: pinnacle.output.OutputHandle, x: integer, y: integer)? An output moved.
+---@field pointer_enter fun(output: pinnacle.output.OutputHandle)? The pointer entered an output.
+---@field pointer_leave fun(output: pinnacle.output.OutputHandle)? The pointer left an output.
+---@field focused fun(output: pinnacle.output.OutputHandle)? An output was focused.
 
 ---Connects to an output signal.
 ---
@@ -571,6 +578,17 @@ function OutputHandle:toggle_powered()
     end
 end
 
+---Focuses this output.
+function OutputHandle:focus()
+    local _, err = client:pinnacle_output_v1_OutputService_Focus({
+        output_name = self.name,
+    })
+
+    if err then
+        log.error(err)
+    end
+end
+
 ---An output pixel dimension and refresh rate configuration.
 ---@class pinnacle.output.Mode
 ---The width of the mode, in pixels.
@@ -841,6 +859,34 @@ function OutputHandle:keyboard_focus_stack_visible()
     return keyboard_focus_stack_visible
 end
 
+---Gets all outputs in the provided direction, sorted closest to farthest.
+---
+---@param direction "left" | "right" | "up" | "down"
+---@return pinnacle.output.OutputHandle[]
+function OutputHandle:in_direction(direction)
+    local dir = util_v1.Dir.DIR_UNSPECIFIED
+
+    if direction == "left" then
+        dir = util_v1.Dir.DIR_LEFT
+    end
+    if direction == "right" then
+        dir = util_v1.Dir.DIR_RIGHT
+    end
+    if direction == "up" then
+        dir = util_v1.Dir.DIR_UP
+    end
+    if direction == "down" then
+        dir = util_v1.Dir.DIR_DOWN
+    end
+
+    local response, err = client:pinnacle_output_v1_OutputService_GetOutputsInDir({
+        output_name = self.name,
+        dir = dir,
+    })
+
+    return response and output_handle.new_from_table(response.output_names or {}) or {}
+end
+
 ---Creates a new `OutputHandle` from its raw name.
 ---@param output_name string
 function output_handle.new(output_name)
@@ -850,6 +896,20 @@ function output_handle.new(output_name)
     }
     setmetatable(self, { __index = OutputHandle })
     return self
+end
+
+---@param output_names string[]
+---
+---@return pinnacle.output.OutputHandle[]
+function output_handle.new_from_table(output_names)
+    ---@type pinnacle.output.OutputHandle[]
+    local handles = {}
+
+    for _, name in ipairs(output_names) do
+        table.insert(handles, output_handle.new(name))
+    end
+
+    return handles
 end
 
 return output

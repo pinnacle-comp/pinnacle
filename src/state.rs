@@ -11,7 +11,7 @@ use crate::{
     cli::{self, Cli},
     config::Config,
     cursor::CursorState,
-    focus::OutputFocusStack,
+    focus::{pointer::PointerContents, OutputFocusStack, WindowKeyboardFocusStack},
     handlers::{
         session_lock::LockState, xdg_activation::XDG_ACTIVATION_TOKEN_TIMEOUT,
         xwayland::XwaylandState,
@@ -27,7 +27,6 @@ use crate::{
     },
     window::{rules::WindowRuleState, Unmapped, WindowElement, ZIndexElement},
 };
-use indexmap::IndexMap;
 use smithay::{
     backend::renderer::element::{
         default_primary_scanout_output_compare, utils::select_dmabuf_feedback, RenderElementState,
@@ -41,7 +40,7 @@ use smithay::{
         },
         PopupManager, Space,
     },
-    input::{keyboard::XkbConfig, pointer::CursorImageStatus, Seat, SeatHandler, SeatState},
+    input::{keyboard::XkbConfig, pointer::CursorImageStatus, Seat, SeatState},
     output::Output,
     reexports::{
         calloop::{
@@ -52,12 +51,12 @@ use smithay::{
         wayland_protocols::xdg::shell::server::xdg_toplevel::WmCapabilities,
         wayland_protocols_misc::server_decoration::server::org_kde_kwin_server_decoration_manager,
         wayland_server::{
-            backend::{ClientData, ClientId, DisconnectReason, GlobalId},
+            backend::{ClientData, ClientId, DisconnectReason},
             protocol::wl_surface::WlSurface,
             Client, Display, DisplayHandle,
         },
     },
-    utils::{Clock, HookId, Logical, Monotonic, Point},
+    utils::{Clock, HookId, Monotonic},
     wayland::{
         compositor::{
             self, with_surface_tree_downward, CompositorClientState, CompositorHandler,
@@ -174,6 +173,7 @@ pub struct Pinnacle {
     /// The state of key and mousebinds along with libinput settings
     pub input_state: InputState,
 
+    pub outputs: Vec<Output>,
     pub output_focus_stack: OutputFocusStack,
 
     /// The z-index stack, bottom to top
@@ -187,6 +187,7 @@ pub struct Pinnacle {
     pub windows: Vec<WindowElement>,
     /// Windows with no buffer attached
     pub unmapped_windows: Vec<Unmapped>,
+    pub keyboard_focus_stack: WindowKeyboardFocusStack,
 
     pub config: Config,
 
@@ -211,8 +212,6 @@ pub struct Pinnacle {
     /// WlSurfaces with an attached idle inhibitor.
     pub idle_inhibiting_surfaces: HashSet<WlSurface>,
 
-    pub outputs: IndexMap<Output, Option<GlobalId>>,
-
     #[cfg(feature = "snowcap")]
     pub snowcap_handle: Option<snowcap::SnowcapHandle>,
     #[cfg(feature = "snowcap")]
@@ -221,7 +220,7 @@ pub struct Pinnacle {
     pub cursor_shape_manager_state: CursorShapeManagerState,
     pub cursor_state: CursorState,
 
-    pub pointer_focus: Option<(<State as SeatHandler>::PointerFocus, Point<f64, Logical>)>,
+    pub pointer_contents: PointerContents,
 
     pub blocker_cleared_tx: std::sync::mpsc::Sender<Client>,
     pub blocker_cleared_rx: std::sync::mpsc::Receiver<Client>,
@@ -245,6 +244,7 @@ impl State {
         self.notify_blocker_cleared();
         self.update_layout();
 
+        self.update_keyboard_focus();
         self.pinnacle.fixup_z_layering();
         self.pinnacle.space.refresh();
         self.pinnacle.update_window_tags();
@@ -463,6 +463,7 @@ impl Pinnacle {
 
             windows: Vec::new(),
             unmapped_windows: Default::default(),
+            keyboard_focus_stack: WindowKeyboardFocusStack::default(),
 
             xwayland_state: None,
 
@@ -484,7 +485,7 @@ impl Pinnacle {
 
             idle_inhibiting_surfaces: HashSet::new(),
 
-            outputs: IndexMap::new(),
+            outputs: Default::default(),
 
             #[cfg(feature = "snowcap")]
             snowcap_handle: None,
@@ -494,7 +495,7 @@ impl Pinnacle {
             cursor_shape_manager_state: CursorShapeManagerState::new::<State>(&display_handle),
             cursor_state: CursorState::new(),
 
-            pointer_focus: None,
+            pointer_contents: Default::default(),
 
             blocker_cleared_tx,
             blocker_cleared_rx,
@@ -638,7 +639,7 @@ impl Pinnacle {
                 next_state,
             );
 
-            if self.outputs.contains_key(new_op) {
+            if self.outputs.contains(new_op) {
                 new_op
             } else {
                 next_output

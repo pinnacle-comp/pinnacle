@@ -276,7 +276,6 @@ impl CompositorHandler for State {
                         let output = window.output(&self.pinnacle);
 
                         if let Some(output) = output {
-                            self.update_keyboard_focus(&output);
                             self.pinnacle.request_layout(&output);
                         }
                     }
@@ -727,12 +726,6 @@ impl WlrLayerShellHandler for State {
             output = Some(op.clone());
         }
 
-        let focused_output = self.pinnacle.focused_output().cloned();
-
-        if let Some(focused_output) = focused_output {
-            self.update_keyboard_focus(&focused_output);
-        }
-
         if let Some(output) = output {
             self.pinnacle.request_layout(&output);
         }
@@ -861,7 +854,9 @@ impl PointerConstraintsHandler for State {
         if with_pointer_constraint(surface, pointer, |constraint| {
             constraint.is_some_and(|c| c.is_active())
         }) {
-            let Some((current_focus, current_focus_loc)) = &self.pinnacle.pointer_focus else {
+            let Some((current_focus, current_focus_loc)) =
+                self.pinnacle.pointer_contents.focus_under.as_ref()
+            else {
                 return;
             };
 
@@ -1071,7 +1066,7 @@ impl Pinnacle {
     pub fn maybe_activate_pointer_constraint(&self, new_pos: Point<f64, Logical>) {
         let _span = tracy_client::span!("Pinnacle::maybe_activate_pointer_constraint");
 
-        let Some((surface, surface_loc)) = self.pointer_focus_target_under(new_pos) else {
+        let Some((surface, surface_loc)) = self.pointer_contents_under(new_pos).focus_under else {
             return;
         };
         let Some(pointer) = self.seat.get_pointer() else {

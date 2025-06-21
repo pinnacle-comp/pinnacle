@@ -966,7 +966,7 @@ impl Udev {
 
         let (phys_w, phys_h) = connector.size().unwrap_or_default();
 
-        if pinnacle.outputs.keys().any(|op| {
+        if pinnacle.outputs.iter().any(|op| {
             op.user_data()
                 .get::<UdevOutputData>()
                 .is_some_and(|op_id| op_id.crtc == crtc)
@@ -984,8 +984,10 @@ impl Udev {
             },
         );
         let global = output.create_global::<State>(&self.display_handle);
+        output.with_state_mut(|state| state.enabled_global_id = Some(global));
 
-        pinnacle.outputs.insert(output.clone(), Some(global));
+        pinnacle.outputs.push(output.clone());
+        pinnacle.output_focus_stack.add_to_end(output.clone());
 
         output.with_state_mut(|state| {
             state.serial = serial;
@@ -1110,7 +1112,7 @@ impl Udev {
 
         let output = pinnacle
             .outputs
-            .keys()
+            .iter()
             .find(|o| {
                 o.user_data()
                     .get::<UdevOutputData>()
@@ -1212,7 +1214,7 @@ impl Udev {
             return;
         };
 
-        let output = if let Some(output) = pinnacle.outputs.keys().find(|o| {
+        let output = if let Some(output) = pinnacle.outputs.iter().find(|o| {
             let udev_op_data = o.user_data().get::<UdevOutputData>();
             udev_op_data
                 .is_some_and(|data| data.device_id == surface.device_id && data.crtc == crtc)
@@ -1345,7 +1347,7 @@ impl Udev {
             return;
         }
 
-        if !pinnacle.outputs.contains_key(output) {
+        if !pinnacle.outputs.contains(output) {
             make_idle(&mut surface.render_state, &pinnacle.loop_handle);
             return;
         }

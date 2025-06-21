@@ -359,6 +359,13 @@ Pinnacle.setup(function()
         end,
     })
 
+    -- Focus outputs when the pointer enters them
+    Output.connect_signal({
+        pointer_enter = function(output)
+            output:focus()
+        end,
+    })
+
     -- Spawning should happen after you add tags, as Pinnacle currently doesn't render windows without tags.
     Process.spawn_once(terminal)
 end)

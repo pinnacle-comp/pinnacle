@@ -185,6 +185,51 @@ signals! {
                 }
             },
         }
+        /// The pointer entered an output.
+        ///
+        /// Callbacks receive the output the pointer entered.
+        OutputPointerEnter = {
+            enum_name = PointerEnter,
+            callback_type = SingleOutputFn,
+            client_request = output_pointer_enter,
+            on_response = |response, callbacks| {
+                let handle = OutputHandle { name: response.output_name };
+
+                for callback in callbacks {
+                    callback(&handle);
+                }
+            },
+        }
+        /// The pointer left an output.
+        ///
+        /// Callbacks receive the output the pointer left.
+        OutputPointerLeave = {
+            enum_name = PointerLeave,
+            callback_type = SingleOutputFn,
+            client_request = output_pointer_leave,
+            on_response = |response, callbacks| {
+                let handle = OutputHandle { name: response.output_name };
+
+                for callback in callbacks {
+                    callback(&handle);
+                }
+            },
+        }
+        /// The window got keyboard focus.
+        ///
+        /// Callbacks receive the newly focused window.
+        OutputFocused = {
+            enum_name = Focused,
+            callback_type = SingleOutputFn,
+            client_request = output_focused,
+            on_response = |response, callbacks| {
+                let handle = OutputHandle { name: response.output_name };
+
+                for callback in callbacks {
+                    callback(&handle);
+                }
+            },
+        }
     }
     /// Signals relating to window events.
     WindowSignal => {
@@ -276,6 +321,9 @@ pub(crate) struct SignalState {
     pub(crate) output_disconnect: SignalData<OutputDisconnect>,
     pub(crate) output_resize: SignalData<OutputResize>,
     pub(crate) output_move: SignalData<OutputMove>,
+    pub(crate) output_pointer_enter: SignalData<OutputPointerEnter>,
+    pub(crate) output_pointer_leave: SignalData<OutputPointerLeave>,
+    pub(crate) output_focused: SignalData<OutputFocused>,
 
     pub(crate) window_pointer_enter: SignalData<WindowPointerEnter>,
     pub(crate) window_pointer_leave: SignalData<WindowPointerLeave>,
@@ -299,10 +347,16 @@ impl SignalState {
             output_disconnect: SignalData::new(),
             output_resize: SignalData::new(),
             output_move: SignalData::new(),
+            output_pointer_enter: SignalData::new(),
+            output_pointer_leave: SignalData::new(),
+            output_focused: SignalData::new(),
+
             window_pointer_enter: SignalData::new(),
             window_pointer_leave: SignalData::new(),
             window_focused: SignalData::new(),
+
             tag_active: SignalData::new(),
+
             input_device_added: SignalData::new(),
         }
     }
@@ -312,10 +366,16 @@ impl SignalState {
         self.output_disconnect.reset();
         self.output_resize.reset();
         self.output_move.reset();
+        self.output_pointer_enter.reset();
+        self.output_pointer_leave.reset();
+        self.output_focused.reset();
+
         self.window_pointer_enter.reset();
         self.window_pointer_leave.reset();
         self.window_focused.reset();
+
         self.tag_active.reset();
+
         self.input_device_added.reset();
     }
 }

@@ -7,7 +7,6 @@ local signal_service = require("pinnacle.grpc.defs").pinnacle.signal.v1.SignalSe
 
 local stream_control = require("pinnacle.grpc.defs").pinnacle.signal.v1.StreamControl
 
----@type table<string, { sender: grpc_client.h2.Stream?, callbacks: function[], on_response: fun(response: table) }>
 local signals = {
     OutputConnect = {
         ---@type grpc_client.h2.Stream?
@@ -37,6 +36,30 @@ local signals = {
         ---@type grpc_client.h2.Stream?
         sender = nil,
         ---@type (fun(output: pinnacle.output.OutputHandle, x: integer, y: integer))[]
+        callbacks = {},
+        ---@type fun(response: table)
+        on_response = nil,
+    },
+    OutputPointerEnter = {
+        ---@type grpc_client.h2.Stream?
+        sender = nil,
+        ---@type (fun(output: pinnacle.output.OutputHandle))[]
+        callbacks = {},
+        ---@type fun(response: table)
+        on_response = nil,
+    },
+    OutputPointerLeave = {
+        ---@type grpc_client.h2.Stream?
+        sender = nil,
+        ---@type (fun(output: pinnacle.output.OutputHandle))[]
+        callbacks = {},
+        ---@type fun(response: table)
+        on_response = nil,
+    },
+    OutputFocused = {
+        ---@type grpc_client.h2.Stream?
+        sender = nil,
+        ---@type (fun(output: pinnacle.output.OutputHandle))[]
         callbacks = {},
         ---@type fun(response: table)
         on_response = nil,
@@ -112,6 +135,33 @@ signals.OutputMove.on_response = function(response)
     local handle = require("pinnacle.output").handle.new(response.output_name)
     for _, callback in ipairs(signals.OutputMove.callbacks) do
         callback(handle, response.x, response.y)
+    end
+end
+
+signals.OutputPointerEnter.on_response = function(response)
+    ---@diagnostic disable-next-line: invisible
+    local handle = require("pinnacle.output").handle.new(response.output_name)
+
+    for _, callback in ipairs(signals.OutputPointerEnter.callbacks) do
+        callback(handle)
+    end
+end
+
+signals.OutputPointerLeave.on_response = function(response)
+    ---@diagnostic disable-next-line: invisible
+    local handle = require("pinnacle.output").handle.new(response.output_name)
+
+    for _, callback in ipairs(signals.OutputPointerLeave.callbacks) do
+        callback(handle)
+    end
+end
+
+signals.OutputFocused.on_response = function(response)
+    ---@diagnostic disable-next-line: invisible
+    local handle = require("pinnacle.output").handle.new(response.output_name)
+
+    for _, callback in ipairs(signals.OutputFocused.callbacks) do
+        callback(handle)
     end
 end
 

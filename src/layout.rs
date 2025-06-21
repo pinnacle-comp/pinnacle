@@ -388,7 +388,7 @@ impl State {
     pub fn update_layout(&mut self) {
         let _span = tracy_client::span!("State::update_layout");
 
-        for output in self.pinnacle.outputs.keys().cloned().collect::<Vec<_>>() {
+        for output in self.pinnacle.outputs.clone() {
             let mut transactions = Vec::new();
 
             while let Some(tx) = self
@@ -471,11 +471,7 @@ impl State {
 
 impl Pinnacle {
     pub fn request_layout(&mut self, output: &Output) {
-        if self
-            .outputs
-            .get(output)
-            .is_some_and(|global| global.is_none())
-        {
+        if output.with_state(|state| state.enabled_global_id.is_none()) {
             return;
         }
 

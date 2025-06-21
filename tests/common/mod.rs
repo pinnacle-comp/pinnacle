@@ -71,8 +71,8 @@ pub async fn test_api(test: fn(&StateSender, Lang) -> anyhow::Result<()>) -> any
         }
     };
 
-    test_with_lang(test, Lang::Lua)?;
     test_with_lang(test, Lang::Rust)?;
+    test_with_lang(test, Lang::Lua)?;
 
     Ok(())
 }
@@ -137,7 +137,7 @@ fn test_with_lang(
     event_loop.run(Duration::from_secs(1), &mut state, |state| {
         state.on_event_loop_cycle_completion();
 
-        for output in state.pinnacle.outputs.keys() {
+        for output in state.pinnacle.outputs.iter() {
             for window in state.pinnacle.space.elements_for_output(output) {
                 window.send_frame(
                     output,

@@ -140,12 +140,8 @@ impl v1::window_service_server::WindowService for super::WindowService {
             let focused = window_id
                 .window(&state.pinnacle)
                 .and_then(|win| {
-                    let current_keyboard_focus = state
-                        .pinnacle
-                        .seat
-                        .get_keyboard()
-                        .unwrap()
-                        .current_focus()?;
+                    let current_keyboard_focus =
+                        state.pinnacle.seat.get_keyboard()?.current_focus()?;
 
                     Some(matches!(
                         current_keyboard_focus,

@@ -115,13 +115,15 @@ impl Pinnacle {
 
         let global = output.create_global::<State>(&self.display_handle);
 
-        self.outputs.insert(output.clone(), Some(global));
+        output.with_state_mut(|state| state.enabled_global_id = Some(global));
+
+        self.outputs.push(output.clone());
 
         self.space.map_output(&output, loc);
 
         self.signal_state.output_connect.signal(&output);
 
-        self.output_focus_stack.set_focus(output.clone());
+        self.focus_output(&output);
 
         output
     }
