@@ -699,9 +699,9 @@ impl State {
             Option<RegionAttributes>,
         )> = None;
 
-        let current_under = &self.pinnacle.pointer_contents;
+        let current_contents = &self.pinnacle.pointer_contents;
 
-        if let Some((surface, surface_loc)) = current_under.focus_under.as_ref() {
+        if let Some((surface, surface_loc)) = current_contents.focus_under.as_ref() {
             let surface_loc = *surface_loc;
             if let Some(wl_surface) = surface.wl_surface() {
                 let mut pointer_locked = false;
@@ -755,13 +755,21 @@ impl State {
 
         let mut new_pointer_loc = pointer_loc + event.delta();
 
-        // Place the pointer inside the nearest output if it would be outside one
-        let output_locs = self
+        if self
             .pinnacle
             .space
-            .outputs()
-            .flat_map(|op| self.pinnacle.space.output_geometry(op));
-        new_pointer_loc = constrain_point_inside_rects(new_pointer_loc, output_locs);
+            .output_under(new_pointer_loc.to_i32_round::<i32>().to_f64())
+            .next()
+            .is_none()
+        {
+            // Place the pointer inside the nearest output if it would be outside one
+            let output_locs = self
+                .pinnacle
+                .space
+                .outputs()
+                .flat_map(|op| self.pinnacle.space.output_geometry(op));
+            new_pointer_loc = constrain_point_inside_rects(new_pointer_loc, output_locs);
+        }
 
         if let Some((focus, surf_loc, region)) = &pointer_confined_to {
             let region = region
@@ -796,7 +804,6 @@ impl State {
 
             for (kind, mut rect) in region.rects {
                 // make loc global
-                // FIXME: f64 -> i32
                 rect.loc += surf_loc.to_i32_round();
                 // PERF: Who knows how out of hand this can get lol
                 match kind {

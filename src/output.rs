@@ -178,6 +178,21 @@ impl Pinnacle {
     ) {
         let _span = tracy_client::span!("Pinnacle::change_output_state");
 
+        // Calculate the ratio that the pointer location was over the output's size
+        // so we can warp it if the output moves
+        let pointer_loc_ratio = self.seat.get_pointer().and_then(|ptr| {
+            let current_loc = ptr.current_location();
+            let output_geo = self.space.output_geometry(output)?;
+            if !output_geo.to_f64().contains(current_loc) {
+                return None;
+            }
+            let relative_loc = current_loc - output_geo.loc.to_f64();
+            Some((
+                relative_loc.x / output_geo.size.w as f64,
+                relative_loc.y / output_geo.size.h as f64,
+            ))
+        });
+
         let old_scale = output.current_scale().fractional_scale();
 
         output.change_current_state(None, transform, scale, location);
@@ -192,6 +207,24 @@ impl Pinnacle {
         }
 
         let new_output_geo = self.space.output_geometry(output);
+
+        if let (Some(pointer_loc_ratio), Some(new_output_geo)) = (pointer_loc_ratio, new_output_geo)
+        {
+            // Warp the pointer if the output moved and the pointer was inside it.
+            // This is necessary on startup when outputs are moved around to make
+            // sure the initial focused output is the one the pointer is on.
+
+            let new_pointer_x =
+                new_output_geo.loc.x as f64 + new_output_geo.size.w as f64 * pointer_loc_ratio.0;
+            let new_pointer_y =
+                new_output_geo.loc.y as f64 + new_output_geo.size.h as f64 * pointer_loc_ratio.1;
+            let new_pointer_loc = Point::from((new_pointer_x, new_pointer_y));
+            // Because of the horrible way I've structured everything
+            // we don't have the `State` here, so into an idle this goes
+            self.loop_handle.insert_idle(move |state| {
+                state.warp_cursor_to_global_loc(new_pointer_loc);
+            });
+        }
 
         if mode.is_some() || transform.is_some() || scale.is_some() {
             layer_map_for_output(output).arrange();
