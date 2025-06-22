@@ -97,6 +97,7 @@ export default defineVersionedConfig({
                         { text: "Integration with external applications", link: "/configuration/integration" },
                         { text: "Xwayland", link: "/configuration/xwayland" },
                         { text: "API stability", link: "/configuration/api-stability" },
+                        { text: "Breaking changes and migrations", link: "/configuration/breaking-changes-and-migrations" }
                     ]
                 },
                 {
