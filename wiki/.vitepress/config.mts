@@ -69,6 +69,7 @@ export default defineVersionedConfig({
                     items: [
                         { text: "Important software", link: "/usage/important-software" },
                         { text: "Window management", link: "/usage/window-management" },
+                        { text: "Focus", link: "/usage/focus" },
                         { text: "IPC", link: "/usage/ipc" },
                         { text: "Screencasting", link: "/usage/screencasting" },
                     ]
