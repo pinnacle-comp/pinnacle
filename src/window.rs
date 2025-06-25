@@ -380,9 +380,7 @@ impl Pinnacle {
             });
         }
 
-        for output in self.outputs.keys() {
-            output.with_state_mut(|state| state.focus_stack.remove(window));
-        }
+        self.keyboard_focus_stack.remove(window);
 
         let to_schedule = self.space.outputs_for_element(window);
         self.space.unmap_elem(window);
@@ -443,9 +441,6 @@ impl Pinnacle {
 
             if tag_output != overlapping_output {
                 win.set_tags_to_output(&overlapping_output);
-
-                tag_output.with_state_mut(|state| state.focus_stack.remove(win));
-                overlapping_output.with_state_mut(|state| state.focus_stack.set_focus(win.clone()));
             }
         }
     }
@@ -487,8 +482,7 @@ impl State {
 
         self.pinnacle.windows.push(window.clone());
 
-        self.pinnacle
-            .raise_window(window.clone(), window.is_on_active_tag());
+        self.pinnacle.raise_window(window.clone());
 
         if attempt_float_on_map && should_float(&window) {
             window.with_state_mut(|state| {
@@ -511,10 +505,9 @@ impl State {
         // TODO: xdg activation
 
         if focus {
-            output.with_state_mut(|state| state.focus_stack.set_focus(window.clone()));
-            self.update_keyboard_focus(&output);
+            self.pinnacle.keyboard_focus_stack.set_focus(window);
         } else {
-            output.with_state_mut(|state| state.focus_stack.add_focus(window.clone()));
+            self.pinnacle.keyboard_focus_stack.add_focus(window);
         }
     }
 }

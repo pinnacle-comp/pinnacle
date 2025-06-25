@@ -33,7 +33,7 @@ impl TagId {
     pub fn tag(&self, pinnacle: &Pinnacle) -> Option<Tag> {
         let _span = tracy_client::span!("TagId::tag");
 
-        pinnacle.outputs.keys().find_map(|op| {
+        pinnacle.outputs.iter().find_map(|op| {
             op.with_state(|state| {
                 state
                     .tags
@@ -118,7 +118,7 @@ impl Tag {
 
         pinnacle
             .outputs
-            .keys()
+            .iter()
             .find(|output| output.with_state(|state| state.tags.contains(self)))
             .cloned()
     }

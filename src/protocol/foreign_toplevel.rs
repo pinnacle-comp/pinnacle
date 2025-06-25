@@ -112,15 +112,7 @@ pub fn refresh(state: &mut State) {
 
     let mut focused = None;
 
-    // FIXME: Initial window mapping bypasses `state.update_keyboard_focus`
-    // and sets it manually without updating the output keyboard focus stack,
-    // fix that
-    let focused_win = state
-        .pinnacle
-        .focused_output()
-        .map(|op| state.pinnacle.focused_window(op));
-
-    // OH GOD THE BORROW CHECKER IS HAVING A SEIZURE
+    let focused_win = state.pinnacle.keyboard_focus_stack.current_focus().cloned();
 
     // PERF: We sacrifice performance to the borrow checker with this clone
     for window in state
@@ -131,7 +123,7 @@ pub fn refresh(state: &mut State) {
         .filter(|win| !win.is_x11_override_redirect())
     {
         if let Some(win) = focused_win.as_ref() {
-            if win.as_ref() == Some(window) {
+            if win == window {
                 focused = Some(window.clone());
                 continue;
             }
@@ -149,7 +141,8 @@ pub fn refresh(state: &mut State) {
         }
     }
 
-    // Finally, refresh the focused window.
+    // Refresh the focused window last so it gets the focused event after the previoous focused
+    // window gets the unfocused event.
     if let Some(window) = focused {
         if let Some(pending_data) = pending_toplevel_data_for(&state.pinnacle, &window) {
             let Some(surface) = window.wl_surface() else {
@@ -168,19 +161,13 @@ fn pending_toplevel_data_for(
     pinnacle: &Pinnacle,
     win: &WindowElement,
 ) -> Option<PendingToplevelData> {
-    let focused_win_and_op = pinnacle
-        .focused_output()
-        .map(|op| (pinnacle.focused_window(op), op.clone()));
+    let focused_win = pinnacle.keyboard_focus_stack.current_focus();
 
     let surface = win.wl_surface()?;
 
     let output = win.output(pinnacle);
 
-    let focused = if let Some((foc_win, _)) = focused_win_and_op.as_ref() {
-        foc_win.as_ref() == Some(win)
-    } else {
-        false
-    };
+    let focused = focused_win == Some(win);
 
     compositor::with_states(&surface, |states| match win.underlying_surface() {
         WindowSurface::Wayland(_toplevel) => {

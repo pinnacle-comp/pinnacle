@@ -19,7 +19,7 @@ use crate::{
 impl v1::tag_service_server::TagService for super::TagService {
     async fn get(&self, _request: Request<GetRequest>) -> TonicResult<GetResponse> {
         run_unary(&self.sender, move |state| {
-            let tags = state.pinnacle.outputs.keys().flat_map(|op| {
+            let tags = state.pinnacle.outputs.iter().flat_map(|op| {
                 op.with_state(|state| {
                     state
                         .tags

@@ -9,11 +9,12 @@ use std::{
 };
 
 use common::{
-    rust::run_rust, test_api, Lang, PINNACLE_1_OUTPUT_MAKE, PINNACLE_1_OUTPUT_MODEL,
-    PINNACLE_1_OUTPUT_NAME, PINNACLE_1_OUTPUT_REFRESH, PINNACLE_1_OUTPUT_SIZE,
+    rust::{run_rust, setup_rust},
+    test_api, Lang, PINNACLE_1_OUTPUT_MAKE, PINNACLE_1_OUTPUT_MODEL, PINNACLE_1_OUTPUT_NAME,
+    PINNACLE_1_OUTPUT_REFRESH, PINNACLE_1_OUTPUT_SIZE,
 };
 use pinnacle::{output::OutputName, state::WithState, window::window_state::LayoutModeKind};
-use pinnacle_api::input::Bind as _;
+use pinnacle_api::{input::Bind as _, layout::LayoutGenerator};
 use smithay::reexports::wayland_protocols::xdg::decoration::zv1::server::zxdg_toplevel_decoration_v1;
 use test_log::test;
 
@@ -672,7 +673,7 @@ fn output_handle_serial() -> anyhow::Result<()> {
         let serial = "this-is-a-serial-138421";
 
         sender.with_state(|state| {
-            let op = state.pinnacle.outputs.keys().next().unwrap();
+            let op = state.pinnacle.outputs.first().unwrap();
             op.with_state_mut(|state| state.serial = serial.into());
         });
 
@@ -740,7 +741,7 @@ fn output_handle_logical_size() -> anyhow::Result<()> {
         }?;
 
         sender.with_state(|state| {
-            let output = state.pinnacle.outputs.keys().next().unwrap().clone();
+            let output = state.pinnacle.outputs.first().cloned().unwrap();
             state.pinnacle.change_output_state(
                 &mut state.backend,
                 &output,
@@ -868,7 +869,7 @@ fn output_handle_modes() -> anyhow::Result<()> {
         let first_mode_refresh = PINNACLE_1_OUTPUT_REFRESH;
 
         sender.with_state(|state| {
-            let op = state.pinnacle.outputs.keys().next().unwrap().clone();
+            let op = state.pinnacle.outputs.first().cloned().unwrap();
 
             let new_modes = [
                 smithay::output::Mode {
@@ -1012,7 +1013,7 @@ fn output_handle_tags() -> anyhow::Result<()> {
 fn output_handle_scale() -> anyhow::Result<()> {
     test_api(|sender, lang| {
         sender.with_state(|state| {
-            let op = state.pinnacle.outputs.keys().next().unwrap().clone();
+            let op = state.pinnacle.outputs.first().cloned().unwrap();
 
             state.pinnacle.change_output_state(
                 &mut state.backend,
@@ -1047,7 +1048,7 @@ fn output_handle_scale() -> anyhow::Result<()> {
 fn output_handle_transform() -> anyhow::Result<()> {
     test_api(|sender, lang| {
         sender.with_state(|state| {
-            let op = state.pinnacle.outputs.keys().next().unwrap().clone();
+            let op = state.pinnacle.outputs.first().cloned().unwrap();
 
             state.pinnacle.change_output_state(
                 &mut state.backend,
@@ -1097,7 +1098,7 @@ fn output_handle_enabled() -> anyhow::Result<()> {
         }?;
 
         sender.with_state(|state| {
-            let op = state.pinnacle.outputs.keys().next().unwrap().clone();
+            let op = state.pinnacle.outputs.first().cloned().unwrap();
 
             state.pinnacle.set_output_enabled(&op, false);
         });
@@ -1145,6 +1146,50 @@ fn output_handle_powered() -> anyhow::Result<()> {
     })
 }
 
+#[test]
+fn output_handle_focus() -> anyhow::Result<()> {
+    test_api(|sender, lang| {
+        sender.with_state(|state| {
+            let new_op = state.pinnacle.new_output(
+                "pinnacle-2",
+                "",
+                "",
+                (10000, 10000).into(),
+                (2560, 1440).into(),
+                144000,
+                2.0,
+                smithay::utils::Transform::Normal,
+            );
+
+            assert_eq!(state.pinnacle.focused_output(), Some(&new_op));
+        });
+
+        match lang {
+            Lang::Lua => {
+                run_lua! {
+                    Output.get_by_name($PINNACLE_1_OUTPUT_NAME):focus()
+                }
+            }
+            Lang::Rust => run_rust(move || {
+                pinnacle_api::output::get_by_name(PINNACLE_1_OUTPUT_NAME)
+                    .unwrap()
+                    .focus();
+            }),
+        }?;
+
+        sleep(SLEEP_DURATION);
+
+        sender.with_state(|state| {
+            assert_eq!(
+                state.pinnacle.focused_output().unwrap().name(),
+                PINNACLE_1_OUTPUT_NAME
+            );
+        });
+
+        Ok(())
+    })
+}
+
 // TODO: keyboard_focus_stack
 // TODO: keyboard_focus_stack_visible
 
@@ -1154,7 +1199,7 @@ fn output_handle_powered() -> anyhow::Result<()> {
 fn tag_get_all() -> anyhow::Result<()> {
     test_api(|sender, lang| {
         sender.with_state(|state| {
-            let op = state.pinnacle.outputs.keys().next().unwrap().clone();
+            let op = state.pinnacle.outputs.first().cloned().unwrap();
 
             pinnacle::api::tag::add(state, ["2".into()], OutputName(op.name()));
 
@@ -1197,7 +1242,7 @@ fn tag_get_all() -> anyhow::Result<()> {
 fn tag_get() -> anyhow::Result<()> {
     test_api(|sender, lang| {
         sender.with_state(|state| {
-            let op = state.pinnacle.outputs.keys().next().unwrap().clone();
+            let op = state.pinnacle.outputs.first().cloned().unwrap();
 
             pinnacle::api::tag::add(state, ["2".into()], OutputName(op.name()));
 
@@ -1273,7 +1318,7 @@ fn tag_add() -> anyhow::Result<()> {
         }?;
 
         sender.with_state(|state| {
-            let op = state.pinnacle.outputs.keys().next().unwrap();
+            let op = state.pinnacle.outputs.first().unwrap();
             let tag_count = op.with_state(|state| state.tags.len());
             assert_eq!(tag_count, 3);
         });
@@ -1302,7 +1347,7 @@ fn tag_remove() -> anyhow::Result<()> {
         }?;
 
         sender.with_state(|state| {
-            let op = state.pinnacle.outputs.keys().next().unwrap();
+            let op = state.pinnacle.outputs.first().unwrap();
             let tags = op.with_state(|state| state.tags.clone());
             assert_eq!(tags.len(), 2);
             assert_eq!(tags[0].name(), "1");
@@ -1335,7 +1380,7 @@ fn tag_handle_remove() -> anyhow::Result<()> {
         }?;
 
         sender.with_state(|state| {
-            let op = state.pinnacle.outputs.keys().next().unwrap();
+            let op = state.pinnacle.outputs.first().unwrap();
             let tags = op.with_state(|state| state.tags.clone());
             assert_eq!(tags.len(), 2);
             assert_eq!(tags[0].name(), "1");
@@ -1370,7 +1415,7 @@ fn tag_handle_switch_to() -> anyhow::Result<()> {
         }?;
 
         sender.with_state(|state| {
-            let op = state.pinnacle.outputs.keys().next().unwrap();
+            let op = state.pinnacle.outputs.first().unwrap();
             let tags = op.with_state(|state| state.tags.clone());
             assert!(!tags[0].active());
             assert!(!tags[1].active());
@@ -1406,7 +1451,7 @@ fn tag_handle_set_active() -> anyhow::Result<()> {
         }?;
 
         sender.with_state(|state| {
-            let op = state.pinnacle.outputs.keys().next().unwrap();
+            let op = state.pinnacle.outputs.first().unwrap();
             let tags = op.with_state(|state| state.tags.clone());
             assert!(!tags[0].active());
             assert!(tags[1].active());
@@ -1442,7 +1487,7 @@ fn tag_handle_toggle_active() -> anyhow::Result<()> {
         }?;
 
         sender.with_state(|state| {
-            let op = state.pinnacle.outputs.keys().next().unwrap();
+            let op = state.pinnacle.outputs.first().unwrap();
             let tags = op.with_state(|state| state.tags.clone());
             assert!(!tags[0].active());
             assert!(tags[1].active());
@@ -1589,22 +1634,23 @@ fn tag_get_does_not_return_tags_cleared_after_config_reload() -> anyhow::Result<
 
 // WINDOW ///////////////////////////////////////////
 
-fn window_set_up_test(lang: Lang) -> anyhow::Result<()> {
-    match lang {
-        Lang::Lua => {
-            run_lua! {
-                Tag.get("1"):set_active(true)
-                Process.spawn("alacritty", "-o", "general.ipc_socket=false")
+fn window_set_up_test() {
+    setup_rust(|| {
+        pinnacle_api::tag::get("1").unwrap().set_active(true);
+        pinnacle_api::process::Command::new("alacritty")
+            .args(["-o", "general.ipc_socket=false"])
+            .spawn()
+            .unwrap();
+
+        pinnacle_api::layout::manage(|args| {
+            let root =
+                pinnacle_api::layout::generators::MasterStack::default().layout(args.window_count);
+            pinnacle_api::layout::LayoutResponse {
+                root_node: root,
+                tree_id: 0,
             }
-        }
-        Lang::Rust => run_rust(|| {
-            pinnacle_api::tag::get("1").unwrap().set_active(true);
-            pinnacle_api::process::Command::new("alacritty")
-                .args(["-o", "general.ipc_socket=false"])
-                .spawn()
-                .unwrap();
-        }),
-    }
+        });
+    });
 }
 
 #[test]
@@ -1656,7 +1702,7 @@ fn window_get_all() -> anyhow::Result<()> {
 #[test]
 fn window_get_focused() -> anyhow::Result<()> {
     test_api(|_sender, lang| {
-        window_set_up_test(lang)?;
+        window_set_up_test();
 
         sleep(SLEEP_DURATION);
 
@@ -1683,7 +1729,7 @@ fn window_get_focused() -> anyhow::Result<()> {
 #[test]
 fn window_handle_close() -> anyhow::Result<()> {
     test_api(|sender, lang| {
-        window_set_up_test(lang)?;
+        window_set_up_test();
 
         sleep(SLEEP_DURATION);
 
@@ -1724,7 +1770,7 @@ fn window_handle_set_geometry_floating() -> anyhow::Result<()> {
 
         sleep(SLEEP_DURATION);
 
-        window_set_up_test(lang)?;
+        window_set_up_test();
 
         sleep(SLEEP_DURATION);
 
@@ -1788,7 +1834,7 @@ fn window_handle_set_geometry_tiled_does_not_change_geometry() -> anyhow::Result
 
         sleep(SLEEP_DURATION);
 
-        window_set_up_test(lang)?;
+        window_set_up_test();
 
         sleep(SLEEP_DURATION);
 
@@ -1835,7 +1881,7 @@ fn window_handle_set_geometry_tiled_does_not_change_geometry() -> anyhow::Result
 #[test]
 fn window_handle_set_fullscreen() -> anyhow::Result<()> {
     test_api(|sender, lang| {
-        window_set_up_test(lang)?;
+        window_set_up_test();
 
         sleep(SLEEP_DURATION);
 
@@ -1888,7 +1934,7 @@ fn window_handle_set_fullscreen() -> anyhow::Result<()> {
 #[test]
 fn window_handle_toggle_fullscreen() -> anyhow::Result<()> {
     test_api(|sender, lang| {
-        window_set_up_test(lang)?;
+        window_set_up_test();
 
         sleep(SLEEP_DURATION);
 
@@ -1941,7 +1987,7 @@ fn window_handle_toggle_fullscreen() -> anyhow::Result<()> {
 #[test]
 fn window_handle_set_maximized() -> anyhow::Result<()> {
     test_api(|sender, lang| {
-        window_set_up_test(lang)?;
+        window_set_up_test();
 
         sleep(SLEEP_DURATION);
 
@@ -1994,7 +2040,7 @@ fn window_handle_set_maximized() -> anyhow::Result<()> {
 #[test]
 fn window_handle_toggle_maximized() -> anyhow::Result<()> {
     test_api(|sender, lang| {
-        window_set_up_test(lang)?;
+        window_set_up_test();
 
         sleep(SLEEP_DURATION);
 
@@ -2047,7 +2093,7 @@ fn window_handle_toggle_maximized() -> anyhow::Result<()> {
 #[test]
 fn window_handle_set_floating() -> anyhow::Result<()> {
     test_api(|sender, lang| {
-        window_set_up_test(lang)?;
+        window_set_up_test();
 
         sleep(SLEEP_DURATION);
 
@@ -2100,7 +2146,7 @@ fn window_handle_set_floating() -> anyhow::Result<()> {
 #[test]
 fn window_handle_toggle_floating() -> anyhow::Result<()> {
     test_api(|sender, lang| {
-        window_set_up_test(lang)?;
+        window_set_up_test();
 
         sleep(SLEEP_DURATION);
 
@@ -2153,7 +2199,7 @@ fn window_handle_toggle_floating() -> anyhow::Result<()> {
 #[test]
 fn window_handle_set_focused() -> anyhow::Result<()> {
     test_api(|sender, lang| {
-        window_set_up_test(lang)?;
+        window_set_up_test();
 
         match lang {
             Lang::Lua => {
@@ -2172,9 +2218,8 @@ fn window_handle_set_focused() -> anyhow::Result<()> {
         sleep(SLEEP_DURATION);
 
         sender.with_state(|state| {
-            let op = state.pinnacle.focused_output().unwrap();
             assert_eq!(
-                state.pinnacle.focused_window(op).as_ref(),
+                state.pinnacle.keyboard_focus_stack.current_focus(),
                 Some(&state.pinnacle.windows[1])
             );
         });
@@ -2195,8 +2240,11 @@ fn window_handle_set_focused() -> anyhow::Result<()> {
         sleep(SLEEP_DURATION);
 
         sender.with_state(move |state| {
-            let op = state.pinnacle.focused_output().unwrap();
-            assert!(state.pinnacle.focused_window(op).is_none());
+            assert!(state
+                .pinnacle
+                .keyboard_focus_stack
+                .current_focus()
+                .is_none());
         });
 
         match lang {
@@ -2216,9 +2264,8 @@ fn window_handle_set_focused() -> anyhow::Result<()> {
         sleep(SLEEP_DURATION);
 
         sender.with_state(move |state| {
-            let op = state.pinnacle.focused_output().unwrap();
             assert_eq!(
-                state.pinnacle.focused_window(op).as_ref(),
+                state.pinnacle.keyboard_focus_stack.current_focus(),
                 Some(&state.pinnacle.windows[0])
             );
         });
@@ -2230,7 +2277,7 @@ fn window_handle_set_focused() -> anyhow::Result<()> {
 #[test]
 fn window_handle_toggle_focused() -> anyhow::Result<()> {
     test_api(|sender, lang| {
-        window_set_up_test(lang)?;
+        window_set_up_test();
 
         sleep(SLEEP_DURATION);
 
@@ -2250,14 +2297,17 @@ fn window_handle_toggle_focused() -> anyhow::Result<()> {
         sleep(SLEEP_DURATION);
 
         sender.with_state(move |state| {
-            let op = state.pinnacle.focused_output().unwrap();
-            assert!(state.pinnacle.focused_window(op).is_none());
+            assert!(state
+                .pinnacle
+                .keyboard_focus_stack
+                .current_focus()
+                .is_none());
         });
 
         match lang {
             Lang::Lua => {
                 run_lua! {
-                    Window.get_all()[1]:toggle_focused(true)
+                    Window.get_all()[1]:toggle_focused()
                 }
             }
             Lang::Rust => run_rust(|| {
@@ -2271,9 +2321,8 @@ fn window_handle_toggle_focused() -> anyhow::Result<()> {
         sleep(SLEEP_DURATION);
 
         sender.with_state(move |state| {
-            let op = state.pinnacle.focused_output().unwrap();
             assert_eq!(
-                state.pinnacle.focused_window(op).as_ref(),
+                state.pinnacle.keyboard_focus_stack.current_focus(),
                 Some(&state.pinnacle.windows[0])
             );
         });
@@ -2294,7 +2343,7 @@ fn window_handle_set_decoration_mode() -> anyhow::Result<()> {
             end)
         };
 
-        window_set_up_test(lang)?;
+        window_set_up_test();
 
         sleep(SLEEP_DURATION);
 
@@ -2351,7 +2400,7 @@ fn window_handle_set_decoration_mode() -> anyhow::Result<()> {
 #[test]
 fn window_handle_move_to_tag() -> anyhow::Result<()> {
     test_api(|sender, lang| {
-        window_set_up_test(lang)?;
+        window_set_up_test();
 
         match lang {
             Lang::Lua => {
@@ -2397,7 +2446,7 @@ fn window_handle_move_to_tag() -> anyhow::Result<()> {
 #[test]
 fn window_handle_set_tag() -> anyhow::Result<()> {
     test_api(|sender, lang| {
-        window_set_up_test(lang)?;
+        window_set_up_test();
 
         match lang {
             Lang::Lua => {
@@ -2465,7 +2514,7 @@ fn window_handle_set_tag() -> anyhow::Result<()> {
 #[test]
 fn window_handle_toggle_tag() -> anyhow::Result<()> {
     test_api(|sender, lang| {
-        window_set_up_test(lang)?;
+        window_set_up_test();
 
         match lang {
             Lang::Lua => {
@@ -2533,7 +2582,7 @@ fn window_handle_toggle_tag() -> anyhow::Result<()> {
 #[test]
 fn window_handle_raise() -> anyhow::Result<()> {
     test_api(|sender, lang| {
-        window_set_up_test(lang)?;
+        window_set_up_test();
 
         match lang {
             Lang::Lua => {
@@ -2595,7 +2644,7 @@ fn window_handle_raise() -> anyhow::Result<()> {
 #[test]
 fn window_handle_is_on_active_tag() -> anyhow::Result<()> {
     test_api(|sender, lang| {
-        window_set_up_test(lang)?;
+        window_set_up_test();
 
         match lang {
             Lang::Lua => {
@@ -2648,7 +2697,7 @@ fn window_handle_loc() -> anyhow::Result<()> {
             end)
         };
 
-        window_set_up_test(lang)?;
+        window_set_up_test();
 
         sleep(SLEEP_DURATION);
 
@@ -2696,7 +2745,7 @@ fn window_handle_size() -> anyhow::Result<()> {
             end)
         };
 
-        window_set_up_test(lang)?;
+        window_set_up_test();
 
         sleep(SLEEP_DURATION);
 
@@ -2737,7 +2786,7 @@ fn window_handle_size() -> anyhow::Result<()> {
 #[test]
 fn window_handle_app_id() -> anyhow::Result<()> {
     test_api(|_sender, lang| {
-        window_set_up_test(lang)?;
+        window_set_up_test();
 
         sleep(SLEEP_DURATION);
 
@@ -2762,7 +2811,7 @@ fn window_handle_app_id() -> anyhow::Result<()> {
 #[test]
 fn window_handle_title() -> anyhow::Result<()> {
     test_api(|_sender, lang| {
-        window_set_up_test(lang)?;
+        window_set_up_test();
 
         sleep(SLEEP_DURATION);
 
@@ -2814,7 +2863,7 @@ fn window_handle_title() -> anyhow::Result<()> {
 #[test]
 fn window_handle_focused() -> anyhow::Result<()> {
     test_api(|_sender, lang| {
-        window_set_up_test(lang)?;
+        window_set_up_test();
 
         sleep(SLEEP_DURATION);
 
@@ -2854,7 +2903,7 @@ fn window_handle_focused() -> anyhow::Result<()> {
 #[test]
 fn window_handle_layout_mode() -> anyhow::Result<()> {
     test_api(|_sender, lang| {
-        window_set_up_test(lang)?;
+        window_set_up_test();
 
         sleep(SLEEP_DURATION);
 
@@ -3014,7 +3063,7 @@ fn window_handle_layout_mode() -> anyhow::Result<()> {
 #[test]
 fn window_handle_tags() -> anyhow::Result<()> {
     test_api(|_sender, lang| {
-        window_set_up_test(lang)?;
+        window_set_up_test();
 
         sleep(SLEEP_DURATION);
 
@@ -3046,7 +3095,7 @@ fn window_handle_tags() -> anyhow::Result<()> {
 fn window_spawned_without_tags_gets_tags_after_add() -> anyhow::Result<()> {
     test_api(|sender, lang| {
         sender.with_state(|state| {
-            for output in state.pinnacle.outputs.keys() {
+            for output in state.pinnacle.outputs.iter() {
                 output.with_state_mut(|state| state.tags.clear());
             }
         });
@@ -3101,7 +3150,7 @@ fn window_spawned_without_tags_gets_tags_after_add() -> anyhow::Result<()> {
 fn window_tags_update_after_set_geometry() -> anyhow::Result<()> {
     test_api(|sender, _lang| {
         sender.with_state(|state| {
-            let init_output = state.pinnacle.outputs.keys().next().unwrap();
+            let init_output = state.pinnacle.outputs.first().unwrap();
             let init_output_geo = state.pinnacle.space.output_geometry(init_output).unwrap();
             let mut new_op_loc = init_output_geo.loc;
             new_op_loc.x += init_output_geo.size.w;
@@ -3155,7 +3204,7 @@ fn window_overlapping_output_overrides_window_rule_tags_on_different_output() ->
 {
     test_api(|sender, _lang| {
         sender.with_state(|state| {
-            let init_output = state.pinnacle.outputs.keys().next().unwrap();
+            let init_output = state.pinnacle.outputs.first().unwrap();
             let init_output_geo = state.pinnacle.space.output_geometry(init_output).unwrap();
             let mut new_op_loc = init_output_geo.loc;
             new_op_loc.x += init_output_geo.size.w;
@@ -3200,7 +3249,7 @@ fn window_overlapping_output_does_not_override_window_rule_tags_on_same_output(
 ) -> anyhow::Result<()> {
     test_api(|sender, _lang| {
         sender.with_state(|state| {
-            let init_output = state.pinnacle.outputs.keys().next().unwrap();
+            let init_output = state.pinnacle.outputs.first().unwrap();
             let init_output_geo = state.pinnacle.space.output_geometry(init_output).unwrap();
             let mut new_op_loc = init_output_geo.loc;
             new_op_loc.x += init_output_geo.size.w;

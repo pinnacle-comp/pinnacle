@@ -7,7 +7,7 @@ use smithay::{
     backend::renderer::damage::OutputDamageTracker,
     desktop::layer_map_for_output,
     output::{Mode, Output, Scale},
-    reexports::drm,
+    reexports::{drm, wayland_server::backend::GlobalId},
     utils::{Logical, Point, Size, Transform},
     wayland::session_lock::LockSurface,
 };
@@ -17,7 +17,6 @@ use crate::{
     api::signal::Signal,
     backend::BackendData,
     config::ConnectorSavedState,
-    focus::WindowKeyboardFocusStack,
     protocol::screencopy::Screencopy,
     state::{Pinnacle, State, WithState},
     tag::Tag,
@@ -38,7 +37,7 @@ impl OutputName {
 
         pinnacle
             .outputs
-            .keys()
+            .iter()
             .find(|output| output.name() == self.0)
             .cloned()
     }
@@ -62,7 +61,8 @@ pub struct OutputState {
     /// The tags on this output.
     pub tags: IndexSet<Tag>,
 
-    pub focus_stack: WindowKeyboardFocusStack,
+    pub enabled_global_id: Option<GlobalId>,
+
     pub screencopies: Vec<Screencopy>,
     // This monitor's edid serial. "Unknown" if it doesn't have one.
     pub serial: String,
@@ -82,7 +82,7 @@ impl Default for OutputState {
     fn default() -> Self {
         Self {
             tags: Default::default(),
-            focus_stack: Default::default(),
+            enabled_global_id: Default::default(),
             screencopies: Default::default(),
             serial: Default::default(),
             modes: Default::default(),
@@ -178,6 +178,21 @@ impl Pinnacle {
     ) {
         let _span = tracy_client::span!("Pinnacle::change_output_state");
 
+        // Calculate the ratio that the pointer location was over the output's size
+        // so we can warp it if the output moves
+        let pointer_loc_ratio = self.seat.get_pointer().and_then(|ptr| {
+            let current_loc = ptr.current_location();
+            let output_geo = self.space.output_geometry(output)?;
+            if !output_geo.to_f64().contains(current_loc) {
+                return None;
+            }
+            let relative_loc = current_loc - output_geo.loc.to_f64();
+            Some((
+                relative_loc.x / output_geo.size.w as f64,
+                relative_loc.y / output_geo.size.h as f64,
+            ))
+        });
+
         let old_scale = output.current_scale().fractional_scale();
 
         output.change_current_state(None, transform, scale, location);
@@ -192,6 +207,24 @@ impl Pinnacle {
         }
 
         let new_output_geo = self.space.output_geometry(output);
+
+        if let (Some(pointer_loc_ratio), Some(new_output_geo)) = (pointer_loc_ratio, new_output_geo)
+        {
+            // Warp the pointer if the output moved and the pointer was inside it.
+            // This is necessary on startup when outputs are moved around to make
+            // sure the initial focused output is the one the pointer is on.
+
+            let new_pointer_x =
+                new_output_geo.loc.x as f64 + new_output_geo.size.w as f64 * pointer_loc_ratio.0;
+            let new_pointer_y =
+                new_output_geo.loc.y as f64 + new_output_geo.size.h as f64 * pointer_loc_ratio.1;
+            let new_pointer_loc = Point::from((new_pointer_x, new_pointer_y));
+            // Because of the horrible way I've structured everything
+            // we don't have the `State` here, so into an idle this goes
+            self.loop_handle.insert_idle(move |state| {
+                state.warp_cursor_to_global_loc(new_pointer_loc);
+            });
+        }
 
         if mode.is_some() || transform.is_some() || scale.is_some() {
             layer_map_for_output(output).arrange();
@@ -263,20 +296,14 @@ impl Pinnacle {
         if enabled {
             let mut should_signal = false;
 
-            match self.outputs.entry(output.clone()) {
-                indexmap::map::Entry::Occupied(entry) => {
-                    let global = entry.into_mut();
-                    if global.is_none() {
-                        *global = Some(output.create_global::<State>(&self.display_handle));
-                        should_signal = true;
-                    }
-                }
-                indexmap::map::Entry::Vacant(entry) => {
-                    let global = output.create_global::<State>(&self.display_handle);
-                    entry.insert(Some(global));
+            output.with_state_mut(|state| {
+                if state.enabled_global_id.is_none() {
+                    state.enabled_global_id =
+                        Some(output.create_global::<State>(&self.display_handle));
                     should_signal = true;
                 }
-            }
+            });
+
             self.space.map_output(output, output.current_location());
 
             // Trigger the connect signal here for configs to reposition outputs
@@ -287,11 +314,8 @@ impl Pinnacle {
                 self.signal_state.output_connect.signal(output);
             }
         } else {
-            let global = self.outputs.get_mut(output);
-            if let Some(global) = global {
-                if let Some(global) = global.take() {
-                    self.display_handle.remove_global::<State>(global);
-                }
+            if let Some(global) = output.with_state_mut(|state| state.enabled_global_id.take()) {
+                self.display_handle.remove_global::<State>(global);
             }
             self.space.unmap_output(output);
 
@@ -302,8 +326,6 @@ impl Pinnacle {
             self.signal_state.output_disconnect.signal(output);
 
             self.gamma_control_manager_state.output_removed(output);
-
-            self.output_focus_stack.remove(output);
 
             self.config.connector_saved_states.insert(
                 OutputName(output.name()),
@@ -326,12 +348,11 @@ impl Pinnacle {
 
         debug!("Removing output {}", output.name());
 
-        let global = self.outputs.shift_remove(output);
-        if let Some(mut global) = global {
-            if let Some(global) = global.take() {
-                self.display_handle.remove_global::<State>(global);
-            }
+        if let Some(global) = output.with_state_mut(|state| state.enabled_global_id.take()) {
+            self.display_handle.remove_global::<State>(global);
         }
+
+        self.outputs.retain(|op| op != output);
 
         for layer in layer_map_for_output(output).layers() {
             layer.layer_surface().send_close();
@@ -340,6 +361,9 @@ impl Pinnacle {
         self.space.unmap_output(output);
 
         self.output_focus_stack.remove(output);
+        if let Some(new_focused_output) = self.output_focus_stack.current_focus() {
+            self.signal_state.output_focused.signal(new_focused_output);
+        }
 
         self.gamma_control_manager_state.output_removed(output);
 

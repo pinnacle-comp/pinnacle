@@ -2,7 +2,6 @@ use smithay::{
     delegate_session_lock,
     output::Output,
     reexports::wayland_server::protocol::wl_output::WlOutput,
-    utils::SERIAL_COUNTER,
     wayland::session_lock::{
         LockSurface, SessionLockHandler, SessionLockManagerState, SessionLocker,
     },
@@ -10,7 +9,6 @@ use smithay::{
 use tracing::{debug, warn};
 
 use crate::{
-    focus::keyboard::KeyboardFocusTarget,
     output::BlankingState,
     state::{State, WithState},
 };
@@ -99,6 +97,8 @@ impl SessionLockHandler for State {
             });
         }
         self.pinnacle.lock_state = LockState::Unlocked;
+
+        self.pinnacle.lock_surface_focus.take();
     }
 
     fn new_surface(&mut self, surface: LockSurface, output: WlOutput) {
@@ -133,19 +133,8 @@ impl SessionLockHandler for State {
         });
         surface.send_configure();
 
-        // Only auto-focus the first received lock surface.
-        // Removes the need to click on the lock surface for gtklock to get keyboard input.
-        if let Some(keyboard) = self.pinnacle.seat.get_keyboard() {
-            if !matches!(
-                keyboard.current_focus(),
-                Some(KeyboardFocusTarget::LockSurface(_))
-            ) {
-                keyboard.set_focus(
-                    self,
-                    Some(KeyboardFocusTarget::LockSurface(surface.clone())),
-                    SERIAL_COUNTER.next_serial(),
-                );
-            }
+        if self.pinnacle.lock_surface_focus.is_none() {
+            self.pinnacle.lock_surface_focus = Some(surface.clone());
         }
 
         output.with_state_mut(|state| state.lock_surface.replace(surface));

@@ -8,8 +8,10 @@ use smithay::{
     utils::{Point, SERIAL_COUNTER},
     wayland::seat::WaylandFocus,
 };
+use tracing::warn;
 
 use crate::{
+    focus::keyboard::KeyboardFocusTarget,
     state::{State, WithState},
     tag::Tag,
     window::WindowElement,
@@ -62,6 +64,11 @@ pub fn set_geometry(
 
 // TODO: minimized
 
+/// Sets a window to focused or not.
+///
+/// If the window is on another output and an attempt is made to
+/// focus it, the focused output will change to that output UNLESS
+/// the window overlaps the currently focused output.
 pub fn set_focused(state: &mut State, window: &WindowElement, set: impl Into<Option<bool>>) {
     if window.is_x11_override_redirect() {
         return;
@@ -73,33 +80,65 @@ pub fn set_focused(state: &mut State, window: &WindowElement, set: impl Into<Opt
 
     let set = set.into();
 
-    let is_focused = state.pinnacle.focused_window(&output).as_ref() == Some(window);
+    let Some(keyboard) = state.pinnacle.seat.get_keyboard() else {
+        return;
+    };
+
+    let is_focused = keyboard
+        .current_focus()
+        .is_some_and(|focus| matches!(focus, KeyboardFocusTarget::Window(win) if win == window));
 
     let set = match set {
         Some(set) => set,
         None => !is_focused,
     };
 
-    for win in state.pinnacle.space.elements() {
-        win.set_activate(false);
-    }
-
     if set {
-        window.set_activate(true);
-        output.with_state_mut(|state| state.focus_stack.set_focus(window.clone()));
-        state.pinnacle.output_focus_stack.set_focus(output.clone());
-        state.update_keyboard_focus(&output);
-    } else {
-        output.with_state_mut(|state| state.focus_stack.unset_focus());
-        if let Some(keyboard) = state.pinnacle.seat.get_keyboard() {
-            keyboard.set_focus(state, None, SERIAL_COUNTER.next_serial());
-        }
-    }
+        state
+            .pinnacle
+            .keyboard_focus_stack
+            .set_focus(window.clone());
 
-    for window in state.pinnacle.space.elements() {
-        if let Some(toplevel) = window.toplevel() {
-            toplevel.send_pending_configure();
+        state.pinnacle.on_demand_layer_focus = None;
+
+        let window_outputs = state
+            .pinnacle
+            .space
+            .outputs()
+            .filter(|op| {
+                let win_geo = state.pinnacle.space.element_geometry(window);
+                let op_geo = state.pinnacle.space.output_geometry(op);
+
+                if let (Some(win_geo), Some(op_geo)) = (win_geo, op_geo) {
+                    win_geo.overlaps(op_geo)
+                } else {
+                    false
+                }
+            })
+            .collect::<Vec<_>>();
+
+        if window_outputs.is_empty() {
+            warn!("Cannot focus an unmapped window");
+            return;
         }
+
+        if window_outputs.len() == 1 {
+            state.pinnacle.focus_output(&output);
+        } else {
+            let currently_focused_op = state.pinnacle.focused_output();
+            match currently_focused_op {
+                Some(op) => {
+                    if !window_outputs.contains(&op) {
+                        state.pinnacle.focus_output(&output);
+                    }
+                }
+                None => {
+                    state.pinnacle.focus_output(&output);
+                }
+            }
+        }
+    } else {
+        state.pinnacle.keyboard_focus_stack.unset_focus();
     }
 }
 
@@ -189,23 +228,14 @@ pub fn raise(state: &mut State, window: WindowElement) {
         state.schedule_render(&output);
     }
 
-    state.pinnacle.raise_window(window, false);
+    state.pinnacle.raise_window(window);
 }
 
 pub fn move_grab(state: &mut State, button: u32) {
-    let Some(pointer_location) = state
-        .pinnacle
-        .seat
-        .get_pointer()
-        .map(|ptr| ptr.current_location())
-    else {
+    let Some((pointer_focus, _)) = state.pinnacle.pointer_contents.focus_under.as_ref() else {
         return;
     };
-    let Some((pointer_focus, _)) = state.pinnacle.pointer_focus_target_under(pointer_location)
-    else {
-        return;
-    };
-    let Some(window) = pointer_focus.window_for(state) else {
+    let Some(window) = pointer_focus.window_for(&state.pinnacle) else {
         return;
     };
     let Some(wl_surf) = window.wl_surface() else {
@@ -229,12 +259,11 @@ pub fn resize_grab(state: &mut State, button: u32) {
     else {
         return;
     };
-    let Some((pointer_focus, window_loc)) = state.pinnacle.pointer_focus_target_under(pointer_loc)
+    let Some((pointer_focus, window_loc)) = state.pinnacle.pointer_contents.focus_under.as_ref()
     else {
         return;
     };
-    let Some(window) = pointer_focus.window_for(state) else {
-        tracing::info!("Move grabs are currently not implemented for non-windows");
+    let Some(window) = pointer_focus.window_for(&state.pinnacle) else {
         return;
     };
     let Some(wl_surf) = window.wl_surface() else {

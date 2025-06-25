@@ -811,6 +811,11 @@ local pinnacle_window_v1_DecorationMode = {
 ---@field output_name string?
 ---@field set_or_toggle pinnacle.util.v1.SetOrToggle?
 
+---@class pinnacle.output.v1.FocusRequest
+---@field output_name string?
+
+---@class pinnacle.output.v1.FocusResponse
+
 ---@class pinnacle.output.v1.GetRequest
 
 ---@class pinnacle.output.v1.GetResponse
@@ -896,6 +901,13 @@ local pinnacle_window_v1_DecorationMode = {
 ---@class pinnacle.output.v1.GetFocusStackWindowIdsResponse
 ---@field window_ids integer[]?
 
+---@class pinnacle.output.v1.GetOutputsInDirRequest
+---@field output_name string?
+---@field dir pinnacle.util.v1.Dir?
+
+---@class pinnacle.output.v1.GetOutputsInDirResponse
+---@field output_names string[]?
+
 ---@class pinnacle.process.v1.SpawnRequest
 ---@field cmd string[]?
 ---@field unique boolean?
@@ -964,6 +976,24 @@ local pinnacle_window_v1_DecorationMode = {
 ---@field output_name string?
 ---@field x integer?
 ---@field y integer?
+
+---@class pinnacle.signal.v1.OutputPointerEnterRequest
+---@field control pinnacle.signal.v1.StreamControl?
+
+---@class pinnacle.signal.v1.OutputPointerEnterResponse
+---@field output_name string?
+
+---@class pinnacle.signal.v1.OutputPointerLeaveRequest
+---@field control pinnacle.signal.v1.StreamControl?
+
+---@class pinnacle.signal.v1.OutputPointerLeaveResponse
+---@field output_name string?
+
+---@class pinnacle.signal.v1.OutputFocusedRequest
+---@field control pinnacle.signal.v1.StreamControl?
+
+---@class pinnacle.signal.v1.OutputFocusedResponse
+---@field output_name string?
 
 ---@class pinnacle.signal.v1.WindowPointerEnterRequest
 ---@field control pinnacle.signal.v1.StreamControl?
@@ -1254,6 +1284,8 @@ pinnacle.output.v1.SetModelineRequest = {}
 pinnacle.output.v1.SetScaleRequest = {}
 pinnacle.output.v1.SetTransformRequest = {}
 pinnacle.output.v1.SetPoweredRequest = {}
+pinnacle.output.v1.FocusRequest = {}
+pinnacle.output.v1.FocusResponse = {}
 pinnacle.output.v1.GetRequest = {}
 pinnacle.output.v1.GetResponse = {}
 pinnacle.output.v1.GetInfoRequest = {}
@@ -1281,6 +1313,8 @@ pinnacle.output.v1.GetPoweredRequest = {}
 pinnacle.output.v1.GetPoweredResponse = {}
 pinnacle.output.v1.GetFocusStackWindowIdsRequest = {}
 pinnacle.output.v1.GetFocusStackWindowIdsResponse = {}
+pinnacle.output.v1.GetOutputsInDirRequest = {}
+pinnacle.output.v1.GetOutputsInDirResponse = {}
 pinnacle.process = {}
 pinnacle.process.v1 = {}
 pinnacle.process.v1.SpawnRequest = {}
@@ -1304,6 +1338,12 @@ pinnacle.signal.v1.OutputResizeRequest = {}
 pinnacle.signal.v1.OutputResizeResponse = {}
 pinnacle.signal.v1.OutputMoveRequest = {}
 pinnacle.signal.v1.OutputMoveResponse = {}
+pinnacle.signal.v1.OutputPointerEnterRequest = {}
+pinnacle.signal.v1.OutputPointerEnterResponse = {}
+pinnacle.signal.v1.OutputPointerLeaveRequest = {}
+pinnacle.signal.v1.OutputPointerLeaveResponse = {}
+pinnacle.signal.v1.OutputFocusedRequest = {}
+pinnacle.signal.v1.OutputFocusedResponse = {}
 pinnacle.signal.v1.WindowPointerEnterRequest = {}
 pinnacle.signal.v1.WindowPointerEnterResponse = {}
 pinnacle.signal.v1.WindowPointerLeaveRequest = {}
@@ -1952,6 +1992,23 @@ pinnacle.output.v1.OutputService.SetPowered.response = ".google.protobuf.Empty"
 function Client:pinnacle_output_v1_OutputService_SetPowered(data)
     return self:unary_request(pinnacle.output.v1.OutputService.SetPowered, data)
 end
+pinnacle.output.v1.OutputService.Focus = {}
+pinnacle.output.v1.OutputService.Focus.service = "pinnacle.output.v1.OutputService"
+pinnacle.output.v1.OutputService.Focus.method = "Focus"
+pinnacle.output.v1.OutputService.Focus.request = ".pinnacle.output.v1.FocusRequest"
+pinnacle.output.v1.OutputService.Focus.response = ".pinnacle.output.v1.FocusResponse"
+
+---Performs a unary request.
+---
+---@nodiscard
+---
+---@param data pinnacle.output.v1.FocusRequest
+---
+---@return pinnacle.output.v1.FocusResponse | nil response
+---@return string | nil error An error string, if any
+function Client:pinnacle_output_v1_OutputService_Focus(data)
+    return self:unary_request(pinnacle.output.v1.OutputService.Focus, data)
+end
 pinnacle.output.v1.OutputService.GetInfo = {}
 pinnacle.output.v1.OutputService.GetInfo.service = "pinnacle.output.v1.OutputService"
 pinnacle.output.v1.OutputService.GetInfo.method = "GetInfo"
@@ -2156,6 +2213,23 @@ pinnacle.output.v1.OutputService.GetFocusStackWindowIds.response = ".pinnacle.ou
 function Client:pinnacle_output_v1_OutputService_GetFocusStackWindowIds(data)
     return self:unary_request(pinnacle.output.v1.OutputService.GetFocusStackWindowIds, data)
 end
+pinnacle.output.v1.OutputService.GetOutputsInDir = {}
+pinnacle.output.v1.OutputService.GetOutputsInDir.service = "pinnacle.output.v1.OutputService"
+pinnacle.output.v1.OutputService.GetOutputsInDir.method = "GetOutputsInDir"
+pinnacle.output.v1.OutputService.GetOutputsInDir.request = ".pinnacle.output.v1.GetOutputsInDirRequest"
+pinnacle.output.v1.OutputService.GetOutputsInDir.response = ".pinnacle.output.v1.GetOutputsInDirResponse"
+
+---Performs a unary request.
+---
+---@nodiscard
+---
+---@param data pinnacle.output.v1.GetOutputsInDirRequest
+---
+---@return pinnacle.output.v1.GetOutputsInDirResponse | nil response
+---@return string | nil error An error string, if any
+function Client:pinnacle_output_v1_OutputService_GetOutputsInDir(data)
+    return self:unary_request(pinnacle.output.v1.OutputService.GetOutputsInDir, data)
+end
 pinnacle.process.v1.ProcessService = {}
 pinnacle.process.v1.ProcessService.Spawn = {}
 pinnacle.process.v1.ProcessService.Spawn.service = "pinnacle.process.v1.ProcessService"
@@ -2329,6 +2403,69 @@ pinnacle.signal.v1.SignalService.OutputMove.response = ".pinnacle.signal.v1.Outp
 ---@return string | nil An error string, if any
 function Client:pinnacle_signal_v1_SignalService_OutputMove(callback)
     return self:bidirectional_streaming_request(pinnacle.signal.v1.SignalService.OutputMove, callback)
+end
+pinnacle.signal.v1.SignalService.OutputPointerEnter = {}
+pinnacle.signal.v1.SignalService.OutputPointerEnter.service = "pinnacle.signal.v1.SignalService"
+pinnacle.signal.v1.SignalService.OutputPointerEnter.method = "OutputPointerEnter"
+pinnacle.signal.v1.SignalService.OutputPointerEnter.request = ".pinnacle.signal.v1.OutputPointerEnterRequest"
+pinnacle.signal.v1.SignalService.OutputPointerEnter.response = ".pinnacle.signal.v1.OutputPointerEnterResponse"
+
+---Performs a bidirectional-streaming request.
+---
+---`callback` will be called with every streamed response.
+---
+---The raw client-to-server stream is returned to allow you to send encoded messages.
+---
+---@nodiscard
+---
+---@param callback fun(response: pinnacle.signal.v1.OutputPointerEnterResponse, stream: grpc_client.h2.Stream)
+---
+---@return grpc_client.h2.Stream | nil
+---@return string | nil An error string, if any
+function Client:pinnacle_signal_v1_SignalService_OutputPointerEnter(callback)
+    return self:bidirectional_streaming_request(pinnacle.signal.v1.SignalService.OutputPointerEnter, callback)
+end
+pinnacle.signal.v1.SignalService.OutputPointerLeave = {}
+pinnacle.signal.v1.SignalService.OutputPointerLeave.service = "pinnacle.signal.v1.SignalService"
+pinnacle.signal.v1.SignalService.OutputPointerLeave.method = "OutputPointerLeave"
+pinnacle.signal.v1.SignalService.OutputPointerLeave.request = ".pinnacle.signal.v1.OutputPointerLeaveRequest"
+pinnacle.signal.v1.SignalService.OutputPointerLeave.response = ".pinnacle.signal.v1.OutputPointerLeaveResponse"
+
+---Performs a bidirectional-streaming request.
+---
+---`callback` will be called with every streamed response.
+---
+---The raw client-to-server stream is returned to allow you to send encoded messages.
+---
+---@nodiscard
+---
+---@param callback fun(response: pinnacle.signal.v1.OutputPointerLeaveResponse, stream: grpc_client.h2.Stream)
+---
+---@return grpc_client.h2.Stream | nil
+---@return string | nil An error string, if any
+function Client:pinnacle_signal_v1_SignalService_OutputPointerLeave(callback)
+    return self:bidirectional_streaming_request(pinnacle.signal.v1.SignalService.OutputPointerLeave, callback)
+end
+pinnacle.signal.v1.SignalService.OutputFocused = {}
+pinnacle.signal.v1.SignalService.OutputFocused.service = "pinnacle.signal.v1.SignalService"
+pinnacle.signal.v1.SignalService.OutputFocused.method = "OutputFocused"
+pinnacle.signal.v1.SignalService.OutputFocused.request = ".pinnacle.signal.v1.OutputFocusedRequest"
+pinnacle.signal.v1.SignalService.OutputFocused.response = ".pinnacle.signal.v1.OutputFocusedResponse"
+
+---Performs a bidirectional-streaming request.
+---
+---`callback` will be called with every streamed response.
+---
+---The raw client-to-server stream is returned to allow you to send encoded messages.
+---
+---@nodiscard
+---
+---@param callback fun(response: pinnacle.signal.v1.OutputFocusedResponse, stream: grpc_client.h2.Stream)
+---
+---@return grpc_client.h2.Stream | nil
+---@return string | nil An error string, if any
+function Client:pinnacle_signal_v1_SignalService_OutputFocused(callback)
+    return self:bidirectional_streaming_request(pinnacle.signal.v1.SignalService.OutputFocused, callback)
 end
 pinnacle.signal.v1.SignalService.WindowPointerEnter = {}
 pinnacle.signal.v1.SignalService.WindowPointerEnter.service = "pinnacle.signal.v1.SignalService"

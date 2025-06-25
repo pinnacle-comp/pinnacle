@@ -87,7 +87,7 @@ pub(crate) fn run(channel: Channel<WlcsEvent>) {
             // Because nothing is actually rendering it's hard to use `send_frame_callbacks`
             // because the surface doesn't have a primary scanout output, because *that* needs
             // actual rendering to happen. So we just send frames here.
-            let output = state.pinnacle.outputs.keys().next().cloned().unwrap();
+            let output = state.pinnacle.outputs.first().cloned().unwrap();
             for window in state.pinnacle.space.elements_for_output(&output) {
                 window.send_frame(
                     &output,

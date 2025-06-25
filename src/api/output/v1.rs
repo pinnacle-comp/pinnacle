@@ -2,10 +2,11 @@ use pinnacle_api_defs::pinnacle::{
     output::{
         self,
         v1::{
-            GetEnabledRequest, GetEnabledResponse, GetFocusStackWindowIdsRequest,
-            GetFocusStackWindowIdsResponse, GetFocusedRequest, GetFocusedResponse, GetInfoRequest,
-            GetInfoResponse, GetLocRequest, GetLocResponse, GetLogicalSizeRequest,
-            GetLogicalSizeResponse, GetModesRequest, GetModesResponse, GetPhysicalSizeRequest,
+            FocusRequest, FocusResponse, GetEnabledRequest, GetEnabledResponse,
+            GetFocusStackWindowIdsRequest, GetFocusStackWindowIdsResponse, GetFocusedRequest,
+            GetFocusedResponse, GetInfoRequest, GetInfoResponse, GetLocRequest, GetLocResponse,
+            GetLogicalSizeRequest, GetLogicalSizeResponse, GetModesRequest, GetModesResponse,
+            GetOutputsInDirRequest, GetOutputsInDirResponse, GetPhysicalSizeRequest,
             GetPhysicalSizeResponse, GetPoweredRequest, GetPoweredResponse, GetRequest,
             GetResponse, GetScaleRequest, GetScaleResponse, GetTagIdsRequest, GetTagIdsResponse,
             GetTransformRequest, GetTransformResponse, SetLocRequest, SetModeRequest,
@@ -27,6 +28,7 @@ use crate::{
     config::ConnectorSavedState,
     output::{OutputMode, OutputName},
     state::{State, WithState},
+    util::rect::Direction,
 };
 
 #[tonic::async_trait]
@@ -36,7 +38,7 @@ impl output::v1::output_service_server::OutputService for super::OutputService {
             let output_names = state
                 .pinnacle
                 .outputs
-                .keys()
+                .iter()
                 .map(|output| output.name())
                 .collect::<Vec<_>>();
 
@@ -321,6 +323,23 @@ impl output::v1::output_service_server::OutputService for super::OutputService {
         .await
     }
 
+    async fn focus(&self, request: Request<FocusRequest>) -> TonicResult<FocusResponse> {
+        let request = request.into_inner();
+
+        let output_name = OutputName(request.output_name);
+
+        run_unary(&self.sender, move |state| {
+            let Some(output) = output_name.output(&state.pinnacle) else {
+                return Ok(FocusResponse {});
+            };
+
+            state.pinnacle.focus_output(&output);
+
+            Ok(FocusResponse {})
+        })
+        .await
+    }
+
     async fn get_info(&self, request: Request<GetInfoRequest>) -> TonicResult<GetInfoResponse> {
         let output_name = OutputName(request.into_inner().output_name);
 
@@ -552,16 +571,8 @@ impl output::v1::output_service_server::OutputService for super::OutputService {
         run_unary(&self.sender, move |state| {
             let output = output_name.output(&state.pinnacle);
 
-            // FIXME: Pinnacle::outputs does not make it obvious that disabled
-            // outputs are ones with no global
             let enabled = output
-                .map(|output| {
-                    state
-                        .pinnacle
-                        .outputs
-                        .get(&output)
-                        .is_some_and(|global| global.is_some())
-                })
+                .map(|output| output.with_state(|state| state.enabled_global_id.is_some()))
                 .unwrap_or_default();
 
             Ok(GetEnabledResponse { enabled })
@@ -602,19 +613,63 @@ impl output::v1::output_service_server::OutputService for super::OutputService {
             let focus_stack_window_ids = output
                 .as_ref()
                 .map(|output| {
-                    output.with_state(|state| {
-                        state
-                            .focus_stack
-                            .windows()
-                            .map(|win| win.with_state(|state| state.id.0))
-                            .collect::<Vec<_>>()
-                    })
+                    state
+                        .pinnacle
+                        .focus_stack_for_output(output)
+                        .map(|win| win.with_state(|state| state.id.0))
+                        .collect()
                 })
                 .unwrap_or_default();
 
             Ok(GetFocusStackWindowIdsResponse {
                 window_ids: focus_stack_window_ids,
             })
+        })
+        .await
+    }
+
+    async fn get_outputs_in_dir(
+        &self,
+        request: Request<GetOutputsInDirRequest>,
+    ) -> TonicResult<GetOutputsInDirResponse> {
+        let request = request.into_inner();
+        let dir = request.dir();
+        let output_name = OutputName(request.output_name);
+
+        if dir == util::v1::Dir::Unspecified {
+            return Err(Status::invalid_argument("no dir was specified"));
+        }
+
+        run_unary(&self.sender, move |state| {
+            let Some(op) = output_name.output(&state.pinnacle) else {
+                return Ok(GetOutputsInDirResponse::default());
+            };
+
+            let Some(op_rect) = state.pinnacle.space.output_geometry(&op) else {
+                return Ok(GetOutputsInDirResponse::default());
+            };
+
+            let candidates = state.pinnacle.space.outputs().collect::<Vec<_>>();
+            let rects = candidates
+                .iter()
+                .map(|op| state.pinnacle.space.output_geometry(op).expect("mapped"))
+                .collect::<Vec<_>>();
+
+            let idxs = crate::util::rect::closest_in_dir(
+                op_rect,
+                &rects,
+                match dir {
+                    util::v1::Dir::Unspecified => unreachable!(),
+                    util::v1::Dir::Left => Direction::Left,
+                    util::v1::Dir::Right => Direction::Right,
+                    util::v1::Dir::Up => Direction::Up,
+                    util::v1::Dir::Down => Direction::Down,
+                },
+            );
+
+            let output_names = idxs.into_iter().map(|idx| candidates[idx].name()).collect();
+
+            Ok(GetOutputsInDirResponse { output_names })
         })
         .await
     }

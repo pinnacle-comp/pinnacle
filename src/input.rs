@@ -6,7 +6,7 @@ pub mod libinput;
 use std::{any::Any, time::Duration};
 
 use crate::{
-    focus::{keyboard::KeyboardFocusTarget, pointer::PointerFocusTarget},
+    focus::pointer::{PointerContents, PointerFocusTarget},
     state::{Pinnacle, WithState},
     window::WindowElement,
 };
@@ -39,7 +39,7 @@ use smithay::{
         keyboard_shortcuts_inhibit::KeyboardShortcutsInhibitorSeat,
         pointer_constraints::{with_pointer_constraint, PointerConstraint},
         seat::WaylandFocus,
-        shell::wlr_layer::{self, KeyboardInteractivity, LayerSurfaceCachedState},
+        shell::wlr_layer,
     },
 };
 use tracing::{error, info};
@@ -78,10 +78,7 @@ enum KeyAction {
 
 impl Pinnacle {
     /// Get the [`PointerFocusTarget`] under `point` along with its origin in the global space.
-    pub fn pointer_focus_target_under<P>(
-        &self,
-        point: P,
-    ) -> Option<(PointerFocusTarget, Point<f64, Logical>)>
+    pub fn pointer_contents_under<P>(&self, point: P) -> PointerContents
     where
         P: Into<Point<f64, Logical>>,
     {
@@ -89,13 +86,14 @@ impl Pinnacle {
 
         let point: Point<f64, Logical> = point.into();
 
-        let output = self.space.outputs().find(|op| {
-            // FIXME: loc is i32
+        let Some(output) = self.space.outputs().find(|op| {
             self.space
                 .output_geometry(op)
                 .expect("called output_geometry on unmapped output (this shouldn't happen here)")
                 .contains(point.to_i32_round())
-        })?;
+        }) else {
+            return PointerContents::default();
+        };
 
         let output_geo = self
             .space
@@ -103,7 +101,7 @@ impl Pinnacle {
             .expect("called output_geometry on unmapped output");
 
         if !self.lock_state.is_unlocked() {
-            return output
+            let focus = output
                 .with_state(|state| state.lock_surface.clone())
                 .map(|lock_surface| {
                     (
@@ -111,6 +109,11 @@ impl Pinnacle {
                         output_geo.loc.to_f64(),
                     )
                 });
+
+            return PointerContents {
+                focus_under: focus,
+                output_under: Some(output.downgrade()),
+            };
         }
 
         let mut fullscreen_and_up_split_at = 0;
@@ -163,7 +166,7 @@ impl Pinnacle {
                     .element_location(win)
                     .expect("called elem loc on unmapped win")
                     - win.geometry().loc;
-                // FIXME: i32 -> f64
+
                 let loc = loc.to_f64();
 
                 win.surface_under(point - loc, surface_type)
@@ -181,7 +184,7 @@ impl Pinnacle {
         // - The rest of the windows
         // - Bottom and background layer surfaces
 
-        layer_under(
+        let focus_under = layer_under(
             &[
                 wlr_layer::Layer::Overlay,
                 wlr_layer::Layer::Top,
@@ -220,7 +223,12 @@ impl Pinnacle {
                 &[wlr_layer::Layer::Bottom, wlr_layer::Layer::Background],
                 WindowSurfaceType::TOPLEVEL | WindowSurfaceType::SUBSURFACE,
             )
-        })
+        });
+
+        PointerContents {
+            focus_under,
+            output_under: Some(output.downgrade()),
+        }
     }
 }
 
@@ -276,19 +284,19 @@ impl State {
         };
 
         let location = pointer.current_location();
-        let surface_under = self.pinnacle.pointer_focus_target_under(location);
+        let new_contents = self.pinnacle.pointer_contents_under(location);
 
-        if self.pinnacle.pointer_focus == surface_under {
+        if self.pinnacle.pointer_contents == new_contents {
             return;
         }
 
         self.pinnacle.maybe_activate_pointer_constraint(location);
 
-        self.pinnacle.pointer_focus.clone_from(&surface_under);
+        self.pinnacle.set_pointer_contents(new_contents.clone());
 
         pointer.motion(
             self,
-            surface_under,
+            new_contents.focus_under,
             &MotionEvent {
                 location,
                 serial: SERIAL_COUNTER.next_serial(),
@@ -307,13 +315,13 @@ impl State {
         };
         let loc: Point<f64, Logical> = loc.into();
         self.pinnacle.maybe_activate_pointer_constraint(loc);
-        let new_under = self.pinnacle.pointer_focus_target_under(loc);
+        let new_contents = self.pinnacle.pointer_contents_under(loc);
 
-        self.pinnacle.pointer_focus.clone_from(&new_under);
+        self.pinnacle.set_pointer_contents(new_contents.clone());
 
         pointer.motion(
             self,
-            new_under,
+            new_contents.focus_under,
             &MotionEvent {
                 location: loc,
                 serial: SERIAL_COUNTER.next_serial(),
@@ -352,76 +360,13 @@ impl State {
     fn on_keyboard<I: InputBackend>(&mut self, event: I::KeyboardKeyEvent) {
         let _span = tracy_client::span!("State::on_keyboard");
 
+        let Some(keyboard) = self.pinnacle.seat.get_keyboard() else {
+            return;
+        };
+
         let serial = SERIAL_COUNTER.next_serial();
         let time = event.time_msec();
         let press_state = event.state();
-
-        let keyboard = self
-            .pinnacle
-            .seat
-            .get_keyboard()
-            .expect("Seat has no keyboard");
-
-        if self.pinnacle.lock_state.is_unlocked() {
-            // Focus the topmost exclusive layer, if any
-            for layer in self.pinnacle.layer_shell_state.layer_surfaces().rev() {
-                let data = compositor::with_states(layer.wl_surface(), |states| {
-                    *states
-                        .cached_state
-                        .get::<LayerSurfaceCachedState>()
-                        .current()
-                });
-                if data.keyboard_interactivity == KeyboardInteractivity::Exclusive
-                    && matches!(
-                        data.layer,
-                        wlr_layer::Layer::Top | wlr_layer::Layer::Overlay
-                    )
-                {
-                    let layer_surface = self.pinnacle.space.outputs().find_map(|op| {
-                        let map = layer_map_for_output(op);
-                        let layer = map.layers().find(|l| l.layer_surface() == &layer).cloned();
-                        layer
-                    });
-
-                    if let Some(layer_surface) = layer_surface {
-                        keyboard.set_focus(
-                            self,
-                            Some(KeyboardFocusTarget::LayerSurface(layer_surface)),
-                            serial,
-                        );
-                        break;
-                    }
-                }
-            }
-        } else {
-            // We don't want anything but lock surfaces getting keyboard input when locked.
-
-            if !matches!(
-                keyboard.current_focus(),
-                Some(KeyboardFocusTarget::LockSurface(_))
-            ) {
-                let pointer_focus = self.pinnacle.pointer_focus_target_under(
-                    self.pinnacle.seat.get_pointer().unwrap().current_location(),
-                );
-
-                let lock_surface = pointer_focus
-                    .and_then(|(focus, _loc)| focus.lock_surface_for(self))
-                    .or_else(|| {
-                        let lock_surface = self
-                            .pinnacle
-                            .space
-                            .outputs()
-                            .find_map(|op| op.with_state(|state| state.lock_surface.clone()));
-                        lock_surface
-                    });
-
-                keyboard.set_focus(
-                    self,
-                    lock_surface.map(KeyboardFocusTarget::LockSurface),
-                    serial,
-                );
-            }
-        }
 
         let shortcuts_inhibited = keyboard
             .current_focus()
@@ -559,42 +504,47 @@ impl State {
         }
 
         if button_state == ButtonState::Pressed {
-            if let Some((focus, _)) = self.pinnacle.pointer_focus_target_under(pointer_loc) {
-                if let Some(window) = focus.window_for(self) {
-                    self.pinnacle.raise_window(window.clone(), true);
-                    if !window.is_x11_override_redirect() {
-                        if let Some(output) = window.output(&self.pinnacle) {
-                            output.with_state_mut(|state| {
-                                state.focus_stack.set_focus(window.clone())
-                            });
-                            self.update_keyboard_focus(&output);
-                        }
-                    }
+            let output_under = self
+                .pinnacle
+                .space
+                .output_under(pointer_loc)
+                .next()
+                .cloned();
+
+            if let Some(output_under) = output_under {
+                self.pinnacle.focus_output(&output_under);
+            }
+
+            if let Some((focus, _)) = self.pinnacle.pointer_contents.focus_under.as_ref() {
+                if let Some(window) = focus.window_for(&self.pinnacle) {
+                    self.pinnacle.raise_window(window.clone());
                     for output in self.pinnacle.space.outputs_for_element(&window) {
                         self.schedule_render(&output);
                     }
-                } else if let Some(layer) = focus.layer_for(self) {
+                    if !window.is_x11_override_redirect() {
+                        self.pinnacle.keyboard_focus_stack.set_focus(window.clone());
+                    }
+                    self.pinnacle.on_demand_layer_focus = None;
+                } else if let Some(layer) = focus.layer_for(&self.pinnacle) {
                     if layer.can_receive_keyboard_focus() {
-                        keyboard.set_focus(
-                            self,
-                            Some(KeyboardFocusTarget::LayerSurface(layer)),
-                            serial,
-                        );
+                        self.pinnacle.on_demand_layer_focus = Some(layer);
+                    } else if let wlr_layer::Layer::Bottom | wlr_layer::Layer::Background =
+                        layer.layer()
+                    {
+                        // Only unset focus when clicking on background stuff
+                        self.pinnacle.keyboard_focus_stack.unset_focus();
+                        self.pinnacle.on_demand_layer_focus = None;
                     }
                 } else if !self.pinnacle.lock_state.is_unlocked() {
-                    if let Some(lock_surface) = focus.lock_surface_for(self) {
-                        keyboard.set_focus(
-                            self,
-                            Some(KeyboardFocusTarget::LockSurface(lock_surface)),
-                            serial,
-                        );
+                    if let Some(lock_surface) = focus.lock_surface_for(&self.pinnacle) {
+                        self.pinnacle.lock_surface_focus = Some(lock_surface);
+                    } else {
+                        self.pinnacle.keyboard_focus_stack.unset_focus();
                     }
                 }
-            } else if let Some(focused_op) = self.pinnacle.focused_output().cloned() {
-                focused_op.with_state_mut(|state| {
-                    state.focus_stack.unset_focus();
-                });
-                self.update_keyboard_focus(&focused_op);
+            } else {
+                self.pinnacle.keyboard_focus_stack.unset_focus();
+                self.pinnacle.on_demand_layer_focus = None;
             }
         };
 
@@ -682,30 +632,23 @@ impl State {
         let pointer_loc = event.position_transformed(output_geo.size) + output_geo.loc.to_f64();
         let serial = SERIAL_COUNTER.next_serial();
 
-        let new_output = self
-            .pinnacle
-            .space
-            .output_under(pointer_loc)
-            .next()
-            .cloned();
+        let new_contents = self.pinnacle.pointer_contents_under(pointer_loc);
 
-        if let Some(new_output) = new_output {
-            if let Some(old_output) = self.pinnacle.focused_output().cloned() {
-                self.schedule_render(&old_output);
-            }
+        if let Some(new_output) = new_contents
+            .output_under
+            .as_ref()
+            .and_then(|op| op.upgrade())
+        {
             self.schedule_render(&new_output);
-            self.pinnacle.output_focus_stack.set_focus(new_output);
         }
 
         self.pinnacle.maybe_activate_pointer_constraint(pointer_loc);
 
-        let pointer_focus = self.pinnacle.pointer_focus_target_under(pointer_loc);
-
-        self.pinnacle.pointer_focus.clone_from(&pointer_focus);
+        self.pinnacle.set_pointer_contents(new_contents.clone());
 
         pointer.motion(
             self,
-            pointer_focus,
+            new_contents.focus_under,
             &MotionEvent {
                 location: pointer_loc,
                 serial,
@@ -732,9 +675,9 @@ impl State {
             Option<RegionAttributes>,
         )> = None;
 
-        let current_under = &self.pinnacle.pointer_focus;
+        let current_contents = &self.pinnacle.pointer_contents;
 
-        if let Some((surface, surface_loc)) = current_under {
+        if let Some((surface, surface_loc)) = current_contents.focus_under.as_ref() {
             let surface_loc = *surface_loc;
             if let Some(wl_surface) = surface.wl_surface() {
                 let mut pointer_locked = false;
@@ -788,14 +731,14 @@ impl State {
 
         let mut new_pointer_loc = pointer_loc + event.delta();
 
-        // Place the pointer inside the nearest output if it would be outside one
         if self
             .pinnacle
             .space
-            .output_under(new_pointer_loc)
+            .output_under(new_pointer_loc.to_i32_round::<i32>().to_f64())
             .next()
             .is_none()
         {
+            // Place the pointer inside the nearest output if it would be outside one
             let output_locs = self
                 .pinnacle
                 .space
@@ -803,8 +746,6 @@ impl State {
                 .flat_map(|op| self.pinnacle.space.output_geometry(op));
             new_pointer_loc = constrain_point_inside_rects(new_pointer_loc, output_locs);
         }
-
-        let new_under = self.pinnacle.pointer_focus_target_under(new_pointer_loc);
 
         if let Some((focus, surf_loc, region)) = &pointer_confined_to {
             let region = region
@@ -839,7 +780,6 @@ impl State {
 
             for (kind, mut rect) in region.rects {
                 // make loc global
-                // FIXME: f64 -> i32
                 rect.loc += surf_loc.to_i32_round();
                 // PERF: Who knows how out of hand this can get lol
                 match kind {
@@ -856,33 +796,28 @@ impl State {
             new_pointer_loc = constrain_point_inside_rects(new_pointer_loc, region_rects);
         }
 
+        let mut new_contents = self.pinnacle.pointer_contents_under(new_pointer_loc);
+
         self.pinnacle
             .maybe_activate_pointer_constraint(new_pointer_loc);
 
-        let new_output = self
-            .pinnacle
-            .space
-            .output_under(new_pointer_loc)
-            .next()
-            .cloned();
-
-        if let Some(new_output) = new_output {
-            if let Some(old_output) = self.pinnacle.focused_output().cloned() {
-                self.schedule_render(&old_output);
-            }
+        if let Some(new_output) = new_contents
+            .output_under
+            .as_ref()
+            .and_then(|op| op.upgrade())
+        {
             self.schedule_render(&new_output);
-            self.pinnacle.output_focus_stack.set_focus(new_output);
         }
 
-        let focus_target = pointer_confined_to
+        new_contents.focus_under = pointer_confined_to
             .map(|(focus, loc, _)| (focus, loc))
-            .or(new_under);
+            .or(new_contents.focus_under);
 
-        self.pinnacle.pointer_focus.clone_from(&focus_target);
+        self.pinnacle.set_pointer_contents(new_contents.clone());
 
         pointer.motion(
             self,
-            focus_target.clone(),
+            new_contents.focus_under.clone(),
             &MotionEvent {
                 location: new_pointer_loc,
                 serial: SERIAL_COUNTER.next_serial(),
@@ -892,7 +827,7 @@ impl State {
 
         pointer.relative_motion(
             self,
-            focus_target,
+            new_contents.focus_under,
             &RelativeMotionEvent {
                 delta: event.delta(),
                 delta_unaccel: event.delta_unaccel(),
@@ -1039,11 +974,11 @@ impl State {
             return;
         };
 
-        let focus = self.pinnacle.pointer_focus_target_under(touch_loc);
+        let focus = self.pinnacle.pointer_contents_under(touch_loc);
 
         touch.down(
             self,
-            focus,
+            focus.focus_under,
             &touch::DownEvent {
                 slot: event.slot(),
                 location: touch_loc,
@@ -1065,11 +1000,11 @@ impl State {
             return;
         };
 
-        let focus = self.pinnacle.pointer_focus_target_under(touch_loc);
+        let focus = self.pinnacle.pointer_contents_under(touch_loc);
 
         touch.motion(
             self,
-            focus,
+            focus.focus_under,
             &touch::MotionEvent {
                 slot: event.slot(),
                 location: touch_loc,
@@ -1140,9 +1075,11 @@ impl State {
         let device = event.device();
 
         let map_region = self.map_region_for_device(&device).or_else(|| {
-            // FIXME: this might get an unmapped output when it's disabled
-            // Split outputs into outputs and unmapped_outputs like windows are or something
-            let next_output = self.pinnacle.outputs.keys().next()?;
+            let next_output = self
+                .pinnacle
+                .outputs
+                .iter()
+                .find(|op| op.with_state(|state| state.enabled_global_id.is_some()))?;
             self.pinnacle
                 .space
                 .output_geometry(next_output)
@@ -1165,24 +1102,23 @@ fn constrain_point_inside_rects(
 ) -> Point<f64, Logical> {
     let _span = tracy_client::span!("constrain_point_inside_rects");
 
-    let (pos_x, pos_y) = pos.into();
-
     let nearest_points = rects.into_iter().map(|rect| {
         let pos = pos.constrain(rect.to_f64());
         (rect, pos.x, pos.y)
     });
 
+    let (pos_x, pos_y) = pos.into();
+
     let nearest_point = nearest_points.min_by(|(_, x1, y1), (_, x2, y2)| {
         f64::total_cmp(
-            &((pos_x - x1).powi(2) + (pos_y - y1).powi(2)).sqrt(),
-            &((pos_x - x2).powi(2) + (pos_y - y2).powi(2)).sqrt(),
+            &f64::hypot((pos_x - x1).abs(), (pos_y - y1).abs()),
+            &f64::hypot((pos_x - x2).abs(), (pos_y - y2).abs()),
         )
     });
 
     nearest_point
         .map(|(rect, mut x, mut y)| {
             let rect = rect.to_f64();
-
             // Clamp the point to actually be in the rect and not
             // touching its edge.
             x = f64::min(x, rect.loc.x + rect.size.w - 1.0);

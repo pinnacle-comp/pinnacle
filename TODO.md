@@ -9,6 +9,8 @@
 Testing
 - Test layout mode changing and how it interacts with client fullscreen/maximized requests
     - Gonna need a test client for that
+- Test `WindowHandle::in_direction`
+- Test new output focus system
 
 Problems:
 - Pointer input to xwayland windows saturates at x=0, y=0, so windows on outputs at negative coords

@@ -11,91 +11,115 @@ enum StreamControl {
 }
 
 message OutputConnectRequest {
-    StreamControl control = 1;
+  StreamControl control = 1;
 }
 message OutputConnectResponse {
-    string output_name = 1;
+  string output_name = 1;
 }
 message OutputDisconnectRequest {
-    StreamControl control = 1;
+  StreamControl control = 1;
 }
 message OutputDisconnectResponse {
-    string output_name = 1;
+  string output_name = 1;
 }
 
 message OutputResizeRequest {
-    StreamControl control = 1;
+  StreamControl control = 1;
 }
 
 // An output's logical size changed
 message OutputResizeResponse {
-    string output_name = 1;
-    uint32 logical_width = 2;
-    uint32 logical_height = 3;
+  string output_name = 1;
+  uint32 logical_width = 2;
+  uint32 logical_height = 3;
 }
 
 message OutputMoveRequest {
-    StreamControl control = 1;
+  StreamControl control = 1;
 }
 
 // An output's location in the global space changed
 message OutputMoveResponse {
-    string output_name = 1;
-    int32 x = 2;
-    int32 y = 3;
+  string output_name = 1;
+  int32 x = 2;
+  int32 y = 3;
+}
+
+message OutputPointerEnterRequest {
+  StreamControl control = 1;
+}
+message OutputPointerEnterResponse {
+  string output_name = 1;
+}
+
+message OutputPointerLeaveRequest {
+  StreamControl control = 1;
+}
+message OutputPointerLeaveResponse {
+  string output_name = 1;
+}
+
+message OutputFocusedRequest {
+  StreamControl control = 1;
+}
+message OutputFocusedResponse {
+  string output_name = 1;
 }
 
 message WindowPointerEnterRequest {
-    StreamControl control = 1;
+  StreamControl control = 1;
 }
 message WindowPointerEnterResponse {
-    // The window that the pointer entered.
-    uint32 window_id = 1;
+  // The window that the pointer entered.
+  uint32 window_id = 1;
 }
 
 message WindowPointerLeaveRequest {
-    StreamControl control = 1;
+  StreamControl control = 1;
 }
 message WindowPointerLeaveResponse {
-    // The window that the pointer left.
-    uint32 window_id = 1;
+  // The window that the pointer left.
+  uint32 window_id = 1;
 }
 
 message WindowFocusedRequest {
-    StreamControl control = 1;
+  StreamControl control = 1;
 }
 message WindowFocusedResponse {
-    // The window that got focus.
-    uint32 window_id = 1;
+  // The window that got focus.
+  uint32 window_id = 1;
 }
 
 message TagActiveRequest {
-    StreamControl control = 1;
+  StreamControl control = 1;
 }
 message TagActiveResponse {
-    uint32 tag_id = 1;
-    // The tag was set to active or inactive.
-    bool active = 2;
+  uint32 tag_id = 1;
+  // The tag was set to active or inactive.
+  bool active = 2;
 }
 
 message InputDeviceAddedRequest {
-    StreamControl control = 1;
+  StreamControl control = 1;
 }
 message InputDeviceAddedResponse {
-    string device_sysname = 1;
+  string device_sysname = 1;
 }
 
 service SignalService {
-    rpc OutputConnect(stream OutputConnectRequest) returns (stream OutputConnectResponse);
-    rpc OutputDisconnect(stream OutputDisconnectRequest) returns (stream OutputDisconnectResponse);
-    rpc OutputResize(stream OutputResizeRequest) returns (stream OutputResizeResponse);
-    rpc OutputMove(stream OutputMoveRequest) returns (stream OutputMoveResponse);
-    
-    rpc WindowPointerEnter(stream WindowPointerEnterRequest) returns (stream WindowPointerEnterResponse);
-    rpc WindowPointerLeave(stream WindowPointerLeaveRequest) returns (stream WindowPointerLeaveResponse);
-    rpc WindowFocused(stream WindowFocusedRequest) returns (stream WindowFocusedResponse);
-    
-    rpc TagActive(stream TagActiveRequest) returns (stream TagActiveResponse);
+  rpc OutputConnect(stream OutputConnectRequest) returns (stream OutputConnectResponse);
+  rpc OutputDisconnect(stream OutputDisconnectRequest) returns (stream OutputDisconnectResponse);
+  rpc OutputResize(stream OutputResizeRequest) returns (stream OutputResizeResponse);
+  rpc OutputMove(stream OutputMoveRequest) returns (stream OutputMoveResponse);
+  rpc OutputPointerEnter(stream OutputPointerEnterRequest) returns (stream OutputPointerEnterResponse);
+  rpc OutputPointerLeave(stream OutputPointerLeaveRequest) returns (stream OutputPointerLeaveResponse);
+  rpc OutputFocused(stream OutputFocusedRequest) returns (stream OutputFocusedResponse);
 
-    rpc InputDeviceAdded(stream InputDeviceAddedRequest) returns (stream InputDeviceAddedResponse);
+  rpc WindowPointerEnter(stream WindowPointerEnterRequest) returns (stream WindowPointerEnterResponse);
+  rpc WindowPointerLeave(stream WindowPointerLeaveRequest) returns (stream WindowPointerLeaveResponse);
+  rpc WindowFocused(stream WindowFocusedRequest) returns (stream WindowFocusedResponse);
+
+  rpc TagActive(stream TagActiveRequest) returns (stream TagActiveResponse);
+
+  rpc InputDeviceAdded(stream InputDeviceAddedRequest) returns (stream InputDeviceAddedResponse);
 }
