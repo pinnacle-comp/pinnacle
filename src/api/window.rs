@@ -99,6 +99,8 @@ pub fn set_focused(state: &mut State, window: &WindowElement, set: impl Into<Opt
             .keyboard_focus_stack
             .set_focus(window.clone());
 
+        state.pinnacle.on_demand_layer_focus = None;
+
         let window_outputs = state
             .pinnacle
             .space

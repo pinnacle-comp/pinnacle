@@ -97,6 +97,8 @@ impl SessionLockHandler for State {
             });
         }
         self.pinnacle.lock_state = LockState::Unlocked;
+
+        self.pinnacle.lock_surface_focus.take();
     }
 
     fn new_surface(&mut self, surface: LockSurface, output: WlOutput) {
@@ -130,6 +132,10 @@ impl SessionLockHandler for State {
             state.size = Some((geo.size.w as u32, geo.size.h as u32).into())
         });
         surface.send_configure();
+
+        if self.pinnacle.lock_surface_focus.is_none() {
+            self.pinnacle.lock_surface_focus = Some(surface.clone());
+        }
 
         output.with_state_mut(|state| state.lock_surface.replace(surface));
 

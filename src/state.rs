@@ -38,7 +38,7 @@ use smithay::{
             send_dmabuf_feedback_surface_tree, send_frames_surface_tree,
             surface_primary_scanout_output, update_surface_primary_scanout_output,
         },
-        PopupManager, Space,
+        LayerSurface, PopupManager, Space,
     },
     input::{keyboard::XkbConfig, pointer::CursorImageStatus, Seat, SeatState},
     output::Output,
@@ -76,7 +76,7 @@ use smithay::{
             data_device::DataDeviceState, ext_data_control,
             primary_selection::PrimarySelectionState, wlr_data_control,
         },
-        session_lock::SessionLockManagerState,
+        session_lock::{LockSurface, SessionLockManagerState},
         shell::{
             kde::decoration::KdeDecorationState,
             wlr_layer::WlrLayerShellState,
@@ -188,6 +188,8 @@ pub struct Pinnacle {
     /// Windows with no buffer attached
     pub unmapped_windows: Vec<Unmapped>,
     pub keyboard_focus_stack: WindowKeyboardFocusStack,
+    pub on_demand_layer_focus: Option<LayerSurface>,
+    pub lock_surface_focus: Option<LockSurface>,
 
     pub config: Config,
 
@@ -464,6 +466,8 @@ impl Pinnacle {
             windows: Vec::new(),
             unmapped_windows: Default::default(),
             keyboard_focus_stack: WindowKeyboardFocusStack::default(),
+            on_demand_layer_focus: None,
+            lock_surface_focus: None,
 
             xwayland_state: None,
 

@@ -713,6 +713,10 @@ impl WlrLayerShellHandler for State {
     fn layer_destroyed(&mut self, surface: wlr_layer::LayerSurface) {
         let _span = tracy_client::span!("WlrLayerShellHandler::layer_destroyed");
 
+        self.pinnacle
+            .on_demand_layer_focus
+            .take_if(|layer| layer.layer_surface() == &surface);
+
         let mut output: Option<Output> = None;
         if let Some((mut map, layer, op)) = self.pinnacle.space.outputs().find_map(|o| {
             let map = layer_map_for_output(o);

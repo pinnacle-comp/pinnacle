@@ -18,6 +18,24 @@ pub mod keyboard;
 pub mod pointer;
 
 impl State {
+    /// Updates the keyboard focus.
+    ///
+    /// This computes the current keyboard focus in the following order:
+    /// 1. Any lock surface if locked,
+    /// 2. The topmost exclusive layer surface,
+    /// 3. Any on-demand layer surface, and finally
+    /// 4. The focused window on the focused output.
+    ///
+    /// Some focus behavior (subject to change):
+    /// - The first lock surface that a client sends in gets lock surface focus.
+    ///   Lock surface focus can be changed by clicking on another lock surface.
+    /// - The topmost exclusive layer surface gets focus, prioritizing surfaces
+    ///   on the focused output. This currently cannot be changed by click,
+    ///   but this may change in the future.
+    /// - On-demand layer surfaces can only be focused by clicking on them.
+    ///   They retain focus unless a window is focused or it is clicked off of.
+    /// - Only the focused window on the focused output gets focus.
+    ///   If the focused output changes, the window may lose focus.
     pub fn update_keyboard_focus(&mut self) {
         let _span = tracy_client::span!("State::update_keyboard_focus");
 
@@ -29,21 +47,22 @@ impl State {
             keyboard.set_focus(self, None, SERIAL_COUNTER.next_serial());
         }
 
+        self.pinnacle
+            .lock_surface_focus
+            .take_if(|lock| !lock.alive());
+
+        // Only allow keyboard focus on lock surfaces when locked
         if !self.pinnacle.lock_state.is_unlocked() {
-            // Only allow keyboard focus on lock surfaces when locked
-            if keyboard
-                .current_focus()
-                .is_some_and(|focus| matches!(focus, KeyboardFocusTarget::LockSurface(_)))
-            {
+            let lock_surface = self
+                .pinnacle
+                .lock_surface_focus
+                .clone()
+                .map(KeyboardFocusTarget::LockSurface);
+
+            if keyboard.current_focus() == lock_surface {
                 return;
             }
 
-            let lock_surface = self
-                .pinnacle
-                .space
-                .outputs()
-                .find_map(|op| op.with_state(|state| state.lock_surface.clone()))
-                .map(KeyboardFocusTarget::LockSurface);
             keyboard.set_focus(self, lock_surface, SERIAL_COUNTER.next_serial());
 
             for win in self.pinnacle.windows.iter() {
@@ -56,65 +75,48 @@ impl State {
             return;
         }
 
-        if keyboard.current_focus().is_some_and(|focus| {
-            matches!(
-                focus,
-                KeyboardFocusTarget::LayerSurface(layer)
-                    if layer.cached_state().keyboard_interactivity
-                        == KeyboardInteractivity::Exclusive
-            )
-        }) {
-            return;
-        }
-
         // Refresh exclusive layer shell focus
         let mut exclusive_layer_focus: Option<smithay::desktop::LayerSurface> = None;
 
         for op in self.pinnacle.output_focus_stack.outputs().rev() {
-            let possible_focus = layer_map_for_output(op)
-                .layers()
+            let possible_overlay_focus = layer_map_for_output(op)
+                .layers_on(wlr_layer::Layer::Overlay)
                 .rev()
                 .find(|layer| {
-                    let top_or_overlay = matches!(
-                        layer.layer(),
-                        wlr_layer::Layer::Top | wlr_layer::Layer::Overlay
-                    );
-                    let exclusive = layer.cached_state().keyboard_interactivity
-                        == KeyboardInteractivity::Exclusive;
-
-                    top_or_overlay && exclusive
+                    layer.cached_state().keyboard_interactivity == KeyboardInteractivity::Exclusive
                 })
                 .cloned();
 
-            match exclusive_layer_focus.as_ref() {
-                Some(layer) => {
-                    if possible_focus
-                        .as_ref()
-                        .is_some_and(|layer| layer.layer() == wlr_layer::Layer::Overlay)
-                        && layer.layer() == wlr_layer::Layer::Top
-                    {
-                        exclusive_layer_focus = possible_focus;
-                        break;
-                    }
-                }
-                None => {
-                    exclusive_layer_focus = possible_focus;
-                    if exclusive_layer_focus.as_ref().is_some_and(|layer| {
+            if possible_overlay_focus.is_some() {
+                exclusive_layer_focus = possible_overlay_focus;
+                break;
+            }
+
+            // Only allow the topmost `top` exlcusive layer but keep searching
+            // for overlay layers
+            if exclusive_layer_focus.is_none() {
+                let possible_top_focus = layer_map_for_output(op)
+                    .layers_on(wlr_layer::Layer::Top)
+                    .rev()
+                    .find(|layer| {
                         layer.cached_state().keyboard_interactivity
                             == KeyboardInteractivity::Exclusive
-                    }) {
-                        break;
-                    }
+                    })
+                    .cloned();
+
+                if possible_top_focus.is_some() {
+                    exclusive_layer_focus = possible_top_focus;
                 }
             }
         }
 
         if let Some(exclusive_layer_focus) = exclusive_layer_focus {
-            keyboard.set_focus(
-                self,
-                Some(KeyboardFocusTarget::LayerSurface(exclusive_layer_focus)),
-                SERIAL_COUNTER.next_serial(),
-            );
+            let layer_target = KeyboardFocusTarget::LayerSurface(exclusive_layer_focus);
+            if keyboard.current_focus().as_ref() == Some(&layer_target) {
+                return;
+            }
+
+            keyboard.set_focus(self, Some(layer_target), SERIAL_COUNTER.next_serial());
 
             for win in self.pinnacle.windows.iter() {
                 win.set_activated(false);
@@ -126,6 +128,30 @@ impl State {
             return;
         }
 
+        // Handle on-demand layer shell focus
+        self.pinnacle
+            .on_demand_layer_focus
+            .take_if(|layer| !layer.alive());
+
+        if let Some(layer) = self.pinnacle.on_demand_layer_focus.as_ref() {
+            let layer_target = KeyboardFocusTarget::LayerSurface(layer.clone());
+            if keyboard.current_focus().as_ref() == Some(&layer_target) {
+                return;
+            }
+
+            keyboard.set_focus(self, Some(layer_target), SERIAL_COUNTER.next_serial());
+
+            for win in self.pinnacle.windows.iter() {
+                win.set_activated(false);
+                if let Some(toplevel) = win.toplevel() {
+                    toplevel.send_pending_configure();
+                }
+            }
+
+            return;
+        }
+
+        // And lastly, window focus
         let focused_window = self
             .pinnacle
             .focused_output()

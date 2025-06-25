@@ -293,25 +293,6 @@ impl State {
             return;
         }
 
-        // let old_contents = std::mem::take(&mut self.pinnacle.pointer_contents);
-        //
-        // let old_focused_win = old_contents
-        //     .focus_under
-        //     .and_then(|(foc, _)| foc.window_for(&self.pinnacle));
-        // let new_focused_win = new_contents
-        //     .focus_under
-        //     .as_ref()
-        //     .and_then(|(foc, _)| foc.window_for(&self.pinnacle));
-        //
-        // if old_focused_win != new_focused_win {
-        //     if let Some(old) = old_focused_win {
-        //         self.pinnacle.signal_state.window_pointer_leave.signal(&old);
-        //     }
-        //     if let Some(new) = new_focused_win {
-        //         self.pinnacle.signal_state.window_pointer_leave.signal(&new);
-        //     }
-        // }
-
         self.pinnacle.maybe_activate_pointer_constraint(location);
 
         self.pinnacle.set_pointer_contents(new_contents.clone());
@@ -546,29 +527,27 @@ impl State {
                     if !window.is_x11_override_redirect() {
                         self.pinnacle.keyboard_focus_stack.set_focus(window.clone());
                     }
+                    self.pinnacle.on_demand_layer_focus = None;
                 } else if let Some(layer) = focus.layer_for(&self.pinnacle) {
                     if layer.can_receive_keyboard_focus() {
-                        keyboard.set_focus(
-                            self,
-                            Some(KeyboardFocusTarget::LayerSurface(layer)),
-                            serial,
-                        );
-                    } else {
+                        self.pinnacle.on_demand_layer_focus = Some(layer);
+                    } else if let wlr_layer::Layer::Bottom | wlr_layer::Layer::Background =
+                        layer.layer()
+                    {
+                        // Only unset focus when clicking on background stuff
                         self.pinnacle.keyboard_focus_stack.unset_focus();
+                        self.pinnacle.on_demand_layer_focus = None;
                     }
                 } else if !self.pinnacle.lock_state.is_unlocked() {
                     if let Some(lock_surface) = focus.lock_surface_for(&self.pinnacle) {
-                        keyboard.set_focus(
-                            self,
-                            Some(KeyboardFocusTarget::LockSurface(lock_surface)),
-                            serial,
-                        );
+                        self.pinnacle.lock_surface_focus = Some(lock_surface);
                     } else {
                         self.pinnacle.keyboard_focus_stack.unset_focus();
                     }
                 }
             } else {
                 self.pinnacle.keyboard_focus_stack.unset_focus();
+                self.pinnacle.on_demand_layer_focus = None;
             }
         };
 
