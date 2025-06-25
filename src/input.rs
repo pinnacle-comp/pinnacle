@@ -6,10 +6,7 @@ pub mod libinput;
 use std::{any::Any, time::Duration};
 
 use crate::{
-    focus::{
-        keyboard::KeyboardFocusTarget,
-        pointer::{PointerContents, PointerFocusTarget},
-    },
+    focus::pointer::{PointerContents, PointerFocusTarget},
     state::{Pinnacle, WithState},
     window::WindowElement,
 };
