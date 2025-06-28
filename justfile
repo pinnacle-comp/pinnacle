@@ -34,7 +34,6 @@ install-lua-lib: gen-lua-pb-defs
 clean: clean-snowcap
     rm -rf "{{xdg_data_dir}}"
     -luarocks remove --local pinnacle-api
-    -luarocks remove --local lua-grpc-client
 
 # Run `cargo build`
 build *args: gen-lua-pb-defs
