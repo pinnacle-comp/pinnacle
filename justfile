@@ -28,7 +28,7 @@ install-protos:
 install-lua-lib: gen-lua-pb-defs
     #!/usr/bin/env bash
     cd "{{rootdir}}/api/lua"
-    luarocks make --local --lua-version "{{lua_version}}" pinnacle-api-dev-1.rockspec
+    luarocks make --local --deps-mode "order" --lua-version "{{lua_version}}" pinnacle-api-dev-1.rockspec
 
 # Remove installed configs and the Lua API (requires Luarocks)
 clean: clean-snowcap
