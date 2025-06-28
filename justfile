@@ -5,9 +5,24 @@ xdg_data_dir := `echo "${XDG_DATA_HOME:-$HOME/.local/share}/pinnacle"`
 
 lua_version := "5.4"
 
+# dirty trick until just's which() is stabilized.
+luarocks := `which luarocks 2>/dev/null || true`
+luarocks_full := if luarocks != "" { `luarocks path --help | grep -- "--full " || true`  } else { "" }
+
 local_lua_path := x"$HOME/.luarocks/share/lua/" + lua_version + x"/?.lua;$HOME/.luarocks/share/lua/" + lua_version + "/?.init.lua;"
-export LUA_PATH := local_lua_path + env("LUA_PATH", "")
-export LUA_CPATH := x"$HOME/.luarocks/lib/lua/" + lua_version + x"/?.so;" + env("LUA_CPATH", "")
+local_lua_cpath := x"$HOME/.luarocks/lib/lua/" + lua_version + x"/?.so;"
+
+export LUA_PATH := if luarocks_full != "" {
+    shell(luarocks + ' "$@"', 'path', '--full', '--lr-path', '--lua-version', lua_version)
+} else if luarocks != "" {
+    shell(luarocks + ' "$@"', 'path', '--lr-path', '--lua-version', lua_version) + ";" + env("LUA_PATH", "")
+} else { local_lua_path + env("LUA_PATH", "") }
+
+export LUA_CPATH := if luarocks_full != "" {
+    shell(luarocks + ' "$@"', 'path', '--full', '--lr-cpath', '--lua-version', lua_version)
+} else if luarocks != "" {
+    shell(luarocks + ' "$@"', 'path', '--lr-cpath', '--lua-version', lua_version) + ";" + env("LUA_CPATH", "")
+} else { local_lua_cpath + env("LUA_CPATH", "") }
 
 list:
     @just --list --unsorted
