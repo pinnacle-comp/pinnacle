@@ -30,7 +30,7 @@ jobs:
         with:
           luaVersion: "5.4"
       - name: Setup LuaRocks
-        uses: leafo/gh-actions-luarocks@v4
+        uses: leafo/gh-actions-luarocks@v5
       - name: Build
         run: cargo build --verbose
       - name: Celebratory yahoo
@@ -60,7 +60,7 @@ jobs:
         with:
           luaVersion: "5.4"
       - name: Setup LuaRocks
-        uses: leafo/gh-actions-luarocks@v4
+        uses: leafo/gh-actions-luarocks@v5
       - name: Setup just
         uses: extractions/setup-just@v1
       - name: Set XDG_DATA_HOME
@@ -106,6 +106,6 @@ jobs:
         with:
           luaVersion: "5.4"
       - name: Setup LuaRocks
-        uses: leafo/gh-actions-luarocks@v4
+        uses: leafo/gh-actions-luarocks@v5
       - name: Clippy check
         run: cargo clippy --all -- -D warnings
