@@ -8,15 +8,28 @@
 -- and points them to the symlinked directory.
 --
 -- TODO: Remove this when snowcap is stable enough to become its own project
-local path_searcher = package.searchers[2]
--- Insert before the actual package.path searcher so it takes priority
-table.insert(package.searchers, 2, function(libname)
+local package_searchers = package.searchers
+
+local function custom_searcher(libname)
     if libname:match("snowcap") then
-        return path_searcher("pinnacle.snowcap." .. libname)
+        libname = "pinnacle.snowcap." .. libname
+
+        for _, searcher in ipairs(package_searchers) do
+            if searcher ~= custom_searcher then
+                local result = { searcher(libname) }
+                if type(result[1]) == "function" then
+                    return table.unpack(result)
+                end
+            end
+        end
+
+        return "Could not find package '" .. libname .. "'."
     else
-        return path_searcher(libname)
+        return nil
     end
-end)
+end
+-- Insert before the actual package.path searcher so it takes priority
+table.insert(package.searchers, 1, custom_searcher)
 
 local log = require("pinnacle.log")
 local client = require("pinnacle.grpc.client").client
