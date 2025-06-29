@@ -31,6 +31,9 @@ end
 -- Insert before the actual package.path searcher so it takes priority
 table.insert(package.searchers, 1, custom_searcher)
 
+-- If luarocks.loader exists, we load it now if it wasn't already done.
+pcall(require, "luarocks.loader")
+
 local log = require("pinnacle.log")
 local client = require("pinnacle.grpc.client").client
 
