@@ -236,6 +236,8 @@ impl CompositorHandler for State {
                         if output.with_state(|state| !state.tags.is_empty())
                             && matches!(unmapped.state, UnmappedState::WaitingForTags { .. })
                         {
+                            // FIXME: If there are no tags and the window still commits a buffer,
+                            // Pinnacle will crash at `map_new_window`.
                             unmapped.window.set_tags_to_output(&output);
                             self.pinnacle.request_window_rules(&mut unmapped);
                         }

@@ -305,19 +305,25 @@ impl Pinnacle {
         seat_name: String,
         config_dir: PathBuf,
         cli: Option<Cli>,
+        create_socket: bool,
     ) -> anyhow::Result<Self> {
         let _span = tracy_client::span!("Pinnacle::new");
 
-        let socket = ListeningSocketSource::new_auto()?;
-        let socket_name = socket.socket_name().to_os_string();
+        let socket_name = if create_socket {
+            let socket = ListeningSocketSource::new_auto()?;
+            let socket_name = socket.socket_name().to_os_string();
 
-        loop_handle.insert_source(socket, |stream, _metadata, state| {
-            state
-                .pinnacle
-                .display_handle
-                .insert_client(stream, Arc::new(ClientState::default()))
-                .expect("Could not insert client into loop handle");
-        })?;
+            loop_handle.insert_source(socket, |stream, _metadata, state| {
+                state
+                    .pinnacle
+                    .display_handle
+                    .insert_client(stream, Arc::new(ClientState::default()))
+                    .expect("Could not insert client into loop handle");
+            })?;
+            socket_name
+        } else {
+            OsString::from("funny-socket-name-here")
+        };
 
         let display_handle = display.handle();
 
@@ -864,6 +870,7 @@ impl State {
         loop_signal: LoopSignal,
         config_dir: PathBuf,
         cli: Option<Cli>,
+        create_socket: bool,
     ) -> anyhow::Result<Self> {
         let _span = tracy_client::span!("State::new");
 
@@ -880,6 +887,7 @@ impl State {
                     uninit_winit.seat_name,
                     config_dir,
                     cli,
+                    create_socket,
                 )?;
                 let winit = (uninit_winit.init)(&mut pinnacle)?;
                 (backend::Backend::Winit(winit), pinnacle)
@@ -894,6 +902,7 @@ impl State {
                     uninit_udev.seat_name,
                     config_dir,
                     cli,
+                    create_socket,
                 )?;
                 let udev = (uninit_udev.init)(&mut pinnacle)?;
                 (backend::Backend::Udev(udev), pinnacle)
@@ -908,6 +917,7 @@ impl State {
                     uninit_dummy.seat_name,
                     config_dir,
                     cli,
+                    create_socket,
                 )?;
                 let dummy = (uninit_dummy.init)(&mut pinnacle)?;
                 (backend::Backend::Dummy(dummy), pinnacle)

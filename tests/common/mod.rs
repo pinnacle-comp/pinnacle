@@ -1,7 +1,10 @@
 #![allow(unused)]
 
+pub mod client;
+pub mod fixture;
 pub mod lua;
 pub mod rust;
+pub mod server;
 
 use std::{
     panic::UnwindSafe,
@@ -88,6 +91,7 @@ fn test_with_lang(
         event_loop.get_signal(),
         PathBuf::from(""),
         None,
+        true,
     )?;
 
     let op = state.pinnacle.new_output(
