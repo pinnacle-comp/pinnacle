@@ -21,7 +21,6 @@ install-protos:
 clean:
     rm -rf "{{xdg_data_dir}}"
     -luarocks remove --local snowcap-api
-    -luarocks remove --local lua-grpc-client
 
 # Generate the protobuf definitions Lua file
 gen-lua-pb-defs:
