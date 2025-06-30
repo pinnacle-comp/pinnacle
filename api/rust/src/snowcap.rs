@@ -279,7 +279,7 @@ impl BindOverlay {
 
                     for desc in descs {
                         children.push(
-                            Text::new(format!("\t{}", desc))
+                            Text::new(format!("\t{desc}"))
                                 .font(self.font.clone())
                                 .into(),
                         );
@@ -314,7 +314,7 @@ impl BindOverlay {
 
                     for desc in descs {
                         children.push(
-                            Text::new(format!("\t{}", desc))
+                            Text::new(format!("\t{desc}"))
                                 .font(self.font.clone())
                                 .into(),
                         );

@@ -100,7 +100,7 @@ fn generate_cvt_mode(hdisplay: i32, vdisplay: i32, vrefresh: Option<f64>) -> drm
     let hsync_end = hsync_start + timing.h_sync as u16;
     let vsync_end = vsync_start + timing.v_sync as u16;
 
-    let name = CString::new(format!("{}x{}", hdisplay, vdisplay)).unwrap();
+    let name = CString::new(format!("{hdisplay}x{vdisplay}")).unwrap();
     let mut name_buf = [0u8; 32];
     let _ = name_buf.as_mut_slice().write_all(name.as_bytes_with_nul());
     let name: [i8; 32] = bytemuck::cast(name_buf);

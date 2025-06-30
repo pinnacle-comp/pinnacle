@@ -1276,9 +1276,9 @@ impl Udev {
                 })
             }
             Err(err) => {
-                warn!("Error during rendering: {:?}", err);
+                warn!("Error during rendering: {err:?}");
                 if let SwapBuffersError::ContextLost(err) = err {
-                    panic!("Rendering loop lost: {}", err)
+                    panic!("Rendering loop lost: {err}")
                 }
             }
         };
