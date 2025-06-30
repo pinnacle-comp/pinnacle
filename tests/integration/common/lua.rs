@@ -1,11 +1,6 @@
-use std::{
-    io::Write,
-    process::{Command, Stdio},
-    sync::LazyLock,
-};
+use std::sync::LazyLock;
 
-use anyhow::anyhow;
-use mlua::{AsChunk, Lua};
+use mlua::Lua;
 
 pub static LUA: LazyLock<Lua> = LazyLock::new(new_lua);
 

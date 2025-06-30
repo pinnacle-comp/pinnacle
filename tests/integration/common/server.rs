@@ -8,7 +8,8 @@ use tokio::runtime::Runtime;
 pub struct Server {
     pub event_loop: EventLoop<'static, State>,
     pub state: State,
-    pub grpc_temp_dir: TempDir,
+    // Remove dir on drop
+    pub _grpc_temp_dir: TempDir,
     pub runtime: Runtime,
 }
 
@@ -37,7 +38,7 @@ impl Server {
         Self {
             event_loop,
             state,
-            grpc_temp_dir,
+            _grpc_temp_dir: grpc_temp_dir,
             runtime,
         }
     }

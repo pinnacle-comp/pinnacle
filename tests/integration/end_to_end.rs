@@ -1,5 +1,3 @@
-mod common;
-
 use std::{
     fs::File,
     io::{Read, Write},
@@ -8,10 +6,13 @@ use std::{
     time::Duration,
 };
 
-use common::{
-    rust::{run_rust, setup_rust},
-    test_api, Lang, PINNACLE_1_OUTPUT_MAKE, PINNACLE_1_OUTPUT_MODEL, PINNACLE_1_OUTPUT_NAME,
-    PINNACLE_1_OUTPUT_REFRESH, PINNACLE_1_OUTPUT_SIZE,
+use crate::{
+    common::{
+        rust::{run_rust, setup_rust},
+        test_api, Lang, PINNACLE_1_OUTPUT_MAKE, PINNACLE_1_OUTPUT_MODEL, PINNACLE_1_OUTPUT_NAME,
+        PINNACLE_1_OUTPUT_REFRESH, PINNACLE_1_OUTPUT_SIZE,
+    },
+    run_lua, setup_lua,
 };
 use pinnacle::{output::OutputName, state::WithState, window::window_state::LayoutModeKind};
 use pinnacle_api::{input::Bind as _, layout::LayoutGenerator};

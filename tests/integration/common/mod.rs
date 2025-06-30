@@ -1,5 +1,3 @@
-#![allow(unused)]
-
 pub mod client;
 pub mod fixture;
 pub mod lua;
@@ -7,18 +5,13 @@ pub mod rust;
 pub mod server;
 
 use std::{
-    panic::UnwindSafe,
     path::PathBuf,
     sync::{LazyLock, Mutex},
     time::Duration,
 };
 
 use anyhow::anyhow;
-use pinnacle::{
-    state::{State, WithState},
-    tag::TagId,
-    window::window_state::WindowId,
-};
+use pinnacle::{state::State, tag::TagId, window::window_state::WindowId};
 use smithay::{
     reexports::calloop::{
         self,
@@ -46,14 +39,6 @@ impl StateSender {
     pub fn with_state(&self, with_state: impl FnOnce(&mut State) + Send + 'static) {
         self.sender.send(Box::new(with_state)).unwrap();
     }
-}
-
-pub fn sleep_secs(secs: u64) {
-    std::thread::sleep(Duration::from_secs(secs));
-}
-
-pub fn sleep_millis(millis: u64) {
-    std::thread::sleep(Duration::from_millis(millis));
 }
 
 static MUTEX: Mutex<()> = Mutex::new(());

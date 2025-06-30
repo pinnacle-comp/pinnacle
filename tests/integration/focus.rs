@@ -1,10 +1,8 @@
-use common::fixture::Fixture;
+use crate::common::fixture::Fixture;
 use pinnacle::{focus::keyboard::KeyboardFocusTarget, state::WithState, tag::Tag};
-use pinnacle_api::layout::{generators::MasterStack, LayoutGenerator, LayoutNode};
+use pinnacle_api::layout::{generators::MasterStack, LayoutGenerator};
 use smithay::{output::Output, utils::Rectangle};
 use test_log::test;
-
-mod common;
 
 fn set_up() -> (Fixture, Output, Output) {
     let mut fixture = Fixture::new();

@@ -1,9 +1,7 @@
-use common::fixture::Fixture;
+use crate::common::fixture::Fixture;
 use pinnacle::{state::WithState, tag::Tag};
 use pinnacle_api::layout::LayoutNode;
 use smithay::utils::Rectangle;
-
-mod common;
 
 fn set_up() -> Fixture {
     let mut fixture = Fixture::new();

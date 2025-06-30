@@ -11,7 +11,7 @@ use pinnacle::state::{ClientState, Pinnacle};
 use smithay::{
     output::Output,
     reexports::calloop::{generic::Generic, EventLoop, Interest, Mode, PostAction},
-    utils::{Logical, Point, Rectangle, Transform},
+    utils::{Logical, Rectangle, Transform},
 };
 use tracing::debug;
 
