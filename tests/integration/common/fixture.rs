@@ -180,6 +180,11 @@ impl Fixture {
         debug!(client = ?id, "roundtripped");
     }
 
+    pub fn double_roundtrip(&mut self, id: ClientId) {
+        self.roundtrip(id);
+        self.roundtrip(id);
+    }
+
     pub fn spawn_window_with<F>(&mut self, id: ClientId, mut pre_initial_commit: F) -> WlSurface
     where
         F: FnMut(&mut Window),
