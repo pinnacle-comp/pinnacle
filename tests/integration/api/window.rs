@@ -44,7 +44,10 @@ fn window_get_all() {
         assert_eq!(pinnacle_api::window::get_all().count(), 0);
     });
 
-    fixture.spawn_lua_blocking("assert(#Window.get_all() == 0)");
+    spawn_lua_blocking! {
+        fixture,
+        assert(#Window.get_all() == 0)
+    }
 
     let client_id = fixture.add_client();
 
@@ -54,7 +57,10 @@ fn window_get_all() {
         assert_eq!(pinnacle_api::window::get_all().count(), 5);
     });
 
-    fixture.spawn_lua_blocking("assert(#Window.get_all() == 5)");
+    spawn_lua_blocking! {
+        fixture,
+        assert(#Window.get_all() == 5)
+    }
 }
 
 #[test_log::test]
@@ -65,7 +71,10 @@ fn window_get_focused() {
         assert!(pinnacle_api::window::get_focused().is_none());
     });
 
-    fixture.spawn_lua_blocking("assert(not Window.get_focused())");
+    spawn_lua_blocking! {
+        fixture,
+        assert(not Window.get_focused())
+    }
 
     let client_id = fixture.add_client();
 
@@ -75,7 +84,10 @@ fn window_get_focused() {
         assert!(pinnacle_api::window::get_focused().is_some());
     });
 
-    fixture.spawn_lua_blocking("assert(Window.get_focused())");
+    spawn_lua_blocking! {
+        fixture,
+        assert(Window.get_focused())
+    }
 }
 
 #[test_log::test]
@@ -93,7 +105,10 @@ fn window_handle_close() {
             Lang::Rust => fixture.spawn_blocking(|| {
                 pinnacle_api::window::get_focused().unwrap().close();
             }),
-            Lang::Lua => fixture.spawn_lua_blocking("Window.get_focused():close()"),
+            Lang::Lua => spawn_lua_blocking! {
+                fixture,
+                Window.get_focused():close()
+            },
         }
         fixture.roundtrip(client_id);
 
@@ -117,9 +132,14 @@ fn window_handle_set_geometry_floating() {
 
         match lang {
             Lang::Rust => fixture.spawn_blocking(|| {
-                pinnacle_api::window::get_focused().unwrap().set_geometry(200, 300, 1000, 1000);
+                pinnacle_api::window::get_focused()
+                    .unwrap()
+                    .set_geometry(200, 300, 1000, 1000);
             }),
-            Lang::Lua => fixture.spawn_lua_blocking("Window.get_focused():set_geometry({ x = 200, y = 300, width = 1000, height = 1000 })"),
+            Lang::Lua => spawn_lua_blocking! {
+                fixture,
+                Window.get_focused():set_geometry({ x = 200, y = 300, width = 1000, height = 1000 })
+            },
         }
 
         fixture
@@ -150,9 +170,14 @@ fn window_handle_set_geometry_tiled_does_not_change_geometry() {
 
         match lang {
             Lang::Rust => fixture.spawn_blocking(|| {
-                pinnacle_api::window::get_focused().unwrap().set_geometry(200, 300, 1000, 1000);
+                pinnacle_api::window::get_focused()
+                    .unwrap()
+                    .set_geometry(200, 300, 1000, 1000);
             }),
-            Lang::Lua => fixture.spawn_lua_blocking("Window.get_focused():set_geometry({ x = 200, y = 300, width = 1000, height = 1000 })"),
+            Lang::Lua => spawn_lua_blocking! {
+                fixture,
+                Window.get_focused():set_geometry({ x = 200, y = 300, width = 1000, height = 1000 })
+            },
         }
 
         fixture
@@ -182,7 +207,10 @@ fn window_handle_set_fullscreen() {
                     .unwrap()
                     .set_fullscreen(true);
             }),
-            Lang::Lua => fixture.spawn_lua_blocking("Window.get_focused():set_fullscreen(true)"),
+            Lang::Lua => spawn_lua_blocking! {
+                fixture,
+                Window.get_focused():set_fullscreen(true)
+            },
         }
 
         fixture
@@ -207,7 +235,10 @@ fn window_handle_set_fullscreen() {
                     .unwrap()
                     .set_fullscreen(false);
             }),
-            Lang::Lua => fixture.spawn_lua_blocking("Window.get_focused():set_fullscreen(false)"),
+            Lang::Lua => spawn_lua_blocking! {
+                fixture,
+                Window.get_focused():set_fullscreen(false)
+            },
         }
 
         fixture
@@ -243,7 +274,10 @@ fn window_handle_toggle_fullscreen() {
                     .unwrap()
                     .toggle_fullscreen();
             }),
-            Lang::Lua => fixture.spawn_lua_blocking("Window.get_focused():toggle_fullscreen()"),
+            Lang::Lua => spawn_lua_blocking! {
+                fixture,
+                Window.get_focused():toggle_fullscreen()
+            },
         }
 
         fixture
@@ -268,7 +302,10 @@ fn window_handle_toggle_fullscreen() {
                     .unwrap()
                     .toggle_fullscreen();
             }),
-            Lang::Lua => fixture.spawn_lua_blocking("Window.get_focused():toggle_fullscreen()"),
+            Lang::Lua => spawn_lua_blocking! {
+                fixture,
+                Window.get_focused():toggle_fullscreen()
+            },
         }
 
         fixture
@@ -304,7 +341,10 @@ fn window_handle_set_maximized() {
                     .unwrap()
                     .set_maximized(true);
             }),
-            Lang::Lua => fixture.spawn_lua_blocking("Window.get_focused():set_maximized(true)"),
+            Lang::Lua => spawn_lua_blocking! {
+                fixture,
+                Window.get_focused():set_maximized(true)
+            },
         }
 
         fixture
@@ -329,7 +369,10 @@ fn window_handle_set_maximized() {
                     .unwrap()
                     .set_maximized(false);
             }),
-            Lang::Lua => fixture.spawn_lua_blocking("Window.get_focused():set_maximized(false)"),
+            Lang::Lua => spawn_lua_blocking! {
+                fixture,
+                Window.get_focused():set_maximized(false)
+            },
         }
 
         fixture
@@ -365,7 +408,10 @@ fn window_handle_toggle_maximized() {
                     .unwrap()
                     .toggle_maximized();
             }),
-            Lang::Lua => fixture.spawn_lua_blocking("Window.get_focused():toggle_maximized()"),
+            Lang::Lua => spawn_lua_blocking! {
+                fixture,
+                Window.get_focused():toggle_maximized()
+            },
         }
 
         fixture
@@ -390,7 +436,10 @@ fn window_handle_toggle_maximized() {
                     .unwrap()
                     .toggle_maximized();
             }),
-            Lang::Lua => fixture.spawn_lua_blocking("Window.get_focused():toggle_maximized()"),
+            Lang::Lua => spawn_lua_blocking! {
+                fixture,
+                Window.get_focused():toggle_maximized()
+            },
         }
 
         fixture
@@ -426,7 +475,10 @@ fn window_handle_set_floating() {
                     .unwrap()
                     .set_floating(true);
             }),
-            Lang::Lua => fixture.spawn_lua_blocking("Window.get_focused():set_floating(true)"),
+            Lang::Lua => spawn_lua_blocking! {
+                fixture,
+                Window.get_focused():set_floating(true)
+            },
         }
 
         fixture
@@ -444,7 +496,10 @@ fn window_handle_set_floating() {
                     .unwrap()
                     .set_floating(false);
             }),
-            Lang::Lua => fixture.spawn_lua_blocking("Window.get_focused():set_floating(false)"),
+            Lang::Lua => spawn_lua_blocking! {
+                fixture,
+                Window.get_focused():set_floating(false)
+            },
         }
 
         fixture
@@ -473,7 +528,10 @@ fn window_handle_toggle_floating() {
                     .unwrap()
                     .toggle_floating();
             }),
-            Lang::Lua => fixture.spawn_lua_blocking("Window.get_focused():toggle_floating()"),
+            Lang::Lua => spawn_lua_blocking! {
+                fixture,
+                Window.get_focused():toggle_floating()
+            },
         }
 
         fixture
@@ -491,7 +549,10 @@ fn window_handle_toggle_floating() {
                     .unwrap()
                     .toggle_floating();
             }),
-            Lang::Lua => fixture.spawn_lua_blocking("Window.get_focused():toggle_floating()"),
+            Lang::Lua => spawn_lua_blocking! {
+                fixture,
+                Window.get_focused():toggle_floating()
+            },
         }
 
         fixture
@@ -522,7 +583,10 @@ fn window_handle_set_focused() {
                     .unwrap()
                     .set_focused(false);
             }),
-            Lang::Lua => fixture.spawn_lua_blocking("Window.get_focused():set_focused(false)"),
+            Lang::Lua => spawn_lua_blocking! {
+                fixture,
+                Window.get_focused():set_focused(false)
+            },
         }
 
         for surface in surfaces.iter() {
@@ -542,7 +606,10 @@ fn window_handle_set_focused() {
                     .unwrap()
                     .set_focused(true);
             }),
-            Lang::Lua => fixture.spawn_lua_blocking("Window.get_all()[1]:set_focused(true)"),
+            Lang::Lua => spawn_lua_blocking! {
+                fixture,
+                Window.get_all()[1]:set_focused(true)
+            },
         }
 
         for surface in surfaces.iter() {
@@ -566,7 +633,10 @@ fn window_handle_set_focused() {
                     .unwrap()
                     .set_focused(true);
             }),
-            Lang::Lua => fixture.spawn_lua_blocking("Window.get_all()[2]:set_focused(true)"),
+            Lang::Lua => spawn_lua_blocking! {
+                fixture,
+                Window.get_all()[2]:set_focused(true)
+            },
         }
 
         for surface in surfaces.iter() {
@@ -602,7 +672,10 @@ fn window_handle_toggle_focused() {
                     .unwrap()
                     .toggle_focused();
             }),
-            Lang::Lua => fixture.spawn_lua_blocking("Window.get_focused():toggle_focused()"),
+            Lang::Lua => spawn_lua_blocking! {
+                fixture,
+                Window.get_focused():toggle_focused()
+            },
         }
 
         for surface in surfaces.iter() {
@@ -622,7 +695,10 @@ fn window_handle_toggle_focused() {
                     .unwrap()
                     .toggle_focused();
             }),
-            Lang::Lua => fixture.spawn_lua_blocking("Window.get_all()[1]:toggle_focused()"),
+            Lang::Lua => spawn_lua_blocking! {
+                fixture,
+                Window.get_all()[1]:toggle_focused()
+            },
         }
 
         for surface in surfaces.iter() {
@@ -646,7 +722,10 @@ fn window_handle_toggle_focused() {
                     .unwrap()
                     .toggle_focused();
             }),
-            Lang::Lua => fixture.spawn_lua_blocking("Window.get_all()[2]:toggle_focused()"),
+            Lang::Lua => spawn_lua_blocking! {
+                fixture,
+                Window.get_all()[2]:toggle_focused()
+            },
         }
 
         for surface in surfaces.iter() {
@@ -683,8 +762,10 @@ fn window_handle_set_decoration_mode() {
                     .unwrap()
                     .set_decoration_mode(pinnacle_api::window::DecorationMode::ClientSide);
             }),
-            Lang::Lua => fixture
-                .spawn_lua_blocking("Window.get_focused():set_decoration_mode('client_side')"),
+            Lang::Lua => spawn_lua_blocking! {
+                fixture,
+                Window.get_focused():set_decoration_mode("client_side")
+            },
         }
 
         fixture
@@ -704,8 +785,10 @@ fn window_handle_set_decoration_mode() {
                     .unwrap()
                     .set_decoration_mode(pinnacle_api::window::DecorationMode::ServerSide);
             }),
-            Lang::Lua => fixture
-                .spawn_lua_blocking("Window.get_focused():set_decoration_mode('server_side')"),
+            Lang::Lua => spawn_lua_blocking! {
+                fixture,
+                Window.get_focused():set_decoration_mode("server_side")
+            },
         }
 
         fixture
@@ -741,9 +824,10 @@ fn window_handle_move_to_tag() {
                     .unwrap()
                     .move_to_tag(&pinnacle_api::tag::get("2").unwrap());
             }),
-            Lang::Lua => {
-                fixture.spawn_lua_blocking("Window.get_focused():move_to_tag(Tag.get('2'))")
-            }
+            Lang::Lua => spawn_lua_blocking! {
+                fixture,
+                Window.get_focused():move_to_tag(Tag.get('2'))
+            },
         }
 
         let tags = fixture.pinnacle().windows[0].with_state(|state| state.tags.clone());
@@ -773,9 +857,10 @@ fn window_handle_set_tag() {
                     .unwrap()
                     .set_tag(&pinnacle_api::tag::get("2").unwrap(), true);
             }),
-            Lang::Lua => {
-                fixture.spawn_lua_blocking("Window.get_focused():set_tag(Tag.get('2'), true)")
-            }
+            Lang::Lua => spawn_lua_blocking! {
+                fixture,
+                Window.get_focused():set_tag(Tag.get('2'), true)
+            },
         }
 
         let tags = fixture.pinnacle().windows[0].with_state(|state| state.tags.clone());
@@ -790,9 +875,10 @@ fn window_handle_set_tag() {
                     .unwrap()
                     .set_tag(&pinnacle_api::tag::get("1").unwrap(), false);
             }),
-            Lang::Lua => {
-                fixture.spawn_lua_blocking("Window.get_focused():set_tag(Tag.get('1'), false)")
-            }
+            Lang::Lua => spawn_lua_blocking! {
+                fixture,
+                Window.get_focused():set_tag(Tag.get('1'), false)
+            },
         }
 
         let tags = fixture.pinnacle().windows[0].with_state(|state| state.tags.clone());
@@ -822,9 +908,10 @@ fn window_handle_toggle_tag() {
                     .unwrap()
                     .toggle_tag(&pinnacle_api::tag::get("2").unwrap());
             }),
-            Lang::Lua => {
-                fixture.spawn_lua_blocking("Window.get_focused():toggle_tag(Tag.get('2'))")
-            }
+            Lang::Lua => spawn_lua_blocking! {
+                fixture,
+                Window.get_focused():toggle_tag(Tag.get('2'))
+            },
         }
 
         let tags = fixture.pinnacle().windows[0].with_state(|state| state.tags.clone());
@@ -839,9 +926,10 @@ fn window_handle_toggle_tag() {
                     .unwrap()
                     .toggle_tag(&pinnacle_api::tag::get("1").unwrap());
             }),
-            Lang::Lua => {
-                fixture.spawn_lua_blocking("Window.get_focused():toggle_tag(Tag.get('1'))")
-            }
+            Lang::Lua => spawn_lua_blocking! {
+                fixture,
+                Window.get_focused():toggle_tag(Tag.get('1'))
+            },
         }
 
         let tags = fixture.pinnacle().windows[0].with_state(|state| state.tags.clone());
@@ -875,7 +963,10 @@ fn window_handle_raise() {
             Lang::Rust => fixture.spawn_blocking(|| {
                 pinnacle_api::window::get_all().next().unwrap().raise();
             }),
-            Lang::Lua => fixture.spawn_lua_blocking("Window.get_all()[1]:raise()"),
+            Lang::Lua => spawn_lua_blocking! {
+                fixture,
+                Window.get_all()[1]:raise()
+            },
         }
 
         let top = fixture
@@ -907,9 +998,10 @@ fn window_handle_is_on_active_tag() {
                     .unwrap()
                     .is_on_active_tag());
             }),
-            Lang::Lua => {
-                fixture.spawn_lua_blocking("assert(Window.get_all()[1]:is_on_active_tag())");
-            }
+            Lang::Lua => spawn_lua_blocking! {
+                fixture,
+                assert(Window.get_all()[1]:is_on_active_tag())
+            },
         }
 
         output.with_state(|state| {
@@ -923,9 +1015,10 @@ fn window_handle_is_on_active_tag() {
                     .unwrap()
                     .is_on_active_tag());
             }),
-            Lang::Lua => {
-                fixture.spawn_lua_blocking("assert(not Window.get_all()[1]:is_on_active_tag())");
-            }
+            Lang::Lua => spawn_lua_blocking! {
+                fixture,
+                assert(not Window.get_all()[1]:is_on_active_tag())
+            },
         }
     });
 }

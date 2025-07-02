@@ -132,7 +132,10 @@ fn output_handle_set_loc() {
                     .unwrap()
                     .set_loc(500, -250);
             }),
-            Lang::Lua => fixture.spawn_lua_blocking("Output.get_focused():set_loc(500, -250)"),
+            Lang::Lua => spawn_lua_blocking! {
+                fixture,
+                Output.get_focused():set_loc(500, -250)
+            },
         }
 
         assert_eq!(output.current_location(), (500, -250).into());
@@ -188,9 +191,10 @@ fn output_handle_set_mode() {
                     .unwrap()
                     .set_mode(800, 600, 75000);
             }),
-            Lang::Lua => {
-                fixture.spawn_lua_blocking("Output.get_focused():set_mode(800, 600, 75000)");
-            }
+            Lang::Lua => spawn_lua_blocking! {
+                fixture,
+                Output.get_focused():set_mode(800, 600, 75000)
+            },
         }
 
         assert_eq!(output.current_mode().unwrap(), old_mode);
@@ -212,9 +216,10 @@ fn output_handle_set_mode() {
                     .unwrap()
                     .set_mode(800, 600, 75000);
             }),
-            Lang::Lua => {
-                fixture.spawn_lua_blocking("Output.get_focused():set_mode(800, 600, 75000)");
-            }
+            Lang::Lua => spawn_lua_blocking! {
+                fixture,
+                Output.get_focused():set_mode(800, 600, 75000)
+            },
         }
 
         assert_eq!(output.current_mode().unwrap(), new_mode);
@@ -232,9 +237,10 @@ fn output_handle_set_custom_mode() {
                     .unwrap()
                     .set_custom_mode(800, 600, 75000);
             }),
-            Lang::Lua => {
-                fixture.spawn_lua_blocking("Output.get_focused():set_custom_mode(800, 600, 75000)");
-            }
+            Lang::Lua => spawn_lua_blocking! {
+                fixture,
+                Output.get_focused():set_custom_mode(800, 600, 75000)
+            },
         }
 
         let new_mode = smithay::output::Mode {
@@ -251,7 +257,10 @@ fn output_handle_set_custom_mode() {
                     .set_custom_mode(801, 601, None);
             }),
             Lang::Lua => {
-                fixture.spawn_lua_blocking("Output.get_focused():set_custom_mode(801, 601)");
+                spawn_lua_blocking! {
+                    fixture,
+                    Output.get_focused():set_custom_mode(801, 601)
+                }
             }
         }
 

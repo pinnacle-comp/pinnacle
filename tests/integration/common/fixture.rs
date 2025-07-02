@@ -171,35 +171,6 @@ impl Fixture {
         }
     }
 
-    #[track_caller]
-    pub fn spawn_lua_blocking(&mut self, code: impl ToString) {
-        let code = code.to_string();
-        let join = std::thread::spawn(move || {
-            let lua = crate::common::new_lua();
-            let task = lua.load(format!(
-                "
-                Pinnacle.run(function()
-                    local run = function()
-                        {code}
-                    end
-
-                    local success, err = pcall(run)
-
-                    if not success then
-                        error(err)
-                    end
-                end)
-"
-            ));
-
-            if let Err(err) = task.exec() {
-                panic!("lua panicked: {err}");
-            }
-        });
-        self.dispatch_until(|_| join.is_finished());
-        join.join().unwrap();
-    }
-
     pub fn roundtrip(&mut self, id: ClientId) {
         let client = self.client(id);
         let wait = client.send_sync();
