@@ -32,6 +32,7 @@ pub(crate) fn run(channel: Channel<WlcsEvent>) {
         event_loop.get_signal(),
         PathBuf::from(""),
         None,
+        false,
     )
     .unwrap();
 
@@ -108,17 +109,6 @@ pub(crate) fn run(channel: Channel<WlcsEvent>) {
             state.on_event_loop_cycle_completion();
         })
         .expect("failed to run event_loop");
-
-    // Apparently the wayland socket doesn't want to get removed
-    let base_dirs = state
-        .pinnacle
-        .xdg_base_dirs
-        .get_runtime_directory()
-        .unwrap();
-
-    let _ = std::fs::remove_file(base_dirs.join(std::env::var("WAYLAND_DISPLAY").unwrap()));
-    let _ =
-        std::fs::remove_file(base_dirs.join(std::env::var("WAYLAND_DISPLAY").unwrap() + ".lock"));
 }
 
 fn handle_event(event: WlcsEvent, state: &mut State) {

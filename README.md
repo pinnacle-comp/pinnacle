@@ -41,4 +41,4 @@ See [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ## Special Thanks
 - [Smithay](https://github.com/Smithay/smithay): For being a great compositor library and also allowing me not to deal with all the graphics stuff I still don't understand
-- [Niri](https://github.com/YaLTeR/niri): For all that rendering and protocol stuff I, ahem, *took inspiration* from. And session stuff.
+- [Niri](https://github.com/YaLTeR/niri): For all that rendering and protocol stuff I, ahem, *took inspiration* from. And session stuff. And the test fixture.

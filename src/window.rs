@@ -467,17 +467,30 @@ impl State {
     pub fn map_new_window(&mut self, unmapped: Unmapped) {
         let _span = tracy_client::span!("State::map_new_window");
 
-        let Unmapped {
-            window,
-            activation_token_data: _, // TODO:
-            state:
-                UnmappedState::PostInitialConfigure {
-                    attempt_float_on_map,
-                    focus,
-                },
-        } = unmapped
-        else {
-            panic!("tried to map window pre initial configure");
+        let (window, attempt_float_on_map, focus) = if cfg!(feature = "wlcs") {
+            // bruh
+            // Relax the requirement that the window should've been configured first
+            // for wlcs
+            let Unmapped {
+                window,
+                activation_token_data: _, // TODO:
+                state: _,
+            } = unmapped;
+            (window, true, true)
+        } else {
+            let Unmapped {
+                window,
+                activation_token_data: _, // TODO:
+                state:
+                    UnmappedState::PostInitialConfigure {
+                        attempt_float_on_map,
+                        focus,
+                    },
+            } = unmapped
+            else {
+                panic!("tried to map window pre initial configure");
+            };
+            (window, attempt_float_on_map, focus)
         };
 
         self.pinnacle.windows.push(window.clone());

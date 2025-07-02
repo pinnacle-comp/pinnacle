@@ -194,6 +194,7 @@ async fn main() -> anyhow::Result<()> {
         event_loop.get_signal(),
         config_dir,
         Some(cli),
+        true,
     )?;
 
     info!(
