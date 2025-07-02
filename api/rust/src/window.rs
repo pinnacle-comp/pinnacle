@@ -10,6 +10,8 @@
 //! [`WindowHandle`]s allow you to do things like resize and move windows, toggle them between
 //! floating and tiled, close them, and more.
 
+use std::borrow::Borrow;
+
 use futures::FutureExt;
 use pinnacle_api_defs::pinnacle::{
     util::v1::SetOrToggle,
@@ -20,7 +22,7 @@ use pinnacle_api_defs::pinnacle::{
             GetSizeRequest, GetTagIdsRequest, GetTitleRequest, GetWindowsInDirRequest,
             MoveGrabRequest, MoveToTagRequest, RaiseRequest, ResizeGrabRequest, ResizeTileRequest,
             SetDecorationModeRequest, SetFloatingRequest, SetFocusedRequest, SetFullscreenRequest,
-            SetGeometryRequest, SetMaximizedRequest, SetTagRequest,
+            SetGeometryRequest, SetMaximizedRequest, SetTagRequest, SetTagsRequest,
         },
     },
 };
@@ -493,6 +495,43 @@ impl WindowHandle {
                 tag_id,
                 set_or_toggle: SetOrToggle::Toggle.into(),
             })
+            .block_on_tokio()
+            .unwrap();
+    }
+
+    /// Sets the exact provided tags on this window.
+    ///
+    /// Passing in an empty collection will not change the window's tags.
+    ///
+    /// For ergonomics, this accepts iterators of both `TagHandle` and `&TagHandle`.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// # use pinnacle_api::window;
+    /// # use pinnacle_api::tag;
+    /// # || {
+    /// let focused = window::get_focused()?;
+    /// let tag1 = tag::get("1")?;
+    /// let tag3 = tag::get("3")?;
+    ///
+    /// // Set `focused`'s tags to "1" and "3", removing all others
+    /// focused.set_tags([tag1, tag3]);
+    /// # Some(())
+    /// # };
+    /// ```
+    pub fn set_tags<T: Borrow<TagHandle>>(&self, tags: impl IntoIterator<Item = T>) {
+        let window_id = self.id;
+        let tag_ids = tags
+            .into_iter()
+            .map(|tag| {
+                let tag: &TagHandle = tag.borrow();
+                tag.id
+            })
+            .collect::<Vec<_>>();
+
+        Client::window()
+            .set_tags(SetTagsRequest { window_id, tag_ids })
             .block_on_tokio()
             .unwrap();
     }

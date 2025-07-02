@@ -1190,6 +1190,12 @@ local pinnacle_window_v1_DecorationMode = {
 ---@field tag_id integer?
 ---@field set_or_toggle pinnacle.util.v1.SetOrToggle?
 
+---@class pinnacle.window.v1.SetTagsRequest
+---@field window_id integer?
+---@field tag_ids integer[]?
+
+---@class pinnacle.window.v1.SetTagsResponse
+
 ---@class pinnacle.window.v1.RaiseRequest
 ---@field window_id integer?
 
@@ -1410,6 +1416,8 @@ pinnacle.window.v1.SetFocusedRequest = {}
 pinnacle.window.v1.SetDecorationModeRequest = {}
 pinnacle.window.v1.MoveToTagRequest = {}
 pinnacle.window.v1.SetTagRequest = {}
+pinnacle.window.v1.SetTagsRequest = {}
+pinnacle.window.v1.SetTagsResponse = {}
 pinnacle.window.v1.RaiseRequest = {}
 pinnacle.window.v1.MoveGrabRequest = {}
 pinnacle.window.v1.ResizeGrabRequest = {}
@@ -3156,6 +3164,23 @@ pinnacle.window.v1.WindowService.SetTag.response = ".google.protobuf.Empty"
 ---@return string | nil error An error string, if any
 function Client:pinnacle_window_v1_WindowService_SetTag(data)
     return self:unary_request(pinnacle.window.v1.WindowService.SetTag, data)
+end
+pinnacle.window.v1.WindowService.SetTags = {}
+pinnacle.window.v1.WindowService.SetTags.service = "pinnacle.window.v1.WindowService"
+pinnacle.window.v1.WindowService.SetTags.method = "SetTags"
+pinnacle.window.v1.WindowService.SetTags.request = ".pinnacle.window.v1.SetTagsRequest"
+pinnacle.window.v1.WindowService.SetTags.response = ".pinnacle.window.v1.SetTagsResponse"
+
+---Performs a unary request.
+---
+---@nodiscard
+---
+---@param data pinnacle.window.v1.SetTagsRequest
+---
+---@return pinnacle.window.v1.SetTagsResponse | nil response
+---@return string | nil error An error string, if any
+function Client:pinnacle_window_v1_WindowService_SetTags(data)
+    return self:unary_request(pinnacle.window.v1.WindowService.SetTags, data)
 end
 pinnacle.window.v1.WindowService.Raise = {}
 pinnacle.window.v1.WindowService.Raise.service = "pinnacle.window.v1.WindowService"

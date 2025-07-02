@@ -3,6 +3,7 @@ use std::sync::{
     Arc,
 };
 
+use indexmap::IndexSet;
 use pinnacle_api_defs::pinnacle::{
     util::{self, v1::SetOrToggle},
     window::{
@@ -15,7 +16,8 @@ use pinnacle_api_defs::pinnacle::{
             GetWindowsInDirRequest, GetWindowsInDirResponse, MoveGrabRequest, MoveToTagRequest,
             RaiseRequest, ResizeGrabRequest, ResizeTileRequest, SetDecorationModeRequest,
             SetFloatingRequest, SetFocusedRequest, SetFullscreenRequest, SetGeometryRequest,
-            SetMaximizedRequest, SetTagRequest, WindowRuleRequest, WindowRuleResponse,
+            SetMaximizedRequest, SetTagRequest, SetTagsRequest, SetTagsResponse, WindowRuleRequest,
+            WindowRuleResponse,
         },
     },
 };
@@ -24,6 +26,7 @@ use smithay::{
     utils::Size,
 };
 use tonic::{Request, Status, Streaming};
+use tracing::warn;
 
 use crate::{
     api::{
@@ -628,6 +631,40 @@ impl v1::window_service_server::WindowService for super::WindowService {
                     }
                 }
             }
+        })
+        .await
+    }
+
+    async fn set_tags(&self, request: Request<SetTagsRequest>) -> TonicResult<SetTagsResponse> {
+        let request = request.into_inner();
+
+        let window_id = WindowId(request.window_id);
+        let tag_ids = request.tag_ids.into_iter().map(TagId::new);
+
+        run_unary(&self.sender, move |state| {
+            // Could possibly just filter instead of failing if any tag doesn't exist
+            let Some(tags) = tag_ids
+                .into_iter()
+                .map(|tag_id| tag_id.tag(&state.pinnacle))
+                .collect::<Option<IndexSet<_>>>()
+            else {
+                return Ok(SetTagsResponse {});
+            };
+
+            if tags.is_empty() {
+                warn!("Cannot set a windows tags to empty");
+                return Ok(SetTagsResponse {});
+            }
+
+            if let Some(window) = window_id.window(&state.pinnacle) {
+                window.with_state_mut(|state| state.tags = tags);
+            } else if let Some(unmapped) = window_id.unmapped_window_mut(&mut state.pinnacle) {
+                if let UnmappedState::WaitingForRules { rules, .. } = &mut unmapped.state {
+                    rules.tags = Some(tags);
+                }
+            }
+
+            Ok(SetTagsResponse {})
         })
         .await
     }

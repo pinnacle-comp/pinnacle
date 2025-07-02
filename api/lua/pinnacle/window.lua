@@ -506,6 +506,35 @@ function WindowHandle:toggle_tag(tag)
     end
 end
 
+---Sets the exact provided tags on this window.
+---
+---Passing in an empty table will not change the window's tags.
+---
+---#### Example
+---```lua
+----- Sets the focused window's tags to "1" and "3", removing all others
+---Window.get_focused():set_tags({ Tag.get("1"), Tag.get("2") })
+---```
+---
+---@param tags pinnacle.tag.TagHandle[] The tags to set
+function WindowHandle:set_tags(tags)
+    ---@type integer[]
+    local ids = {}
+
+    for _, tag in ipairs(tags) do
+        table.insert(ids, tag.id)
+    end
+
+    local _, err = client:pinnacle_window_v1_WindowService_SetTags({
+        window_id = self.id,
+        tag_ids = ids,
+    })
+
+    if err then
+        log.error(err)
+    end
+end
+
 ---Raises a window.
 ---
 ---This will bring the window to the front.

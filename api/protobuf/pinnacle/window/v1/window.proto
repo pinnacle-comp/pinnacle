@@ -141,6 +141,12 @@ message SetTagRequest {
   pinnacle.util.v1.SetOrToggle set_or_toggle = 3;
 }
 
+message SetTagsRequest {
+  uint32 window_id = 1;
+  repeated uint32 tag_ids = 2;
+}
+message SetTagsResponse {}
+
 message RaiseRequest {
   uint32 window_id = 1;
 }
@@ -195,6 +201,8 @@ service WindowService {
   rpc SetDecorationMode(SetDecorationModeRequest) returns (google.protobuf.Empty);
   rpc MoveToTag(MoveToTagRequest) returns (google.protobuf.Empty);
   rpc SetTag(SetTagRequest) returns (google.protobuf.Empty);
+  // Sets the exact tags of this window.
+  rpc SetTags(SetTagsRequest) returns (SetTagsResponse);
   rpc Raise(RaiseRequest) returns (google.protobuf.Empty);
   rpc MoveGrab(MoveGrabRequest) returns (google.protobuf.Empty);
   rpc ResizeGrab(ResizeGrabRequest) returns (google.protobuf.Empty);

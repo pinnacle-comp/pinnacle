@@ -944,6 +944,61 @@ fn window_handle_toggle_tag() {
 }
 
 #[test_log::test]
+fn window_handle_set_tags() {
+    for_each_api(|lang| {
+        let (mut fixture, output) = set_up();
+        output.with_state_mut(|state| {
+            let tag2 = Tag::new("2".to_string());
+            let tag3 = Tag::new("3".to_string());
+            state.add_tags([tag2, tag3]);
+        });
+
+        let client_id = fixture.add_client();
+
+        fixture.spawn_windows(1, client_id);
+
+        match lang {
+            Lang::Rust => fixture.spawn_blocking(|| {
+                pinnacle_api::window::get_focused().unwrap().set_tags([
+                    pinnacle_api::tag::get("2").unwrap(),
+                    pinnacle_api::tag::get("3").unwrap(),
+                ]);
+            }),
+            Lang::Lua => spawn_lua_blocking! {
+                fixture,
+                Window.get_focused():set_tags({ Tag.get("2"), Tag.get("3") })
+            },
+        }
+
+        let tags = fixture.pinnacle().windows[0].with_state(|state| state.tags.clone());
+
+        assert_eq!(tags.len(), 2);
+        assert_eq!(tags[0].name(), "2");
+        assert_eq!(tags[1].name(), "3");
+
+        // Setting tags to empty shouldn't do anything
+
+        match lang {
+            Lang::Rust => fixture.spawn_blocking(|| {
+                pinnacle_api::window::get_focused()
+                    .unwrap()
+                    .set_tags::<pinnacle_api::tag::TagHandle>([]);
+            }),
+            Lang::Lua => spawn_lua_blocking! {
+                fixture,
+                Window.get_focused():set_tags({})
+            },
+        }
+
+        let tags = fixture.pinnacle().windows[0].with_state(|state| state.tags.clone());
+
+        assert_eq!(tags.len(), 2);
+        assert_eq!(tags[0].name(), "2");
+        assert_eq!(tags[1].name(), "3");
+    });
+}
+
+#[test_log::test]
 fn window_handle_raise() {
     for_each_api(|lang| {
         let (mut fixture, _) = set_up();
