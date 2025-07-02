@@ -1163,6 +1163,35 @@ fn window_handle_focused() {
 }
 
 #[test_log::test]
+fn window_handle_output() {
+    let (mut fixture, output) = set_up();
+
+    let client_id = fixture.add_client();
+
+    fixture.spawn_windows(1, client_id);
+
+    fixture.spawn_blocking({
+        let output_name = output.name();
+        move || {
+            assert_eq!(
+                pinnacle_api::window::get_focused()
+                    .unwrap()
+                    .output()
+                    .unwrap()
+                    .name(),
+                output_name
+            );
+        }
+    });
+
+    let output_name = output.name();
+    spawn_lua_blocking! {
+        fixture,
+        assert(Window.get_focused():output().name == $output_name)
+    };
+}
+
+#[test_log::test]
 fn window_handle_tiled() {
     let (mut fixture, _) = set_up();
 

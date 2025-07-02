@@ -589,6 +589,19 @@ function WindowHandle:focused()
     return response and response.focused or false
 end
 
+---Gets this window's output.
+---
+---This is currently implemented as the output of the first tag on this window.
+---
+---@return pinnacle.output.OutputHandle|nil output This window's output, or `nil` if it doesn't exist or it has no tags.
+function WindowHandle:output()
+    local tags = self:tags()
+    if not tags[1] then
+        return nil
+    end
+    return tags[1]:output()
+end
+
 ---Gets whether or not this window is floating.
 ---
 ---@return boolean

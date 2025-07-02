@@ -30,6 +30,7 @@ use tokio_stream::StreamExt;
 use crate::{
     client::Client,
     input::MouseButton,
+    output::OutputHandle,
     signal::{SignalHandle, WindowSignal},
     tag::TagHandle,
     util::{Batch, Direction, Point, Size},
@@ -576,6 +577,21 @@ impl WindowHandle {
             .unwrap()
             .into_inner()
             .title
+    }
+
+    /// Gets this window's output.
+    ///
+    /// This is currently implemented as the output of the first
+    /// tag that this window has.
+    ///
+    /// Returns `None` if this window doesn't exist or if it has no tags.
+    pub fn output(&self) -> Option<OutputHandle> {
+        self.output_async().block_on_tokio()
+    }
+
+    /// Async impl for [`Self::output`].
+    pub async fn output_async(&self) -> Option<OutputHandle> {
+        Some(self.tags_async().await.next()?.output())
     }
 
     /// Gets whether or not this window has keyboard focus.
