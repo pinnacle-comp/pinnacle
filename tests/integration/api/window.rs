@@ -313,6 +313,7 @@ fn window_handle_toggle_fullscreen() {
             .window_for_surface(&surface)
             .ack_and_commit();
         fixture.roundtrip(client_id);
+        fixture.roundtrip(client_id);
 
         assert!(
             !fixture
@@ -446,6 +447,7 @@ fn window_handle_toggle_maximized() {
             .client(client_id)
             .window_for_surface(&surface)
             .ack_and_commit();
+        fixture.roundtrip(client_id);
         fixture.roundtrip(client_id);
 
         assert!(
