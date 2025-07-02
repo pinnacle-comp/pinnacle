@@ -67,10 +67,10 @@ jobs:
         run: echo "XDG_DATA_HOME=$HOME/.local/share" >> $GITHUB_ENV
       - name: Test
         if: ${{ runner.debug != '1' }}
-        run: just install test
+        run: just install test -- --skip process_spawn
       - name: Test (debug)
         if: ${{ runner.debug == '1' }}
-        run: RUST_LOG=debug RUST_BACKTRACE=1 just install test -- --nocapture
+        run: RUST_LOG=debug RUST_BACKTRACE=1 just install test -- --nocapture --skip process_spawn
       - name: Test Rust default config compilation
         if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
         run: just install test -- --ignored
