@@ -2,7 +2,7 @@ use std::{
     os::fd::AsFd,
     sync::{
         atomic::{AtomicU32, Ordering},
-        Arc,
+        Arc, Mutex, MutexGuard,
     },
     time::Duration,
 };
@@ -14,15 +14,19 @@ use smithay::{
     utils::{Logical, Rectangle, Transform},
 };
 use tracing::debug;
+use wayland_client::protocol::wl_surface::WlSurface;
 
 use super::{
-    client::{Client, ClientId},
+    client::{Client, ClientId, Window},
     server::Server,
 };
+
+static TEST_MUTEX: Mutex<()> = Mutex::new(());
 
 pub struct Fixture {
     event_loop: EventLoop<'static, State>,
     state: State,
+    _test_guard: MutexGuard<'static, ()>,
 }
 
 struct State {
@@ -34,8 +38,21 @@ static OUTPUT_COUNTER: AtomicU32 = AtomicU32::new(0);
 
 impl Fixture {
     pub fn new() -> Self {
+        Self::new_inner(false)
+    }
+
+    pub fn new_with_socket() -> Self {
+        Self::new_inner(true)
+    }
+
+    pub fn new_inner(create_socket: bool) -> Self {
+        let _test_guard = TEST_MUTEX.lock().unwrap_or_else(|guard| {
+            TEST_MUTEX.clear_poison();
+            guard.into_inner()
+        });
+
         let state = State {
-            server: Server::new(),
+            server: Server::new(create_socket),
             clients: Vec::new(),
         };
 
@@ -57,7 +74,11 @@ impl Fixture {
             })
             .unwrap();
 
-        Self { event_loop, state }
+        Self {
+            event_loop,
+            state,
+            _test_guard,
+        }
     }
 
     pub fn runtime_handle(&self) -> tokio::runtime::Handle {
@@ -131,16 +152,52 @@ impl Fixture {
     }
 
     /// Spawns a blocking API call and dispatches the event loop until it is finished.
+    #[track_caller]
     pub fn spawn_blocking<F, T>(&mut self, spawn: F) -> T
     where
-        F: FnMut() -> T + Send + 'static,
+        F: FnOnce() -> T + Send + 'static,
         T: Send + 'static,
     {
         let handle = self.runtime_handle();
         let _guard = handle.enter();
         let join = handle.spawn_blocking(spawn);
         self.dispatch_until(|_| join.is_finished());
-        self.runtime_handle().block_on(join).unwrap()
+
+        match self.runtime_handle().block_on(join) {
+            Ok(ret) => ret,
+            Err(err) => {
+                panic!("rust panicked: {err}");
+            }
+        }
+    }
+
+    #[track_caller]
+    pub fn spawn_lua_blocking(&mut self, code: impl ToString) {
+        let code = code.to_string();
+        let join = std::thread::spawn(move || {
+            let lua = crate::common::new_lua();
+            let task = lua.load(format!(
+                "
+                Pinnacle.run(function()
+                    local run = function()
+                        {code}
+                    end
+
+                    local success, err = pcall(run)
+
+                    if not success then
+                        error(err)
+                    end
+                end)
+"
+            ));
+
+            if let Err(err) = task.exec() {
+                panic!("lua panicked: {err}");
+            }
+        });
+        self.dispatch_until(|_| join.is_finished());
+        join.join().unwrap();
     }
 
     pub fn roundtrip(&mut self, id: ClientId) {
@@ -150,6 +207,83 @@ impl Fixture {
             self.dispatch();
         }
         debug!(client = ?id, "roundtripped");
+    }
+
+    pub fn spawn_window_with<F>(&mut self, id: ClientId, mut pre_initial_commit: F) -> WlSurface
+    where
+        F: FnMut(&mut Window),
+    {
+        // Add a window
+        let window = self.client(id).create_window();
+        pre_initial_commit(window);
+        window.commit();
+        let surface = window.surface();
+        self.roundtrip(id);
+
+        // Commit a buffer
+        let window = self.client(id).window_for_surface(&surface);
+        window.attach_buffer();
+        let current_serial = window.current_serial();
+        assert!(current_serial.is_some());
+        window.ack_and_commit();
+        assert!(window.current_serial().is_none());
+        self.roundtrip(id);
+
+        let old_trees = self.pinnacle().layout_state.layout_trees.clone();
+
+        // Let Pinnacle do a layout
+        self.dispatch_until(|fixture| fixture.pinnacle().layout_state.layout_trees != old_trees);
+        self.roundtrip(id);
+
+        // Commit the layout
+        let window = self.client(id).window_for_surface(&surface);
+        window.ack_and_commit();
+        self.roundtrip(id);
+
+        surface
+    }
+
+    pub fn spawn_floating_window_with<F>(
+        &mut self,
+        id: ClientId,
+        size: (i32, i32),
+        mut pre_initial_commit: F,
+    ) -> WlSurface
+    where
+        F: FnMut(&mut Window),
+    {
+        // Add a window
+        let window = self.client(id).create_window();
+        window.set_min_size(size.0, size.1);
+        window.set_max_size(size.0, size.1);
+        pre_initial_commit(window);
+        window.commit();
+        let surface = window.surface();
+        self.roundtrip(id);
+
+        // Commit a buffer
+        let window = self.client(id).window_for_surface(&surface);
+        window.attach_buffer();
+        window.set_size(size.0, size.1);
+        window.ack_and_commit();
+        self.roundtrip(id);
+
+        surface
+    }
+
+    pub fn spawn_windows(&mut self, amount: u8, id: ClientId) -> Vec<WlSurface> {
+        let surfaces = (0..amount)
+            .map(|_| self.spawn_window_with(id, |_| ()))
+            .collect::<Vec<_>>();
+
+        for surf in surfaces.iter() {
+            let window = self.client(id).window_for_surface(surf);
+            window.ack_and_commit();
+        }
+
+        self.roundtrip(id);
+
+        surfaces
     }
 
     pub fn client(&mut self, id: ClientId) -> &mut Client {
@@ -164,4 +298,33 @@ impl State {
             .find(|client| client.id() == id)
             .unwrap()
     }
+}
+
+#[macro_export]
+macro_rules! spawn_lua_blocking {
+    ($fixture:expr, $($code:tt)*) => {{
+        let join = ::std::thread::spawn(move || {
+            let lua = $crate::common::new_lua();
+            let task = lua.load(::mlua::chunk! {
+                Pinnacle.run(function()
+                    local run = function()
+                        $($code)*
+                    end
+
+                    local success, err = pcall(run)
+
+                    if not success then
+                        error(err)
+                    end
+                end)
+            });
+
+            if let Err(err) = task.exec() {
+                panic!("lua panicked: {err}");
+            }
+        });
+
+        $fixture.dispatch_until(|_| join.is_finished());
+        join.join().unwrap();
+    }};
 }

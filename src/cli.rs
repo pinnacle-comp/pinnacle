@@ -22,7 +22,7 @@ pub enum Backend {
 }
 
 /// The main CLI struct.
-#[derive(clap::Parser, Debug)]
+#[derive(clap::Parser, Debug, Default)]
 #[command(author, version = version(), about, long_about = None, args_conflicts_with_subcommands = true)]
 pub struct Cli {
     /// Use the config at the given directory

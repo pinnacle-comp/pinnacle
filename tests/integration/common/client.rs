@@ -37,7 +37,7 @@ use wayland_client::{
         wl_compositor::WlCompositor,
         wl_display::WlDisplay,
         wl_registry::{self, WlRegistry},
-        wl_surface::{self, WlSurface},
+        wl_surface::WlSurface,
     },
     Connection, Dispatch, Proxy, QueueHandle,
 };
@@ -80,6 +80,18 @@ pub struct Window {
 
     current_configure_serial: Option<u32>,
     pending_configure: PendingConfigure,
+    pub close_requested: bool,
+    pub fullscreen: bool,
+    pub maximized: bool,
+}
+
+impl Drop for Window {
+    fn drop(&mut self) {
+        self.toplevel.destroy();
+        self.xdg_surface.destroy();
+        self.viewport.destroy();
+        self.wl_surface.destroy();
+    }
 }
 
 #[derive(Default, Debug)]
@@ -154,6 +166,10 @@ impl Client {
     pub fn create_window(&mut self) -> &mut Window {
         self.state.create_window()
     }
+
+    pub fn close_window(&mut self, surface: &WlSurface) {
+        self.state.windows.retain(|win| &win.surface() != surface);
+    }
 }
 
 impl State {
@@ -184,6 +200,9 @@ impl State {
             viewport,
             current_configure_serial: None,
             pending_configure: Default::default(),
+            close_requested: false,
+            fullscreen: false,
+            maximized: false,
         };
 
         self.windows.push(window);
@@ -203,14 +222,18 @@ impl Window {
         self.wl_surface.clone()
     }
 
+    pub fn current_serial(&self) -> Option<u32> {
+        self.current_configure_serial
+    }
+
     pub fn commit(&self) {
         debug!(?self.wl_surface, "committing");
         self.wl_surface.commit();
     }
 
-    pub fn ack_and_commit(&self) {
-        if let Some(current_configure_serial) = self.current_configure_serial {
-            debug!(?self.xdg_surface, "acking");
+    pub fn ack_and_commit(&mut self) {
+        if let Some(current_configure_serial) = self.current_configure_serial.take() {
+            debug!(?self.xdg_surface, current_configure_serial, "acking");
             self.xdg_surface.ack_configure(current_configure_serial);
         }
 
@@ -222,6 +245,26 @@ impl Window {
             self.single_pixel_buffer
                 .create_u32_rgba_buffer(0, 0, 0, u32::MAX, &self.qh, ());
         self.wl_surface.attach(Some(&buffer), 0, 0);
+    }
+
+    pub fn set_app_id(&self, app_id: &str) {
+        self.toplevel.set_app_id(app_id.to_string());
+    }
+
+    pub fn set_title(&self, title: &str) {
+        self.toplevel.set_title(title.to_string());
+    }
+
+    pub fn set_min_size(&self, width: i32, height: i32) {
+        self.toplevel.set_min_size(width, height);
+    }
+
+    pub fn set_max_size(&self, width: i32, height: i32) {
+        self.toplevel.set_max_size(width, height);
+    }
+
+    pub fn set_size(&self, width: i32, height: i32) {
+        self.viewport.set_destination(width, height);
     }
 }
 
@@ -279,12 +322,12 @@ impl Dispatch<WlCallback, Arc<AtomicBool>> for State {
 
 impl Dispatch<WlRegistry, GlobalListContents> for State {
     fn event(
-        state: &mut Self,
-        proxy: &WlRegistry,
-        event: <WlRegistry as wayland_client::Proxy>::Event,
-        data: &GlobalListContents,
-        conn: &Connection,
-        qhandle: &wayland_client::QueueHandle<Self>,
+        _state: &mut Self,
+        _proxy: &WlRegistry,
+        _event: <WlRegistry as wayland_client::Proxy>::Event,
+        _data: &GlobalListContents,
+        _conn: &Connection,
+        _qhandle: &wayland_client::QueueHandle<Self>,
     ) {
         // TODO: Hotplugged outputs
     }
@@ -308,20 +351,13 @@ impl Dispatch<XdgWmBase, ()> for State {
 
 impl Dispatch<WlSurface, ()> for State {
     fn event(
-        state: &mut Self,
-        proxy: &WlSurface,
-        event: <WlSurface as wayland_client::Proxy>::Event,
-        data: &(),
-        conn: &Connection,
-        qhandle: &QueueHandle<Self>,
+        _state: &mut Self,
+        _proxy: &WlSurface,
+        _event: <WlSurface as wayland_client::Proxy>::Event,
+        _data: &(),
+        _conn: &Connection,
+        _qhandle: &QueueHandle<Self>,
     ) {
-        match event {
-            wl_surface::Event::Enter { output } => todo!(),
-            wl_surface::Event::Leave { output } => todo!(),
-            wl_surface::Event::PreferredBufferScale { factor } => todo!(),
-            wl_surface::Event::PreferredBufferTransform { transform } => todo!(),
-            _ => todo!(),
-        }
     }
 }
 
@@ -330,9 +366,9 @@ impl Dispatch<XdgSurface, ()> for State {
         state: &mut Self,
         proxy: &XdgSurface,
         event: <XdgSurface as wayland_client::Proxy>::Event,
-        data: &(),
-        conn: &Connection,
-        qhandle: &QueueHandle<Self>,
+        _data: &(),
+        _conn: &Connection,
+        _qhandle: &QueueHandle<Self>,
     ) {
         match event {
             xdg_surface::Event::Configure { serial } => {
@@ -349,7 +385,7 @@ impl Dispatch<XdgSurface, ()> for State {
                 let PendingConfigure {
                     size,
                     states,
-                    bounds,
+                    bounds: _,
                 } = std::mem::take(&mut window.pending_configure);
 
                 if let Some((mut w, mut h)) = size {
@@ -360,6 +396,11 @@ impl Dispatch<XdgSurface, ()> for State {
                         h = 480;
                     }
                     window.viewport.set_destination(w, h);
+                }
+
+                if let Some(states) = states {
+                    window.fullscreen = states.contains(&xdg_toplevel::State::Fullscreen);
+                    window.maximized = states.contains(&xdg_toplevel::State::Maximized);
                 }
             }
             _ => todo!(),
@@ -372,9 +413,9 @@ impl Dispatch<XdgToplevel, ()> for State {
         state: &mut Self,
         proxy: &XdgToplevel,
         event: <XdgToplevel as wayland_client::Proxy>::Event,
-        data: &(),
-        conn: &Connection,
-        qhandle: &QueueHandle<Self>,
+        _data: &(),
+        _conn: &Connection,
+        _qhandle: &QueueHandle<Self>,
     ) {
         let window = state
             .windows
@@ -399,7 +440,7 @@ impl Dispatch<XdgToplevel, ()> for State {
 
                 window.pending_configure.states = Some(states);
             }
-            xdg_toplevel::Event::Close => (),
+            xdg_toplevel::Event::Close => window.close_requested = true,
             xdg_toplevel::Event::ConfigureBounds { width, height } => {
                 window.pending_configure.bounds = Some((width, height));
             }

@@ -13,7 +13,6 @@ fn set_up() -> (Fixture, Output, Output) {
         tag.set_active(true);
         state.add_tags([tag]);
     });
-    fixture.pinnacle().focus_output(&output_1);
 
     let output_2 = fixture.add_output(Rectangle::new((100, 0).into(), (100, 100).into()));
     output_2.with_state_mut(|state| {
@@ -21,6 +20,8 @@ fn set_up() -> (Fixture, Output, Output) {
         tag.set_active(true);
         state.add_tags([tag]);
     });
+
+    fixture.pinnacle().focus_output(&output_1);
 
     fixture
         .runtime_handle()

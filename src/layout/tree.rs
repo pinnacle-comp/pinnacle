@@ -35,7 +35,7 @@ impl std::fmt::Debug for LayoutNode {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct LayoutTree {
     taffy_tree: taffy::TaffyTree<NodeContext>,
     root: LayoutNode,
@@ -43,14 +43,55 @@ pub struct LayoutTree {
     neighbor_info: HashMap<taffy::NodeId, NeighborInfo>,
 }
 
-#[derive(Debug, Clone, Default)]
+impl PartialEq for LayoutTree {
+    fn eq(&self, other: &Self) -> bool {
+        self.root == other.root
+            && self.taffy_root_id == other.taffy_root_id
+            && self.neighbor_info == other.neighbor_info
+            && taffy_node_partial_eq(
+                &self.taffy_tree,
+                &other.taffy_tree,
+                self.taffy_root_id,
+                other.taffy_root_id,
+            )
+    }
+}
+
+fn taffy_node_partial_eq(
+    this: &taffy::TaffyTree<NodeContext>,
+    other: &taffy::TaffyTree<NodeContext>,
+    this_node: taffy::NodeId,
+    other_node: taffy::NodeId,
+) -> bool {
+    if this.style(this_node) != other.style(other_node) {
+        return false;
+    }
+
+    if this.get_node_context(this_node) != other.get_node_context(other_node) {
+        return false;
+    }
+
+    let this_children = this.children(this_node).unwrap();
+    let other_children = other.children(other_node).unwrap();
+
+    if this_children.len() != other_children.len() {
+        return false;
+    }
+
+    this_children
+        .into_iter()
+        .zip(other_children)
+        .all(|(this_node, other_node)| taffy_node_partial_eq(this, other, this_node, other_node))
+}
+
+#[derive(Debug, Clone, Default, PartialEq)]
 struct NodeContext {
     traversal_index: u32,
     traversal_overrides: HashMap<u32, Vec<u32>>,
     original_flex_basis: f32,
 }
 
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
 struct NeighborInfo {
     has_immediate_row_neighbor_ahead: bool,
     has_immediate_row_neighbor_behind: bool,
