@@ -6,11 +6,11 @@
 
 use std::pin::Pin;
 
-use futures::{stream::FuturesOrdered, Future, StreamExt};
+use futures::{Future, StreamExt, stream::FuturesOrdered};
 
+use crate::BlockOnTokio;
 pub use crate::batch_boxed;
 pub use crate::batch_boxed_async;
-use crate::BlockOnTokio;
 
 /// A horizontal or vertical axis.
 #[derive(Copy, Clone, Hash, Eq, PartialEq, Debug)]

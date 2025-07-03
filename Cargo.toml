@@ -15,9 +15,9 @@ exclude = [
 
 [workspace.package]
 authors = ["Ottatop <ottatop1227@gmail.com>"]
-edition = "2021"
+edition = "2024"
 repository = "https://github.com/pinnacle-comp/pinnacle/"
-rust-version = "1.82"
+rust-version = "1.88"
 
 [workspace.dependencies]
 # Tokio

@@ -10,7 +10,7 @@ use pinnacle_api_defs::pinnacle::{
     util::v1::SetOrToggle,
 };
 
-use crate::{client::Client, BlockOnTokio};
+use crate::{BlockOnTokio, client::Client};
 
 /// Sets damage visualization.
 ///

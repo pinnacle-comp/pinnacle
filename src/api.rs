@@ -13,7 +13,7 @@ use std::pin::Pin;
 
 use smithay::reexports::calloop;
 use tokio::{
-    sync::mpsc::{unbounded_channel, UnboundedSender},
+    sync::mpsc::{UnboundedSender, unbounded_channel},
     task::JoinHandle,
 };
 use tokio_stream::{Stream, StreamExt};

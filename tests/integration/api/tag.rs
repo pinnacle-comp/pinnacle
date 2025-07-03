@@ -3,7 +3,7 @@ use pinnacle_api::layout::LayoutNode;
 use smithay::{output::Output, utils::Rectangle};
 
 use crate::{
-    common::{fixture::Fixture, for_each_api, Lang},
+    common::{Lang, fixture::Fixture, for_each_api},
     spawn_lua_blocking,
 };
 

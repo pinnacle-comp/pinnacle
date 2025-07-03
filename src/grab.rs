@@ -5,7 +5,7 @@ pub mod resize_grab;
 
 use smithay::{
     input::pointer::{GrabStartData, PointerHandle},
-    reexports::wayland_server::{protocol::wl_surface::WlSurface, Resource},
+    reexports::wayland_server::{Resource, protocol::wl_surface::WlSurface},
     utils::Serial,
     wayland::seat::WaylandFocus,
 };

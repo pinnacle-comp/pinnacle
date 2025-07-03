@@ -5,11 +5,11 @@ use std::{
 };
 
 use pinnacle::{state::WithState, tag::Tag};
-use pinnacle_api::layout::{generators::MasterStack, LayoutGenerator};
+use pinnacle_api::layout::{LayoutGenerator, generators::MasterStack};
 use smithay::{output::Output, utils::Rectangle};
 
 use crate::{
-    common::{fixture::Fixture, for_each_api, Lang},
+    common::{Lang, fixture::Fixture, for_each_api},
     spawn_lua_blocking,
 };
 
@@ -96,11 +96,13 @@ fn process_spawn_unique() {
 
         match lang {
             Lang::Rust => fixture.spawn_blocking(|| {
-                assert!(pinnacle_api::process::Command::new("alacritty")
-                    .args(["-o", "general.ipc_socket=false"])
-                    .unique()
-                    .spawn()
-                    .is_none())
+                assert!(
+                    pinnacle_api::process::Command::new("alacritty")
+                        .args(["-o", "general.ipc_socket=false"])
+                        .unique()
+                        .spawn()
+                        .is_none()
+                )
             }),
             Lang::Lua => spawn_lua_blocking! {
                 fixture,
@@ -197,11 +199,13 @@ fn process_spawn_once() {
 
         match lang {
             Lang::Rust => fixture.spawn_blocking(|| {
-                assert!(pinnacle_api::process::Command::new("alacritty")
-                    .args(["-o", "general.ipc_socket=false"])
-                    .once()
-                    .spawn()
-                    .is_none());
+                assert!(
+                    pinnacle_api::process::Command::new("alacritty")
+                        .args(["-o", "general.ipc_socket=false"])
+                        .once()
+                        .spawn()
+                        .is_none()
+                );
             }),
             Lang::Lua => spawn_lua_blocking! {
                 fixture,

@@ -2,7 +2,7 @@
 
 // Hands down plagiarized from Niri
 
-use std::collections::{hash_map::Entry, HashMap};
+use std::collections::{HashMap, hash_map::Entry};
 
 use smithay::{
     desktop::WindowSurface,
@@ -14,10 +14,9 @@ use smithay::{
             zwlr_foreign_toplevel_manager_v1::{self, ZwlrForeignToplevelManagerV1},
         },
         wayland_server::{
-            self,
+            self, Client, DataInit, Dispatch, DisplayHandle, GlobalDispatch, Resource,
             backend::ClientId,
             protocol::{wl_output::WlOutput, wl_surface::WlSurface},
-            Client, DataInit, Dispatch, DisplayHandle, GlobalDispatch, Resource,
         },
     },
     wayland::{compositor, seat::WaylandFocus, shell::xdg::XdgToplevelSurfaceData},

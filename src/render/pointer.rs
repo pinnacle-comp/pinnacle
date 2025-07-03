@@ -4,13 +4,12 @@ use std::rc::Rc;
 
 use smithay::{
     backend::renderer::{
-        element::{
-            self,
-            memory::MemoryRenderBufferRenderElement,
-            surface::{render_elements_from_surface_tree, WaylandSurfaceRenderElement},
-            AsRenderElements, Element, Id,
-        },
         ImportAll, ImportMem,
+        element::{
+            self, AsRenderElements, Element, Id,
+            memory::MemoryRenderBufferRenderElement,
+            surface::{WaylandSurfaceRenderElement, render_elements_from_surface_tree},
+        },
     },
     desktop::Space,
     input::pointer::CursorImageSurfaceData,

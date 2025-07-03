@@ -7,7 +7,7 @@ use std::{cell::RefCell, collections::HashMap, ops::Deref, rc::Rc};
 use indexmap::IndexSet;
 use rules::{ClientRequests, WindowRules};
 use smithay::{
-    desktop::{space::SpaceElement, Window, WindowSurface},
+    desktop::{Window, WindowSurface, space::SpaceElement},
     output::{Output, WeakOutput},
     reexports::wayland_server::protocol::wl_surface::WlSurface,
     utils::{IsAlive, Logical, Point, Rectangle, Serial},
@@ -340,28 +340,24 @@ impl Pinnacle {
 
         let mut should_remove = true;
 
-        // TODO: Replace with if-let chains in Rust 1.88
-        if let Some(snap) = window.with_state_mut(|state| state.snapshot.take()) {
-            if window.with_state(|state| state.layout_mode.is_tiled()) {
-                if let Some(output) = maybe_output {
-                    // Add an unmapping window to the z_index_stack that will be displayed
-                    // in place of the removed window until a transaction finishes.
-                    if let Some(loc) = self.space.element_location(window) {
-                        let unmapping = Rc::new(UnmappingWindow {
-                            snapshot: snap,
-                            fullscreen: window
-                                .with_state(|state| state.layout_mode.is_fullscreen()),
-                            space_loc: loc,
-                        });
-                        let weak = Rc::downgrade(&unmapping);
-                        self.layout_state
-                            .pending_unmaps
-                            .add_for_output(&output, vec![unmapping]);
-                        *z = ZIndexElement::Unmapping(weak);
-                        should_remove = false;
-                    }
-                }
-            }
+        if let Some(snap) = window.with_state_mut(|state| state.snapshot.take())
+            && window.with_state(|state| state.layout_mode.is_tiled())
+            && let Some(output) = maybe_output
+            && let Some(loc) = self.space.element_location(window)
+        {
+            // Add an unmapping window to the z_index_stack that will be displayed
+            // in place of the removed window until a transaction finishes.
+            let unmapping = Rc::new(UnmappingWindow {
+                snapshot: snap,
+                fullscreen: window.with_state(|state| state.layout_mode.is_fullscreen()),
+                space_loc: loc,
+            });
+            let weak = Rc::downgrade(&unmapping);
+            self.layout_state
+                .pending_unmaps
+                .add_for_output(&output, vec![unmapping]);
+            *z = ZIndexElement::Unmapping(weak);
+            should_remove = false;
         }
 
         if should_remove {

@@ -6,7 +6,7 @@ use tokio::sync::mpsc::unbounded_channel;
 use tonic::{Request, Streaming};
 
 use crate::{
-    api::{run_bidirectional_streaming, ResponseStream, TonicResult},
+    api::{ResponseStream, TonicResult, run_bidirectional_streaming},
     layout::LayoutInfo,
     output::OutputName,
 };

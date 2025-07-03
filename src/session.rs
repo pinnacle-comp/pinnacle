@@ -55,7 +55,11 @@ pub fn notify_fd() -> anyhow::Result<()> {
         Err(env::VarError::NotPresent) => return Ok(()),
         Err(err) => return Err(err.into()),
     };
-    env::remove_var("NOTIFY_FD");
+
+    // SAFETY: All set_vars and remove_vars occur on the event loop thread
+    unsafe {
+        env::remove_var("NOTIFY_FD");
+    }
     let mut notif = unsafe { File::from_raw_fd(fd) };
     notif.write_all(b"READY=1\n")?;
     Ok(())

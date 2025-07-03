@@ -33,12 +33,12 @@ use pinnacle_api_defs::pinnacle::{
 };
 
 use crate::{
+    BlockOnTokio,
     client::Client,
     output::OutputHandle,
     signal::{SignalHandle, TagSignal},
     util::Batch,
     window::WindowHandle,
-    BlockOnTokio,
 };
 
 /// Adds tags to the specified output.
@@ -56,10 +56,11 @@ use crate::{
 ///     let tags = tag::add(&op, ["1", "2", "3", "4", "5"]);
 /// }
 /// ```
-pub fn add(
-    output: &OutputHandle,
-    tag_names: impl IntoIterator<Item = impl ToString>,
-) -> impl Iterator<Item = TagHandle> {
+pub fn add<I, T>(output: &OutputHandle, tag_names: I) -> impl Iterator<Item = TagHandle> + use<I, T>
+where
+    I: IntoIterator<Item = T>,
+    T: ToString,
+{
     let output_name = output.name();
     let tag_names = tag_names.into_iter().map(|name| name.to_string()).collect();
 
@@ -394,12 +395,12 @@ impl TagHandle {
     }
 
     /// Gets all windows with this tag.
-    pub fn windows(&self) -> impl Iterator<Item = WindowHandle> {
+    pub fn windows(&self) -> impl Iterator<Item = WindowHandle> + use<> {
         self.windows_async().block_on_tokio()
     }
 
     /// Async impl for [`Self::windows`].
-    pub async fn windows_async(&self) -> impl Iterator<Item = WindowHandle> {
+    pub async fn windows_async(&self) -> impl Iterator<Item = WindowHandle> + use<> {
         let windows = crate::window::get_all_async().await;
         let this = self.clone();
         windows.batch_filter(

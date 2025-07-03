@@ -1,14 +1,14 @@
 use std::{any::Any, collections::HashMap};
 
 use iced::{
-    widget::{Column, Container, Row, Scrollable},
     Command,
+    widget::{Column, Container, Row, Scrollable},
 };
 use iced_runtime::Program;
 use iced_wgpu::core::Element;
 use snowcap_api_defs::snowcap::widget::{
     self,
-    v0alpha1::{widget_def, WidgetDef},
+    v0alpha1::{WidgetDef, widget_def},
 };
 
 use crate::{layer::SnowcapLayer, state::State, util::convert::FromApi};
@@ -22,7 +22,7 @@ pub struct WidgetIdCounter(WidgetId);
 impl WidgetIdCounter {
     pub fn next_and_increment(&mut self) -> WidgetId {
         let ret = self.0;
-        self.0 .0 += 1;
+        self.0.0 += 1;
         ret
     }
 }

@@ -5,7 +5,7 @@ use std::{
     sync::atomic::{AtomicU32, Ordering},
 };
 
-use indexmap::{map::Entry, IndexMap};
+use indexmap::{IndexMap, map::Entry};
 use smithay::input::keyboard::ModifiersState;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use xkbcommon::xkb::Keysym;

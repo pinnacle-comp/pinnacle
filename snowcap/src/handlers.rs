@@ -7,19 +7,19 @@ use smithay_client_toolkit::{
     delegate_compositor, delegate_layer, delegate_output, delegate_registry, delegate_seat,
     output::{OutputHandler, OutputState},
     reexports::client::{
+        Connection, QueueHandle,
         protocol::{
             wl_output::{self, WlOutput},
             wl_seat::WlSeat,
             wl_surface::WlSurface,
         },
-        Connection, QueueHandle,
     },
     registry::{ProvidesRegistryState, RegistryState},
     registry_handlers,
     seat::{Capability, SeatHandler, SeatState},
     shell::{
-        wlr_layer::{LayerShellHandler, LayerSurface, LayerSurfaceConfigure},
         WaylandSurface,
+        wlr_layer::{LayerShellHandler, LayerSurface, LayerSurfaceConfigure},
     },
 };
 

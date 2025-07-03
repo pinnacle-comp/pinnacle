@@ -3,7 +3,7 @@
 use smithay::{
     backend::{
         allocator::dmabuf::Dmabuf,
-        renderer::{gles::GlesRenderer, ImportDma, Renderer, TextureFilter},
+        renderer::{ImportDma, Renderer, TextureFilter, gles::GlesRenderer},
     },
     delegate_dmabuf,
     output::Output,

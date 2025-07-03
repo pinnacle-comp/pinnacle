@@ -1,5 +1,5 @@
-use smithay::backend::renderer::test::DummyRenderer;
 use smithay::backend::renderer::ImportMemWl;
+use smithay::backend::renderer::test::DummyRenderer;
 use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
 use smithay::utils::{Logical, Physical, Point, Size};
 

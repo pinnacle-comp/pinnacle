@@ -9,7 +9,7 @@ use pinnacle_api_defs::pinnacle::{
 use tonic::{Request, Status};
 
 use crate::{
-    api::{run_unary, run_unary_no_response, TonicResult},
+    api::{TonicResult, run_unary, run_unary_no_response},
     output::OutputName,
     state::WithState,
     tag::TagId,

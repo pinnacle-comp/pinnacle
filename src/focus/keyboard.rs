@@ -4,10 +4,10 @@ use smithay::{
     backend::input::KeyState,
     desktop::{LayerSurface, PopupKind, WindowSurface},
     input::{
-        keyboard::{KeyboardTarget, KeysymHandle, ModifiersState},
         Seat,
+        keyboard::{KeyboardTarget, KeysymHandle, ModifiersState},
     },
-    reexports::wayland_server::{protocol::wl_surface::WlSurface, Resource},
+    reexports::wayland_server::{Resource, protocol::wl_surface::WlSurface},
     utils::{IsAlive, Serial},
     wayland::{seat::WaylandFocus, session_lock::LockSurface},
 };

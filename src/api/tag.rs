@@ -11,7 +11,7 @@ use crate::{
     window::UnmappedState,
 };
 
-use super::{signal::Signal, StateFnSender};
+use super::{StateFnSender, signal::Signal};
 
 pub struct TagService {
     sender: StateFnSender,

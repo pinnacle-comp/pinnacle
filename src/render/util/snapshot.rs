@@ -22,7 +22,7 @@ use crate::state::WithState;
 use crate::window::WindowElement;
 
 use super::surface::WlSurfaceTextureRenderElement;
-use super::{render_to_encompassing_texture, EncompassingTexture};
+use super::{EncompassingTexture, render_to_encompassing_texture};
 
 /// Type for window snapshots.
 pub type WindowSnapshot = RenderSnapshot<WlSurfaceTextureRenderElement>;

@@ -3,8 +3,8 @@
 use std::{
     hash::Hash,
     sync::{
-        atomic::{AtomicU32, Ordering},
         Arc, Mutex,
+        atomic::{AtomicU32, Ordering},
     },
 };
 

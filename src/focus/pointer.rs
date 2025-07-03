@@ -2,13 +2,13 @@ use std::borrow::Cow;
 
 use smithay::{
     desktop::{
-        layer_map_for_output, utils::with_surfaces_surface_tree, LayerSurface, PopupKind,
-        WindowSurface, WindowSurfaceType,
+        LayerSurface, PopupKind, WindowSurface, WindowSurfaceType, layer_map_for_output,
+        utils::with_surfaces_surface_tree,
     },
     input::{
+        Seat, SeatHandler,
         pointer::{self, PointerTarget},
         touch::{self, TouchTarget},
-        Seat, SeatHandler,
     },
     output::WeakOutput,
     reexports::wayland_server::{backend::ObjectId, protocol::wl_surface::WlSurface},

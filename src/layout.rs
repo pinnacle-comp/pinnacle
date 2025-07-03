@@ -3,14 +3,14 @@
 pub mod tree;
 
 use std::{
-    collections::{hash_map::Entry, HashMap, HashSet},
+    collections::{HashMap, HashSet, hash_map::Entry},
     rc::Rc,
     time::Duration,
 };
 
 use indexmap::IndexSet;
 use smithay::{
-    desktop::{layer_map_for_output, utils::surface_primary_scanout_output, WindowSurface},
+    desktop::{WindowSurface, layer_map_for_output, utils::surface_primary_scanout_output},
     output::{Output, WeakOutput},
     reexports::wayland_protocols::xdg::shell::server::xdg_toplevel,
     utils::{Logical, Rectangle, Size},

@@ -8,8 +8,8 @@ use indexmap::IndexMap;
 use snowcap_api::{
     layer::{ExclusiveZone, KeyboardInteractivity, ZLayer},
     widget::{
-        font::{Family, Font, Weight},
         Alignment, Color, Column, Container, Length, Padding, Row, Scrollable, Text, WidgetDef,
+        font::{Family, Font, Weight},
     },
 };
 use xkbcommon::xkb::Keysym;

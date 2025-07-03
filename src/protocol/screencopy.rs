@@ -1,7 +1,7 @@
 use std::{
     sync::{
-        atomic::{AtomicBool, Ordering},
         Arc,
+        atomic::{AtomicBool, Ordering},
     },
     time::UNIX_EPOCH,
 };
@@ -9,7 +9,7 @@ use std::{
 use smithay::{
     backend::{
         allocator::Buffer,
-        renderer::{buffer_type, BufferType},
+        renderer::{BufferType, buffer_type},
     },
     output::Output,
     reexports::{
@@ -18,9 +18,8 @@ use smithay::{
             zwlr_screencopy_manager_v1::{self, ZwlrScreencopyManagerV1},
         },
         wayland_server::{
-            self,
+            self, Client, DataInit, Dispatch, DisplayHandle, GlobalDispatch, Resource,
             protocol::{wl_buffer::WlBuffer, wl_shm},
-            Client, DataInit, Dispatch, DisplayHandle, GlobalDispatch, Resource,
         },
     },
     utils::{Physical, Rectangle},

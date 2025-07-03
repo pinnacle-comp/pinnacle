@@ -1,7 +1,7 @@
 use indexmap::{IndexMap, IndexSet};
 use prost_types::{
-    field_descriptor_proto::{Label, Type},
     DescriptorProto, EnumDescriptorProto, FieldDescriptorProto, ServiceDescriptorProto,
+    field_descriptor_proto::{Label, Type},
 };
 
 const CLIENT_CODE: &str = include_str!("../grpc_client.lua");

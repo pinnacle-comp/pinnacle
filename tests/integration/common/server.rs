@@ -64,7 +64,10 @@ impl Server {
         let wayland_display = create_socket.then_some(state.pinnacle.socket_name.clone());
 
         if create_socket {
-            std::env::set_var("WAYLAND_DISPLAY", &state.pinnacle.socket_name);
+            // SAFETY: All set_vars occur on the event loop thread
+            unsafe {
+                std::env::set_var("WAYLAND_DISPLAY", &state.pinnacle.socket_name);
+            }
         }
 
         Self {

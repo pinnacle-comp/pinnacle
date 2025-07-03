@@ -4,7 +4,7 @@ use std::sync::atomic::{AtomicU32, Ordering};
 
 use indexmap::IndexSet;
 use smithay::{
-    desktop::{layer_map_for_output, WindowSurface},
+    desktop::{WindowSurface, layer_map_for_output},
     reexports::wayland_protocols::xdg::{
         decoration::zv1::server::zxdg_toplevel_decoration_v1, shell::server::xdg_toplevel,
     },

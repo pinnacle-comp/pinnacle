@@ -8,13 +8,13 @@ use smithay::{
         wayland_protocols_misc::server_decoration::server::org_kde_kwin_server_decoration::{
             self, OrgKdeKwinServerDecoration,
         },
-        wayland_server::{protocol::wl_surface::WlSurface, WEnum},
+        wayland_server::{WEnum, protocol::wl_surface::WlSurface},
     },
     wayland::{
         compositor,
         shell::{
             kde::decoration::{KdeDecorationHandler, KdeDecorationState},
-            xdg::{decoration::XdgDecorationHandler, ToplevelSurface},
+            xdg::{ToplevelSurface, decoration::XdgDecorationHandler},
         },
     },
 };

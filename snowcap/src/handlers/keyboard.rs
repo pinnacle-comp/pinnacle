@@ -1,11 +1,11 @@
 use smithay_client_toolkit::{
     delegate_keyboard,
     reexports::client::{
-        protocol::{wl_keyboard::WlKeyboard, wl_surface::WlSurface},
         Connection, QueueHandle,
+        protocol::{wl_keyboard::WlKeyboard, wl_surface::WlSurface},
     },
     seat::keyboard::{KeyEvent, KeyboardHandler, Keysym, Modifiers},
-    shell::{wlr_layer::LayerSurface, WaylandSurface},
+    shell::{WaylandSurface, wlr_layer::LayerSurface},
 };
 use snowcap_api_defs::snowcap::input::{self, v0alpha1::KeyboardKeyResponse};
 

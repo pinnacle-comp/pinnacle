@@ -10,7 +10,7 @@ use tonic::{Request, Streaming};
 use tracing::{info, trace};
 
 use crate::api::{
-    run_bidirectional_streaming, run_unary, run_unary_no_response, ResponseStream, TonicResult,
+    ResponseStream, TonicResult, run_bidirectional_streaming, run_unary, run_unary_no_response,
 };
 
 #[tonic::async_trait]

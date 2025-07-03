@@ -22,9 +22,9 @@ use smithay::{
         renderer::utils::with_renderer_surface_state,
         winit::WinitVirtualDevice,
     },
-    desktop::{layer_map_for_output, space::SpaceElement, WindowSurfaceType},
+    desktop::{WindowSurfaceType, layer_map_for_output, space::SpaceElement},
     input::{
-        keyboard::{keysyms, FilterResult},
+        keyboard::{FilterResult, keysyms},
         pointer::{
             AxisFrame, ButtonEvent, GestureHoldBeginEvent, GestureHoldEndEvent,
             GesturePinchBeginEvent, GesturePinchEndEvent, GesturePinchUpdateEvent,
@@ -37,7 +37,7 @@ use smithay::{
     wayland::{
         compositor::{self, RegionAttributes, SurfaceAttributes},
         keyboard_shortcuts_inhibit::KeyboardShortcutsInhibitorSeat,
-        pointer_constraints::{with_pointer_constraint, PointerConstraint},
+        pointer_constraints::{PointerConstraint, with_pointer_constraint},
         seat::WaylandFocus,
         shell::wlr_layer,
     },

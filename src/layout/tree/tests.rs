@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use proptest::{
-    prelude::{any, Strategy},
+    prelude::{Strategy, any},
     prop_compose, proptest,
 };
 use rand::seq::IndexedRandom;

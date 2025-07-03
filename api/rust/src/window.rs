@@ -30,13 +30,13 @@ use tokio::sync::mpsc::unbounded_channel;
 use tokio_stream::StreamExt;
 
 use crate::{
+    BlockOnTokio,
     client::Client,
     input::MouseButton,
     output::OutputHandle,
     signal::{SignalHandle, WindowSignal},
     tag::TagHandle,
     util::{Batch, Direction, Point, Size},
-    BlockOnTokio,
 };
 
 /// Gets handles to all windows.
@@ -698,12 +698,12 @@ impl WindowHandle {
     }
 
     /// Gets handles to all tags on this window.
-    pub fn tags(&self) -> impl Iterator<Item = TagHandle> {
+    pub fn tags(&self) -> impl Iterator<Item = TagHandle> + use<> {
         self.tags_async().block_on_tokio()
     }
 
     /// Async impl for [`Self::tags`].
-    pub async fn tags_async(&self) -> impl Iterator<Item = TagHandle> {
+    pub async fn tags_async(&self) -> impl Iterator<Item = TagHandle> + use<> {
         let window_id = self.id;
         Client::window()
             .get_tag_ids(GetTagIdsRequest { window_id })
@@ -729,7 +729,7 @@ impl WindowHandle {
     }
 
     /// Gets all windows in the provided direction, sorted closest to farthest.
-    pub fn in_direction(&self, direction: Direction) -> impl Iterator<Item = WindowHandle> {
+    pub fn in_direction(&self, direction: Direction) -> impl Iterator<Item = WindowHandle> + use<> {
         self.in_direction_async(direction).block_on_tokio()
     }
 
@@ -737,7 +737,7 @@ impl WindowHandle {
     pub async fn in_direction_async(
         &self,
         direction: Direction,
-    ) -> impl Iterator<Item = WindowHandle> {
+    ) -> impl Iterator<Item = WindowHandle> + use<> {
         let window_id = self.id;
 
         let mut request = GetWindowsInDirRequest {

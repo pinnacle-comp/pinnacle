@@ -1,7 +1,7 @@
 use pinnacle_api::input::Bind as _;
 
 use crate::{
-    common::{fixture::Fixture, for_each_api, Lang},
+    common::{Lang, fixture::Fixture, for_each_api},
     spawn_lua_blocking,
 };
 

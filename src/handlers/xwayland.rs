@@ -4,8 +4,8 @@ use std::{
     os::fd::OwnedFd,
     process::Stdio,
     sync::{
-        atomic::{AtomicBool, Ordering},
         Arc,
+        atomic::{AtomicBool, Ordering},
     },
     time::Duration,
 };
@@ -14,8 +14,9 @@ use smithay::{
     desktop::Window,
     input::pointer::CursorIcon,
     reexports::wayland_server::Client,
-    utils::{Logical, Point, Rectangle, Size, SERIAL_COUNTER},
+    utils::{Logical, Point, Rectangle, SERIAL_COUNTER, Size},
     wayland::selection::{
+        SelectionTarget,
         data_device::{
             clear_data_device_selection, current_data_device_selection_userdata,
             request_data_device_client_selection, set_data_device_selection,
@@ -24,11 +25,10 @@ use smithay::{
             clear_primary_selection, current_primary_selection_userdata,
             request_primary_client_selection, set_primary_selection,
         },
-        SelectionTarget,
     },
     xwayland::{
-        xwm::{Reorder, XwmId},
         X11Surface, X11Wm, XWayland, XWaylandClientData, XWaylandEvent, XwmHandler,
+        xwm::{Reorder, XwmId},
     },
 };
 use tracing::{debug, error, info, trace, warn};
@@ -37,8 +37,8 @@ use crate::{
     focus::keyboard::KeyboardFocusTarget,
     state::{Pinnacle, State, WithState},
     window::{
-        rules::ClientRequests, window_state::FullscreenOrMaximized, Unmapped, UnmappedState,
-        WindowElement,
+        Unmapped, UnmappedState, WindowElement, rules::ClientRequests,
+        window_state::FullscreenOrMaximized,
     },
 };
 
@@ -600,7 +600,10 @@ impl Pinnacle {
                             warn!("Failed to set xwayland default cursor: {err}");
                         }
 
-                        std::env::set_var("DISPLAY", format!(":{display_number}"));
+                        // SAFETY: All set_vars occur on the event loop thread
+                        unsafe {
+                            std::env::set_var("DISPLAY", format!(":{display_number}"));
+                        }
 
                         state.pinnacle.xwayland_state = Some(XwaylandState {
                             xwm: wm,

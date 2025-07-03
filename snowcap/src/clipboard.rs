@@ -9,7 +9,7 @@ impl WaylandClipboard {
     /// `display` must be a valid `*mut wl_display` pointer, and it must remain
     /// valid for as long as `Clipboard` object is alive.
     pub unsafe fn new(display: *mut c_void) -> Self {
-        Self(smithay_clipboard::Clipboard::new(display))
+        Self(unsafe { smithay_clipboard::Clipboard::new(display) })
     }
 }
 

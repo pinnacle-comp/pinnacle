@@ -5,6 +5,7 @@ use smithay::{
     // NOTE: maybe alias this to PointerGrabStartData because there's another GrabStartData in
     // |     input::keyboard
     input::{
+        Seat, SeatHandler,
         pointer::{
             AxisFrame, ButtonEvent, CursorIcon, CursorImageStatus, Focus, GestureHoldBeginEvent,
             GestureHoldEndEvent, GesturePinchBeginEvent, GesturePinchEndEvent,
@@ -12,7 +13,6 @@ use smithay::{
             GestureSwipeUpdateEvent, GrabStartData, MotionEvent, PointerGrab, PointerInnerHandle,
             RelativeMotionEvent,
         },
-        Seat, SeatHandler,
     },
     reexports::wayland_server::protocol::wl_surface::WlSurface,
     utils::{IsAlive, Logical, Point, Rectangle, Serial},
@@ -21,7 +21,7 @@ use tracing::{debug, warn};
 
 use crate::{
     state::{State, WithState},
-    window::{window_state::LayoutModeKind, WindowElement},
+    window::{WindowElement, window_state::LayoutModeKind},
 };
 
 /// Data for moving a window.

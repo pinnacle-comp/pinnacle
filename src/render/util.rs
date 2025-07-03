@@ -3,7 +3,7 @@
 pub mod snapshot;
 pub mod surface;
 
-use anyhow::{bail, Context};
+use anyhow::{Context, bail};
 use smithay::backend::allocator::Fourcc;
 use smithay::backend::renderer::damage::OutputDamageTracker;
 use smithay::backend::renderer::element::solid::SolidColorRenderElement;

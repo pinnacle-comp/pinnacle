@@ -11,48 +11,46 @@ use indexmap::IndexSet;
 
 use std::{collections::HashMap, mem, path::Path, time::Duration};
 
-use anyhow::{anyhow, ensure, Context};
+use anyhow::{Context, anyhow, ensure};
 use drm::{create_drm_mode, refresh_interval};
 use smithay::{
     backend::{
+        SwapBuffersError,
         allocator::{
-            gbm::{GbmAllocator, GbmBuffer, GbmBufferFlags, GbmDevice},
             Buffer, Fourcc,
+            gbm::{GbmAllocator, GbmBuffer, GbmBufferFlags, GbmDevice},
         },
         drm::{
+            DrmDevice, DrmDeviceFd, DrmEvent, DrmEventMetadata, DrmNode, DrmSurface, NodeType,
             compositor::{FrameFlags, PrimaryPlaneElement, RenderFrameResult},
             exporter::gbm::GbmFramebufferExporter,
             gbm::GbmFramebuffer,
             output::{DrmOutput, DrmOutputManager, DrmOutputRenderElements},
-            DrmDevice, DrmDeviceFd, DrmEvent, DrmEventMetadata, DrmNode, DrmSurface, NodeType,
         },
-        egl::{context::ContextPriority, EGLDevice, EGLDisplay},
+        egl::{EGLDevice, EGLDisplay, context::ContextPriority},
         libinput::{LibinputInputBackend, LibinputSessionInterface},
         renderer::{
-            self,
+            self, Bind, Blit, BufferType, ExportMem, ImportDma, ImportEgl, ImportMemWl, Offscreen,
+            Renderer, TextureFilter,
             damage::OutputDamageTracker,
-            element::{self, surface::render_elements_from_surface_tree, Element, Id},
+            element::{self, Element, Id, surface::render_elements_from_surface_tree},
             gles::{GlesRenderbuffer, GlesRenderer},
-            multigpu::{gbm::GbmGlesBackend, GpuManager, MultiRenderer},
+            multigpu::{GpuManager, MultiRenderer, gbm::GbmGlesBackend},
             sync::SyncPoint,
             utils::{CommitCounter, DamageSet},
-            Bind, Blit, BufferType, ExportMem, ImportDma, ImportEgl, ImportMemWl, Offscreen,
-            Renderer, TextureFilter,
         },
-        session::{self, libseat::LibSeatSession, Session},
+        session::{self, Session, libseat::LibSeatSession},
         udev::{self, UdevBackend, UdevEvent},
-        SwapBuffersError,
     },
     desktop::utils::OutputPresentationFeedback,
     output::{Output, PhysicalProperties, Subpixel},
     reexports::{
         calloop::{
-            self,
+            self, Dispatcher, Interest, LoopHandle, PostAction, RegistrationToken,
             generic::Generic,
             timer::{TimeoutAction, Timer},
-            Dispatcher, Interest, LoopHandle, PostAction, RegistrationToken,
         },
-        drm::control::{connector, crtc, ModeTypeFlags},
+        drm::control::{ModeTypeFlags, connector, crtc},
         input::Libinput,
         rustix::fs::OFlags,
         wayland_protocols::wp::{
@@ -60,8 +58,8 @@ use smithay::{
             presentation_time::server::wp_presentation_feedback,
         },
         wayland_server::{
-            protocol::{wl_shm, wl_surface::WlSurface},
             DisplayHandle,
+            protocol::{wl_shm, wl_surface::WlSurface},
         },
     },
     utils::{DeviceFd, Rectangle, Transform},
@@ -81,8 +79,8 @@ use crate::{
     input::libinput::DeviceState,
     output::{BlankingState, OutputMode, OutputName},
     render::{
-        pointer::pointer_render_elements, take_presentation_feedback, OutputRenderElement,
-        CLEAR_COLOR, CLEAR_COLOR_LOCKED,
+        CLEAR_COLOR, CLEAR_COLOR_LOCKED, OutputRenderElement, pointer::pointer_render_elements,
+        take_presentation_feedback,
     },
     state::{FrameCallbackSequence, Pinnacle, State, WithState},
 };

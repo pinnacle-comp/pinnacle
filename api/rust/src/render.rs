@@ -5,7 +5,7 @@ use pinnacle_api_defs::pinnacle::render::{
     v1::{SetDownscaleFilterRequest, SetUpscaleFilterRequest},
 };
 
-use crate::{client::Client, BlockOnTokio};
+use crate::{BlockOnTokio, client::Client};
 
 /// What filter to use when scaling.
 pub enum ScalingFilter {

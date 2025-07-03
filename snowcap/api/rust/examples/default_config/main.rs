@@ -3,8 +3,8 @@
 use snowcap_api::{
     layer::{ExclusiveZone, KeyboardInteractivity, ZLayer},
     widget::{
-        font::{Family, Font, Weight},
         Alignment, Color, Column, Container, Length, Padding, Row, Text,
+        font::{Family, Font, Weight},
     },
 };
 

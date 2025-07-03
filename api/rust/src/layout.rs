@@ -13,12 +13,12 @@ use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use pinnacle_api_defs::pinnacle::layout::{
     self,
-    v1::{layout_request, LayoutRequest, TraversalOverrides},
+    v1::{LayoutRequest, TraversalOverrides, layout_request},
 };
-use tokio::sync::mpsc::{unbounded_channel, UnboundedSender};
+use tokio::sync::mpsc::{UnboundedSender, unbounded_channel};
 use tokio_stream::StreamExt;
 
-use crate::{client::Client, output::OutputHandle, tag::TagHandle, BlockOnTokio};
+use crate::{BlockOnTokio, client::Client, output::OutputHandle, tag::TagHandle};
 
 /// A response to a layout request containing a layout tree.
 pub struct LayoutResponse {

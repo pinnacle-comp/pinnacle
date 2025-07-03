@@ -26,12 +26,12 @@ use pinnacle_api_defs::pinnacle::{
 };
 
 use crate::{
+    BlockOnTokio,
     client::Client,
     signal::{OutputSignal, SignalHandle},
     tag::TagHandle,
     util::{Batch, Direction, Point, Size},
     window::WindowHandle,
-    BlockOnTokio,
 };
 
 /// Gets handles to all currently plugged-in outputs.
@@ -770,12 +770,12 @@ impl OutputHandle {
     }
 
     /// Gets all modes currently known to this output.
-    pub fn modes(&self) -> impl Iterator<Item = Mode> {
+    pub fn modes(&self) -> impl Iterator<Item = Mode> + use<> {
         self.modes_async().block_on_tokio()
     }
 
     /// Async impl for [`Self::modes`].
-    pub async fn modes_async(&self) -> impl Iterator<Item = Mode> {
+    pub async fn modes_async(&self) -> impl Iterator<Item = Mode> + use<> {
         Client::output()
             .get_modes(GetModesRequest {
                 output_name: self.name(),
@@ -838,12 +838,12 @@ impl OutputHandle {
     }
 
     /// Gets handles to all tags on this output.
-    pub fn tags(&self) -> impl Iterator<Item = TagHandle> {
+    pub fn tags(&self) -> impl Iterator<Item = TagHandle> + use<> {
         self.tags_async().block_on_tokio()
     }
 
     /// Async impl for [`Self::tags`].
-    pub async fn tags_async(&self) -> impl Iterator<Item = TagHandle> {
+    pub async fn tags_async(&self) -> impl Iterator<Item = TagHandle> + use<> {
         Client::output()
             .get_tag_ids(GetTagIdsRequest {
                 output_name: self.name(),
@@ -901,12 +901,12 @@ impl OutputHandle {
     /// This will return the focus stack containing *all* windows on this output.
     /// If you only want windows on active tags, see
     /// [`OutputHandle::keyboard_focus_stack_visible`].
-    pub fn keyboard_focus_stack(&self) -> impl Iterator<Item = WindowHandle> {
+    pub fn keyboard_focus_stack(&self) -> impl Iterator<Item = WindowHandle> + use<> {
         self.keyboard_focus_stack_async().block_on_tokio()
     }
 
     /// Async impl for [`Self::keyboard_focus_stack`].
-    pub async fn keyboard_focus_stack_async(&self) -> impl Iterator<Item = WindowHandle> {
+    pub async fn keyboard_focus_stack_async(&self) -> impl Iterator<Item = WindowHandle> + use<> {
         Client::output()
             .get_focus_stack_window_ids(GetFocusStackWindowIdsRequest {
                 output_name: self.name(),
@@ -927,12 +927,14 @@ impl OutputHandle {
     ///
     /// This will return the focus stack containing only windows on active tags on this output.
     /// If you want *all* windows on this output, see [`OutputHandle::keyboard_focus_stack`].
-    pub fn keyboard_focus_stack_visible(&self) -> impl Iterator<Item = WindowHandle> {
+    pub fn keyboard_focus_stack_visible(&self) -> impl Iterator<Item = WindowHandle> + use<> {
         self.keyboard_focus_stack_visible_async().block_on_tokio()
     }
 
     /// Async impl for [`Self::keyboard_focus_stack_visible`].
-    pub async fn keyboard_focus_stack_visible_async(&self) -> impl Iterator<Item = WindowHandle> {
+    pub async fn keyboard_focus_stack_visible_async(
+        &self,
+    ) -> impl Iterator<Item = WindowHandle> + use<> {
         self.keyboard_focus_stack_async()
             .await
             .batch_filter(|win| win.is_on_active_tag_async().boxed(), |is_on| is_on)
@@ -975,7 +977,7 @@ impl OutputHandle {
     }
 
     /// Gets all outputs in the provided direction, sorted closest to farthest.
-    pub fn in_direction(&self, direction: Direction) -> impl Iterator<Item = OutputHandle> {
+    pub fn in_direction(&self, direction: Direction) -> impl Iterator<Item = OutputHandle> + use<> {
         self.in_direction_async(direction).block_on_tokio()
     }
 
@@ -983,7 +985,7 @@ impl OutputHandle {
     pub async fn in_direction_async(
         &self,
         direction: Direction,
-    ) -> impl Iterator<Item = OutputHandle> {
+    ) -> impl Iterator<Item = OutputHandle> + use<> {
         let output_name = self.name();
 
         let mut request = GetOutputsInDirRequest {

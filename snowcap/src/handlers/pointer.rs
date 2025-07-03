@@ -2,8 +2,8 @@ use iced::mouse::ScrollDelta;
 use smithay_client_toolkit::{
     delegate_pointer,
     reexports::client::{
-        protocol::wl_pointer::{AxisSource, WlPointer},
         Connection, QueueHandle,
+        protocol::wl_pointer::{AxisSource, WlPointer},
     },
     seat::pointer::{PointerEvent, PointerEventKind, PointerHandler},
     shell::WaylandSurface,

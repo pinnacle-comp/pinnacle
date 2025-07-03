@@ -27,7 +27,7 @@ use crate::{
     window::WindowElement,
 };
 
-use super::{run_bidirectional_streaming, ResponseStream, StateFnSender};
+use super::{ResponseStream, StateFnSender, run_bidirectional_streaming};
 
 #[derive(Debug, Default)]
 pub struct SignalState {

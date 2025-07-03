@@ -1,8 +1,8 @@
 use std::{
     os::fd::AsFd,
     sync::{
-        atomic::{AtomicU32, Ordering},
         Arc, Mutex, MutexGuard,
+        atomic::{AtomicU32, Ordering},
     },
     time::Duration,
 };
@@ -10,7 +10,7 @@ use std::{
 use pinnacle::state::{ClientState, Pinnacle};
 use smithay::{
     output::Output,
-    reexports::calloop::{generic::Generic, EventLoop, Interest, Mode, PostAction},
+    reexports::calloop::{EventLoop, Interest, Mode, PostAction, generic::Generic},
     utils::{Logical, Rectangle, Transform},
 };
 use tracing::debug;

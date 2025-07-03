@@ -5,7 +5,7 @@ use pinnacle_api_defs::pinnacle::process::{
 use tonic::Request;
 
 use crate::{
-    api::{run_server_streaming, run_unary, run_unary_no_response, ResponseStream, TonicResult},
+    api::{ResponseStream, TonicResult, run_server_streaming, run_unary, run_unary_no_response},
     process::PipeProcesses,
 };
 

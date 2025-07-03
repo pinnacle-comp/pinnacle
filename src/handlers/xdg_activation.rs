@@ -89,7 +89,9 @@ impl XdgActivationHandler for State {
                 ActivationContext::FocusIfPossible => {
                     if window.is_on_active_tag() {
                         let Some(output) = window.output(&self.pinnacle) else {
-                            debug!("xdg-activation: focus-if-possible request on window but it had no tags");
+                            debug!(
+                                "xdg-activation: focus-if-possible request on window but it had no tags"
+                            );
                             self.pinnacle.xdg_activation_state.remove_token(&token);
                             return;
                         };

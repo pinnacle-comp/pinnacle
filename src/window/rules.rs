@@ -13,15 +13,15 @@ use crate::{
 };
 
 use super::{
-    window_state::{FullscreenOrMaximized, LayoutMode, WindowId},
     Unmapped, UnmappedState, WindowElement,
+    window_state::{FullscreenOrMaximized, LayoutMode, WindowId},
 };
 
 use std::{
     collections::HashMap,
     sync::{
-        atomic::{AtomicU32, Ordering},
         Arc,
+        atomic::{AtomicU32, Ordering},
     },
 };
 

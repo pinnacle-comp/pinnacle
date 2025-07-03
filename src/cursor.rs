@@ -12,8 +12,8 @@ use smithay::{
     utils::Transform,
 };
 use xcursor::{
-    parser::{parse_xcursor, Image},
     CursorTheme,
+    parser::{Image, parse_xcursor},
 };
 
 use crate::render::pointer::PointerElement;
@@ -33,8 +33,11 @@ impl CursorState {
     pub fn new() -> Self {
         let (theme, size) = load_xcursor_theme_from_env();
 
-        std::env::set_var("XCURSOR_THEME", &theme);
-        std::env::set_var("XCURSOR_SIZE", size.to_string());
+        // SAFETY: All set_vars occur on the event loop thread
+        unsafe {
+            std::env::set_var("XCURSOR_THEME", &theme);
+            std::env::set_var("XCURSOR_SIZE", size.to_string());
+        }
 
         Self {
             current_cursor_image: CursorImageStatus::default_named(),
@@ -46,7 +49,10 @@ impl CursorState {
     }
 
     pub fn set_theme(&mut self, theme: &str) {
-        std::env::set_var("XCURSOR_THEME", theme);
+        // SAFETY: All set_vars occur on the event loop thread
+        unsafe {
+            std::env::set_var("XCURSOR_THEME", theme);
+        }
 
         self.theme = CursorTheme::load(theme);
         self.mem_buffer_cache.clear();
@@ -54,7 +60,10 @@ impl CursorState {
     }
 
     pub fn set_size(&mut self, size: u32) {
-        std::env::set_var("XCURSOR_SIZE", size.to_string());
+        // SAFETY: All set_vars occur on the event loop thread
+        unsafe {
+            std::env::set_var("XCURSOR_SIZE", size.to_string());
+        }
 
         self.size = size;
         self.mem_buffer_cache.clear();

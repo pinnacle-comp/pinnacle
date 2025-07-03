@@ -1,8 +1,7 @@
 use pinnacle_api_defs::pinnacle::input::{
     self,
     v1::{
-        set_device_map_target_request::Target, switch_xkb_layout_request::Action, AccelProfile,
-        BindInfo, BindRequest, BindResponse, ClickMethod, EnterBindLayerRequest,
+        AccelProfile, BindInfo, BindRequest, BindResponse, ClickMethod, EnterBindLayerRequest,
         GetBindInfosRequest, GetBindInfosResponse, GetBindLayerStackRequest,
         GetBindLayerStackResponse, GetDeviceCapabilitiesRequest, GetDeviceCapabilitiesResponse,
         GetDeviceInfoRequest, GetDeviceInfoResponse, GetDeviceTypeRequest, GetDeviceTypeResponse,
@@ -11,7 +10,7 @@ use pinnacle_api_defs::pinnacle::input::{
         MousebindStreamResponse, ScrollMethod, SendEventsMode, SetBindPropertiesRequest,
         SetDeviceLibinputSettingRequest, SetDeviceMapTargetRequest, SetRepeatRateRequest,
         SetXcursorRequest, SetXkbConfigRequest, SetXkbKeymapRequest, SwitchXkbLayoutRequest,
-        TapButtonMap,
+        TapButtonMap, set_device_map_target_request::Target, switch_xkb_layout_request::Action,
     },
 };
 use smithay::reexports::input as libinput;
@@ -24,7 +23,7 @@ use tonic::{Request, Status};
 use tracing::{error, warn};
 
 use crate::{
-    api::{run_server_streaming, run_unary, run_unary_no_response, ResponseStream, TonicResult},
+    api::{ResponseStream, TonicResult, run_server_streaming, run_unary, run_unary_no_response},
     input::{
         bind::{Edge, ModMask},
         libinput::device_type,
@@ -676,7 +675,7 @@ impl input::v1::input_service_server::InputService for InputService {
 
                 match method {
                     ClickMethod::Unspecified => {
-                        return Err(Status::invalid_argument("unspecified click method"))
+                        return Err(Status::invalid_argument("unspecified click method"));
                     }
                     ClickMethod::ButtonAreas => Box::new(|device| {
                         let _ = device.config_click_set_method(libinput::ClickMethod::ButtonAreas);

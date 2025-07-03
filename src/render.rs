@@ -7,23 +7,21 @@ pub mod util;
 
 use smithay::{
     backend::renderer::{
+        ImportAll, ImportMem, Renderer, RendererSuper, Texture,
         element::{
-            self,
+            self, AsRenderElements, RenderElementStates,
             solid::SolidColorRenderElement,
-            surface::{render_elements_from_surface_tree, WaylandSurfaceRenderElement},
-            AsRenderElements, RenderElementStates,
+            surface::{WaylandSurfaceRenderElement, render_elements_from_surface_tree},
         },
         gles::GlesRenderer,
-        ImportAll, ImportMem, Renderer, RendererSuper, Texture,
     },
     desktop::{
-        layer_map_for_output,
+        PopupManager, Space, WindowSurface, layer_map_for_output,
         space::SpaceElement,
         utils::{
-            surface_presentation_feedback_flags_from_states, surface_primary_scanout_output,
-            OutputPresentationFeedback,
+            OutputPresentationFeedback, surface_presentation_feedback_flags_from_states,
+            surface_primary_scanout_output,
         },
-        PopupManager, Space, WindowSurface,
     },
     output::Output,
     reexports::wayland_server::protocol::wl_surface::WlSurface,
@@ -33,7 +31,7 @@ use smithay::{
 use util::{snapshot::SnapshotRenderElement, surface::WlSurfaceTextureRenderElement};
 
 use crate::{
-    backend::{udev::UdevRenderer, Backend},
+    backend::{Backend, udev::UdevRenderer},
     pinnacle_render_elements,
     state::{State, WithState},
     window::{WindowElement, ZIndexElement},

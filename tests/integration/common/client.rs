@@ -6,8 +6,8 @@ use std::{
         unix::net::UnixStream,
     },
     sync::{
-        atomic::{AtomicBool, AtomicU32, Ordering},
         Arc,
+        atomic::{AtomicBool, AtomicU32, Ordering},
     },
     time::Duration,
 };
@@ -29,7 +29,7 @@ use smithay::reexports::{
 };
 use tracing::debug;
 use wayland_client::{
-    delegate_noop,
+    Connection, Dispatch, Proxy, QueueHandle, delegate_noop,
     globals::GlobalListContents,
     protocol::{
         wl_buffer::WlBuffer,
@@ -39,7 +39,6 @@ use wayland_client::{
         wl_registry::{self, WlRegistry},
         wl_surface::WlSurface,
     },
-    Connection, Dispatch, Proxy, QueueHandle,
 };
 
 pub struct Client {

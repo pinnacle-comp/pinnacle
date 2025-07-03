@@ -8,7 +8,7 @@ use std::{
 };
 
 use smithay::{
-    reexports::rustix::process::{getrlimit, setrlimit, Resource, Rlimit},
+    reexports::rustix::process::{Resource, Rlimit, getrlimit, setrlimit},
     utils::{Point, Rectangle, Size},
 };
 use tracing::warn;

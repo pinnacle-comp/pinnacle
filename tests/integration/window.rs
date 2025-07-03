@@ -1,5 +1,5 @@
 use pinnacle::{state::WithState, tag::Tag};
-use pinnacle_api::layout::{generators::MasterStack, LayoutGenerator as _};
+use pinnacle_api::layout::{LayoutGenerator as _, generators::MasterStack};
 use smithay::{output::Output, utils::Rectangle};
 
 use crate::common::fixture::Fixture;
@@ -60,15 +60,19 @@ fn window_spawned_without_tags_gets_tags_after_add() {
     let surface = window.surface();
     fixture.roundtrip(id);
 
-    assert!(fixture
-        .client(id)
-        .window_for_surface(&surface)
-        .current_serial()
-        .is_none());
+    assert!(
+        fixture
+            .client(id)
+            .window_for_surface(&surface)
+            .current_serial()
+            .is_none()
+    );
 
-    assert!(fixture.pinnacle().unmapped_windows[0]
-        .window
-        .with_state(|state| state.tags.is_empty()));
+    assert!(
+        fixture.pinnacle().unmapped_windows[0]
+            .window
+            .with_state(|state| state.tags.is_empty())
+    );
 
     assert!(fixture.pinnacle().windows.is_empty());
     assert_eq!(fixture.pinnacle().unmapped_windows.len(), 1);
@@ -80,15 +84,19 @@ fn window_spawned_without_tags_gets_tags_after_add() {
         );
     });
 
-    assert!(fixture
-        .client(id)
-        .window_for_surface(&surface)
-        .current_serial()
-        .is_some());
+    assert!(
+        fixture
+            .client(id)
+            .window_for_surface(&surface)
+            .current_serial()
+            .is_some()
+    );
 
-    assert!(fixture.pinnacle().unmapped_windows[0]
-        .window
-        .with_state(|state| !state.tags.is_empty()));
+    assert!(
+        fixture.pinnacle().unmapped_windows[0]
+            .window
+            .with_state(|state| !state.tags.is_empty())
+    );
 }
 
 #[test_log::test]

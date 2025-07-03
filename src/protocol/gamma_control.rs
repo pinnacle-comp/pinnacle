@@ -8,8 +8,8 @@ use smithay::{
             zwlr_gamma_control_v1::{self, ZwlrGammaControlV1},
         },
         wayland_server::{
-            self, backend::ClientId, Client, DataInit, Dispatch, DisplayHandle, GlobalDispatch,
-            Resource,
+            self, Client, DataInit, Dispatch, DisplayHandle, GlobalDispatch, Resource,
+            backend::ClientId,
         },
     },
 };

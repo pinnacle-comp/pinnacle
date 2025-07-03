@@ -3,15 +3,14 @@
 use crate::{
     api::signal::SignalState,
     backend::{
-        self,
+        self, Backend,
         udev::{SurfaceDmabufFeedback, Udev},
         winit::Winit,
-        Backend,
     },
     cli::{self, Cli},
     config::Config,
     cursor::CursorState,
-    focus::{pointer::PointerContents, OutputFocusStack, WindowKeyboardFocusStack},
+    focus::{OutputFocusStack, WindowKeyboardFocusStack, pointer::PointerContents},
     handlers::{
         session_lock::LockState, xdg_activation::XDG_ACTIVATION_TOKEN_TIMEOUT,
         xwayland::XwaylandState,
@@ -25,45 +24,44 @@ use crate::{
         output_power_management::OutputPowerManagementState,
         screencopy::ScreencopyManagerState,
     },
-    window::{rules::WindowRuleState, Unmapped, WindowElement, ZIndexElement},
+    window::{Unmapped, WindowElement, ZIndexElement, rules::WindowRuleState},
 };
 use smithay::{
     backend::renderer::element::{
-        default_primary_scanout_output_compare, utils::select_dmabuf_feedback, RenderElementState,
-        RenderElementStates,
+        RenderElementState, RenderElementStates, default_primary_scanout_output_compare,
+        utils::select_dmabuf_feedback,
     },
     desktop::{
-        layer_map_for_output,
+        LayerSurface, PopupManager, Space, layer_map_for_output,
         utils::{
             send_dmabuf_feedback_surface_tree, send_frames_surface_tree,
             surface_primary_scanout_output, update_surface_primary_scanout_output,
         },
-        LayerSurface, PopupManager, Space,
     },
-    input::{keyboard::XkbConfig, pointer::CursorImageStatus, Seat, SeatState},
+    input::{Seat, SeatState, keyboard::XkbConfig, pointer::CursorImageStatus},
     output::Output,
     reexports::{
         calloop::{
+            Interest, LoopHandle, LoopSignal, Mode, PostAction,
             generic::Generic,
             timer::{TimeoutAction, Timer},
-            Interest, LoopHandle, LoopSignal, Mode, PostAction,
         },
         wayland_protocols::xdg::shell::server::xdg_toplevel::WmCapabilities,
         wayland_protocols_misc::server_decoration::server::org_kde_kwin_server_decoration_manager,
         wayland_server::{
+            Client, Display, DisplayHandle,
             backend::{ClientData, ClientId, DisconnectReason},
             protocol::wl_surface::WlSurface,
-            Client, Display, DisplayHandle,
         },
     },
     utils::{Clock, HookId, Monotonic},
     wayland::{
         compositor::{
-            self, with_surface_tree_downward, CompositorClientState, CompositorHandler,
-            CompositorState, SurfaceData,
+            self, CompositorClientState, CompositorHandler, CompositorState, SurfaceData,
+            with_surface_tree_downward,
         },
         cursor_shape::CursorShapeManagerState,
-        fractional_scale::{with_fractional_scale, FractionalScaleManagerState},
+        fractional_scale::{FractionalScaleManagerState, with_fractional_scale},
         idle_inhibit::IdleInhibitManagerState,
         idle_notify::IdleNotifierState,
         keyboard_shortcuts_inhibit::KeyboardShortcutsInhibitState,
@@ -80,7 +78,7 @@ use smithay::{
         shell::{
             kde::decoration::KdeDecorationState,
             wlr_layer::WlrLayerShellState,
-            xdg::{decoration::XdgDecorationState, XdgShellState},
+            xdg::{XdgShellState, decoration::XdgDecorationState},
         },
         shm::ShmState,
         single_pixel_buffer::SinglePixelBufferState,
@@ -640,7 +638,7 @@ impl Pinnacle {
         &'a Output,
         &'a RenderElementState,
     ) -> &'a Output
-           + '_ {
+    + '_ {
         |current_output, current_state, next_output, next_state| {
             let new_op = default_primary_scanout_output_compare(
                 current_output,

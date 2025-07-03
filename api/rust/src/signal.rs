@@ -9,25 +9,25 @@
 #![allow(clippy::type_complexity)]
 
 use std::{
-    collections::{btree_map, BTreeMap},
+    collections::{BTreeMap, btree_map},
     sync::{
-        atomic::{AtomicU32, Ordering},
         Arc,
+        atomic::{AtomicU32, Ordering},
     },
 };
 
-use futures::{pin_mut, FutureExt};
+use futures::{FutureExt, pin_mut};
 use pinnacle_api_defs::pinnacle::signal::v1::{SignalRequest, StreamControl};
 use tokio::sync::{
-    mpsc::{unbounded_channel, UnboundedSender},
+    mpsc::{UnboundedSender, unbounded_channel},
     oneshot,
 };
-use tokio_stream::{wrappers::UnboundedReceiverStream, StreamExt};
+use tokio_stream::{StreamExt, wrappers::UnboundedReceiverStream};
 use tonic::Streaming;
 
 use crate::{
-    input::libinput::DeviceHandle, output::OutputHandle, tag::TagHandle, window::WindowHandle,
-    BlockOnTokio,
+    BlockOnTokio, input::libinput::DeviceHandle, output::OutputHandle, tag::TagHandle,
+    window::WindowHandle,
 };
 
 pub(crate) trait Signal {

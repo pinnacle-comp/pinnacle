@@ -2,10 +2,10 @@
 use smithay::backend::renderer::test::DummyRenderer;
 use smithay::{
     backend::renderer::{
-        element::{self, texture::TextureRenderElement, Element, RenderElement},
+        RendererSuper,
+        element::{self, Element, RenderElement, texture::TextureRenderElement},
         gles::{GlesRenderer, GlesTexture},
         utils::{CommitCounter, DamageSet, OpaqueRegions},
-        RendererSuper,
     },
     utils::{Buffer, Physical, Rectangle, Scale},
 };

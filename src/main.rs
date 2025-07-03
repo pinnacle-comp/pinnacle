@@ -4,8 +4,8 @@ use std::{
     env,
     io::{BufRead, BufReader},
     sync::{
-        atomic::{AtomicBool, Ordering},
         Arc,
+        atomic::{AtomicBool, Ordering},
     },
     time::Duration,
 };
@@ -14,10 +14,10 @@ use anyhow::Context;
 use clap::CommandFactory;
 use pinnacle::{
     cli::{
-        self, generate_config, start_lua_repl, Cli, CliSubcommand, ConfigSubcommand,
-        DebugSubcommand,
+        self, Cli, CliSubcommand, ConfigSubcommand, DebugSubcommand, generate_config,
+        start_lua_repl,
     },
-    config::{get_config_dir, parse_startup_config, StartupConfig},
+    config::{StartupConfig, get_config_dir, parse_startup_config},
     process::{REMOVE_RUST_BACKTRACE, REMOVE_RUST_LIB_BACKTRACE},
     session::{import_environment, notify_fd},
     state::State,
@@ -29,7 +29,7 @@ use smithay::reexports::{
 };
 use tracing::{error, info, warn};
 use tracing_appender::rolling::Rotation;
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Layer};
+use tracing_subscriber::{EnvFilter, Layer, layer::SubscriberExt, util::SubscriberInitExt};
 use xdg::BaseDirectories;
 
 #[cfg(feature = "tracy-alloc")]
@@ -40,11 +40,17 @@ static GLOBAL_ALLOC: tracy_client::ProfiledAllocator<std::alloc::System> =
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     if env::var_os("RUST_BACKTRACE").is_none() {
-        env::set_var("RUST_BACKTRACE", "1");
+        // SAFETY: All set_vars occur on the event loop thread
+        unsafe {
+            env::set_var("RUST_BACKTRACE", "1");
+        }
         REMOVE_RUST_BACKTRACE.store(true, Ordering::Relaxed);
     }
     if env::var_os("RUST_LIB_BACKTRACE").is_none() {
-        env::set_var("RUST_LIB_BACKTRACE", "0");
+        // SAFETY: All set_vars occur on the event loop thread
+        unsafe {
+            env::set_var("RUST_LIB_BACKTRACE", "0");
+        }
         REMOVE_RUST_LIB_BACKTRACE.store(true, Ordering::Relaxed);
     }
 
@@ -62,8 +68,9 @@ async fn main() -> anyhow::Result<()> {
 
     let env_filter = EnvFilter::try_from_default_env();
 
-    let file_log_env_filter =
-        EnvFilter::new("debug,h2=warn,hyper=warn,smithay::xwayland::xwm=warn,wgpu_hal=warn,naga=warn,wgpu_core=warn,cosmic_text=warn,iced_wgpu=warn,sctk=error");
+    let file_log_env_filter = EnvFilter::new(
+        "debug,h2=warn,hyper=warn,smithay::xwayland::xwm=warn,wgpu_hal=warn,naga=warn,wgpu_core=warn,cosmic_text=warn,iced_wgpu=warn,sctk=error",
+    );
 
     let file_log_layer = tracing_subscriber::fmt::layer()
         .compact()
@@ -138,19 +145,33 @@ async fn main() -> anyhow::Result<()> {
     if cli.session {
         if env::var_os("DISPLAY").is_some() {
             warn!("Running as a session but DISPLAY is set, removing it");
-            env::remove_var("DISPLAY");
+
+            // SAFETY: All remove_vars occur on the event loop thread
+            unsafe {
+                env::remove_var("DISPLAY");
+            }
         }
         if env::var_os("WAYLAND_DISPLAY").is_some() {
             warn!("Running as a session but WAYLAND_DISPLAY is set, removing it");
-            env::remove_var("WAYLAND_DISPLAY");
+
+            // SAFETY: All remove_vars occur on the event loop thread
+            unsafe {
+                env::remove_var("WAYLAND_DISPLAY");
+            }
         }
         if env::var_os("WAYLAND_SOCKET").is_some() {
             warn!("Running as a session but WAYLAND_SOCKET is set, removing it");
-            env::remove_var("WAYLAND_SOCKET");
+            // SAFETY: All remove_vars occur on the event loop thread
+            unsafe {
+                env::remove_var("WAYLAND_SOCKET");
+            }
         }
 
-        env::set_var("XDG_CURRENT_DESKTOP", "pinnacle");
-        env::set_var("XDG_SESSION_TYPE", "wayland");
+        // SAFETY: All set_vars occur on the event loop thread
+        unsafe {
+            env::set_var("XDG_CURRENT_DESKTOP", "pinnacle");
+            env::set_var("XDG_SESSION_TYPE", "wayland");
+        }
     }
 
     if !sysinfo::set_open_files_limit(0) {
@@ -201,7 +222,11 @@ async fn main() -> anyhow::Result<()> {
         "Setting WAYLAND_DISPLAY to {}",
         state.pinnacle.socket_name.to_string_lossy()
     );
-    env::set_var("WAYLAND_DISPLAY", &state.pinnacle.socket_name);
+
+    // SAFETY: All set_vars occur on the event loop thread
+    unsafe {
+        env::set_var("WAYLAND_DISPLAY", &state.pinnacle.socket_name);
+    }
 
     state
         .pinnacle

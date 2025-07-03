@@ -10,7 +10,7 @@ use pinnacle_api_defs::pinnacle::{
 };
 use tonic::{Request, Status};
 
-use crate::api::{run_unary_no_response, TonicResult};
+use crate::api::{TonicResult, run_unary_no_response};
 
 #[tonic::async_trait]
 impl debug::v1::debug_service_server::DebugService for super::DebugService {
@@ -26,7 +26,7 @@ impl debug::v1::debug_service_server::DebugService for super::DebugService {
             SetOrToggle::Unset => Some(false),
             SetOrToggle::Toggle => None,
             SetOrToggle::Unspecified => {
-                return Err(Status::invalid_argument("no set or toggle specified"))
+                return Err(Status::invalid_argument("no set or toggle specified"));
             }
         };
 
@@ -53,7 +53,7 @@ impl debug::v1::debug_service_server::DebugService for super::DebugService {
             SetOrToggle::Unset => Some(false),
             SetOrToggle::Toggle => None,
             SetOrToggle::Unspecified => {
-                return Err(Status::invalid_argument("no set or toggle specified"))
+                return Err(Status::invalid_argument("no set or toggle specified"));
             }
         };
 
@@ -80,7 +80,7 @@ impl debug::v1::debug_service_server::DebugService for super::DebugService {
             SetOrToggle::Unset => Some(false),
             SetOrToggle::Toggle => None,
             SetOrToggle::Unspecified => {
-                return Err(Status::invalid_argument("no set or toggle specified"))
+                return Err(Status::invalid_argument("no set or toggle specified"));
             }
         };
 
@@ -108,7 +108,7 @@ impl debug::v1::debug_service_server::DebugService for super::DebugService {
             SetOrToggle::Unset => Some(false),
             SetOrToggle::Toggle => None,
             SetOrToggle::Unspecified => {
-                return Err(Status::invalid_argument("no set or toggle specified"))
+                return Err(Status::invalid_argument("no set or toggle specified"));
             }
         };
 

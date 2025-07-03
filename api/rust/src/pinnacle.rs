@@ -15,7 +15,7 @@ use pinnacle_api_defs::pinnacle::{
 };
 use tonic::Streaming;
 
-use crate::{client::Client, BlockOnTokio};
+use crate::{BlockOnTokio, client::Client};
 
 /// A backend that Pinnacle runs with.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

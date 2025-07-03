@@ -8,8 +8,8 @@ use smithay::{
     backend::input::{ButtonState, DeviceCapability, InputEvent},
     reexports::{
         calloop::{
-            channel::{Channel, Event},
             EventLoop,
+            channel::{Channel, Event},
         },
         wayland_server::{Client, Resource},
     },
@@ -17,11 +17,11 @@ use smithay::{
 };
 
 use crate::{
+    WlcsEvent,
     input_backend::{
         WlcsDevice, WlcsInputBackend, WlcsPointerButtonEvent, WlcsPointerMotionAbsoluteEvent,
         WlcsPointerMotionEvent, WlcsTouchDownEvent, WlcsTouchUpEvent,
     },
-    WlcsEvent,
 };
 
 pub(crate) fn run(channel: Channel<WlcsEvent>) {

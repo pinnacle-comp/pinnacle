@@ -7,21 +7,21 @@ use smithay::{
     backend::{
         egl::EGLDevice,
         renderer::{
-            self, buffer_type,
+            self, Bind, Blit, BufferType, ExportMem, ImportDma, ImportEgl, ImportMemWl,
+            TextureFilter, buffer_type,
             damage::{self, OutputDamageTracker, RenderOutputResult},
             element::{self, surface::render_elements_from_surface_tree},
             gles::GlesRenderer,
-            Bind, Blit, BufferType, ExportMem, ImportDma, ImportEgl, ImportMemWl, TextureFilter,
         },
         winit::{self, WinitEvent, WinitGraphicsBackend},
     },
     output::{Output, Scale, Subpixel},
     reexports::{
-        calloop::{self, generic::Generic, Interest, LoopHandle, PostAction},
+        calloop::{self, Interest, LoopHandle, PostAction, generic::Generic},
         wayland_protocols::wp::presentation_time::server::wp_presentation_feedback,
         wayland_server::{
-            protocol::{wl_shm, wl_surface::WlSurface},
             DisplayHandle,
+            protocol::{wl_shm, wl_surface::WlSurface},
         },
         winit::{
             platform::wayland::WindowAttributesExtWayland,
@@ -39,8 +39,8 @@ use tracing::{debug, error, trace, warn};
 use crate::{
     output::{BlankingState, OutputMode},
     render::{
-        pointer::pointer_render_elements, take_presentation_feedback, OutputRenderElement,
-        CLEAR_COLOR, CLEAR_COLOR_LOCKED,
+        CLEAR_COLOR, CLEAR_COLOR_LOCKED, OutputRenderElement, pointer::pointer_render_elements,
+        take_presentation_feedback,
     },
     state::{Pinnacle, State, WithState},
 };

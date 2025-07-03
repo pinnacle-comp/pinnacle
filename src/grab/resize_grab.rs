@@ -1,15 +1,15 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use smithay::{
-    desktop::{space::SpaceElement, WindowSurface},
+    desktop::{WindowSurface, space::SpaceElement},
     input::{
+        Seat, SeatHandler,
         pointer::{
             AxisFrame, ButtonEvent, CursorIcon, CursorImageStatus, Focus, GestureHoldBeginEvent,
             GestureHoldEndEvent, GesturePinchBeginEvent, GesturePinchEndEvent,
             GesturePinchUpdateEvent, GestureSwipeBeginEvent, GestureSwipeEndEvent,
             GestureSwipeUpdateEvent, GrabStartData, PointerGrab, PointerInnerHandle,
         },
-        Seat, SeatHandler,
     },
     reexports::{
         wayland_protocols::xdg::shell::server::xdg_toplevel,
@@ -129,7 +129,6 @@ impl PointerGrab<State> for ResizeSurfaceGrab {
             return;
         }
 
-        // TODO: if-let chains in 1.88
         let output = self.window.output(&state.pinnacle);
 
         if !self.window.alive() || output.is_none() {

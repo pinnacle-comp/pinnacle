@@ -7,9 +7,9 @@ use std::{
     collections::HashMap,
     rc::Rc,
     sync::{
+        Arc, Mutex, Weak,
         atomic::{AtomicBool, Ordering},
         mpsc::Sender,
-        Arc, Mutex, Weak,
     },
     time::{Duration, Instant},
 };
@@ -17,10 +17,9 @@ use std::{
 use smithay::{
     reexports::{
         calloop::{
-            self,
+            self, LoopHandle,
             ping::Ping,
             timer::{TimeoutAction, Timer},
-            LoopHandle,
         },
         wayland_server::Client,
     },

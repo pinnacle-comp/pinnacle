@@ -1,6 +1,6 @@
 use std::sync::{
-    atomic::{AtomicU32, Ordering},
     Arc,
+    atomic::{AtomicU32, Ordering},
 };
 
 use indexmap::IndexSet;
@@ -30,8 +30,8 @@ use tracing::warn;
 
 use crate::{
     api::{
-        run_bidirectional_streaming_mapped, run_unary, run_unary_no_response, ResponseStream,
-        TonicResult,
+        ResponseStream, TonicResult, run_bidirectional_streaming_mapped, run_unary,
+        run_unary_no_response,
     },
     focus::keyboard::KeyboardFocusTarget,
     layout::tree::ResizeDir,
@@ -39,8 +39,8 @@ use crate::{
     tag::TagId,
     util::rect::Direction,
     window::{
-        window_state::{LayoutMode, LayoutModeKind, WindowId},
         UnmappedState,
+        window_state::{LayoutMode, LayoutModeKind, WindowId},
     },
 };
 
@@ -546,7 +546,7 @@ impl v1::window_service_server::WindowService for super::WindowService {
 
         let mode = match request.decoration_mode() {
             v1::DecorationMode::Unspecified => {
-                return Err(Status::invalid_argument("decoration mode was unspecified"))
+                return Err(Status::invalid_argument("decoration mode was unspecified"));
             }
             v1::DecorationMode::ClientSide => zxdg_toplevel_decoration_v1::Mode::ClientSide,
             v1::DecorationMode::ServerSide => zxdg_toplevel_decoration_v1::Mode::ServerSide,

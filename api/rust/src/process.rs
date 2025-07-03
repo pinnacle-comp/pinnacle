@@ -15,7 +15,7 @@ use passfd::FdPassingExt;
 use pinnacle_api_defs::pinnacle::process::v1::{SetEnvRequest, SpawnRequest, WaitOnSpawnRequest};
 use tokio_stream::StreamExt;
 
-use crate::{client::Client, BlockOnTokio};
+use crate::{BlockOnTokio, client::Client};
 
 /// Adds an environment variable that all newly spawned [`Command`]s will inherit.
 pub fn set_env(key: impl ToString, value: impl ToString) {

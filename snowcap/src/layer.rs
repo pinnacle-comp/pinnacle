@@ -13,8 +13,8 @@ use smithay_client_toolkit::{
         client::{Proxy, QueueHandle},
     },
     shell::{
-        wlr_layer::{self, Anchor, LayerSurface},
         WaylandSurface,
+        wlr_layer::{self, Anchor, LayerSurface},
     },
 };
 use snowcap_api_defs::snowcap::input::v0alpha1::{KeyboardKeyResponse, PointerButtonResponse};

@@ -3,8 +3,8 @@ use std::sync::Arc;
 use anyhow::Context;
 use iced_wgpu::graphics::backend::Text;
 use iced_wgpu::{
-    wgpu::{self, Backends},
     Backend,
+    wgpu::{self, Backends},
 };
 
 use crate::block_on_tokio;

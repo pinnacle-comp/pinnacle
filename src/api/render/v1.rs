@@ -6,7 +6,7 @@ use smithay::backend::renderer::TextureFilter;
 use tonic::{Request, Status};
 
 use crate::{
-    api::{run_unary_no_response, TonicResult},
+    api::{TonicResult, run_unary_no_response},
     backend::BackendData,
 };
 

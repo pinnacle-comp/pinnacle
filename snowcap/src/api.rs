@@ -6,9 +6,9 @@ use futures::Stream;
 use smithay_client_toolkit::{reexports::calloop, shell::wlr_layer};
 use snowcap_api_defs::snowcap::layer::{
     self,
-    v0alpha1::{layer_service_server, CloseRequest, NewLayerRequest, NewLayerResponse},
+    v0alpha1::{CloseRequest, NewLayerRequest, NewLayerResponse, layer_service_server},
 };
-use tokio::sync::mpsc::{unbounded_channel, UnboundedSender};
+use tokio::sync::mpsc::{UnboundedSender, unbounded_channel};
 use tonic::{Request, Response, Status};
 use tracing::warn;
 

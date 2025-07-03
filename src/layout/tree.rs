@@ -8,8 +8,8 @@ use smithay::utils::{Logical, Rectangle, Size};
 use tracing::trace;
 
 use crate::util::treediff::{
-    diffable::{Diffable, StyleDiff},
     EditAction,
+    diffable::{Diffable, StyleDiff},
 };
 
 pub const MIN_TILE_SIZE: f32 = 50.0;
@@ -375,11 +375,7 @@ impl LayoutTree {
                 let a = a.data();
                 let b = b.data();
 
-                if a.label == b.label {
-                    1.0
-                } else {
-                    f64::MAX
-                }
+                if a.label == b.label { 1.0 } else { f64::MAX }
             },
             |a, b| a.data().label == b.data().label,
         );

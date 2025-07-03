@@ -23,24 +23,24 @@ use smithay::{
     delegate_security_context, delegate_shm, delegate_single_pixel_buffer, delegate_tablet_manager,
     delegate_viewporter, delegate_xwayland_keyboard_grab, delegate_xwayland_shell,
     desktop::{
-        self, find_popup_root_surface, get_popup_toplevel_coords, layer_map_for_output,
-        LayerSurface, PopupKind, PopupManager, WindowSurfaceType,
+        self, LayerSurface, PopupKind, PopupManager, WindowSurfaceType, find_popup_root_surface,
+        get_popup_toplevel_coords, layer_map_for_output,
     },
     input::{
+        Seat, SeatHandler, SeatState,
         keyboard::LedState,
         pointer::{CursorImageStatus, CursorImageSurfaceData, PointerHandle},
-        Seat, SeatHandler, SeatState,
     },
     output::{Mode, Output, Scale},
     reexports::{
         calloop::Interest,
         wayland_protocols::xdg::shell::server::xdg_positioner::ConstraintAdjustment,
         wayland_server::{
+            Client, Resource,
             protocol::{
                 wl_buffer::WlBuffer, wl_data_source::WlDataSource, wl_output::WlOutput,
                 wl_surface::WlSurface,
             },
-            Client, Resource,
         },
     },
     utils::{Logical, Point, Rectangle},
@@ -57,21 +57,22 @@ use smithay::{
             KeyboardShortcutsInhibitor,
         },
         output::OutputHandler,
-        pointer_constraints::{with_pointer_constraint, PointerConstraintsHandler},
+        pointer_constraints::{PointerConstraintsHandler, with_pointer_constraint},
         seat::WaylandFocus,
         security_context::{
             SecurityContext, SecurityContextHandler, SecurityContextListenerSource,
         },
         selection::{
+            SelectionHandler, SelectionSource, SelectionTarget,
             data_device::{
-                set_data_device_focus, ClientDndGrabHandler, DataDeviceHandler, DataDeviceState,
-                ServerDndGrabHandler,
+                ClientDndGrabHandler, DataDeviceHandler, DataDeviceState, ServerDndGrabHandler,
+                set_data_device_focus,
             },
             ext_data_control,
             primary_selection::{
-                set_primary_focus, PrimarySelectionHandler, PrimarySelectionState,
+                PrimarySelectionHandler, PrimarySelectionState, set_primary_focus,
             },
-            wlr_data_control, SelectionHandler, SelectionSource, SelectionTarget,
+            wlr_data_control,
         },
         shell::{
             wlr_layer::{self, Layer, LayerSurfaceData, WlrLayerShellHandler, WlrLayerShellState},

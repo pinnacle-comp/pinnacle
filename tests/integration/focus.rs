@@ -1,6 +1,6 @@
 use crate::common::fixture::Fixture;
 use pinnacle::{focus::keyboard::KeyboardFocusTarget, state::WithState, tag::Tag};
-use pinnacle_api::layout::{generators::MasterStack, LayoutGenerator};
+use pinnacle_api::layout::{LayoutGenerator, generators::MasterStack};
 use smithay::{output::Output, utils::Rectangle};
 use test_log::test;
 

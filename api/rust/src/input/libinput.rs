@@ -7,13 +7,13 @@
 use pinnacle_api_defs::pinnacle::input::{
     self,
     v1::{
-        set_device_libinput_setting_request::Setting, set_device_map_target_request::Target,
         GetDeviceCapabilitiesRequest, GetDeviceInfoRequest, GetDeviceTypeRequest,
         GetDevicesRequest, SetDeviceLibinputSettingRequest, SetDeviceMapTargetRequest,
+        set_device_libinput_setting_request::Setting, set_device_map_target_request::Target,
     },
 };
 
-use crate::{client::Client, output::OutputHandle, signal::InputSignal, util::Rect, BlockOnTokio};
+use crate::{BlockOnTokio, client::Client, output::OutputHandle, signal::InputSignal, util::Rect};
 
 /// A pointer acceleration profile.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

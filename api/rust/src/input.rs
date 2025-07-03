@@ -10,19 +10,20 @@ use num_enum::{FromPrimitive, IntoPrimitive};
 use pinnacle_api_defs::pinnacle::input::{
     self,
     v1::{
-        switch_xkb_layout_request, BindProperties, BindRequest, EnterBindLayerRequest,
-        GetBindInfosRequest, KeybindOnPressRequest, KeybindStreamRequest, MousebindOnPressRequest,
+        BindProperties, BindRequest, EnterBindLayerRequest, GetBindInfosRequest,
+        KeybindOnPressRequest, KeybindStreamRequest, MousebindOnPressRequest,
         MousebindStreamRequest, SetBindPropertiesRequest, SetRepeatRateRequest, SetXcursorRequest,
         SetXkbConfigRequest, SetXkbKeymapRequest, SwitchXkbLayoutRequest,
+        switch_xkb_layout_request,
     },
 };
-use tokio::sync::mpsc::{unbounded_channel, UnboundedSender};
+use tokio::sync::mpsc::{UnboundedSender, unbounded_channel};
 use tokio_stream::StreamExt;
 
 use crate::{
+    BlockOnTokio,
     client::Client,
     signal::{InputSignal, SignalHandle},
-    BlockOnTokio,
 };
 
 pub mod libinput;

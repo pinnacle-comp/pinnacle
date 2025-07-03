@@ -1,5 +1,5 @@
 use std::{
-    collections::{hash_map::Entry, HashMap},
+    collections::{HashMap, hash_map::Entry},
     ops::Deref,
 };
 
@@ -11,8 +11,8 @@ use smithay::{
             zwlr_output_power_v1::{self, ZwlrOutputPowerV1},
         },
         wayland_server::{
-            self, backend::ClientId, Client, DataInit, Dispatch, DisplayHandle, GlobalDispatch,
-            Resource, WEnum,
+            self, Client, DataInit, Dispatch, DisplayHandle, GlobalDispatch, Resource, WEnum,
+            backend::ClientId,
         },
     },
 };

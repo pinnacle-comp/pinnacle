@@ -32,7 +32,7 @@ use pinnacle_api_defs::pinnacle::{
     window::v1::window_service_server::WindowServiceServer,
 };
 use smithay::{
-    reexports::calloop::{self, channel::Event, LoopHandle, RegistrationToken},
+    reexports::calloop::{self, LoopHandle, RegistrationToken, channel::Event},
     utils::{Logical, Point},
 };
 use tokio::{
@@ -41,7 +41,7 @@ use tokio::{
 };
 use toml::Table;
 
-use tracing::{debug, debug_span, error, info, warn, Instrument};
+use tracing::{Instrument, debug, debug_span, error, info, warn};
 use xdg::BaseDirectories;
 
 use crate::{
@@ -456,7 +456,7 @@ impl Pinnacle {
                     return load_default_config(
                         self,
                         &format!("failed to start config process {cmd:?}: {err}"),
-                    )
+                    );
                 }
             };
 
@@ -559,7 +559,10 @@ impl Pinnacle {
         let uds = tokio::net::UnixListener::bind(&socket_path)?;
         let uds_stream = tokio_stream::wrappers::UnixListenerStream::new(uds);
 
-        std::env::set_var(GRPC_SOCKET_ENV, &socket_path);
+        // SAFETY: All set_vars occur on the event loop thread
+        unsafe {
+            std::env::set_var(GRPC_SOCKET_ENV, &socket_path);
+        }
 
         let grpc_server = tonic::transport::Server::builder()
             .add_service(refl_service)

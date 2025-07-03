@@ -1,9 +1,9 @@
 use crate::{
-    common::{fixture::Fixture, for_each_api, Lang},
+    common::{Lang, fixture::Fixture, for_each_api},
     spawn_lua_blocking,
 };
 use pinnacle::{focus::keyboard::KeyboardFocusTarget, state::WithState, tag::Tag};
-use pinnacle_api::layout::{generators::MasterStack, LayoutGenerator as _};
+use pinnacle_api::layout::{LayoutGenerator as _, generators::MasterStack};
 use smithay::{
     output::Output,
     reexports::wayland_protocols::xdg::decoration::zv1::server::zxdg_toplevel_decoration_v1,
@@ -1048,10 +1048,12 @@ fn window_handle_is_on_active_tag() {
 
         match lang {
             Lang::Rust => fixture.spawn_blocking(|| {
-                assert!(pinnacle_api::window::get_all()
-                    .next()
-                    .unwrap()
-                    .is_on_active_tag());
+                assert!(
+                    pinnacle_api::window::get_all()
+                        .next()
+                        .unwrap()
+                        .is_on_active_tag()
+                );
             }),
             Lang::Lua => spawn_lua_blocking! {
                 fixture,
@@ -1065,10 +1067,12 @@ fn window_handle_is_on_active_tag() {
 
         match lang {
             Lang::Rust => fixture.spawn_blocking(|| {
-                assert!(!pinnacle_api::window::get_all()
-                    .next()
-                    .unwrap()
-                    .is_on_active_tag());
+                assert!(
+                    !pinnacle_api::window::get_all()
+                        .next()
+                        .unwrap()
+                        .is_on_active_tag()
+                );
             }),
             Lang::Lua => spawn_lua_blocking! {
                 fixture,

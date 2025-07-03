@@ -14,8 +14,8 @@ use crate::{
     state::{State, WithState},
     util::transaction::{Location, TransactionBuilder},
     window::{
-        window_state::{LayoutMode, LayoutModeKind},
         WindowElement,
+        window_state::{LayoutMode, LayoutModeKind},
     },
 };
 

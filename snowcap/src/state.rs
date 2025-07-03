@@ -6,13 +6,13 @@ use smithay_client_toolkit::{
         calloop::{LoopHandle, LoopSignal},
         calloop_wayland_source::WaylandSource,
         client::{
+            Connection, QueueHandle,
             globals::registry_queue_init,
             protocol::{wl_keyboard::WlKeyboard, wl_pointer::WlPointer},
-            Connection, QueueHandle,
         },
     },
     registry::RegistryState,
-    seat::{keyboard::Modifiers, SeatState},
+    seat::{SeatState, keyboard::Modifiers},
     shell::wlr_layer::LayerShell,
 };
 
@@ -20,7 +20,7 @@ use crate::{
     handlers::keyboard::KeyboardFocus,
     layer::SnowcapLayer,
     server::GrpcServerState,
-    wgpu::{setup_wgpu, Wgpu},
+    wgpu::{Wgpu, setup_wgpu},
     widget::WidgetIdCounter,
 };
 

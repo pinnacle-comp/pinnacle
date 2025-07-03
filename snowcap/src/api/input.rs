@@ -1,12 +1,12 @@
 use snowcap_api_defs::snowcap::input::v0alpha1::{
-    input_service_server, KeyboardKeyRequest, KeyboardKeyResponse, PointerButtonRequest,
-    PointerButtonResponse,
+    KeyboardKeyRequest, KeyboardKeyResponse, PointerButtonRequest, PointerButtonResponse,
+    input_service_server,
 };
 use tonic::{Request, Response, Status};
 
 use crate::widget::WidgetId;
 
-use super::{run_server_streaming, ResponseStream, StateFnSender};
+use super::{ResponseStream, StateFnSender, run_server_streaming};
 
 pub struct InputService {
     sender: StateFnSender,

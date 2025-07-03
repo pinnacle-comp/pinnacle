@@ -1,7 +1,7 @@
 [package]
 name = "pinnacle-config"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 
 [dependencies]
 pinnacle-api = { git = "http://github.com/pinnacle-comp/pinnacle", default-features = false }

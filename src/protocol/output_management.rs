@@ -10,7 +10,7 @@ use smithay::{
         },
         wayland_server::{Resource, WEnum},
     },
-    utils::{Logical, Physical, Point, Size, Transform, SERIAL_COUNTER},
+    utils::{Logical, Physical, Point, SERIAL_COUNTER, Size, Transform},
 };
 use std::{
     collections::{HashMap, HashSet},
@@ -28,7 +28,7 @@ use smithay::{
             zwlr_output_manager_v1::{self, ZwlrOutputManagerV1},
         },
         wayland_server::{
-            self, backend::ClientId, Client, DataInit, Dispatch, DisplayHandle, GlobalDispatch,
+            self, Client, DataInit, Dispatch, DisplayHandle, GlobalDispatch, backend::ClientId,
         },
     },
 };

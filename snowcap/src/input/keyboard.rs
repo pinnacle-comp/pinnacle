@@ -1,4 +1,4 @@
-use iced::keyboard::{key::Named, Key, Location};
+use iced::keyboard::{Key, Location, key::Named};
 use smithay_client_toolkit::seat::keyboard::Keysym;
 
 // All this stuff from cosmic's iced-sctk

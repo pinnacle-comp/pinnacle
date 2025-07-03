@@ -23,7 +23,7 @@ use tonic::{Request, Status};
 use tracing::debug;
 
 use crate::{
-    api::{run_unary, run_unary_no_response, TonicResult},
+    api::{TonicResult, run_unary, run_unary_no_response},
     backend::udev::drm_mode_from_modeinfo,
     config::ConnectorSavedState,
     output::{OutputMode, OutputName},

@@ -1,5 +1,5 @@
 mod inner {
-    use pinnacle_api::layout::{generators::MasterStack, LayoutGenerator, LayoutResponse};
+    use pinnacle_api::layout::{LayoutGenerator, LayoutResponse, generators::MasterStack};
 
     async fn config() {
         pinnacle_api::output::for_each_output(|output| {

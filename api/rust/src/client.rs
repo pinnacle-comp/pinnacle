@@ -13,7 +13,7 @@ use pinnacle_api_defs::pinnacle::{
 use tokio::sync::{MappedMutexGuard, Mutex, MutexGuard, RwLock, RwLockReadGuard};
 use tonic::transport::Channel;
 
-use crate::{signal::SignalState, BlockOnTokio};
+use crate::{BlockOnTokio, signal::SignalState};
 
 static CLIENT: RwLock<Option<Client>> = RwLock::const_new(None);
 static SIGNAL_STATE: Mutex<Option<SignalState>> = Mutex::const_new(None);

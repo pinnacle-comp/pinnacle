@@ -1,12 +1,12 @@
 // Parts ripped out from Niri like that time Omni-man almost ripped out Donald's spine
 // Not that I'm Omni-man, of course.
 
-use anyhow::{ensure, Context};
+use anyhow::{Context, ensure};
 use smithay::backend::drm::DrmDevice;
-use smithay::reexports::drm::control::{crtc, Device};
+use smithay::reexports::drm::control::{Device, crtc};
 use smithay::{backend::session::Session, output::Output};
 
-use crate::backend::udev::{render_surface_for_output, PendingGammaChange};
+use crate::backend::udev::{PendingGammaChange, render_surface_for_output};
 
 use super::{Udev, UdevOutputData};
 

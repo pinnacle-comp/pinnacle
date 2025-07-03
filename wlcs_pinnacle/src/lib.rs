@@ -9,30 +9,30 @@ use std::{
         unix::net::UnixStream,
     },
     sync::{
-        atomic::{AtomicU32, Ordering},
         Once,
+        atomic::{AtomicU32, Ordering},
     },
-    thread::{spawn, JoinHandle},
+    thread::{JoinHandle, spawn},
 };
 
 use smithay::{
-    reexports::calloop::channel::{channel, Sender},
+    reexports::calloop::channel::{Sender, channel},
     utils::{Logical, Point},
 };
 use tracing::{info, warn};
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Layer};
+use tracing_subscriber::{EnvFilter, Layer, layer::SubscriberExt, util::SubscriberInitExt};
 use wayland_sys::{
     client::{wayland_client_handle, wl_display, wl_proxy},
     common::{wl_fixed_t, wl_fixed_to_double},
     ffi_dispatch,
 };
 use wlcs::{
-    extension_list,
+    Pointer, Touch, Wlcs, extension_list,
     ffi_display_server_api::{
         WlcsExtensionDescriptor, WlcsIntegrationDescriptor, WlcsServerIntegration,
     },
     ffi_wrappers::wlcs_server,
-    wlcs_server_integration, Pointer, Touch, Wlcs,
+    wlcs_server_integration,
 };
 
 wlcs_server_integration!(PinnacleHandle);

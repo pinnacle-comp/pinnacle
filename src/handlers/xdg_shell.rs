@@ -1,22 +1,22 @@
 use smithay::{
     delegate_xdg_shell,
     desktop::{
-        find_popup_root_surface, layer_map_for_output, PopupKeyboardGrab, PopupKind,
-        PopupPointerGrab, PopupUngrabStrategy, Window, WindowSurfaceType,
+        PopupKeyboardGrab, PopupKind, PopupPointerGrab, PopupUngrabStrategy, Window,
+        WindowSurfaceType, find_popup_root_surface, layer_map_for_output,
     },
-    input::{pointer::Focus, Seat},
+    input::{Seat, pointer::Focus},
     reexports::{
         calloop::Interest,
         wayland_protocols::xdg::shell::server::xdg_toplevel::ResizeEdge,
         wayland_server::{
-            protocol::{wl_output::WlOutput, wl_seat::WlSeat},
             Resource,
+            protocol::{wl_output::WlOutput, wl_seat::WlSeat},
         },
     },
     utils::{HookId, Serial},
     wayland::{
         compositor::{
-            self, add_pre_commit_hook, BufferAssignment, CompositorHandler, SurfaceAttributes,
+            self, BufferAssignment, CompositorHandler, SurfaceAttributes, add_pre_commit_hook,
         },
         shell::xdg::{
             PopupSurface, PositionerState, ToplevelSurface, XdgShellHandler, XdgShellState,
@@ -30,8 +30,8 @@ use crate::{
     focus::keyboard::KeyboardFocusTarget,
     state::{State, WithState},
     window::{
-        rules::ClientRequests, window_state::FullscreenOrMaximized, Unmapped, UnmappedState,
-        WindowElement,
+        Unmapped, UnmappedState, WindowElement, rules::ClientRequests,
+        window_state::FullscreenOrMaximized,
     },
 };
 

@@ -1,8 +1,8 @@
 use std::{ffi::CString, io::Write, time::Duration};
 
 use drm_sys::{
-    drm_mode_modeinfo, DRM_MODE_FLAG_NHSYNC, DRM_MODE_FLAG_NVSYNC, DRM_MODE_FLAG_PHSYNC,
-    DRM_MODE_FLAG_PVSYNC, DRM_MODE_TYPE_USERDEF,
+    DRM_MODE_FLAG_NHSYNC, DRM_MODE_FLAG_NVSYNC, DRM_MODE_FLAG_PHSYNC, DRM_MODE_FLAG_PVSYNC,
+    DRM_MODE_TYPE_USERDEF, drm_mode_modeinfo,
 };
 use libdisplay_info::cvt::{self, ReducedBlankingVersion};
 use smithay::reexports::drm::{self, control::ModeFlags};
