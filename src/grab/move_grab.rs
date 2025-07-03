@@ -21,7 +21,7 @@ use tracing::{debug, warn};
 
 use crate::{
     state::{State, WithState},
-    window::WindowElement,
+    window::{window_state::LayoutModeKind, WindowElement},
 };
 
 /// Data for moving a window.
@@ -57,94 +57,111 @@ impl PointerGrab<State> for MoveSurfaceGrab {
 
         state.pinnacle.raise_window(self.window.clone());
 
-        let is_floating = self
-            .window
-            .with_state(|state| state.layout_mode.is_floating());
+        let layout_mode = self.window.with_state(|state| state.layout_mode.current());
 
-        if is_floating {
-            let delta = event.location - self.start_data.location;
-            let new_loc = self.initial_window_loc.to_f64() + delta;
-            // FIXME: space maps locs as i32 not f64
-            state
-                .pinnacle
-                .space
-                .map_element(self.window.clone(), new_loc.to_i32_round(), false);
+        let output_under_pointer = state
+            .pinnacle
+            .pointer_contents
+            .output_under
+            .as_ref()
+            .and_then(|op| op.upgrade());
 
-            self.window.with_state_mut(|state| {
-                state.set_floating_loc(new_loc.to_i32_round());
-            });
+        match layout_mode {
+            LayoutModeKind::Tiled => {
+                let tag_output = self.window.output(&state.pinnacle);
+                if let Some(output_under_pointer) = output_under_pointer {
+                    if Some(&output_under_pointer) != tag_output.as_ref() {
+                        self.window.set_tags_to_output(&output_under_pointer);
 
-            if let Some(surface) = self.window.x11_surface() {
-                if !surface.is_override_redirect() {
-                    let geo = surface.geometry();
-                    let new_geo = Rectangle::new(new_loc.to_i32_round(), geo.size);
-                    surface
-                        .configure(new_geo)
-                        .expect("failed to configure x11 win");
-                }
-            }
+                        state.pinnacle.request_layout(&output_under_pointer);
 
-            let outputs = state.pinnacle.space.outputs_for_element(&self.window);
-            for output in outputs {
-                state.schedule_render(&output);
-            }
-        } else {
-            let tag_output = self.window.output(&state.pinnacle);
-            if let Some(focused_output) = state.pinnacle.focused_output().cloned() {
-                if Some(&focused_output) != tag_output.as_ref() {
-                    self.window.set_tags_to_output(&focused_output);
-
-                    state.pinnacle.request_layout(&focused_output);
-
-                    if let Some(tag_output) = tag_output {
-                        state.pinnacle.request_layout(&tag_output);
+                        if let Some(tag_output) = tag_output {
+                            state.pinnacle.request_layout(&tag_output);
+                        }
                     }
                 }
-            }
 
-            // INFO: this is being used instead of space.element_under(event.location) because that
-            // |     uses the bounding box, which is different from the actual geometry
-            let window_under = state
-                .pinnacle
-                .space
-                .elements()
-                .filter(|win| win.is_on_active_tag())
-                .rev()
-                .find(|&win| {
-                    if let Some(loc) = state.pinnacle.space.element_location(win) {
-                        let size = win.geometry().size;
-                        let rect = Rectangle { size, loc };
-                        rect.contains(event.location.to_i32_round())
-                    } else {
-                        false
-                    }
-                })
-                .cloned();
-
-            if let Some(window_under) = window_under {
-                if state.pinnacle.layout_state.pending_swap {
-                    return;
-                }
-
-                if window_under == self.window {
-                    return;
-                }
-
-                if window_under.with_state(|state| state.layout_mode.is_floating()) {
-                    return;
-                }
-
-                let output = self.window.output(&state.pinnacle);
-
-                debug!("Swapping window positions");
-                state
+                // INFO: this is being used instead of space.element_under(event.location) because that
+                // |     uses the bounding box, which is different from the actual geometry
+                let window_under = state
                     .pinnacle
-                    .swap_window_positions(&self.window, &window_under);
+                    .space
+                    .elements()
+                    .filter(|win| win.is_on_active_tag())
+                    .rev()
+                    .find(|&win| {
+                        if let Some(loc) = state.pinnacle.space.element_location(win) {
+                            let size = win.geometry().size;
+                            let rect = Rectangle { size, loc };
+                            rect.contains(event.location.to_i32_round())
+                        } else {
+                            false
+                        }
+                    })
+                    .cloned();
 
-                state.pinnacle.layout_state.pending_swap = true;
+                if let Some(window_under) = window_under {
+                    if state.pinnacle.layout_state.pending_swap {
+                        return;
+                    }
 
-                if let Some(output) = output.as_ref() {
-                    state.pinnacle.request_layout(output);
+                    if window_under == self.window {
+                        return;
+                    }
+
+                    if window_under.with_state(|state| state.layout_mode.is_floating()) {
+                        return;
+                    }
+
+                    let output = self.window.output(&state.pinnacle);
+
+                    debug!("Swapping window positions");
+                    state
+                        .pinnacle
+                        .swap_window_positions(&self.window, &window_under);
+
+                    state.pinnacle.layout_state.pending_swap = true;
+
+                    if let Some(output) = output.as_ref() {
+                        state.pinnacle.request_layout(output);
+                    }
+                }
+            }
+            LayoutModeKind::Floating => {
+                let delta = event.location - self.start_data.location;
+                let new_loc = self.initial_window_loc.to_f64() + delta;
+                state.pinnacle.space.map_element(
+                    self.window.clone(),
+                    new_loc.to_i32_round(),
+                    false,
+                );
+
+                self.window.with_state_mut(|state| {
+                    state.set_floating_loc(new_loc.to_i32_round());
+                });
+
+                if let Some(surface) = self.window.x11_surface() {
+                    if !surface.is_override_redirect() {
+                        let geo = surface.geometry();
+                        let new_geo = Rectangle::new(new_loc.to_i32_round(), geo.size);
+                        surface
+                            .configure(new_geo)
+                            .expect("failed to configure x11 win");
+                    }
+                }
+
+                let outputs = state.pinnacle.space.outputs_for_element(&self.window);
+                for output in outputs {
+                    state.schedule_render(&output);
+                }
+            }
+            LayoutModeKind::Maximized | LayoutModeKind::Fullscreen => {
+                let tag_output = self.window.output(&state.pinnacle);
+                if let Some(output_under_pointer) = output_under_pointer {
+                    if Some(&output_under_pointer) != tag_output.as_ref() {
+                        self.window.set_tags_to_output(&output_under_pointer);
+                        state.update_window_layout_mode_and_layout(&self.window, |_| ());
+                    }
                 }
             }
         }
