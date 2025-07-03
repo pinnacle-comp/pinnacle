@@ -25,7 +25,7 @@ Alternatively, you can build and install Pinnacle from source.
 
 ### Dependencies
 
-To build the project, you will need Rust 1.82 or newer.
+To build the project, you will need Rust 1.88 or newer.
 
 First, you will need the following dependencies:
 - [`just`](https://github.com/casey/just)
