@@ -651,6 +651,16 @@ function WindowHandle:tiled()
     return response and response.layout_mode == layout_mode_def.LAYOUT_MODE_TILED or false
 end
 
+---Gets whether this window is spilled from the layout.
+---
+---@return boolean
+function WindowHandle:spilled()
+    local response, err =
+        client:pinnacle_window_v1_WindowService_GetLayoutMode({ window_id = self.id })
+
+    return response and response.layout_mode == layout_mode_def.LAYOUT_MODE_SPILLED or false
+end
+
 ---Gets whether this window is fullscreen.
 ---
 ---@return boolean
