@@ -680,6 +680,16 @@ impl WindowHandle {
         self.layout_mode_async().await == LayoutMode::Floating
     }
 
+    /// Gets whether or not this window was spilled by the layout.
+    pub fn spilled(&self) -> bool {
+        self.spilled_async().block_on_tokio()
+    }
+
+    /// Async impl for [`Self::spilled`].
+    pub async fn spilled_async(&self) -> bool {
+        self.layout_mode_async().await == LayoutMode::Spilled
+    }
+
     /// Gets whether or not this window is fullscreen.
     pub fn fullscreen(&self) -> bool {
         self.fullscreen_async().block_on_tokio()
