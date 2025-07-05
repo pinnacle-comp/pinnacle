@@ -127,7 +127,7 @@ impl PointerGrab<State> for MoveSurfaceGrab {
                     }
                 }
             }
-            LayoutModeKind::Floating => {
+            LayoutModeKind::Floating | LayoutModeKind::Spilled => {
                 let delta = event.location - self.start_data.location;
                 let new_loc = self.initial_window_loc.to_f64() + delta;
                 state.pinnacle.space.map_element(

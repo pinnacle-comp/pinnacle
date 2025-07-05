@@ -71,6 +71,7 @@ pub enum LayoutModeKind {
     Floating,
     Maximized,
     Fullscreen,
+    Spilled,
 }
 
 impl LayoutModeKind {
@@ -104,6 +105,14 @@ impl LayoutModeKind {
     #[must_use]
     fn is_fullscreen(&self) -> bool {
         matches!(self, Self::Fullscreen)
+    }
+
+    /// Returns `true` if the LayoutModeKind is [`Spilled`]
+    ///
+    /// [`Spilled`]: LayoutModeKind::Spilled
+    #[must_use]
+    fn is_spilled(&self) -> bool {
+        matches!(self, Self::Spilled)
     }
 }
 
@@ -186,6 +195,7 @@ impl LayoutMode {
             .unwrap_or_else(|| match self.base_mode {
                 FloatingOrTiled::Floating => LayoutModeKind::Floating,
                 FloatingOrTiled::Tiled => LayoutModeKind::Tiled,
+                FloatingOrTiled::Spilled => LayoutModeKind::Spilled,
             })
     }
 
@@ -195,6 +205,10 @@ impl LayoutMode {
 
     pub fn is_floating(&self) -> bool {
         self.current().is_floating()
+    }
+
+    pub fn is_spilled(&self) -> bool {
+        self.current().is_spilled()
     }
 
     pub fn is_fullscreen(&self) -> bool {
@@ -219,6 +233,25 @@ impl LayoutMode {
                     self.client_requested_mode = None;
                     self.elevated_mode = None;
                     self.base_mode = FloatingOrTiled::Tiled;
+                }
+            }
+        }
+    }
+
+    pub fn set_spilled(&mut self, spilled: bool) {
+        match spilled {
+            true => {
+                if !self.is_spilled() {
+                    self.client_requested_mode = None;
+                    self.elevated_mode = None;
+                    self.base_mode = FloatingOrTiled::Spilled;
+                }
+            }
+            false => {
+                if self.is_spilled() {
+                    self.client_requested_mode = None;
+                    self.elevated_mode = None;
+                    self.base_mode = FloatingOrTiled::Tiled
                 }
             }
         }
@@ -456,7 +489,7 @@ impl Pinnacle {
 
         match layout_mode.current() {
             LayoutModeKind::Tiled => (),
-            LayoutModeKind::Floating => {
+            LayoutModeKind::Floating | LayoutModeKind::Spilled => {
                 window.set_floating_states();
 
                 let (size, loc) =
@@ -532,6 +565,7 @@ pub enum FloatingOrTiled {
     Floating,
     /// The window is tiled.
     Tiled,
+    Spilled,
 }
 
 impl FloatingOrTiled {
@@ -548,6 +582,11 @@ impl FloatingOrTiled {
     /// [`Tiled`]: FloatingOrTiled::Tiled
     #[must_use]
     pub fn is_tiled(&self) -> bool {
+        matches!(self, Self::Tiled)
+    }
+
+    #[must_use]
+    pub fn is_spilled(&self) -> bool {
         matches!(self, Self::Tiled)
     }
 }

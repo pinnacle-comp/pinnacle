@@ -180,6 +180,8 @@ pub enum LayoutMode {
     Fullscreen,
     /// The window is maximized.
     Maximized,
+    /// The window was spilled from the layout
+    Spilled,
 }
 
 impl TryFrom<pinnacle_api_defs::pinnacle::window::v1::LayoutMode> for LayoutMode {
@@ -194,6 +196,7 @@ impl TryFrom<pinnacle_api_defs::pinnacle::window::v1::LayoutMode> for LayoutMode
             window::v1::LayoutMode::Floating => Ok(LayoutMode::Floating),
             window::v1::LayoutMode::Fullscreen => Ok(LayoutMode::Fullscreen),
             window::v1::LayoutMode::Maximized => Ok(LayoutMode::Maximized),
+            window::v1::LayoutMode::Spilled => Ok(LayoutMode::Spilled),
         }
     }
 }
@@ -675,6 +678,26 @@ impl WindowHandle {
     /// Async impl for [`Self::floating`].
     pub async fn floating_async(&self) -> bool {
         self.layout_mode_async().await == LayoutMode::Floating
+    }
+
+    /// Gets whether or not this window is tiled
+    pub fn tiled(&self) -> bool {
+        self.tiled_async().block_on_tokio()
+    }
+
+    /// Async impl for [`Self::tiled`].
+    pub async fn tiled_async(&self) -> bool {
+        self.layout_mode_async().await == LayoutMode::Tiled
+    }
+
+    /// Gets whether or not this window was spilled by the layout.
+    pub fn spilled(&self) -> bool {
+        self.spilled_async().block_on_tokio()
+    }
+
+    /// Async impl for [`Self::spilled`].
+    pub async fn spilled_async(&self) -> bool {
+        self.layout_mode_async().await == LayoutMode::Spilled
     }
 
     /// Gets whether or not this window is fullscreen.
