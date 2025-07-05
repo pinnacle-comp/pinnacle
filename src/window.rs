@@ -9,17 +9,23 @@ use rules::{ClientRequests, WindowRules};
 use smithay::{
     desktop::{Window, WindowSurface, space::SpaceElement},
     output::{Output, WeakOutput},
-    reexports::wayland_server::protocol::wl_surface::WlSurface,
+    reexports::{
+        wayland_protocols::xdg::shell::server::xdg_positioner::{
+            Anchor, ConstraintAdjustment, Gravity,
+        },
+        wayland_server::protocol::wl_surface::WlSurface,
+    },
     utils::{IsAlive, Logical, Point, Rectangle, Serial},
     wayland::{
         compositor,
         seat::WaylandFocus,
-        shell::xdg::{SurfaceCachedState, XdgToplevelSurfaceData},
+        shell::xdg::{PositionerState, SurfaceCachedState, XdgToplevelSurfaceData},
         xdg_activation::XdgActivationTokenData,
     },
     xwayland::xwm::WmWindowType,
 };
 use tracing::{error, warn};
+use window_state::LayoutModeKind;
 
 use crate::{
     render::util::snapshot::WindowSnapshot,
@@ -438,6 +444,67 @@ impl Pinnacle {
             if tag_output != overlapping_output {
                 win.set_tags_to_output(&overlapping_output);
             }
+        }
+    }
+
+    pub fn compute_window_geometry(
+        &self,
+        window: &WindowElement,
+        output_geo: Rectangle<i32, Logical>,
+        non_exclusive_zone: Rectangle<i32, Logical>,
+    ) -> Option<Rectangle<i32, Logical>> {
+        let mut non_exclusive_geo = non_exclusive_zone;
+        non_exclusive_geo.loc += output_geo.loc;
+
+        match window.with_state(|state| state.layout_mode.current()) {
+            LayoutModeKind::Tiled => None,
+            LayoutModeKind::Floating => {
+                let mut size = window.with_state(|state| state.floating_size);
+                if size.is_empty() {
+                    size = window.geometry().size;
+                }
+
+                let center_rect = self
+                    .parent_window_for(window)
+                    .and_then(|parent| self.space.element_geometry(parent))
+                    .unwrap_or(non_exclusive_geo);
+
+                let set_x = window.with_state(|state| state.floating_x);
+                let set_y = window.with_state(|state| state.floating_y);
+
+                let floating_loc = window
+                    .with_state(|state| state.floating_loc())
+                    .or_else(|| self.space.element_location(window))
+                    .unwrap_or_else(|| {
+                        // Attempt to center the window within its parent.
+                        // If it has no parent, center it within the non-exclusive zone of its output.
+                        //
+                        // We use a positioner to slide the window so that it isn't off screen.
+
+                        let positioner = PositionerState {
+                            rect_size: size,
+                            anchor_rect: center_rect,
+                            anchor_edges: Anchor::None,
+                            gravity: Gravity::None,
+                            constraint_adjustment: ConstraintAdjustment::SlideX
+                                | ConstraintAdjustment::SlideY,
+                            offset: (0, 0).into(),
+                            ..Default::default()
+                        };
+
+                        positioner.get_unconstrained_geometry(non_exclusive_geo).loc
+                    });
+
+                window.with_state_mut(|state| {
+                    state.floating_x = Some(set_x.unwrap_or(floating_loc.x));
+                    state.floating_y = Some(set_y.unwrap_or(floating_loc.y));
+                    state.floating_size = size;
+                });
+
+                Some(Rectangle::new(floating_loc, size))
+            }
+            LayoutModeKind::Maximized => Some(non_exclusive_geo),
+            LayoutModeKind::Fullscreen => Some(output_geo),
         }
     }
 }
