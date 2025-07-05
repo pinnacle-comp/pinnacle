@@ -680,6 +680,16 @@ impl WindowHandle {
         self.layout_mode_async().await == LayoutMode::Floating
     }
 
+    /// Gets whether or not this window is tiled.
+    pub fn tiled(&self) -> bool {
+        self.tiled_async().block_on_tokio()
+    }
+
+    /// Async impl for [`Self::tiled`].
+    pub async fn tiled_async(&self) -> bool {
+        self.layout_mode_async().await == LayoutMode::Tiled
+    }
+
     /// Gets whether or not this window is spilled from the layout.
     pub fn spilled(&self) -> bool {
         self.spilled_async().block_on_tokio()
