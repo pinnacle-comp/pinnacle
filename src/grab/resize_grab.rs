@@ -401,9 +401,7 @@ impl State {
             };
 
             if window.with_state(|state| {
-                !state.layout_mode.is_floating()
-                    && !state.layout_mode.is_tiled()
-                    && !state.layout_mode.is_spilled()
+                state.layout_mode.is_maximized() || state.layout_mode.is_fullscreen()
             }) {
                 return;
             }
@@ -454,9 +452,7 @@ impl State {
         };
 
         if window.with_state(|state| {
-            !state.layout_mode.is_floating()
-                && !state.layout_mode.is_tiled()
-                && !state.layout_mode.is_spilled()
+            state.layout_mode.is_maximized() || state.layout_mode.is_fullscreen()
         }) {
             return;
         }
