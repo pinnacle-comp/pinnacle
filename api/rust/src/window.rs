@@ -180,6 +180,8 @@ pub enum LayoutMode {
     Fullscreen,
     /// The window is maximized.
     Maximized,
+    /// The window was spilled from the layout
+    Spilled,
 }
 
 impl TryFrom<pinnacle_api_defs::pinnacle::window::v1::LayoutMode> for LayoutMode {
@@ -194,6 +196,7 @@ impl TryFrom<pinnacle_api_defs::pinnacle::window::v1::LayoutMode> for LayoutMode
             window::v1::LayoutMode::Floating => Ok(LayoutMode::Floating),
             window::v1::LayoutMode::Fullscreen => Ok(LayoutMode::Fullscreen),
             window::v1::LayoutMode::Maximized => Ok(LayoutMode::Maximized),
+            window::v1::LayoutMode::Spilled => Ok(LayoutMode::Spilled),
         }
     }
 }

@@ -541,6 +541,7 @@ local pinnacle_window_v1_LayoutMode = {
     LAYOUT_MODE_FLOATING = 2,
     LAYOUT_MODE_FULLSCREEN = 3,
     LAYOUT_MODE_MAXIMIZED = 4,
+    LAYOUT_MODE_SPILLED = 5,
 }
 
 ---@enum pinnacle.window.v1.DecorationMode
