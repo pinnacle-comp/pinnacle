@@ -123,7 +123,11 @@ impl Pinnacle {
         let tiled_windows = windows_on_foc_tags
             .iter()
             .filter(|win| !win.is_x11_override_redirect())
-            .filter(|win| win.with_state(|state| state.layout_mode.is_tiled()))
+            .filter(|win| {
+                win.with_state(|state| {
+                    state.layout_mode.is_tiled() || state.layout_mode.is_spilled()
+                })
+            })
             .cloned();
 
         let Some(output_geo) = self.space.output_geometry(output) else {
@@ -132,6 +136,18 @@ impl Pinnacle {
         };
 
         let non_exclusive_geo = layer_map_for_output(output).non_exclusive_zone();
+
+        let spilled_windows = tiled_windows
+            .clone()
+            .skip(geometries.len())
+            .map(|w| {
+                w.with_state_mut(|s| s.layout_mode.set_spilled(true));
+                let geo = self
+                    .compute_window_geometry(&w, output_geo, non_exclusive_geo)
+                    .expect("compute_window_geometry cannot fail for spilled window");
+                (w, geo, false)
+            })
+            .collect::<Vec<_>>();
 
         let mut zipped = tiled_windows.zip(geometries.into_iter().map(|mut geo| {
             geo.loc += output_geo.loc + non_exclusive_geo.loc;
@@ -159,11 +175,13 @@ impl Pinnacle {
 
         let wins_and_geos = wins_and_geos_tiled
             .into_iter()
+            .chain(spilled_windows)
             .chain(wins_and_geos_other)
             .collect::<Vec<_>>();
 
         for (win, geo, is_tiled) in wins_and_geos.iter() {
             if *is_tiled {
+                win.with_state_mut(|s| s.layout_mode.set_spilled(false));
                 win.set_tiled_states();
             } else {
                 self.configure_window_if_nontiled(win);
@@ -495,7 +513,11 @@ impl Pinnacle {
 
         let window_count = windows_on_foc_tags
             .iter()
-            .filter(|win| win.with_state(|state| state.layout_mode.is_tiled()))
+            .filter(|win| {
+                win.with_state(|state| {
+                    state.layout_mode.is_tiled() || state.layout_mode.is_spilled()
+                })
+            })
             .count();
 
         let tag_ids = output.with_state(|state| state.focused_tags().map(|tag| tag.id()).collect());

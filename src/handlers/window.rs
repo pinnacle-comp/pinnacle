@@ -42,7 +42,8 @@ impl State {
         window.with_state_mut(|state| state.layout_mode = new_mode);
 
         let layout_needs_update = old_mode.current() != new_mode.current()
-            && (old_mode.is_tiled() || new_mode.is_tiled());
+            && (old_mode.is_tiled() || new_mode.is_tiled())
+            && (!new_mode.is_spilled());
 
         let non_exclusive_zone = layer_map_for_output(&output).non_exclusive_zone();
         let geo = self
