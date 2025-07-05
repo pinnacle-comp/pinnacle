@@ -34,10 +34,10 @@ impl Pinnacle {
         output: &Output,
         backend: &mut Backend,
         is_resize: bool,
-    ) -> Vec<WindowElement> {
+    ) {
         let Some(tree) = self.layout_state.current_tree_for_output(output) else {
             warn!("no layout tree for output");
-            return Vec::new();
+            return;
         };
 
         let (output_width, output_height) = {
@@ -132,17 +132,21 @@ impl Pinnacle {
 
         let Some(output_geo) = self.space.output_geometry(output) else {
             warn!("Cannot update_windows_from_tree without output geo");
-            return Vec::new();
+            return;
         };
 
         let non_exclusive_geo = layer_map_for_output(output).non_exclusive_zone();
 
-        // TODO: I'm not a huge fan of doing it that way, but until
-        // State.update_window_layout_mode_and_layout gets refactored, it's best to defer setting
-        // the layout since we also need to compute the window geometry. This is a POC and I'm lazy
         let spilled_windows = tiled_windows
             .clone()
             .skip(geometries.len())
+            .map(|w| {
+                w.with_state_mut(|s| s.layout_mode.set_spilled(true));
+                let geo = self
+                    .compute_window_geometry(&w, output, &output_geo)
+                    .expect("compute_window_geometry cannot fail for spilled window");
+                (w, geo, false)
+            })
             .collect::<Vec<_>>();
 
         let mut zipped = tiled_windows.zip(geometries.into_iter().map(|mut geo| {
@@ -171,16 +175,12 @@ impl Pinnacle {
 
         let wins_and_geos = wins_and_geos_tiled
             .into_iter()
+            .chain(spilled_windows)
             .chain(wins_and_geos_other)
             .collect::<Vec<_>>();
 
         for (win, geo, is_tiled) in wins_and_geos.iter() {
             if *is_tiled {
-                // Just remove the spilled here if the window has been tiled.
-                // Since this will not change the layout, it shouldn't matter that we don't use a
-                // transacion.
-                //
-                // TODO: confirm with Check with ottatop
                 win.with_state_mut(|s| s.layout_mode.set_spilled(false));
                 win.set_tiled_states();
             } else {
@@ -241,8 +241,6 @@ impl Pinnacle {
                 }
             });
         }
-
-        spilled_windows
     }
 
     pub fn swap_window_positions(&mut self, win1: &WindowElement, win2: &WindowElement) {
@@ -568,15 +566,8 @@ impl State {
             .entry(output.downgrade())
             .or_default() = tree_id;
 
-        let spilled = self
-            .pinnacle
+        self.pinnacle
             .update_windows_from_tree(&output, &mut self.backend, false);
-
-        for w in spilled {
-            self.update_window_layout_mode_and_layout(&w, |layout_mode| {
-                layout_mode.set_spilled(true)
-            });
-        }
 
         self.schedule_render(&output);
 
