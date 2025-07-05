@@ -52,11 +52,12 @@ impl State {
         window.with_state_mut(|state| state.layout_mode = new_mode);
 
         let layout_needs_update = old_mode.current() != new_mode.current()
-            && (old_mode.is_tiled() || new_mode.is_tiled());
+            && (old_mode.is_tiled() || new_mode.is_tiled())
+            && (!new_mode.is_spilled());
 
         let geo = match window.with_state(|state| state.layout_mode.current()) {
             LayoutModeKind::Tiled => None,
-            LayoutModeKind::Floating => {
+            LayoutModeKind::Floating | LayoutModeKind::Spilled => {
                 let mut size = window.with_state(|state| state.floating_size);
                 if size.is_empty() {
                     size = window.geometry().size;
