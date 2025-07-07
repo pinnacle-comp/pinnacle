@@ -644,6 +644,27 @@ function builtin.fair(options)
     }
 end
 
+---A layout generator that floats windows.
+---
+---This works by simply returning an empty layout tree.
+---Note: the windows are not truly floating, see `WindowHandle::spilled` for
+---details.
+---@class pinnacle.layout.builtin.Floating : pinnacle.layout.LayoutGenerator
+
+---Creates a layout generator that floats windows.
+---
+---@return pinnacle.layout.builtin.Floating
+function builtin.floating()
+    return {
+        layout = function(self, window_count)
+            return {
+                label = "builtin.floating",
+                children = {},
+            }
+        end,
+    }
+end
+
 ---A layout generator that keeps track of layouts per tag
 ---and provides methods to cycle between them.
 ---@class pinnacle.layout.builtin.Cycle : pinnacle.layout.LayoutGenerator

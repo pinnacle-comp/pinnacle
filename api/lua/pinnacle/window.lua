@@ -653,6 +653,11 @@ end
 
 ---Gets whether this window is spilled from the layout.
 ---
+---A window is spilled when the current layout doesn't contains enough nodes
+---and the compositor cannot assign a geometry to it. In that state, the window
+---behaves as a floating window except that it gets tiled again if the number
+---of nodes become big enough.
+---
 ---@return boolean
 function WindowHandle:spilled()
     local response, err =

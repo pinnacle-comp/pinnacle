@@ -162,7 +162,7 @@ Pinnacle.setup(function()
     -- the `layout` function, which takes in a window count and computes
     -- a tree of layout nodes that determines how windows are laid out.
     --
-    -- There are currently six built-in layout generators, one of which delegates to other
+    -- There are currently seven built-in layout generators, one of which delegates to other
     -- generators as shown below.
 
     -- Create a cycling layout generator. This provides methods to cycle
@@ -183,6 +183,7 @@ Pinnacle.setup(function()
         Layout.builtin.corner({ corner_loc = "bottom_right" }),
         Layout.builtin.fair(),
         Layout.builtin.fair({ axis = "horizontal" }),
+        Layout.builtin.floating(),
     })
 
     -- Use the cycling layout generator to manage layout requests.
