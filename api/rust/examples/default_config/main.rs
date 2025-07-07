@@ -14,6 +14,7 @@ use pinnacle_api::layout::generators::CornerLocation;
 use pinnacle_api::layout::generators::Cycle;
 use pinnacle_api::layout::generators::Dwindle;
 use pinnacle_api::layout::generators::Fair;
+use pinnacle_api::layout::generators::Floating;
 use pinnacle_api::layout::generators::MasterSide;
 use pinnacle_api::layout::generators::MasterStack;
 use pinnacle_api::layout::generators::Spiral;
@@ -209,6 +210,7 @@ async fn config() {
             axis: Axis::Horizontal,
             ..Default::default()
         }),
+        into_box(Floating::default()),
     ])));
 
     // Use the cycling layout generator to manage layout requests.
