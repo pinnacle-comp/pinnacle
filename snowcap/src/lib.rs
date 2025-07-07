@@ -1,5 +1,6 @@
 pub mod api;
 pub mod clipboard;
+pub mod compositor;
 pub mod handlers;
 pub mod input;
 pub mod layer;
@@ -14,10 +15,7 @@ use std::time::Duration;
 
 use futures::Future;
 use server::socket_dir;
-use smithay_client_toolkit::{
-    reexports::calloop::{self, EventLoop},
-    shell::WaylandSurface,
-};
+use smithay_client_toolkit::reexports::calloop::{self, EventLoop};
 use state::State;
 use tracing::info;
 
@@ -90,16 +88,6 @@ pub fn start(stop_signal_sender: Option<tokio::sync::oneshot::Sender<SnowcapHand
                     });
             if keyboard_focus_is_dead {
                 state.keyboard_focus = None;
-            }
-
-            for layer in state.layers.iter_mut() {
-                if !layer.widgets.is_queue_empty() {
-                    layer
-                        .layer
-                        .wl_surface()
-                        .frame(&state.queue_handle, layer.layer.wl_surface().clone());
-                    layer.layer.commit();
-                }
             }
         })
         .unwrap();

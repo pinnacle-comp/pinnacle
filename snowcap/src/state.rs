@@ -17,10 +17,7 @@ use smithay_client_toolkit::{
 };
 
 use crate::{
-    handlers::keyboard::KeyboardFocus,
-    layer::SnowcapLayer,
-    server::GrpcServerState,
-    wgpu::{Wgpu, setup_wgpu},
+    handlers::keyboard::KeyboardFocus, layer::SnowcapLayer, server::GrpcServerState,
     widget::WidgetIdCounter,
 };
 
@@ -39,7 +36,7 @@ pub struct State {
 
     pub queue_handle: QueueHandle<State>,
 
-    pub wgpu: Wgpu,
+    pub compositor: Option<crate::compositor::Compositor>,
 
     pub layers: Vec<SnowcapLayer>,
 
@@ -90,7 +87,7 @@ impl State {
             layer_shell_state,
             grpc_server_state: None,
             queue_handle,
-            wgpu: setup_wgpu()?,
+            compositor: Default::default(),
             layers: Vec::new(),
             keyboard_focus: None,
             keyboard_modifiers: smithay_client_toolkit::seat::keyboard::Modifiers::default(),

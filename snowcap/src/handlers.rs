@@ -1,6 +1,8 @@
 pub mod keyboard;
 pub mod pointer;
 
+use std::time::Instant;
+
 use iced_wgpu::graphics::Viewport;
 use smithay_client_toolkit::{
     compositor::CompositorHandler,
@@ -122,12 +124,10 @@ impl LayerShellHandler for State {
         let layer = self.layers.iter_mut().find(|l| &l.layer == layer);
 
         if let Some(layer) = layer {
-            layer.update_and_draw(
-                &self.wgpu.device,
-                &self.wgpu.queue,
-                &mut self.wgpu.renderer,
-                qh,
-            );
+            if !layer.initial_configure {
+                layer.initial_configure = true;
+                layer.update_and_draw(qh);
+            }
         }
     }
 }
@@ -153,13 +153,11 @@ impl CompositorHandler for State {
                 ),
                 new_factor as f64,
             );
-            layer.set_scale(new_factor, &self.wgpu.device);
-            layer.update_and_draw(
-                &self.wgpu.device,
-                &self.wgpu.queue,
-                &mut self.wgpu.renderer,
-                qh,
+            layer.set_scale(
+                new_factor,
+                self.compositor.as_mut().expect("should be initialized"),
             );
+            layer.update_and_draw(qh);
         }
     }
 
@@ -186,12 +184,10 @@ impl CompositorHandler for State {
             .find(|layer| layer.layer.wl_surface() == surface);
 
         if let Some(layer) = layer {
-            layer.update_and_draw(
-                &self.wgpu.device,
-                &self.wgpu.queue,
-                &mut self.wgpu.renderer,
-                qh,
-            );
+            layer.widgets.queued_events.push(iced::Event::Window(
+                iced::window::Event::RedrawRequested(Instant::now()),
+            ));
+            layer.update_and_draw(qh);
         }
     }
 
