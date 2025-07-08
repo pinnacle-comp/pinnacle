@@ -87,10 +87,12 @@ proptest! {
         let mut tree = LayoutTree::new(root_node);
         let geos_and_nodes = tree.compute_geos(w, h);
 
-        let &(_, resize_node) = geos_and_nodes.choose(&mut rand::rng()).unwrap();
+        if !geos_and_nodes.is_empty() {
+            let &(_, resize_node) = geos_and_nodes.choose(&mut rand::rng()).unwrap();
 
-        tree.resize_tile(resize_node, new_size, resize_x_dir, resize_y_dir);
+            tree.resize_tile(resize_node, new_size, resize_x_dir, resize_y_dir);
 
-        let _ = tree.compute_geos(w, h);
+            let _ = tree.compute_geos(w, h);
+        }
     }
 }

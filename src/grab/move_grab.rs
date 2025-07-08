@@ -57,7 +57,7 @@ impl PointerGrab<State> for MoveSurfaceGrab {
 
         state.pinnacle.raise_window(self.window.clone());
 
-        let layout_mode = self.window.with_state(|state| state.layout_mode.current());
+        let mut layout_mode = self.window.with_state(|state| state.layout_mode.current());
 
         let output_under_pointer = state
             .pinnacle
@@ -65,6 +65,12 @@ impl PointerGrab<State> for MoveSurfaceGrab {
             .output_under
             .as_ref()
             .and_then(|op| op.upgrade());
+
+        let win_output = self.window.output(&state.pinnacle);
+
+        if matches!(layout_mode, LayoutModeKind::Spilled) && win_output != output_under_pointer {
+            layout_mode = LayoutModeKind::Tiled;
+        }
 
         match layout_mode {
             LayoutModeKind::Tiled => {
@@ -109,7 +115,7 @@ impl PointerGrab<State> for MoveSurfaceGrab {
                         return;
                     }
 
-                    if window_under.with_state(|state| state.layout_mode.is_floating()) {
+                    if window_under.with_state(|state| !state.layout_mode.is_tiled()) {
                         return;
                     }
 
@@ -127,7 +133,7 @@ impl PointerGrab<State> for MoveSurfaceGrab {
                     }
                 }
             }
-            LayoutModeKind::Floating => {
+            LayoutModeKind::Floating | LayoutModeKind::Spilled => {
                 let delta = event.location - self.start_data.location;
                 let new_loc = self.initial_window_loc.to_f64() + delta;
                 state.pinnacle.space.map_element(

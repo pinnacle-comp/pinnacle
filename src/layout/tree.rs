@@ -327,6 +327,10 @@ impl LayoutTree {
                 .unwrap();
         }
 
+        if self.root.children.is_empty() {
+            return Vec::new();
+        }
+
         let mut geos = Vec::new();
 
         let mut node_assigned = HashSet::<taffy::NodeId>::new();

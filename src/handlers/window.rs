@@ -1,22 +1,12 @@
 use std::time::Duration;
 
-use smithay::{
-    desktop::{layer_map_for_output, utils::surface_primary_scanout_output},
-    reexports::wayland_protocols::xdg::shell::server::xdg_positioner::{
-        Anchor, ConstraintAdjustment, Gravity,
-    },
-    utils::Rectangle,
-    wayland::shell::xdg::PositionerState,
-};
+use smithay::desktop::{layer_map_for_output, utils::surface_primary_scanout_output};
 use tracing::error;
 
 use crate::{
     state::{State, WithState},
     util::transaction::{Location, TransactionBuilder},
-    window::{
-        WindowElement,
-        window_state::{LayoutMode, LayoutModeKind},
-    },
+    window::{WindowElement, window_state::LayoutMode},
 };
 
 impl State {
@@ -52,68 +42,13 @@ impl State {
         window.with_state_mut(|state| state.layout_mode = new_mode);
 
         let layout_needs_update = old_mode.current() != new_mode.current()
-            && (old_mode.is_tiled() || new_mode.is_tiled());
+            && (old_mode.is_tiled() || new_mode.is_tiled())
+            && (!new_mode.is_spilled());
 
-        let geo = match window.with_state(|state| state.layout_mode.current()) {
-            LayoutModeKind::Tiled => None,
-            LayoutModeKind::Floating => {
-                let mut size = window.with_state(|state| state.floating_size);
-                if size.is_empty() {
-                    size = window.geometry().size;
-                }
-
-                let mut working_output_geo = layer_map_for_output(&output).non_exclusive_zone();
-                working_output_geo.loc += output_geo.loc;
-
-                let center_rect = self
-                    .pinnacle
-                    .parent_window_for(window)
-                    .and_then(|parent| self.pinnacle.space.element_geometry(parent))
-                    .unwrap_or(working_output_geo);
-
-                let set_x = window.with_state(|state| state.floating_x);
-                let set_y = window.with_state(|state| state.floating_y);
-
-                let floating_loc = window
-                    .with_state(|state| state.floating_loc())
-                    .or_else(|| self.pinnacle.space.element_location(window))
-                    .unwrap_or_else(|| {
-                        // Attempt to center the window within its parent.
-                        // If it has no parent, center it within the non-exclusive zone of its output.
-                        //
-                        // We use a positioner to slide the window so that it isn't off screen.
-
-                        let positioner = PositionerState {
-                            rect_size: size,
-                            anchor_rect: center_rect,
-                            anchor_edges: Anchor::None,
-                            gravity: Gravity::None,
-                            constraint_adjustment: ConstraintAdjustment::SlideX
-                                | ConstraintAdjustment::SlideY,
-                            offset: (0, 0).into(),
-                            ..Default::default()
-                        };
-
-                        positioner
-                            .get_unconstrained_geometry(working_output_geo)
-                            .loc
-                    });
-
-                window.with_state_mut(|state| {
-                    state.floating_x = Some(set_x.unwrap_or(floating_loc.x));
-                    state.floating_y = Some(set_y.unwrap_or(floating_loc.y));
-                    state.floating_size = size;
-                });
-
-                Some(Rectangle::new(floating_loc, size))
-            }
-            LayoutModeKind::Maximized => {
-                let mut non_exclusive_geo = layer_map_for_output(&output).non_exclusive_zone();
-                non_exclusive_geo.loc += output_geo.loc;
-                Some(non_exclusive_geo)
-            }
-            LayoutModeKind::Fullscreen => Some(output_geo),
-        };
+        let non_exclusive_zone = layer_map_for_output(&output).non_exclusive_zone();
+        let geo = self
+            .pinnacle
+            .compute_window_geometry(window, output_geo, non_exclusive_zone);
 
         if !window.is_on_active_tag() {
             return;

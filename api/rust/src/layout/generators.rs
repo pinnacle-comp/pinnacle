@@ -531,6 +531,21 @@ impl LayoutGenerator for Fair {
     }
 }
 
+/// A [`LayoutGenerator`] that floats windows.
+///
+/// This works by simply returning an empty layout tree.<br>
+/// Note: the windows are not truly floating, see [`WindowHandle::spilled`] for details.
+///
+/// [`WindowHandle::spilled`]: crate::window::WindowHandle::spilled
+#[derive(Copy, Clone, Debug, Default, PartialEq)]
+pub struct Floating {}
+
+impl LayoutGenerator for Floating {
+    fn layout(&self, _win_count: u32) -> LayoutNode {
+        LayoutNode::new_with_label("builtin.floating")
+    }
+}
+
 /// A [`LayoutGenerator`] that keeps track of layouts per tag and provides
 /// methods to cycle between them.
 pub struct Cycle<T> {

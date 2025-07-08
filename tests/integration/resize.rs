@@ -27,9 +27,14 @@ fn test_thing() {
     let handle = fixture.runtime_handle();
     let _guard = handle.enter();
 
-    pinnacle_api::layout::manage(|_| pinnacle_api::layout::LayoutResponse {
-        root_node: LayoutNode::new(),
-        tree_id: 0,
+    pinnacle_api::layout::manage(|_| {
+        let root_node = LayoutNode::new();
+        root_node.add_child(LayoutNode::new());
+
+        pinnacle_api::layout::LayoutResponse {
+            root_node,
+            tree_id: 0,
+        }
     });
 
     // Add a window
