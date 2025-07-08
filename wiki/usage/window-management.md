@@ -31,3 +31,10 @@ Fullscreen windows completely fill the screen. They will also render above all l
 except for those on the overlay layer.
 
 ![Fullscreen layout](/assets/fullscreen.png)
+
+Spilled windows behave like floating windows, but are still tracked by the
+tiled layout. This mode is set by the compositor on windows that should be
+tiled but aren't due to the layout lacking free tiles. Contrary to floating
+windows, spilled ones will become tiled automatically if the layout starts
+providing enough empty tiles.
+
