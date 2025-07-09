@@ -181,10 +181,8 @@ impl layer_service_server::LayerService for LayerService {
                 anchor,
                 exclusive_zone,
                 keyboard_interactivity,
-                crate::widget::SnowcapWidgetProgram {
-                    widgets: f,
-                    widget_state: states,
-                },
+                f,
+                states,
             );
 
             let ret = Ok(NewLayerResponse {

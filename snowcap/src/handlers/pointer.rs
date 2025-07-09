@@ -84,7 +84,7 @@ impl PointerHandler for State {
                 }
             };
 
-            layer.widgets.queue_event(iced_event);
+            layer.widgets.queued_events.push(iced_event);
         }
     }
 }

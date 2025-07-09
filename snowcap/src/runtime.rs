@@ -21,6 +21,10 @@ impl iced_futures::Executor for CurrentTokioExecutor {
     ) {
         tokio::runtime::Handle::current().spawn(future);
     }
+
+    fn block_on<T>(&self, future: impl Future<Output = T>) -> T {
+        tokio::runtime::Handle::current().block_on(future)
+    }
 }
 
 pub struct CalloopSenderSink<T>(calloop::channel::Sender<T>);

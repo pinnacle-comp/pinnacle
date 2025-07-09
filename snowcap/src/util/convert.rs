@@ -1,5 +1,6 @@
 //! Utilities for converting to and from API types
 
+use iced::widget::scrollable::Scrollbar;
 use snowcap_api_defs::snowcap::widget;
 
 pub trait FromApi {
@@ -34,27 +35,11 @@ impl FromApi for iced::Alignment {
     }
 }
 
-impl FromApi for iced::widget::scrollable::Alignment {
-    type ApiType = widget::v0alpha1::ScrollableAlignment;
-
-    fn from_api(api_type: Self::ApiType) -> Self {
-        match api_type {
-            widget::v0alpha1::ScrollableAlignment::Unspecified => Self::default(),
-            widget::v0alpha1::ScrollableAlignment::Start => {
-                iced::widget::scrollable::Alignment::Start
-            }
-            widget::v0alpha1::ScrollableAlignment::End => iced::widget::scrollable::Alignment::End,
-        }
-    }
-}
-
-impl FromApi for iced::widget::scrollable::Properties {
+impl FromApi for iced::widget::scrollable::Scrollbar {
     type ApiType = widget::v0alpha1::ScrollableProperties;
 
     fn from_api(api_type: Self::ApiType) -> Self {
-        let mut properties = iced::widget::scrollable::Properties::new();
-        let alignment = api_type.alignment();
-        properties = properties.alignment(iced::widget::scrollable::Alignment::from_api(alignment));
+        let mut properties = iced::widget::scrollable::Scrollbar::new();
         if let Some(width) = api_type.width {
             properties = properties.width(width);
         }
@@ -72,14 +57,13 @@ impl FromApi for iced::widget::scrollable::Direction {
     type ApiType = widget::v0alpha1::ScrollableDirection;
 
     fn from_api(api_type: Self::ApiType) -> Self {
-        use iced::widget::scrollable::Properties;
         match (api_type.vertical, api_type.horizontal) {
             (Some(vertical), Some(horizontal)) => Self::Both {
-                vertical: Properties::from_api(vertical),
-                horizontal: Properties::from_api(horizontal),
+                vertical: Scrollbar::from_api(vertical),
+                horizontal: Scrollbar::from_api(horizontal),
             },
-            (Some(vertical), None) => Self::Vertical(Properties::from_api(vertical)),
-            (None, Some(horizontal)) => Self::Horizontal(Properties::from_api(horizontal)),
+            (Some(vertical), None) => Self::Vertical(Scrollbar::from_api(vertical)),
+            (None, Some(horizontal)) => Self::Horizontal(Scrollbar::from_api(horizontal)),
             (None, None) => Self::default(),
         }
     }

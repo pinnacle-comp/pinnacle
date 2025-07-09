@@ -78,14 +78,18 @@ impl KeyboardHandler for State {
             modifiers |= iced::keyboard::Modifiers::LOGO;
         }
 
-        snowcap_layer.widgets.queue_event(iced::Event::Keyboard(
-            iced::keyboard::Event::KeyPressed {
-                key,
+        snowcap_layer
+            .widgets
+            .queued_events
+            .push(iced::Event::Keyboard(iced::keyboard::Event::KeyPressed {
+                key: key.clone(),
                 location,
                 modifiers,
                 text: None,
-            },
-        ));
+                modified_key: key, // TODO:
+                // TODO:
+                physical_key: iced::keyboard::key::Physical::Code(iced::keyboard::key::Code::F13),
+            }));
 
         if let Some(sender) = snowcap_layer.keyboard_key_sender.as_ref() {
             let api_modifiers = input::v0alpha1::Modifiers {
@@ -134,13 +138,18 @@ impl KeyboardHandler for State {
             modifiers |= iced::keyboard::Modifiers::LOGO;
         }
 
-        snowcap_layer.widgets.queue_event(iced::Event::Keyboard(
-            iced::keyboard::Event::KeyReleased {
-                key,
+        snowcap_layer
+            .widgets
+            .queued_events
+            .push(iced::Event::Keyboard(iced::keyboard::Event::KeyReleased {
+                key: key.clone(),
                 location,
                 modifiers,
-            },
-        ));
+                // TODO:
+                modified_key: key,
+                // TODO:
+                physical_key: iced::keyboard::key::Physical::Code(iced::keyboard::key::Code::F13),
+            }));
     }
 
     fn update_modifiers(

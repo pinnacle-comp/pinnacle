@@ -7,10 +7,20 @@ rust-version.workspace = true
 [dependencies]
 smithay-client-toolkit = "0.19.2"
 anyhow = { workspace = true }
-iced = { version = "0.12.1", default-features = false, features = ["wgpu", "tokio"] }
-iced_wgpu = "0.12.1"
-iced_runtime = "0.12.1"
-iced_futures = "0.12.0"
+iced = { git = "https://github.com/iced-rs/iced", rev = "283d0e7", default-features = false, features = ["wgpu", "tokio", "tiny-skia"] }
+iced_wgpu = { git = "https://github.com/iced-rs/iced", rev = "283d0e7" }
+iced_runtime = { git = "https://github.com/iced-rs/iced", rev = "283d0e7" }
+iced_futures = { git = "https://github.com/iced-rs/iced", rev = "283d0e7" }
+iced_graphics = { git = "https://github.com/iced-rs/iced", rev = "283d0e7" }
+iced_tiny_skia = { git = "https://github.com/iced-rs/iced", rev = "283d0e7" }
+iced_renderer = { git = "https://github.com/iced-rs/iced", rev = "283d0e7" }
+# iced = { path = "../../../git/iced", default-features = false, features = ["wgpu", "tokio", "tiny-skia"] }
+# iced_wgpu = { path = "../../../git/iced/wgpu" }
+# iced_runtime = { path = "../../../git/iced/runtime" }
+# iced_futures = { path = "../../../git/iced/futures" }
+# iced_graphics = { path = "../../../git/iced/graphics" }
+# iced_tiny_skia = { path = "../../../git/iced/tiny_skia" }
+# iced_renderer = { path = "../../../git/iced/renderer" }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 raw-window-handle = "0.6.2"

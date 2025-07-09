@@ -1,10 +1,7 @@
 use std::{any::Any, collections::HashMap};
 
-use iced::{
-    Command,
-    widget::{Column, Container, Row, Scrollable},
-};
-use iced_runtime::Program;
+use iced::widget::{Column, Container, Row, Scrollable};
+use iced_runtime::{UserInterface, user_interface};
 use iced_wgpu::core::Element;
 use snowcap_api_defs::snowcap::widget::{
     self,
@@ -49,12 +46,40 @@ impl From<u32> for WidgetId {
 pub struct SnowcapWidgetProgram {
     pub widgets: WidgetFn,
     pub widget_state: HashMap<u32, Box<dyn Any + Send>>,
+    pub user_interface:
+        Option<UserInterface<'static, SnowcapMessage, iced::Theme, iced_renderer::Renderer>>,
+    pub queued_events: Vec<iced::Event>,
+    pub queued_messages: Vec<SnowcapMessage>,
+    pub mouse_interaction: iced::mouse::Interaction,
+}
+
+impl SnowcapWidgetProgram {
+    pub fn new(
+        widgets: WidgetFn,
+        widget_state: HashMap<u32, Box<dyn Any + Send>>,
+        bounds: iced::Size,
+        renderer: &mut iced_renderer::Renderer,
+    ) -> Self {
+        let user_interface = {
+            let view = widgets(&widget_state);
+            UserInterface::build(view, bounds, user_interface::Cache::default(), renderer)
+        };
+
+        Self {
+            widgets,
+            widget_state,
+            user_interface: Some(user_interface),
+            queued_events: Vec::new(),
+            queued_messages: Vec::new(),
+            mouse_interaction: iced::mouse::Interaction::None,
+        }
+    }
 }
 
 pub type WidgetFn = Box<
-    dyn for<'a> Fn(
-        &'a HashMap<u32, Box<dyn Any + Send>>,
-    ) -> Element<'a, SnowcapMessage, iced::Theme, iced_wgpu::Renderer>,
+    dyn Fn(
+        &HashMap<u32, Box<dyn Any + Send>>,
+    ) -> Element<'static, SnowcapMessage, iced::Theme, iced_renderer::Renderer>,
 >;
 
 #[derive(Debug)]
@@ -62,29 +87,6 @@ pub enum SnowcapMessage {
     Noop,
     Close,
     Update(u32, Box<dyn Any + Send>),
-}
-
-impl Program for SnowcapWidgetProgram {
-    type Renderer = iced_wgpu::Renderer;
-
-    type Theme = iced::Theme;
-
-    type Message = SnowcapMessage;
-
-    fn update(&mut self, message: Self::Message) -> Command<Self::Message> {
-        match message {
-            SnowcapMessage::Noop => (),
-            SnowcapMessage::Close => (),
-            SnowcapMessage::Update(id, data) => {
-                self.widget_state.insert(id, data);
-            }
-        }
-        Command::none()
-    }
-
-    fn view(&self) -> Element<'_, Self::Message, Self::Theme, Self::Renderer> {
-        (self.widgets)(&self.widget_state)
-    }
 }
 
 pub fn widget_def_to_fn(def: WidgetDef) -> Option<(WidgetFn, HashMap<u32, Box<dyn Any + Send>>)> {
@@ -130,32 +132,34 @@ fn widget_def_to_fn_inner(
                     text = text.height(iced::Length::from_api(height));
                 }
                 if let Some(color) = color {
-                    text = text.style(iced::theme::Text::Color(iced::Color::from_api(color)));
+                    text = text.style(move |_| iced::widget::text::Style {
+                        color: Some(iced::Color::from_api(color)),
+                    });
                 }
 
                 match horizontal_alignment {
                     widget::v0alpha1::Alignment::Unspecified => (),
                     widget::v0alpha1::Alignment::Start => {
-                        text = text.horizontal_alignment(iced::alignment::Horizontal::Left)
+                        text = text.align_x(iced::alignment::Horizontal::Left)
                     }
                     widget::v0alpha1::Alignment::Center => {
-                        text = text.horizontal_alignment(iced::alignment::Horizontal::Center)
+                        text = text.align_x(iced::alignment::Horizontal::Center)
                     }
                     widget::v0alpha1::Alignment::End => {
-                        text = text.horizontal_alignment(iced::alignment::Horizontal::Right)
+                        text = text.align_x(iced::alignment::Horizontal::Right)
                     }
                 }
 
                 match vertical_alignment {
                     widget::v0alpha1::Alignment::Unspecified => (),
                     widget::v0alpha1::Alignment::Start => {
-                        text = text.vertical_alignment(iced::alignment::Vertical::Top)
+                        text = text.align_y(iced::alignment::Vertical::Top)
                     }
                     widget::v0alpha1::Alignment::Center => {
-                        text = text.vertical_alignment(iced::alignment::Vertical::Center)
+                        text = text.align_y(iced::alignment::Vertical::Center)
                     }
                     widget::v0alpha1::Alignment::End => {
-                        text = text.vertical_alignment(iced::alignment::Vertical::Bottom)
+                        text = text.align_y(iced::alignment::Vertical::Bottom)
                     }
                 }
 
@@ -210,7 +214,7 @@ fn widget_def_to_fn_inner(
                 }
 
                 if let Some(alignment) = item_alignment {
-                    column = column.align_items(match alignment {
+                    column = column.align_x(match alignment {
                         // FIXME: actual conversion logic
                         1 => iced::Alignment::Start,
                         2 => iced::Alignment::Center,
@@ -269,16 +273,16 @@ fn widget_def_to_fn_inner(
                     left,
                 }) = padding
                 {
-                    row = row.padding([
-                        top.unwrap_or_default(),
-                        right.unwrap_or_default(),
-                        bottom.unwrap_or_default(),
-                        left.unwrap_or_default(),
-                    ]);
+                    row = row.padding(iced::Padding {
+                        top: top.unwrap_or_default(),
+                        right: right.unwrap_or_default(),
+                        bottom: bottom.unwrap_or_default(),
+                        left: left.unwrap_or_default(),
+                    });
                 }
 
                 if let Some(alignment) = item_alignment {
-                    row = row.align_items(match alignment {
+                    row = row.align_y(match alignment {
                         // FIXME: actual conversion logic
                         1 => iced::Alignment::Start,
                         2 => iced::Alignment::Center,
@@ -404,11 +408,9 @@ fn widget_def_to_fn_inner(
                 let border_color_clone = border_color;
 
                 let style = move |theme: &iced::Theme| {
-                    use iced::widget::container::Appearance;
-
                     let palette = theme.extended_palette();
 
-                    let mut appearance = Appearance {
+                    let mut style = iced::widget::container::Style {
                         text_color: None,
                         background: Some(palette.background.weak.color.into()),
                         border: iced::Border {
@@ -417,33 +419,33 @@ fn widget_def_to_fn_inner(
                             radius: 2.0.into(),
                         },
                         shadow: iced::Shadow::default(),
+                        snap: false,
                     };
 
                     if let Some(text_color) = text_color_clone {
-                        appearance.text_color = Some(iced::Color::from_api(text_color));
+                        style.text_color = Some(iced::Color::from_api(text_color));
                     }
 
                     if let Some(background_color) = background_color_clone {
-                        appearance.background =
-                            Some(iced::Color::from_api(background_color).into());
+                        style.background = Some(iced::Color::from_api(background_color).into());
                     }
 
                     if let Some(border_color) = border_color_clone {
-                        appearance.border.color = iced::Color::from_api(border_color);
+                        style.border.color = iced::Color::from_api(border_color);
                     }
 
                     if let Some(border_radius) = border_radius {
-                        appearance.border.radius = border_radius.into();
+                        style.border.radius = border_radius.into();
                     }
 
                     if let Some(border_thickness) = border_thickness {
-                        appearance.border.width = border_thickness;
+                        style.border.width = border_thickness;
                     }
 
-                    appearance
+                    style
                 };
 
-                container = container.style(iced::theme::Container::Custom(Box::new(style)));
+                container = container.style(style);
 
                 container.into()
             });

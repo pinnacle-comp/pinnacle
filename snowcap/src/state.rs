@@ -17,10 +17,7 @@ use smithay_client_toolkit::{
 };
 
 use crate::{
-    handlers::keyboard::KeyboardFocus,
-    layer::SnowcapLayer,
-    server::GrpcServerState,
-    wgpu::{Wgpu, setup_wgpu},
+    handlers::keyboard::KeyboardFocus, layer::SnowcapLayer, server::GrpcServerState,
     widget::WidgetIdCounter,
 };
 
@@ -39,7 +36,7 @@ pub struct State {
 
     pub queue_handle: QueueHandle<State>,
 
-    pub wgpu: Wgpu,
+    pub compositor: Option<crate::compositor::Compositor>,
 
     pub layers: Vec<SnowcapLayer>,
 
@@ -79,6 +76,11 @@ impl State {
             .insert(loop_handle.clone())
             .unwrap();
 
+        // Attempt to create a wgpu renderer upfront; this takes a non-trivial amount of time to do
+        let compositor = crate::wgpu::Compositor::new()
+            .ok()
+            .map(crate::compositor::Compositor::Primary);
+
         let state = State {
             loop_handle,
             loop_signal,
@@ -90,7 +92,7 @@ impl State {
             layer_shell_state,
             grpc_server_state: None,
             queue_handle,
-            wgpu: setup_wgpu()?,
+            compositor,
             layers: Vec::new(),
             keyboard_focus: None,
             keyboard_modifiers: smithay_client_toolkit::seat::keyboard::Modifiers::default(),

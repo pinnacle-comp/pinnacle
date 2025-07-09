@@ -480,9 +480,11 @@ pub fn keysym_to_iced_key_and_loc(keysym: Keysym) -> (Key, Location) {
     let mut key = keysym_to_iced_key(keysym);
     if matches!(key, Key::Unidentified) {
         let mut utf8 = xkbcommon::xkb::keysym_to_utf8(keysym);
-        utf8.pop();
-        if !utf8.is_empty() {
-            key = Key::Character(utf8.into());
+        let char = utf8.pop();
+        if let Some(ch) = char
+            && utf8.is_empty()
+        {
+            key = Key::Character(ch.to_string().into());
         }
     }
 
