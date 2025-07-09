@@ -30,6 +30,25 @@ fn set_up() -> (Fixture, Output) {
     (fixture, output)
 }
 
+fn set_up_no_layout() -> (Fixture, Output) {
+    let mut fixture = Fixture::new();
+
+    let output = fixture.add_output(Rectangle::new((0, 0).into(), (1920, 1080).into()));
+    output.with_state_mut(|state| {
+        let tag = Tag::new("1".to_string());
+        tag.set_active(true);
+        state.add_tags([tag]);
+    });
+    fixture.pinnacle().focus_output(&output);
+
+    fixture
+        .runtime_handle()
+        .block_on(pinnacle_api::connect())
+        .unwrap();
+
+    (fixture, output)
+}
+
 #[test_log::test]
 fn window_floating_size_heuristic_works() {
     let (mut fixture, _) = set_up();
@@ -125,4 +144,28 @@ fn window_tags_update_after_set_geometry() {
 
     let tags = fixture.pinnacle().windows[0].with_state(|state| state.tags.clone());
     assert_eq!(tags, output2.with_state(|state| state.tags.clone()));
+}
+
+#[test_log::test]
+fn windows_spill_correctly() {
+    let (mut fixture, _) = set_up_no_layout();
+
+    fixture.spawn_blocking(|| {
+        pinnacle_api::layout::manage(|args| pinnacle_api::layout::LayoutResponse {
+            root_node: MasterStack::default().layout(args.window_count.min(3)),
+            tree_id: 0,
+        });
+    });
+
+    let id = fixture.add_client();
+
+    fixture.spawn_windows(5, id);
+
+    for (i, win) in fixture.pinnacle().windows.iter().enumerate() {
+        match i {
+            0..=2 => assert!(win.with_state(|state| state.layout_mode.is_tiled())),
+            3..=4 => assert!(win.with_state(|state| state.layout_mode.is_spilled())),
+            _ => unreachable!(),
+        }
+    }
 }
