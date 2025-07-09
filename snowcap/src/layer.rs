@@ -168,7 +168,7 @@ impl SnowcapLayer {
             unsafe { WaylandClipboard::new(state.conn.backend().display_ptr() as *mut _) };
 
         let (sender, recv) = calloop::channel::channel::<SnowcapMessage>();
-        let mut runtime = Runtime::new(CurrentTokioExecutor, CalloopSenderSink::new(sender));
+        let runtime = Runtime::new(CurrentTokioExecutor, CalloopSenderSink::new(sender));
 
         let layer_clone = layer.clone();
         state
@@ -197,21 +197,6 @@ impl SnowcapLayer {
                 calloop::channel::Event::Closed => (),
             })
             .unwrap();
-
-        runtime.track(iced_futures::subscription::into_recipes(
-            iced::keyboard::on_key_press(|key, _mods| {
-                // if matches!(
-                //     key,
-                //     iced::keyboard::Key::Named(iced::keyboard::key::Named::Escape)
-                // ) {
-                println!("WHOA WHOA, {key:?}");
-                // Some(SnowcapMessage::Close)
-                None
-                // } else {
-                //     None
-                // }
-            }),
-        ));
 
         let next_id = state.widget_id_counter.next_and_increment();
 
