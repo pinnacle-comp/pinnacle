@@ -11,8 +11,6 @@ pub mod util;
 pub mod wgpu;
 pub mod widget;
 
-use std::time::Duration;
-
 use futures::Future;
 use server::socket_dir;
 use smithay_client_toolkit::reexports::calloop::{self, EventLoop};
@@ -76,7 +74,7 @@ pub fn start(stop_signal_sender: Option<tokio::sync::oneshot::Sender<SnowcapHand
     }
 
     event_loop
-        .run(Duration::from_secs(1), &mut state, |state| {
+        .run(None, &mut state, |state| {
             let keyboard_focus_is_dead =
                 state
                     .keyboard_focus
@@ -88,6 +86,13 @@ pub fn start(stop_signal_sender: Option<tokio::sync::oneshot::Sender<SnowcapHand
                     });
             if keyboard_focus_is_dead {
                 state.keyboard_focus = None;
+            }
+
+            for layer in state.layers.iter_mut() {
+                if layer.redraw_requested {
+                    layer.redraw_requested = false;
+                    layer.update_and_draw(&state.queue_handle);
+                }
             }
         })
         .unwrap();

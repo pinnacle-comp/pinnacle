@@ -174,7 +174,7 @@ impl CompositorHandler for State {
     fn frame(
         &mut self,
         _conn: &Connection,
-        qh: &QueueHandle<Self>,
+        _qh: &QueueHandle<Self>,
         surface: &WlSurface,
         _time: u32,
     ) {
@@ -184,10 +184,12 @@ impl CompositorHandler for State {
             .find(|layer| layer.layer.wl_surface() == surface);
 
         if let Some(layer) = layer {
-            layer.widgets.queued_events.push(iced::Event::Window(
-                iced::window::Event::RedrawRequested(Instant::now()),
-            ));
-            layer.update_and_draw(qh);
+            if !layer.redraw_requested {
+                layer.widgets.queued_events.push(iced::Event::Window(
+                    iced::window::Event::RedrawRequested(Instant::now()),
+                ));
+                layer.redraw_requested = true;
+            }
         }
     }
 

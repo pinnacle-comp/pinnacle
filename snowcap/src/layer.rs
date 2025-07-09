@@ -45,6 +45,7 @@ pub struct SnowcapLayer {
     pub scale: i32,
     pub viewport: Viewport,
 
+    pub redraw_requested: bool,
     pub widgets: SnowcapWidgetProgram,
     pub clipboard: WaylandClipboard,
 
@@ -236,6 +237,7 @@ impl SnowcapLayer {
             keyboard_key_sender: None,
             pointer_button_sender: None,
             initial_configure: false,
+            redraw_requested: false,
         }
     }
 
@@ -248,6 +250,7 @@ impl SnowcapLayer {
                 let Surface::Primary(surface) = &mut self.surface else {
                     unreachable!();
                 };
+                let mut presented = false;
                 iced_wgpu::window::compositor::present(
                     wgpu,
                     surface,
@@ -257,9 +260,17 @@ impl SnowcapLayer {
                         self.layer
                             .wl_surface()
                             .frame(queue_handle, self.layer.wl_surface().clone());
+                        presented = true;
                     },
                 )
                 .unwrap();
+
+                if !presented {
+                    self.layer
+                        .wl_surface()
+                        .frame(queue_handle, self.layer.wl_surface().clone());
+                    self.layer.wl_surface().commit();
+                }
             }
             Renderer::Secondary(skia) => {
                 let Surface::Secondary(surface) = &mut self.surface else {
@@ -270,7 +281,7 @@ impl SnowcapLayer {
                     skia,
                     surface,
                     &self.viewport,
-                    Color::BLACK,
+                    Color::TRANSPARENT,
                     || {
                         self.layer
                             .wl_surface()
