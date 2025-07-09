@@ -184,3 +184,4 @@ workspace = true
 
 [patch.crates-io]
 taffy = { git = "https://github.com/Ottatop/taffy", rev = "dcdaa42" } # Rounding fixes
+softbuffer = { git = "https://github.com/Ottatop/softbuffer", rev = "cd65c9e" }
