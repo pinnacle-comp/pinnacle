@@ -76,6 +76,11 @@ impl State {
             .insert(loop_handle.clone())
             .unwrap();
 
+        // Attempt to create a wgpu renderer upfront; this takes a non-trivial amount of time to do
+        let compositor = crate::wgpu::Compositor::new()
+            .ok()
+            .map(crate::compositor::Compositor::Primary);
+
         let state = State {
             loop_handle,
             loop_signal,
@@ -87,7 +92,7 @@ impl State {
             layer_shell_state,
             grpc_server_state: None,
             queue_handle,
-            compositor: Default::default(),
+            compositor,
             layers: Vec::new(),
             keyboard_focus: None,
             keyboard_modifiers: smithay_client_toolkit::seat::keyboard::Modifiers::default(),

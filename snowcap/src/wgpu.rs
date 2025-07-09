@@ -9,11 +9,6 @@ const UBUNTU_BOLD: &[u8] = include_bytes!("../resources/fonts/Ubuntu-Bold.ttf");
 const UBUNTU_ITALIC: &[u8] = include_bytes!("../resources/fonts/Ubuntu-Italic.ttf");
 const UBUNTU_BOLD_ITALIC: &[u8] = include_bytes!("../resources/fonts/Ubuntu-BoldItalic.ttf");
 
-pub struct Wgpu {
-    pub compositor: Compositor,
-    pub renderer: iced_wgpu::Renderer,
-}
-
 pub struct Compositor {
     instance: wgpu::Instance,
     device: wgpu::Device,
@@ -23,19 +18,8 @@ pub struct Compositor {
     engine: iced_wgpu::Engine,
 }
 
-impl Wgpu {
-    pub fn new() -> Self {
-        let compositor = Compositor::new().unwrap();
-        let renderer = compositor.create_renderer();
-        Self {
-            compositor,
-            renderer,
-        }
-    }
-}
-
 impl Compositor {
-    fn new() -> anyhow::Result<Self> {
+    pub fn new() -> anyhow::Result<Self> {
         let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
             backends: wgpu::Backends::VULKAN,
             flags: wgpu::InstanceFlags::default().with_env(),
