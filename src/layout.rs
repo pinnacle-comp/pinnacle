@@ -453,6 +453,7 @@ impl State {
                                 loc.y += initial_geo.size.h - window.geometry().size.h;
                             }
 
+                            window.with_state_mut(|s| s.set_floating_loc(loc));
                             loc
                         }
                     };
