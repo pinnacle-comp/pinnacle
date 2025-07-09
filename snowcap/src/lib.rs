@@ -11,7 +11,6 @@ pub mod util;
 pub mod wgpu;
 pub mod widget;
 
-use futures::Future;
 use server::socket_dir;
 use smithay_client_toolkit::reexports::calloop::{self, EventLoop};
 use state::State;
@@ -89,15 +88,15 @@ pub fn start(stop_signal_sender: Option<tokio::sync::oneshot::Sender<SnowcapHand
             }
 
             for layer in state.layers.iter_mut() {
+                if !layer.widgets.queued_events.is_empty() {
+                    layer.update(&state.queue_handle);
+                }
+
                 if layer.redraw_requested {
                     layer.redraw_requested = false;
-                    layer.update_and_draw(&state.queue_handle);
+                    layer.draw();
                 }
             }
         })
         .unwrap();
-}
-
-fn block_on_tokio<F: Future>(future: F) -> F::Output {
-    tokio::task::block_in_place(|| tokio::runtime::Handle::current().block_on(future))
 }

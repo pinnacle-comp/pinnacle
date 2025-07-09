@@ -126,7 +126,8 @@ impl LayerShellHandler for State {
         if let Some(layer) = layer {
             if !layer.initial_configure {
                 layer.initial_configure = true;
-                layer.update_and_draw(qh);
+                layer.update(qh);
+                layer.redraw_requested = true;
             }
         }
     }
@@ -157,7 +158,11 @@ impl CompositorHandler for State {
                 new_factor,
                 self.compositor.as_mut().expect("should be initialized"),
             );
-            layer.update_and_draw(qh);
+            layer
+                .layer
+                .wl_surface()
+                .frame(qh, layer.layer.wl_surface().clone());
+            layer.layer.wl_surface().commit();
         }
     }
 

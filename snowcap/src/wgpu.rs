@@ -2,7 +2,7 @@ use anyhow::Context;
 use iced_graphics::Compositor as _;
 use iced_wgpu::wgpu;
 
-use crate::block_on_tokio;
+use crate::util::BlockOnTokio;
 
 const UBUNTU_REGULAR: &[u8] = include_bytes!("../resources/fonts/Ubuntu-Regular.ttf");
 const UBUNTU_BOLD: &[u8] = include_bytes!("../resources/fonts/Ubuntu-Bold.ttf");
@@ -42,23 +42,27 @@ impl Compositor {
             ..Default::default()
         });
 
-        let adapter = block_on_tokio(instance.request_adapter(&wgpu::RequestAdapterOptions {
-            power_preference: wgpu::PowerPreference::default(),
-            force_fallback_adapter: false,
-            compatible_surface: None,
-        }))
-        .context("no adapter")?;
+        let adapter = instance
+            .request_adapter(&wgpu::RequestAdapterOptions {
+                power_preference: wgpu::PowerPreference::default(),
+                force_fallback_adapter: false,
+                compatible_surface: None,
+            })
+            .block_on_tokio()
+            .context("no adapter")?;
 
-        let (device, queue) = block_on_tokio(adapter.request_device(
-            &wgpu::DeviceDescriptor {
-                label: None,
-                required_features: wgpu::Features::empty(),
-                required_limits:
-                    wgpu::Limits::downlevel_defaults().using_resolution(adapter.limits()),
-                memory_hints: wgpu::MemoryHints::default(),
-            },
-            None,
-        ))?;
+        let (device, queue) = adapter
+            .request_device(
+                &wgpu::DeviceDescriptor {
+                    label: None,
+                    required_features: wgpu::Features::empty(),
+                    required_limits: wgpu::Limits::downlevel_defaults()
+                        .using_resolution(adapter.limits()),
+                    memory_hints: wgpu::MemoryHints::default(),
+                },
+                None,
+            )
+            .block_on_tokio()?;
 
         let engine = iced_wgpu::Engine::new(
             &adapter,

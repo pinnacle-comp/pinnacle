@@ -1,9 +1,9 @@
 use std::{any::Any, collections::HashMap, num::NonZeroU32, ptr::NonNull};
 
-use iced::{Color, Size, Theme};
+use iced::{Color, Size, Theme, window::RedrawRequest};
 use iced_futures::Runtime;
 use iced_graphics::Compositor;
-use iced_runtime::UserInterface;
+use iced_runtime::{UserInterface, user_interface};
 use iced_wgpu::graphics::Viewport;
 use raw_window_handle::{
     HasDisplayHandle, HasWindowHandle, RawDisplayHandle, RawWindowHandle, WaylandDisplayHandle,
@@ -11,7 +11,7 @@ use raw_window_handle::{
 };
 use smithay_client_toolkit::{
     reexports::{
-        calloop::{self, LoopHandle},
+        calloop::{self, LoopHandle, timer::Timer},
         client::{Proxy, QueueHandle},
     },
     shell::{
@@ -241,67 +241,10 @@ impl SnowcapLayer {
         }
     }
 
-    pub fn present(&mut self, queue_handle: &QueueHandle<State>) {
+    pub fn draw(&mut self) {
         use iced_renderer::fallback::Renderer;
         use iced_renderer::fallback::Surface;
 
-        match &mut self.renderer {
-            Renderer::Primary(wgpu) => {
-                let Surface::Primary(surface) = &mut self.surface else {
-                    unreachable!();
-                };
-                let mut presented = false;
-                iced_wgpu::window::compositor::present(
-                    wgpu,
-                    surface,
-                    &self.viewport,
-                    Color::TRANSPARENT,
-                    || {
-                        self.layer
-                            .wl_surface()
-                            .frame(queue_handle, self.layer.wl_surface().clone());
-                        presented = true;
-                    },
-                )
-                .unwrap();
-
-                if !presented {
-                    self.layer
-                        .wl_surface()
-                        .frame(queue_handle, self.layer.wl_surface().clone());
-                    self.layer.wl_surface().commit();
-                }
-            }
-            Renderer::Secondary(skia) => {
-                let Surface::Secondary(surface) = &mut self.surface else {
-                    unreachable!();
-                };
-                let mut presented = false;
-                iced_tiny_skia::window::compositor::present(
-                    skia,
-                    surface,
-                    &self.viewport,
-                    Color::TRANSPARENT,
-                    || {
-                        self.layer
-                            .wl_surface()
-                            .frame(queue_handle, self.layer.wl_surface().clone());
-                        presented = true;
-                    },
-                )
-                .unwrap();
-
-                if !presented {
-                    self.layer
-                        .wl_surface()
-                        .frame(queue_handle, self.layer.wl_surface().clone());
-                    self.layer.wl_surface().commit();
-                }
-            }
-        }
-    }
-
-    pub fn update_and_draw(&mut self, queue_handle: &QueueHandle<State>) {
         let cursor = match self.pointer_location {
             Some((x, y)) => iced::mouse::Cursor::Available(iced::Point {
                 x: x as f32,
@@ -310,21 +253,62 @@ impl SnowcapLayer {
             None => iced::mouse::Cursor::Unavailable,
         };
 
-        // old self.widgets.update(...)
-        {
-            let mut user_interface = {
-                let view = (self.widgets.widgets)(&self.widgets.widget_state);
-                UserInterface::build(
-                    view,
-                    self.viewport.logical_size(),
-                    self.widgets.cache.take().unwrap(),
-                    &mut self.renderer,
+        self.widgets.user_interface.as_mut().unwrap().draw(
+            &mut self.renderer,
+            &Theme::CatppuccinFrappe,
+            &iced_wgpu::core::renderer::Style {
+                text_color: Color::WHITE,
+            },
+            cursor,
+        );
+
+        match &mut self.renderer {
+            Renderer::Primary(wgpu) => {
+                let Surface::Primary(surface) = &mut self.surface else {
+                    unreachable!();
+                };
+                iced_wgpu::window::compositor::present(
+                    wgpu,
+                    surface,
+                    &self.viewport,
+                    Color::TRANSPARENT,
+                    || {},
                 )
-            };
+                .unwrap();
+            }
+            Renderer::Secondary(skia) => {
+                let Surface::Secondary(surface) = &mut self.surface else {
+                    unreachable!();
+                };
+                iced_tiny_skia::window::compositor::present(
+                    skia,
+                    surface,
+                    &self.viewport,
+                    Color::TRANSPARENT,
+                    || {},
+                )
+                .unwrap();
+            }
+        }
+    }
 
-            let mut messages = Vec::new();
+    pub fn update(&mut self, queue_handle: &QueueHandle<State>) {
+        let cursor = match self.pointer_location {
+            Some((x, y)) => iced::mouse::Cursor::Available(iced::Point {
+                x: x as f32,
+                y: y as f32,
+            }),
+            None => iced::mouse::Cursor::Unavailable,
+        };
 
-            let (_state, statuses) = user_interface.update(
+        let mut messages = Vec::new();
+
+        let (state, statuses) = self
+            .widgets
+            .user_interface
+            .as_mut()
+            .expect("ui should exist")
+            .update(
                 &self.widgets.queued_events,
                 cursor,
                 &mut self.renderer,
@@ -332,33 +316,67 @@ impl SnowcapLayer {
                 &mut messages,
             );
 
-            for (event, status) in self.widgets.queued_events.iter().zip(statuses) {
-                self.runtime
-                    .broadcast(iced_futures::subscription::Event::Interaction {
-                        window: iced::window::Id::unique(),
-                        event: event.clone(),
-                        status,
-                    });
+        let mut ui_stale = false;
+        let mut request_frame = false;
+
+        match state {
+            user_interface::State::Outdated => {
+                ui_stale = true;
             }
-
-            self.widgets.queued_events.clear();
-            messages.append(&mut self.widgets.queued_messages);
-
-            // TODO: update SnowcapWidgetProgram from messages
-
-            user_interface.draw(
-                &mut self.renderer,
-                &Theme::CatppuccinFrappe,
-                &iced_wgpu::core::renderer::Style {
-                    text_color: Color::WHITE,
-                },
-                cursor,
-            );
-
-            self.widgets.cache = Some(user_interface.into_cache());
+            user_interface::State::Updated {
+                mouse_interaction: _, // TODO:
+                redraw_request,
+                input_method: _,
+            } => match redraw_request {
+                RedrawRequest::NextFrame => {
+                    request_frame = true;
+                }
+                RedrawRequest::At(instant) => {
+                    let surface = self.layer.wl_surface().clone();
+                    self.loop_handle
+                        .insert_source(Timer::from_deadline(instant), move |_, _, state| {
+                            surface.frame(&state.queue_handle, surface.clone());
+                            surface.commit();
+                            calloop::timer::TimeoutAction::Drop
+                        })
+                        .unwrap();
+                }
+                RedrawRequest::Wait => (),
+            },
         }
 
-        self.present(queue_handle);
+        for (event, status) in self.widgets.queued_events.iter().zip(statuses) {
+            self.runtime
+                .broadcast(iced_futures::subscription::Event::Interaction {
+                    window: iced::window::Id::unique(),
+                    event: event.clone(),
+                    status,
+                });
+        }
+
+        self.widgets.queued_events.clear();
+        messages.append(&mut self.widgets.queued_messages);
+
+        // If there are messages, we'll need to recreate the UI with the new state.
+        if !messages.is_empty() || ui_stale {
+            // TODO: Update SnowcapWidgetProgram with messages
+            request_frame = true;
+            let cache = self.widgets.user_interface.take().unwrap().into_cache();
+            let view = (self.widgets.widgets)(&self.widgets.widget_state);
+            self.widgets.user_interface = Some(UserInterface::build(
+                view,
+                self.viewport.logical_size(),
+                cache,
+                &mut self.renderer,
+            ));
+        }
+
+        if request_frame {
+            self.layer
+                .wl_surface()
+                .frame(queue_handle, self.layer.wl_surface().clone());
+            self.layer.wl_surface().commit();
+        }
     }
 
     pub fn set_scale(&mut self, scale: i32, compositor: &mut crate::compositor::Compositor) {

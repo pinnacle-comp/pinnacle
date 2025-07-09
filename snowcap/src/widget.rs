@@ -46,7 +46,8 @@ impl From<u32> for WidgetId {
 pub struct SnowcapWidgetProgram {
     pub widgets: WidgetFn,
     pub widget_state: HashMap<u32, Box<dyn Any + Send>>,
-    pub cache: Option<user_interface::Cache>,
+    pub user_interface:
+        Option<UserInterface<'static, SnowcapMessage, iced::Theme, iced_renderer::Renderer>>,
     pub queued_events: Vec<iced::Event>,
     pub queued_messages: Vec<SnowcapMessage>,
     pub mouse_interaction: iced::mouse::Interaction,
@@ -64,12 +65,10 @@ impl SnowcapWidgetProgram {
             UserInterface::build(view, bounds, user_interface::Cache::default(), renderer)
         };
 
-        let cache = Some(user_interface.into_cache());
-
         Self {
             widgets,
             widget_state,
-            cache,
+            user_interface: Some(user_interface),
             queued_events: Vec::new(),
             queued_messages: Vec::new(),
             mouse_interaction: iced::mouse::Interaction::None,
@@ -78,9 +77,9 @@ impl SnowcapWidgetProgram {
 }
 
 pub type WidgetFn = Box<
-    dyn for<'a> Fn(
-        &'a HashMap<u32, Box<dyn Any + Send>>,
-    ) -> Element<'a, SnowcapMessage, iced::Theme, iced_renderer::Renderer>,
+    dyn Fn(
+        &HashMap<u32, Box<dyn Any + Send>>,
+    ) -> Element<'static, SnowcapMessage, iced::Theme, iced_renderer::Renderer>,
 >;
 
 #[derive(Debug)]
