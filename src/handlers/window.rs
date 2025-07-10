@@ -42,8 +42,7 @@ impl State {
         window.with_state_mut(|state| state.layout_mode = new_mode);
 
         let layout_needs_update = old_mode.current() != new_mode.current()
-            && (old_mode.is_tiled() || new_mode.is_tiled())
-            && (!new_mode.is_spilled());
+            && (old_mode.is_tiled() || new_mode.is_tiled() || new_mode.is_spilled());
 
         let non_exclusive_zone = layer_map_for_output(&output).non_exclusive_zone();
         let geo = self
@@ -55,13 +54,16 @@ impl State {
         }
 
         if layout_needs_update {
-            // Defer updating this window's state until the next incoming layout
-
-            if let Some(geo) = geo {
-                self.pinnacle
-                    .layout_state
-                    .pending_window_updates
-                    .add_for_output(&output, vec![(window.clone(), geo)]);
+            // Defer updating this window's state until the next incoming layout,
+            // but ignore spilled window since they could become tiled then have
+            // their geometry update.
+            if !new_mode.is_spilled() {
+                if let Some(geo) = geo {
+                    self.pinnacle
+                        .layout_state
+                        .pending_window_updates
+                        .add_for_output(&output, vec![(window.clone(), geo)]);
+                }
             }
             self.pinnacle.request_layout(&output);
         } else if let Some(geo) = geo {
