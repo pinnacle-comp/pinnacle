@@ -5,6 +5,14 @@ use std::{
 
 use smithay_client_toolkit::reexports::calloop;
 
+use crate::widget::SnowcapMessage;
+
+pub type Runtime = iced_futures::Runtime<
+    CurrentTokioExecutor,
+    CalloopSenderSink<(iced::window::Id, SnowcapMessage)>,
+    (iced::window::Id, SnowcapMessage),
+>;
+
 pub struct CurrentTokioExecutor;
 
 impl iced_futures::Executor for CurrentTokioExecutor {

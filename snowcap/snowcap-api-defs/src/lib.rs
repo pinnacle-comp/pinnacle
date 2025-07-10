@@ -5,9 +5,17 @@ pub mod snowcap {
         tonic::include_proto!("snowcap.v0alpha1");
     }
 
+    pub mod v1 {
+        tonic::include_proto!("snowcap.v1");
+    }
+
     pub mod widget {
         pub mod v0alpha1 {
             tonic::include_proto!("snowcap.widget.v0alpha1");
+        }
+
+        pub mod v1 {
+            tonic::include_proto!("snowcap.widget.v1");
         }
     }
 
@@ -15,11 +23,19 @@ pub mod snowcap {
         pub mod v0alpha1 {
             tonic::include_proto!("snowcap.layer.v0alpha1");
         }
+
+        pub mod v1 {
+            tonic::include_proto!("snowcap.layer.v1");
+        }
     }
 
     pub mod input {
         pub mod v0alpha1 {
             tonic::include_proto!("snowcap.input.v0alpha1");
+        }
+
+        pub mod v1 {
+            tonic::include_proto!("snowcap.input.v1");
         }
     }
 }

@@ -4,11 +4,11 @@ mod v1;
 use super::StateFnSender;
 
 #[derive(Clone)]
-pub struct InputService {
+pub struct LayerService {
     sender: StateFnSender,
 }
 
-impl InputService {
+impl LayerService {
     pub fn new(sender: StateFnSender) -> Self {
         Self { sender }
     }

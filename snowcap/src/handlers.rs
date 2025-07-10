@@ -126,7 +126,7 @@ impl LayerShellHandler for State {
         if let Some(layer) = layer {
             if !layer.initial_configure {
                 layer.initial_configure = true;
-                layer.update(qh);
+                layer.update(qh, &mut self.runtime);
                 layer.redraw_requested = true;
             }
         }

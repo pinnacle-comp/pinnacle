@@ -1,9 +1,11 @@
 use anyhow::Context;
+use iced::keyboard::key::{NativeCode, Physical};
+use iced_futures::Runtime;
 use smithay_client_toolkit::{
     compositor::CompositorState,
     output::OutputState,
     reexports::{
-        calloop::{LoopHandle, LoopSignal},
+        calloop::{self, LoopHandle, LoopSignal},
         calloop_wayland_source::WaylandSource,
         client::{
             Connection, QueueHandle,
@@ -15,10 +17,14 @@ use smithay_client_toolkit::{
     seat::{SeatState, keyboard::Modifiers},
     shell::wlr_layer::LayerShell,
 };
+use xkbcommon::xkb::Keysym;
 
 use crate::{
-    handlers::keyboard::KeyboardFocus, layer::SnowcapLayer, server::GrpcServerState,
-    widget::WidgetIdCounter,
+    handlers::keyboard::KeyboardFocus,
+    layer::SnowcapLayer,
+    runtime::{CalloopSenderSink, CurrentTokioExecutor},
+    server::GrpcServerState,
+    widget::{SnowcapMessage, WidgetIdCounter},
 };
 
 pub struct State {
@@ -26,6 +32,7 @@ pub struct State {
     pub loop_signal: LoopSignal,
     pub conn: Connection,
 
+    pub runtime: crate::runtime::Runtime,
     pub registry_state: RegistryState,
     pub seat_state: SeatState,
     pub output_state: OutputState,
@@ -81,10 +88,87 @@ impl State {
             .ok()
             .map(crate::compositor::Compositor::Primary);
 
+        let (sender, recv) = calloop::channel::channel::<(iced::window::Id, SnowcapMessage)>();
+        let mut runtime = Runtime::new(CurrentTokioExecutor, CalloopSenderSink::new(sender));
+
+        loop_handle
+            .insert_source(recv, move |event, _, state| match event {
+                calloop::channel::Event::Msg((id, msg)) => {
+                    let Some(layer) = state.layers.iter().find(|layer| layer.window_id == id)
+                    else {
+                        return;
+                    };
+
+                    match msg {
+                        SnowcapMessage::Noop => (),
+                        SnowcapMessage::Close => (),
+                        SnowcapMessage::Update(_, _) => (),
+                        SnowcapMessage::KeyboardKey(key) => {
+                            if let Some(sender) = layer.keyboard_key_sender.as_ref() {
+                                let _ = sender.send(key);
+                            }
+                        }
+                    }
+                }
+                calloop::channel::Event::Closed => (),
+            })
+            .unwrap();
+
+        runtime.track(iced_futures::subscription::into_recipes(
+            iced::event::listen_with(|event, status, id| {
+                if status == iced::event::Status::Captured {
+                    return None;
+                }
+
+                match event {
+                    iced::Event::Keyboard(iced::keyboard::Event::KeyPressed {
+                        modifiers,
+                        physical_key: Physical::Unidentified(NativeCode::Xkb(raw)),
+                        ..
+                    }) => Some((
+                        id,
+                        SnowcapMessage::KeyboardKey(crate::handlers::keyboard::KeyboardKey {
+                            key: Keysym::new(raw),
+                            modifiers: Modifiers {
+                                ctrl: modifiers.control(),
+                                alt: modifiers.alt(),
+                                shift: modifiers.shift(),
+                                caps_lock: false,
+                                logo: modifiers.logo(),
+                                num_lock: false,
+                            },
+                            pressed: true,
+                        }),
+                    )),
+                    iced::Event::Keyboard(iced::keyboard::Event::KeyReleased {
+                        modifiers,
+                        physical_key: Physical::Unidentified(NativeCode::Xkb(raw)),
+                        ..
+                    }) => Some((
+                        id,
+                        SnowcapMessage::KeyboardKey(crate::handlers::keyboard::KeyboardKey {
+                            key: Keysym::new(raw),
+                            modifiers: Modifiers {
+                                ctrl: modifiers.control(),
+                                alt: modifiers.alt(),
+                                shift: modifiers.shift(),
+                                caps_lock: false,
+                                logo: modifiers.logo(),
+                                num_lock: false,
+                            },
+                            pressed: false,
+                        }),
+                    )),
+                    _ => None,
+                }
+            }),
+        ));
+
         let state = State {
             loop_handle,
             loop_signal,
             conn: conn.clone(),
+            runtime,
             registry_state,
             seat_state,
             output_state,

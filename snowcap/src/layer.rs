@@ -1,7 +1,6 @@
 use std::{any::Any, collections::HashMap, num::NonZeroU32, ptr::NonNull};
 
 use iced::{Color, Size, Theme, window::RedrawRequest};
-use iced_futures::Runtime;
 use iced_graphics::Compositor;
 use iced_runtime::{UserInterface, user_interface};
 use iced_wgpu::graphics::Viewport;
@@ -19,16 +18,16 @@ use smithay_client_toolkit::{
         wlr_layer::{self, Anchor, LayerSurface},
     },
 };
-use snowcap_api_defs::snowcap::input::v0alpha1::{KeyboardKeyResponse, PointerButtonResponse};
+use snowcap_api_defs::snowcap::input::v0alpha1::PointerButtonResponse;
 use tokio::sync::mpsc::UnboundedSender;
 use tonic::Status;
 
 use crate::{
     clipboard::WaylandClipboard,
-    runtime::{CalloopSenderSink, CurrentTokioExecutor},
+    handlers::keyboard::KeyboardKey,
     state::State,
     util::BlockOnTokio,
-    widget::{SnowcapMessage, SnowcapWidgetProgram, WidgetFn, WidgetId},
+    widget::{SnowcapWidgetProgram, WidgetFn, WidgetId},
 };
 
 pub struct SnowcapLayer {
@@ -51,11 +50,10 @@ pub struct SnowcapLayer {
 
     pub pointer_location: Option<(f64, f64)>,
 
-    pub runtime: Runtime<CurrentTokioExecutor, CalloopSenderSink<SnowcapMessage>, SnowcapMessage>,
-
     pub widget_id: WidgetId,
+    pub window_id: iced::window::Id,
 
-    pub keyboard_key_sender: Option<UnboundedSender<Result<KeyboardKeyResponse, Status>>>,
+    pub keyboard_key_sender: Option<UnboundedSender<KeyboardKey>>,
     pub pointer_button_sender: Option<UnboundedSender<Result<PointerButtonResponse, Status>>>,
 
     pub initial_configure: bool,
@@ -167,37 +165,6 @@ impl SnowcapLayer {
         let clipboard =
             unsafe { WaylandClipboard::new(state.conn.backend().display_ptr() as *mut _) };
 
-        let (sender, recv) = calloop::channel::channel::<SnowcapMessage>();
-        let runtime = Runtime::new(CurrentTokioExecutor, CalloopSenderSink::new(sender));
-
-        let layer_clone = layer.clone();
-        state
-            .loop_handle
-            .insert_source(recv, move |event, _, state| match event {
-                calloop::channel::Event::Msg(message) => {
-                    let Some(layer) = state
-                        .layers
-                        .iter_mut()
-                        .find(|sn_layer| sn_layer.layer == layer_clone)
-                    else {
-                        return;
-                    };
-
-                    match message {
-                        SnowcapMessage::Close => {
-                            state
-                                .layers
-                                .retain(|sn_layer| sn_layer.layer != layer_clone);
-                        }
-                        msg => {
-                            layer.widgets.queued_messages.push(msg);
-                        }
-                    }
-                }
-                calloop::channel::Event::Closed => (),
-            })
-            .unwrap();
-
         let next_id = state.widget_id_counter.next_and_increment();
 
         let viewport = Viewport::with_physical_size(Size::new(width, height), 1.0);
@@ -217,8 +184,8 @@ impl SnowcapLayer {
             renderer,
             clipboard,
             pointer_location: None,
-            runtime,
             widget_id: next_id,
+            window_id: iced::window::Id::unique(),
             keyboard_key_sender: None,
             pointer_button_sender: None,
             initial_configure: false,
@@ -277,7 +244,11 @@ impl SnowcapLayer {
         }
     }
 
-    pub fn update(&mut self, queue_handle: &QueueHandle<State>) {
+    pub fn update(
+        &mut self,
+        queue_handle: &QueueHandle<State>,
+        runtime: &mut crate::runtime::Runtime,
+    ) {
         let cursor = match self.pointer_location {
             Some((x, y)) => iced::mouse::Cursor::Available(iced::Point {
                 x: x as f32,
@@ -331,12 +302,11 @@ impl SnowcapLayer {
         }
 
         for (event, status) in self.widgets.queued_events.iter().zip(statuses) {
-            self.runtime
-                .broadcast(iced_futures::subscription::Event::Interaction {
-                    window: iced::window::Id::unique(),
-                    event: event.clone(),
-                    status,
-                });
+            runtime.broadcast(iced_futures::subscription::Event::Interaction {
+                window: self.window_id,
+                event: event.clone(),
+                status,
+            });
         }
 
         self.widgets.queued_events.clear();

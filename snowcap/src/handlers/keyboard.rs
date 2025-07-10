@@ -1,3 +1,4 @@
+use iced::keyboard::key::{NativeCode, Physical};
 use smithay_client_toolkit::{
     delegate_keyboard,
     reexports::client::{
@@ -7,9 +8,15 @@ use smithay_client_toolkit::{
     seat::keyboard::{KeyEvent, KeyboardHandler, Keysym, Modifiers},
     shell::{WaylandSurface, wlr_layer::LayerSurface},
 };
-use snowcap_api_defs::snowcap::input::{self, v0alpha1::KeyboardKeyResponse};
 
 use crate::{input::keyboard::keysym_to_iced_key_and_loc, state::State};
+
+#[derive(Clone, Copy, Debug)]
+pub struct KeyboardKey {
+    pub key: Keysym,
+    pub modifiers: Modifiers,
+    pub pressed: bool,
+}
 
 impl KeyboardHandler for State {
     fn enter(
@@ -87,23 +94,8 @@ impl KeyboardHandler for State {
                 modifiers,
                 text: None,
                 modified_key: key, // TODO:
-                // TODO:
-                physical_key: iced::keyboard::key::Physical::Code(iced::keyboard::key::Code::F13),
+                physical_key: Physical::Unidentified(NativeCode::Xkb(event.keysym.raw())),
             }));
-
-        if let Some(sender) = snowcap_layer.keyboard_key_sender.as_ref() {
-            let api_modifiers = input::v0alpha1::Modifiers {
-                shift: Some(self.keyboard_modifiers.shift),
-                ctrl: Some(self.keyboard_modifiers.ctrl),
-                alt: Some(self.keyboard_modifiers.alt),
-                super_: Some(self.keyboard_modifiers.logo),
-            };
-            let _ = sender.send(Ok(KeyboardKeyResponse {
-                key: Some(event.keysym.raw()),
-                modifiers: Some(api_modifiers),
-                pressed: Some(true),
-            }));
-        }
     }
 
     fn release_key(
@@ -148,7 +140,7 @@ impl KeyboardHandler for State {
                 // TODO:
                 modified_key: key,
                 // TODO:
-                physical_key: iced::keyboard::key::Physical::Code(iced::keyboard::key::Code::F13),
+                physical_key: Physical::Unidentified(NativeCode::Xkb(event.keysym.raw())),
             }));
     }
 
