@@ -13,13 +13,12 @@
 
 pub mod input;
 pub mod layer;
-pub mod snowcap;
 pub mod widget;
 
 use hyper_util::rt::TokioIo;
 use snowcap_api_defs::snowcap::{
-    input::v0alpha1::input_service_client::InputServiceClient,
-    layer::v0alpha1::layer_service_client::LayerServiceClient,
+    input::v1::input_service_client::InputServiceClient,
+    layer::v1::layer_service_client::LayerServiceClient,
 };
 pub use xkbcommon;
 
