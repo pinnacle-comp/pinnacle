@@ -2,111 +2,146 @@
 -- License, v. 2.0. If a copy of the MPL was not distributed with this
 -- file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
----@class snowcap.WidgetDef
----@field text snowcap.Text?
----@field column snowcap.Column?
----@field row snowcap.Row?
----@field scrollable snowcap.Scrollable?
----@field container snowcap.Container?
+---@class snowcap.widget.Palette
+---@field background snowcap.widget.Color
+---@field text snowcap.widget.Color
+---@field primary snowcap.widget.Color
+---@field success snowcap.widget.Color
+---@field warning snowcap.widget.Color
+---@field danger snowcap.widget.Color
 
----@class snowcap.Text
+---@class snowcap.widget.Theme
+---@field palette snowcap.widget.Palette?
+---@field text_style snowcap.widget.text.Style?
+---@field scrollable_style snowcap.widget.scrollable.Style?
+---@field container_style snowcap.widget.container.Style?
+
+---@class snowcap.widget.WidgetDef
+---@field theme snowcap.widget.Theme?
+---@field text snowcap.widget.Text?
+---@field column snowcap.widget.Column?
+---@field row snowcap.widget.Row?
+---@field scrollable snowcap.widget.Scrollable?
+---@field container snowcap.widget.Container?
+
+---@class snowcap.widget.Border
+---@field color snowcap.widget.Color?
+---@field width number?
+---@field radius snowcap.widget.Radius?
+
+---@class snowcap.widget.Radius
+---@field top_left number?
+---@field top_right number?
+---@field bottom_right number?
+---@field bottom_left number?
+
+---@class (exact) snowcap.widget.Text
 ---@field text string
----@field size number?
----@field width snowcap.Length?
----@field height snowcap.Length?
----@field halign snowcap.Alignment?
----@field valign snowcap.Alignment?
----@field color snowcap.Color?
----@field font snowcap.Font?
+---@field width snowcap.widget.Length?
+---@field height snowcap.widget.Length?
+---@field halign snowcap.widget.Alignment?
+---@field valign snowcap.widget.Alignment?
+---@field style snowcap.widget.text.Style?
 
----@class snowcap.Column
+---@class snowcap.widget.text.Style
+---@field color snowcap.widget.Color?
+---@field pixels number?
+---@field font snowcap.widget.Font?
+
+---@class snowcap.widget.Column
 ---@field spacing number?
----@field padding snowcap.Padding?
----@field item_alignment snowcap.Alignment?
----@field width snowcap.Length?
----@field height snowcap.Length?
+---@field padding snowcap.widget.Padding?
+---@field item_alignment snowcap.widget.Alignment?
+---@field width snowcap.widget.Length?
+---@field height snowcap.widget.Length?
 ---@field max_width number?
 ---@field clip boolean?
----@field children snowcap.WidgetDef[]
+---@field children snowcap.widget.WidgetDef[]
 
----@class snowcap.Row
+---@class snowcap.widget.Row
 ---@field spacing number?
----@field padding snowcap.Padding?
----@field item_alignment snowcap.Alignment?
----@field width snowcap.Length?
----@field height snowcap.Length?
+---@field padding snowcap.widget.Padding?
+---@field item_alignment snowcap.widget.Alignment?
+---@field width snowcap.widget.Length?
+---@field height snowcap.widget.Length?
 ---@field clip boolean?
----@field children snowcap.WidgetDef[]
+---@field children snowcap.widget.WidgetDef[]
 
----@class snowcap.Scrollable
----@field width snowcap.Length?
----@field height snowcap.Length?
----@field direction snowcap.Scrollable.Direction?
----@field child snowcap.WidgetDef
+---@class snowcap.widget.Scrollable
+---@field width snowcap.widget.Length?
+---@field height snowcap.widget.Length?
+---@field direction snowcap.widget.scrollable.Direction?
+---@field child snowcap.widget.WidgetDef
+---@field style snowcap.widget.scrollable.Style?
 
----@class snowcap.Scrollable.Direction
----@field vertical snowcap.Scrollable.Properties?
----@field horizontal snowcap.Scrollable.Properties?
+---@class snowcap.widget.scrollable.Direction
+---@field vertical snowcap.widget.scrollable.Scrollbar?
+---@field horizontal snowcap.widget.scrollable.Scrollbar?
 
----@class snowcap.Scrollable.Properties
----@field width number?
----@field height number?
----@field scroller_width number?
----@field alignment snowcap.Scrollable.Alignment?
+---@class snowcap.widget.scrollable.Scrollbar
+---@field width_pixels number?
+---@field height_pixels number?
+---@field scroller_width_pixels number?
+---@field anchor_to_end boolean?
+---@field embed_spacing number?
 
----@class snowcap.Container
----@field padding snowcap.Padding?
----@field width snowcap.Length?
----@field height snowcap.Length?
+---@class snowcap.widget.scrollable.Style
+---@field container_style snowcap.widget.container.Style?
+---@field vertical_rail snowcap.widget.scrollable.Rail?
+---@field horizontal_rail snowcap.widget.scrollable.Rail?
+
+---@class snowcap.widget.scrollable.Rail
+---@field background_color snowcap.widget.Color?
+---@field border snowcap.widget.Border?
+---@field scroller_color snowcap.widget.Color?
+---@field scroller_border snowcap.widget.Border?
+
+---@class (exact) snowcap.widget.Container
+---@field padding snowcap.widget.Padding?
+---@field width snowcap.widget.Length?
+---@field height snowcap.widget.Length?
 ---@field max_width number?
 ---@field max_height number?
----@field halign snowcap.Alignment?
----@field valign snowcap.Alignment?
+---@field halign snowcap.widget.Alignment?
+---@field valign snowcap.widget.Alignment?
 ---@field clip boolean?
----@field child snowcap.WidgetDef
----@field text_color snowcap.Color?
----@field background_color snowcap.Color?
----@field border_radius number?
----@field border_thickness number?
----@field border_color snowcap.Color?
+---@field child snowcap.widget.WidgetDef
+---@field style snowcap.widget.container.Style?
 
-local scrollable = {
-    ---@enum snowcap.Scrollable.Alignment
-    alignment = {
-        START = 1,
-        END = 2,
-    },
-}
+---@class snowcap.widget.container.Style
+---@field text_color snowcap.widget.Color?
+---@field background_color snowcap.widget.Color?
+---@field border snowcap.widget.Border?
 
----@class snowcap.Length
+---@class snowcap.widget.Length
 ---@field fill {}?
 ---@field fill_portion integer?
 ---@field shrink {}?
 ---@field fixed number?
 
 local length = {
-    ---@type snowcap.Length
+    ---@type snowcap.widget.Length
     Fill = { fill = {} },
-    ---@type fun(portion: integer): snowcap.Length
+    ---@type fun(portion: integer): snowcap.widget.Length
     FillPortion = function(portion)
         return { fill_portion = portion }
     end,
-    ---@type snowcap.Length
+    ---@type snowcap.widget.Length
     Shrink = { shrink = {} },
-    ---@type fun(size: number): snowcap.Length
+    ---@type fun(size: number): snowcap.widget.Length
     Fixed = function(size)
         return { fixed = size }
     end,
 }
 
----@enum snowcap.Alignment
+---@enum snowcap.widget.Alignment
 local alignment = {
     START = 1,
     CENTER = 2,
     END = 3,
 }
 
----@class snowcap.Color
+---@class snowcap.widget.Color
 ---@field red number?
 ---@field green number?
 ---@field blue number?
@@ -119,7 +154,7 @@ local color = {}
 ---@param b number
 ---@param a number?
 ---
----@return snowcap.Color
+---@return snowcap.widget.Color
 function color.from_rgba(r, g, b, a)
     return {
         red = r,
@@ -129,7 +164,7 @@ function color.from_rgba(r, g, b, a)
     }
 end
 
----@class snowcap.Font
+---@class snowcap.widget.Font
 ---@field family snowcap.Font.Family?
 ---@field weight snowcap.Font.Weight?
 ---@field stretch snowcap.Font.Stretch?
@@ -195,72 +230,65 @@ local font = {
     },
 }
 
----@class snowcap.Padding
+---@class snowcap.widget.Padding
 ---@field top number?
 ---@field right number?
 ---@field bottom number?
 ---@field left number?
 
 local widget = {
-    scrollable = scrollable,
     length = length,
     alignment = alignment,
     color = color,
     font = font,
 }
 
----@param def snowcap.Text
----@return snowcap.widget.v0alpha1.Text
+---@param def snowcap.widget.Text
+---@return snowcap.widget.v1.Text
 local function text_into_api(def)
-    ---@type snowcap.widget.v0alpha1.Text
+    ---@type snowcap.widget.v1.Text
     return {
         text = def.text,
-        pixels = def.size,
-        width = def.width --[[@as snowcap.widget.v0alpha1.Length]],
-        height = def.height --[[@as snowcap.widget.v0alpha1.Length]],
+        width = def.width --[[@as snowcap.widget.v1.Length]],
+        height = def.height --[[@as snowcap.widget.v1.Length]],
         vertical_alignment = def.valign,
         horizontal_alignment = def.halign,
-        color = def.color --[[@as snowcap.widget.v0alpha1.Color]],
-        font = def.font --[[@as snowcap.widget.v0alpha1.Font]],
+        style = def.style --[[@as snowcap.widget.v1.Text.Style]],
     }
 end
 
----@param def snowcap.Container
----@return snowcap.widget.v0alpha1.Container
+---@param def snowcap.widget.Container
+---@return snowcap.widget.v1.Container
 local function container_into_api(def)
-    ---@type snowcap.widget.v0alpha1.Container
+    ---@type snowcap.widget.v1.Container
     return {
-        padding = def.padding --[[@as snowcap.widget.v0alpha1.Padding]],
-        width = def.width --[[@as snowcap.widget.v0alpha1.Length]],
-        height = def.height --[[@as snowcap.widget.v0alpha1.Length]],
+        padding = def.padding --[[@as snowcap.widget.v1.Padding]],
+        width = def.width --[[@as snowcap.widget.v1.Length]],
+        height = def.height --[[@as snowcap.widget.v1.Length]],
         max_width = def.max_width,
         max_height = def.max_height,
         vertical_alignment = def.valign,
         horizontal_alignment = def.halign,
         clip = def.clip,
         child = widget.widget_def_into_api(def.child),
-        text_color = def.text_color --[[@as snowcap.widget.v0alpha1.Color]],
-        background_color = def.background_color --[[@as snowcap.widget.v0alpha1.Color]],
-        border_radius = def.border_radius,
-        border_thickness = def.border_thickness,
-        border_color = def.border_color --[[@as snowcap.widget.v0alpha1.Color]],
+        style = def.style --[[@as snowcap.widget.v1.Container.Style]],
     }
 end
 
----@param def snowcap.Column
----@return snowcap.widget.v0alpha1.Column
+---@param def snowcap.widget.Column
+---@return snowcap.widget.v1.Column
 local function column_into_api(def)
     local children = {}
     for _, child in ipairs(def.children) do
         table.insert(children, widget.widget_def_into_api(child))
     end
 
-    ---@type snowcap.widget.v0alpha1.Column
+    ---@type snowcap.widget.v1.Column
     return {
-        width = def.width --[[@as snowcap.widget.v0alpha1.Length]],
-        height = def.height --[[@as snowcap.widget.v0alpha1.Length]],
+        width = def.width --[[@as snowcap.widget.v1.Length]],
+        height = def.height --[[@as snowcap.widget.v1.Length]],
         max_width = def.max_width,
-        padding = def.padding --[[@as snowcap.widget.v0alpha1.Padding]],
+        padding = def.padding --[[@as snowcap.widget.v1.Padding]],
         spacing = def.spacing,
         clip = def.clip,
         item_alignment = def.item_alignment,
@@ -268,19 +296,19 @@ local function column_into_api(def)
     }
 end
 
----@param def snowcap.Row
----@return snowcap.widget.v0alpha1.Row
+---@param def snowcap.widget.Row
+---@return snowcap.widget.v1.Row
 local function row_into_api(def)
     local children = {}
     for _, child in ipairs(def.children) do
         table.insert(children, widget.widget_def_into_api(child))
     end
 
-    ---@type snowcap.widget.v0alpha1.Row
+    ---@type snowcap.widget.v1.Row
     return {
-        width = def.width --[[@as snowcap.widget.v0alpha1.Length]],
-        height = def.height --[[@as snowcap.widget.v0alpha1.Length]],
-        padding = def.padding --[[@as snowcap.widget.v0alpha1.Padding]],
+        width = def.width --[[@as snowcap.widget.v1.Length]],
+        height = def.height --[[@as snowcap.widget.v1.Length]],
+        padding = def.padding --[[@as snowcap.widget.v1.Padding]],
         spacing = def.spacing,
         clip = def.clip,
         item_alignment = def.item_alignment,
@@ -288,20 +316,20 @@ local function row_into_api(def)
     }
 end
 
----@param def snowcap.Scrollable
----@return snowcap.widget.v0alpha1.Scrollable
+---@param def snowcap.widget.Scrollable
+---@return snowcap.widget.v1.Scrollable
 local function scrollable_into_api(def)
-    ---@type snowcap.widget.v0alpha1.Scrollable
+    ---@type snowcap.widget.v1.Scrollable
     return {
-        width = def.width --[[@as snowcap.widget.v0alpha1.Length]],
-        height = def.height --[[@as snowcap.widget.v0alpha1.Length]],
-        direction = def.direction --[[@as snowcap.widget.v0alpha1.ScrollableDirection]],
+        width = def.width --[[@as snowcap.widget.v1.Length]],
+        height = def.height --[[@as snowcap.widget.v1.Length]],
+        direction = def.direction --[[@as snowcap.widget.v1.Scrollable.Direction]],
         child = widget.widget_def_into_api(def.child),
     }
 end
 
----@param def snowcap.WidgetDef
----@return snowcap.widget.v0alpha1.WidgetDef
+---@param def snowcap.widget.WidgetDef
+---@return snowcap.widget.v1.WidgetDef
 function widget.widget_def_into_api(def)
     if def.text then
         def.text = text_into_api(def.text)
@@ -319,48 +347,48 @@ function widget.widget_def_into_api(def)
         def.scrollable = scrollable_into_api(def.scrollable)
     end
 
-    return def --[[@as snowcap.widget.v0alpha1.WidgetDef]]
+    return def --[[@as snowcap.widget.v1.WidgetDef]]
 end
 
----@param text snowcap.Text
+---@param text snowcap.widget.Text
 ---
----@return snowcap.WidgetDef
+---@return snowcap.widget.WidgetDef
 function widget.text(text)
     return {
         text = text,
     }
 end
 
----@param column snowcap.Column
+---@param column snowcap.widget.Column
 ---
----@return snowcap.WidgetDef
+---@return snowcap.widget.WidgetDef
 function widget.column(column)
     return {
         column = column,
     }
 end
 
----@param row snowcap.Row
+---@param row snowcap.widget.Row
 ---
----@return snowcap.WidgetDef
+---@return snowcap.widget.WidgetDef
 function widget.row(row)
     return {
         row = row,
     }
 end
 
----@param scrollable snowcap.Scrollable
+---@param scrollable snowcap.widget.Scrollable
 ---
----@return snowcap.WidgetDef
+---@return snowcap.widget.WidgetDef
 function widget.scrollable(scrollable)
     return {
         scrollable = scrollable,
     }
 end
 
----@param container snowcap.Container
+---@param container snowcap.widget.Container
 ---
----@return snowcap.WidgetDef
+---@return snowcap.widget.WidgetDef
 function widget.container(container)
     return {
         container = container,
