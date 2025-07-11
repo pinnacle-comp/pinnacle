@@ -373,10 +373,10 @@ impl BindOverlay {
         .width(Length::Fill)
         .height(Length::Fill)
         .padding(Padding {
-            top: 16.0,
-            right: 16.0,
-            bottom: 16.0,
-            left: 16.0,
+            top: self.border_thickness + 10.0,
+            right: self.border_thickness + 10.0,
+            bottom: self.border_thickness + 10.0,
+            left: self.border_thickness + 10.0,
         })
         .vertical_alignment(Alignment::Center)
         .horizontal_alignment(Alignment::Center)
