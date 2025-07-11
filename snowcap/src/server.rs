@@ -2,15 +2,12 @@ use std::path::{Path, PathBuf};
 
 use anyhow::Context;
 use smithay_client_toolkit::reexports::calloop;
-use snowcap_api_defs::snowcap::{
-    input::v0alpha1::input_service_server::InputServiceServer,
-    layer::v0alpha1::layer_service_server::LayerServiceServer,
-};
+use snowcap_api_defs::snowcap::{input, layer};
 use tokio::task::JoinHandle;
 use tracing::{error, info};
 
 use crate::{
-    api::{LayerService, input::InputService},
+    api::{input::InputService, layer::LayerService},
     state::State,
 };
 
@@ -72,8 +69,22 @@ impl State {
 
         let grpc_server = tonic::transport::Server::builder()
             .add_service(refl_service)
-            .add_service(LayerServiceServer::new(layer_service))
-            .add_service(InputServiceServer::new(input_service));
+            .add_service(
+                layer::v0alpha1::layer_service_server::LayerServiceServer::new(
+                    layer_service.clone(),
+                ),
+            )
+            .add_service(
+                input::v0alpha1::input_service_server::InputServiceServer::new(
+                    input_service.clone(),
+                ),
+            )
+            .add_service(layer::v1::layer_service_server::LayerServiceServer::new(
+                layer_service.clone(),
+            ))
+            .add_service(input::v1::input_service_server::InputServiceServer::new(
+                input_service.clone(),
+            ));
 
         let join_handle = tokio::spawn(async move {
             if let Err(err) = grpc_server.serve_with_incoming(uds_stream).await {

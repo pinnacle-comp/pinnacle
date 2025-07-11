@@ -1,0 +1,222 @@
+syntax = "proto3";
+
+package snowcap.widget.v1;
+
+import "google/protobuf/empty.proto";
+
+message Padding {
+  float top = 1;
+  float right = 2;
+  float bottom = 3;
+  float left = 4;
+}
+
+enum Alignment {
+  ALIGNMENT_UNSPECIFIED = 0;
+  ALIGNMENT_START = 1;
+  ALIGNMENT_CENTER = 2;
+  ALIGNMENT_END = 3;
+}
+
+message Length {
+  oneof strategy {
+    google.protobuf.Empty fill = 1;
+    uint32 fill_portion = 2;
+    google.protobuf.Empty shrink = 3;
+    float fixed = 4;
+  }
+}
+
+message Color {
+  float red = 1;
+  float green = 2;
+  float blue = 3;
+  float alpha = 4;
+}
+
+message Font {
+  message Family {
+    oneof family {
+      string name = 1;
+      google.protobuf.Empty serif = 2;
+      google.protobuf.Empty sans_serif = 3;
+      google.protobuf.Empty cursive = 4;
+      google.protobuf.Empty fantasy = 5;
+      google.protobuf.Empty monospace = 6;
+    }
+  }
+
+  enum Weight {
+    WEIGHT_UNSPECIFIED = 0;
+    WEIGHT_THIN = 1;
+    WEIGHT_EXTRA_LIGHT = 2;
+    WEIGHT_LIGHT = 3;
+    WEIGHT_NORMAL = 4;
+    WEIGHT_MEDIUM = 5;
+    WEIGHT_SEMIBOLD = 6;
+    WEIGHT_BOLD = 7;
+    WEIGHT_EXTRA_BOLD = 8;
+    WEIGHT_BLACK = 9;
+  }
+
+  enum Stretch {
+    STRETCH_UNSPECIFIED = 0;
+    STRETCH_ULTRA_CONDENSED = 1;
+    STRETCH_EXTRA_CONDENSED = 2;
+    STRETCH_CONDENSED = 3;
+    STRETCH_SEMI_CONDENSED = 4;
+    STRETCH_NORMAL = 5;
+    STRETCH_SEMI_EXPANDED = 6;
+    STRETCH_EXPANDED = 7;
+    STRETCH_EXTRA_EXPANDED = 8;
+    STRETCH_ULTRA_EXPANDED = 9;
+  }
+
+  enum Style {
+    STYLE_UNSPECIFIED = 0;
+    STYLE_NORMAL = 1;
+    STYLE_ITALIC = 2;
+    STYLE_OBLIQUE = 3;
+  }
+
+  Family family = 1;
+  Weight weight = 2;
+  Stretch stretch = 3;
+  Style style = 4;
+}
+
+message Radius {
+  float top_left = 1;
+  float top_right = 2;
+  float bottom_right = 3;
+  float bottom_left = 4;
+}
+
+message Border {
+  optional Color color = 1;
+  optional float width = 2;
+  optional Radius radius = 3;
+}
+
+message Theme {
+  optional Palette palette = 1;
+
+  optional Text.Style text_style = 2;
+  optional Scrollable.Style scrollable_style = 3;
+  optional Container.Style container_style = 4;
+}
+
+message Palette {
+  Color background = 1;
+  Color text = 2;
+  Color primary = 3;
+  Color success = 4;
+  Color warning = 5;
+  Color danger = 6;
+}
+
+message WidgetDef {
+  optional Theme theme = 1;
+
+  oneof widget {
+    Text text = 2;
+    Column column = 3;
+    Row row = 4;
+    Scrollable scrollable = 5;
+    Container container = 6;
+  }
+}
+
+message Text {
+  string text = 1;
+  optional Length width = 2;
+  optional Length height = 3;
+  optional Alignment horizontal_alignment = 4;
+  optional Alignment vertical_alignment = 5;
+  optional Style style = 6;
+
+  message Style {
+    optional Color color = 1;
+    optional float pixels = 2;
+    optional Font font = 3;
+  }
+}
+
+message Column {
+  optional float spacing = 1;
+  optional Padding padding = 2;
+  optional Alignment item_alignment = 3;
+  optional Length width = 4;
+  optional Length height = 5;
+  optional float max_width = 6;
+  optional bool clip = 7;
+  repeated WidgetDef children = 8;
+}
+
+message Row {
+  optional float spacing = 1;
+  optional Padding padding = 2;
+  optional Alignment item_alignment = 3;
+  optional Length width = 4;
+  optional Length height = 5;
+  optional bool clip = 6;
+  repeated WidgetDef children = 7;
+}
+
+message Scrollable {
+  optional Length width = 1;
+  optional Length height = 2;
+  optional Direction direction = 3;
+  WidgetDef child = 4;
+  optional Style style = 5;
+
+  message Style {
+    optional Container.Style container_style = 1;
+    optional Rail vertical_rail = 2;
+    optional Rail horizontal_rail = 3;
+  }
+
+  message Rail {
+    optional Color background_color = 1;
+    optional Border border = 2;
+    optional Color scroller_color = 3;
+    optional Border scroller_border = 4;
+  }
+
+  message Direction {
+    optional Scrollbar vertical = 1;
+    optional Scrollbar horizontal = 2;
+  }
+
+  message Scrollbar {
+    optional float width_pixels = 1;
+    optional float margin_pixels = 2;
+    optional float scroller_width_pixels = 3;
+    // `true` to anchor the scrollbar to start at the end,
+    // `false` for the default behavior
+    optional bool anchor_to_end = 4;
+    // Embeds the scrollbar into the scrollable with the
+    // given spacing.
+    optional float embed_spacing = 5;
+  }
+}
+
+message Container {
+  optional Padding padding = 1;
+  optional Length width = 2;
+  optional Length height = 3;
+  optional float max_width = 4;
+  optional float max_height = 5;
+  optional Alignment horizontal_alignment = 6;
+  optional Alignment vertical_alignment = 7;
+  optional bool clip = 8;
+  WidgetDef child = 9;
+  optional Style style = 10;
+
+  message Style {
+    optional Color text_color = 1;
+    optional Color background_color = 2; // TODO: gradient
+    optional Border border = 3;
+    // TODO: shadow
+  }
+}

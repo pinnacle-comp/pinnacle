@@ -50,13 +50,13 @@ impl Font {
     }
 }
 
-impl From<Font> for widget::v0alpha1::Font {
+impl From<Font> for widget::v1::Font {
     fn from(value: Font) -> Self {
         Self {
             family: Some(value.family.into()),
-            weight: Some(widget::v0alpha1::font::Weight::from(value.weight) as i32),
-            stretch: Some(widget::v0alpha1::font::Stretch::from(value.stretch) as i32),
-            style: Some(widget::v0alpha1::font::Style::from(value.style) as i32),
+            weight: widget::v1::font::Weight::from(value.weight) as i32,
+            stretch: widget::v1::font::Stretch::from(value.stretch) as i32,
+            style: widget::v1::font::Style::from(value.style) as i32,
         }
     }
 }
@@ -75,16 +75,16 @@ pub enum Family {
     Monospace,
 }
 
-impl From<Family> for widget::v0alpha1::font::Family {
+impl From<Family> for widget::v1::font::Family {
     fn from(value: Family) -> Self {
         Self {
             family: Some(match value {
-                Family::Name(name) => widget::v0alpha1::font::family::Family::Name(name),
-                Family::Serif => widget::v0alpha1::font::family::Family::Serif(()),
-                Family::SansSerif => widget::v0alpha1::font::family::Family::SansSerif(()),
-                Family::Cursive => widget::v0alpha1::font::family::Family::Cursive(()),
-                Family::Fantasy => widget::v0alpha1::font::family::Family::Fantasy(()),
-                Family::Monospace => widget::v0alpha1::font::family::Family::Monospace(()),
+                Family::Name(name) => widget::v1::font::family::Family::Name(name),
+                Family::Serif => widget::v1::font::family::Family::Serif(()),
+                Family::SansSerif => widget::v1::font::family::Family::SansSerif(()),
+                Family::Cursive => widget::v1::font::family::Family::Cursive(()),
+                Family::Fantasy => widget::v1::font::family::Family::Fantasy(()),
+                Family::Monospace => widget::v1::font::family::Family::Monospace(()),
             }),
         }
     }
@@ -106,18 +106,18 @@ pub enum Weight {
     Black,
 }
 
-impl From<Weight> for widget::v0alpha1::font::Weight {
+impl From<Weight> for widget::v1::font::Weight {
     fn from(value: Weight) -> Self {
         match value {
-            Weight::Thin => widget::v0alpha1::font::Weight::Thin,
-            Weight::ExtraLight => widget::v0alpha1::font::Weight::ExtraLight,
-            Weight::Light => widget::v0alpha1::font::Weight::Light,
-            Weight::Normal => widget::v0alpha1::font::Weight::Normal,
-            Weight::Medium => widget::v0alpha1::font::Weight::Medium,
-            Weight::Semibold => widget::v0alpha1::font::Weight::Semibold,
-            Weight::Bold => widget::v0alpha1::font::Weight::Bold,
-            Weight::ExtraBold => widget::v0alpha1::font::Weight::ExtraBold,
-            Weight::Black => widget::v0alpha1::font::Weight::Black,
+            Weight::Thin => widget::v1::font::Weight::Thin,
+            Weight::ExtraLight => widget::v1::font::Weight::ExtraLight,
+            Weight::Light => widget::v1::font::Weight::Light,
+            Weight::Normal => widget::v1::font::Weight::Normal,
+            Weight::Medium => widget::v1::font::Weight::Medium,
+            Weight::Semibold => widget::v1::font::Weight::Semibold,
+            Weight::Bold => widget::v1::font::Weight::Bold,
+            Weight::ExtraBold => widget::v1::font::Weight::ExtraBold,
+            Weight::Black => widget::v1::font::Weight::Black,
         }
     }
 }
@@ -138,18 +138,18 @@ pub enum Stretch {
     UltraExpanded,
 }
 
-impl From<Stretch> for widget::v0alpha1::font::Stretch {
+impl From<Stretch> for widget::v1::font::Stretch {
     fn from(value: Stretch) -> Self {
         match value {
-            Stretch::UltraCondensed => widget::v0alpha1::font::Stretch::UltraCondensed,
-            Stretch::ExtraCondensed => widget::v0alpha1::font::Stretch::ExtraCondensed,
-            Stretch::Condensed => widget::v0alpha1::font::Stretch::Condensed,
-            Stretch::SemiCondensed => widget::v0alpha1::font::Stretch::SemiCondensed,
-            Stretch::Normal => widget::v0alpha1::font::Stretch::Normal,
-            Stretch::SemiExpanded => widget::v0alpha1::font::Stretch::SemiExpanded,
-            Stretch::Expanded => widget::v0alpha1::font::Stretch::Expanded,
-            Stretch::ExtraExpanded => widget::v0alpha1::font::Stretch::ExtraExpanded,
-            Stretch::UltraExpanded => widget::v0alpha1::font::Stretch::UltraExpanded,
+            Stretch::UltraCondensed => widget::v1::font::Stretch::UltraCondensed,
+            Stretch::ExtraCondensed => widget::v1::font::Stretch::ExtraCondensed,
+            Stretch::Condensed => widget::v1::font::Stretch::Condensed,
+            Stretch::SemiCondensed => widget::v1::font::Stretch::SemiCondensed,
+            Stretch::Normal => widget::v1::font::Stretch::Normal,
+            Stretch::SemiExpanded => widget::v1::font::Stretch::SemiExpanded,
+            Stretch::Expanded => widget::v1::font::Stretch::Expanded,
+            Stretch::ExtraExpanded => widget::v1::font::Stretch::ExtraExpanded,
+            Stretch::UltraExpanded => widget::v1::font::Stretch::UltraExpanded,
         }
     }
 }
@@ -164,12 +164,12 @@ pub enum Style {
     Oblique,
 }
 
-impl From<Style> for widget::v0alpha1::font::Style {
+impl From<Style> for widget::v1::font::Style {
     fn from(value: Style) -> Self {
         match value {
-            Style::Normal => widget::v0alpha1::font::Style::Normal,
-            Style::Italic => widget::v0alpha1::font::Style::Italic,
-            Style::Oblique => widget::v0alpha1::font::Style::Oblique,
+            Style::Normal => widget::v1::font::Style::Normal,
+            Style::Italic => widget::v1::font::Style::Italic,
+            Style::Oblique => widget::v1::font::Style::Oblique,
         }
     }
 }

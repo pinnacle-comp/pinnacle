@@ -10,7 +10,7 @@ local pb = require("pb")
 local protobuf = {}
 
 function protobuf.build_protos()
-    local version = "v0alpha1"
+    local version = "v1"
     local proto_file_paths = {
         "snowcap/input/" .. version .. "/input.proto",
         "snowcap/layer/" .. version .. "/layer.proto",

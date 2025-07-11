@@ -1,0 +1,34 @@
+syntax = "proto3";
+
+package snowcap.input.v1;
+
+message Modifiers {
+  bool shift = 1;
+  bool ctrl = 2;
+  bool alt = 3;
+  bool super = 4;
+}
+
+message KeyboardKeyRequest {
+  uint32 id = 1;
+}
+
+message KeyboardKeyResponse {
+  uint32 key = 1;
+  Modifiers modifiers = 2;
+  bool pressed = 3;
+}
+
+message PointerButtonRequest {
+  uint32 id = 1;
+}
+
+message PointerButtonResponse {
+  uint32 button = 1;
+  bool pressed = 2;
+}
+
+service InputService {
+  rpc KeyboardKey(KeyboardKeyRequest) returns (stream KeyboardKeyResponse);
+  rpc PointerButton(PointerButtonRequest) returns (stream PointerButtonResponse);
+}

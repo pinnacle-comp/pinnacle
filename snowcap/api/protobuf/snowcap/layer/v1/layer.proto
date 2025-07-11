@@ -1,0 +1,56 @@
+syntax = "proto3";
+
+package snowcap.layer.v1;
+
+import "google/protobuf/empty.proto";
+import "snowcap/widget/v1/widget.proto";
+
+enum Anchor {
+  ANCHOR_UNSPECIFIED = 0;
+  ANCHOR_TOP = 1;
+  ANCHOR_BOTTOM = 2;
+  ANCHOR_LEFT = 3;
+  ANCHOR_RIGHT = 4;
+  ANCHOR_TOP_LEFT = 5;
+  ANCHOR_TOP_RIGHT = 6;
+  ANCHOR_BOTTOM_LEFT = 7;
+  ANCHOR_BOTTOM_RIGHT = 8;
+}
+
+enum KeyboardInteractivity {
+  KEYBOARD_INTERACTIVITY_UNSPECIFIED = 0;
+  KEYBOARD_INTERACTIVITY_NONE = 1;
+  KEYBOARD_INTERACTIVITY_ON_DEMAND = 2;
+  KEYBOARD_INTERACTIVITY_EXCLUSIVE = 3;
+}
+
+enum Layer {
+  LAYER_UNSPECIFIED = 0;
+  LAYER_BACKGROUND = 1;
+  LAYER_BOTTOM = 2;
+  LAYER_TOP = 3;
+  LAYER_OVERLAY = 4;
+}
+
+message NewLayerRequest {
+  snowcap.widget.v1.WidgetDef widget_def = 1;
+  uint32 width = 2;
+  uint32 height = 3;
+  Anchor anchor = 4;
+  KeyboardInteractivity keyboard_interactivity = 5;
+  int32 exclusive_zone = 6;
+  Layer layer = 7;
+}
+
+message NewLayerResponse {
+  uint32 layer_id = 1;
+}
+
+message CloseRequest {
+  uint32 layer_id = 2;
+}
+
+service LayerService {
+  rpc NewLayer(NewLayerRequest) returns (NewLayerResponse);
+  rpc Close(CloseRequest) returns (google.protobuf.Empty);
+}

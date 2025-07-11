@@ -8,8 +8,13 @@ use indexmap::IndexMap;
 use snowcap_api::{
     layer::{ExclusiveZone, KeyboardInteractivity, ZLayer},
     widget::{
-        Alignment, Color, Column, Container, Length, Padding, Row, Scrollable, Text, WidgetDef,
+        Alignment, Color, Length, Padding, WidgetDef,
+        column::Column,
+        container::Container,
         font::{Family, Font, Weight},
+        row::Row,
+        scrollable::Scrollable,
+        text::{self, Text},
     },
 };
 use xkbcommon::xkb::Keysym;
@@ -55,23 +60,30 @@ impl QuitPrompt {
     pub fn show(&self) {
         let widget = Container::new(Column::new_with_children([
             Text::new("Quit Pinnacle?")
-                .font(self.font.clone().weight(Weight::Bold))
-                .size(20.0)
+                .style(
+                    text::Style::new()
+                        .font(self.font.clone().weight(Weight::Bold))
+                        .pixels(20.0),
+                )
                 .into(),
-            Text::new("").size(8.0).into(), // Spacing because I haven't impl'd that yet
+            Text::new("").style(text::Style::new().pixels(8.0)).into(), // Spacing
             Text::new("Press ENTER to confirm, or\nany other key to close this")
-                .font(self.font.clone())
-                .size(14.0)
+                .style(text::Style::new().font(self.font.clone()).pixels(14.0))
                 .into(),
         ]))
         .width(Length::Fill)
         .height(Length::Fill)
         .vertical_alignment(Alignment::Center)
         .horizontal_alignment(Alignment::Center)
-        .border_radius(self.border_radius)
-        .border_thickness(self.border_thickness)
-        .border_color(self.border_color)
-        .background_color(self.background_color);
+        .style(snowcap_api::widget::container::Style {
+            text_color: None,
+            background_color: Some(self.background_color),
+            border: Some(snowcap_api::widget::Border {
+                color: Some(self.border_color),
+                width: Some(self.border_thickness),
+                radius: Some(self.border_radius.into()),
+            }),
+        });
 
         snowcap_api::layer::Layer
             .new_widget(
@@ -251,21 +263,27 @@ impl BindOverlay {
 
         let sections = groups.into_iter().flat_map(|(group, data)| {
             let group_title = Text::new(if !group.is_empty() { group } else { "Other".into() })
-                .font(self.font.clone().weight(Weight::Bold))
-                .size(19.0);
+                .style(
+                    text::Style::new()
+                        .font(self.font.clone().weight(Weight::Bold))
+                        .pixels(19.0),
+                );
 
             let keybinds = data.keybinds.into_iter().map(|(key, descs)| {
                 if descs.is_empty() {
-                    WidgetDef::from(Text::new(key.to_string()).font(self.font.clone()))
+                    WidgetDef::from(
+                        Text::new(key.to_string())
+                            .style(text::Style::new().font(self.font.clone())),
+                    )
                 } else if descs.len() == 1 {
                     Row::new_with_children([
                         Text::new(key.to_string())
                             .width(Length::FillPortion(1))
-                            .font(self.font.clone())
+                            .style(text::Style::new().font(self.font.clone()))
                             .into(),
                         Text::new(descs[0].clone())
                             .width(Length::FillPortion(2))
-                            .font(self.font.clone())
+                            .style(text::Style::new().font(self.font.clone()))
                             .into(),
                     ])
                     .into()
@@ -273,14 +291,14 @@ impl BindOverlay {
                     let mut children = Vec::<WidgetDef>::new();
                     children.push(
                         Text::new(key.to_string() + ":")
-                            .font(self.font.clone())
+                            .style(text::Style::new().font(self.font.clone()))
                             .into(),
                     );
 
                     for desc in descs {
                         children.push(
                             Text::new(format!("\t{desc}"))
-                                .font(self.font.clone())
+                                .style(text::Style::new().font(self.font.clone()))
                                 .into(),
                         );
                     }
@@ -291,16 +309,19 @@ impl BindOverlay {
 
             let mousebinds = data.mousebinds.into_iter().map(|(mouse, descs)| {
                 if descs.is_empty() {
-                    WidgetDef::from(Text::new(mouse.to_string()).font(self.font.clone()))
+                    WidgetDef::from(
+                        Text::new(mouse.to_string())
+                            .style(text::Style::new().font(self.font.clone())),
+                    )
                 } else if descs.len() == 1 {
                     Row::new_with_children([
                         Text::new(mouse.to_string())
                             .width(Length::FillPortion(1))
-                            .font(self.font.clone())
+                            .style(text::Style::new().font(self.font.clone()))
                             .into(),
                         Text::new(descs[0].clone())
                             .width(Length::FillPortion(2))
-                            .font(self.font.clone())
+                            .style(text::Style::new().font(self.font.clone()))
                             .into(),
                     ])
                     .into()
@@ -308,14 +329,14 @@ impl BindOverlay {
                     let mut children = Vec::<WidgetDef>::new();
                     children.push(
                         Text::new(mouse.to_string() + ":")
-                            .font(self.font.clone())
+                            .style(text::Style::new().font(self.font.clone()))
                             .into(),
                     );
 
                     for desc in descs {
                         children.push(
                             Text::new(format!("\t{desc}"))
-                                .font(self.font.clone())
+                                .style(text::Style::new().font(self.font.clone()))
                                 .into(),
                         );
                     }
@@ -328,7 +349,7 @@ impl BindOverlay {
             children.push(group_title.into());
             children.extend(keybinds);
             children.extend(mousebinds);
-            children.push(Text::new("").size(8.0).into()); // Spacing because I haven't impl'd that yet
+            children.push(Text::new("").style(text::Style::new().pixels(8.0)).into()); // Spacing because I haven't impl'd that yet
 
             children
         });
@@ -339,27 +360,35 @@ impl BindOverlay {
 
         let widget = Container::new(Column::new_with_children([
             Text::new("Keybinds")
-                .font(self.font.clone().weight(Weight::Bold))
-                .size(24.0)
+                .style(
+                    text::Style::new()
+                        .font(self.font.clone().weight(Weight::Bold))
+                        .pixels(24.0),
+                )
                 .width(Length::Fill)
                 .into(),
-            Text::new("").size(8.0).into(), // Spacing because I haven't impl'd that yet
+            Text::new("").style(text::Style::new().pixels(8.0)).into(), // Spacing
             scrollable.into(),
         ]))
         .width(Length::Fill)
         .height(Length::Fill)
         .padding(Padding {
-            top: 16.0,
-            right: 16.0,
-            bottom: 16.0,
-            left: 16.0,
+            top: self.border_thickness + 10.0,
+            right: self.border_thickness + 10.0,
+            bottom: self.border_thickness + 10.0,
+            left: self.border_thickness + 10.0,
         })
         .vertical_alignment(Alignment::Center)
         .horizontal_alignment(Alignment::Center)
-        .border_radius(self.border_radius)
-        .border_thickness(self.border_thickness)
-        .border_color(self.border_color)
-        .background_color(self.background_color);
+        .style(snowcap_api::widget::container::Style {
+            text_color: None,
+            background_color: Some(self.background_color),
+            border: Some(snowcap_api::widget::Border {
+                color: Some(self.border_color),
+                width: Some(self.border_thickness),
+                radius: Some(self.border_radius.into()),
+            }),
+        });
 
         snowcap_api::layer::Layer
             .new_widget(
@@ -443,26 +472,29 @@ impl ConfigCrashedMessage {
     pub fn show(&self, message: impl std::fmt::Display) {
         let widget = Container::new(Column::new_with_children([
             Text::new("Config crashed!")
-                .font(self.font.clone().weight(Weight::Bold))
-                .size(20.0)
+                .style(
+                    text::Style::new()
+                        .font(self.font.clone().weight(Weight::Bold))
+                        .pixels(20.0),
+                )
                 .into(),
-            Text::new("").size(8.0).into(), // Spacing because I haven't impl'd that yet
+            Text::new("").style(text::Style::new().pixels(8.0)).into(), // Spacing
             Text::new("The previous config crashed with the following error message:")
-                .font(self.font.clone())
-                .size(14.0)
+                .style(text::Style::new().font(self.font.clone()).pixels(14.0))
                 .into(),
-            Text::new("").size(8.0).into(), // Spacing because I haven't impl'd that yet
-            Scrollable::new(Text::new(message).font(self.font.clone()).size(14.0))
-                .width(Length::Fill)
-                .height(Length::Fill)
-                .into(),
-            Text::new("").size(8.0).into(), // Spacing because I haven't impl'd that yet
+            Text::new("").style(text::Style::new().pixels(8.0)).into(), // Spacing
+            Scrollable::new(
+                Text::new(message).style(text::Style::new().font(self.font.clone()).pixels(14.0)),
+            )
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .into(),
+            Text::new("").style(text::Style::new().pixels(8.0)).into(), // Spacing
             Text::new(
                 "ESCAPE/ENTER: Close this window. MOD + S: Bring up the bind overlay.\n\
                     MOD + CTRL + R: Restart your config.",
             )
-            .font(self.font.clone())
-            .size(14.0)
+            .style(text::Style::new().font(self.font.clone()).pixels(14.0))
             .into(),
         ]))
         .width(Length::Fill)
@@ -475,10 +507,15 @@ impl ConfigCrashedMessage {
         })
         .vertical_alignment(Alignment::Center)
         .horizontal_alignment(Alignment::Center)
-        .border_radius(self.border_radius)
-        .border_thickness(self.border_thickness)
-        .border_color(self.border_color)
-        .background_color(self.background_color);
+        .style(snowcap_api::widget::container::Style {
+            text_color: None,
+            background_color: Some(self.background_color),
+            border: Some(snowcap_api::widget::Border {
+                color: Some(self.border_color),
+                width: Some(self.border_thickness),
+                radius: Some(self.border_radius.into()),
+            }),
+        });
 
         snowcap_api::layer::Layer
             .new_widget(

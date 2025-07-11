@@ -3,10 +3,10 @@
 use std::num::NonZeroU32;
 
 use snowcap_api_defs::snowcap::{
-    input::v0alpha1::KeyboardKeyRequest,
+    input::v1::KeyboardKeyRequest,
     layer::{
         self,
-        v0alpha1::{CloseRequest, NewLayerRequest},
+        v1::{CloseRequest, NewLayerRequest},
     },
 };
 use tokio_stream::StreamExt;
@@ -38,17 +38,17 @@ pub enum Anchor {
     BottomRight,
 }
 
-impl From<Anchor> for layer::v0alpha1::Anchor {
+impl From<Anchor> for layer::v1::Anchor {
     fn from(value: Anchor) -> Self {
         match value {
-            Anchor::Top => layer::v0alpha1::Anchor::Top,
-            Anchor::Bottom => layer::v0alpha1::Anchor::Bottom,
-            Anchor::Left => layer::v0alpha1::Anchor::Left,
-            Anchor::Right => layer::v0alpha1::Anchor::Right,
-            Anchor::TopLeft => layer::v0alpha1::Anchor::TopLeft,
-            Anchor::TopRight => layer::v0alpha1::Anchor::TopRight,
-            Anchor::BottomLeft => layer::v0alpha1::Anchor::BottomLeft,
-            Anchor::BottomRight => layer::v0alpha1::Anchor::BottomRight,
+            Anchor::Top => layer::v1::Anchor::Top,
+            Anchor::Bottom => layer::v1::Anchor::Bottom,
+            Anchor::Left => layer::v1::Anchor::Left,
+            Anchor::Right => layer::v1::Anchor::Right,
+            Anchor::TopLeft => layer::v1::Anchor::TopLeft,
+            Anchor::TopRight => layer::v1::Anchor::TopRight,
+            Anchor::BottomLeft => layer::v1::Anchor::BottomLeft,
+            Anchor::BottomRight => layer::v1::Anchor::BottomRight,
         }
     }
 }
@@ -64,12 +64,12 @@ pub enum KeyboardInteractivity {
     Exclusive,
 }
 
-impl From<KeyboardInteractivity> for layer::v0alpha1::KeyboardInteractivity {
+impl From<KeyboardInteractivity> for layer::v1::KeyboardInteractivity {
     fn from(value: KeyboardInteractivity) -> Self {
         match value {
-            KeyboardInteractivity::None => layer::v0alpha1::KeyboardInteractivity::None,
-            KeyboardInteractivity::OnDemand => layer::v0alpha1::KeyboardInteractivity::OnDemand,
-            KeyboardInteractivity::Exclusive => layer::v0alpha1::KeyboardInteractivity::Exclusive,
+            KeyboardInteractivity::None => layer::v1::KeyboardInteractivity::None,
+            KeyboardInteractivity::OnDemand => layer::v1::KeyboardInteractivity::OnDemand,
+            KeyboardInteractivity::Exclusive => layer::v1::KeyboardInteractivity::Exclusive,
         }
     }
 }
@@ -107,7 +107,7 @@ pub enum ZLayer {
     Overlay,
 }
 
-impl From<ZLayer> for layer::v0alpha1::Layer {
+impl From<ZLayer> for layer::v1::Layer {
     fn from(value: ZLayer) -> Self {
         match value {
             ZLayer::Background => Self::Background,
@@ -124,9 +124,6 @@ pub enum NewLayerError {
     /// Snowcap returned a gRPC error status.
     #[error("gRPC error: `{0}`")]
     GrpcStatus(#[from] tonic::Status),
-    /// Snowcap did not return a layer id as expected.
-    #[error("snowcap did not return a layer id")]
-    NoLayerId,
 }
 
 impl Layer {
@@ -141,22 +138,23 @@ impl Layer {
         exclusive_zone: ExclusiveZone,
         layer: ZLayer,
     ) -> Result<LayerHandle, NewLayerError> {
-        let response = block_on_tokio(crate::layer().new_layer(NewLayerRequest {
-            widget_def: Some(widget.into().into()),
-            width: Some(width),
-            height: Some(height),
-            anchor: anchor.map(|anchor| layer::v0alpha1::Anchor::from(anchor) as i32),
-            keyboard_interactivity: Some(layer::v0alpha1::KeyboardInteractivity::from(
-                keyboard_interactivity,
-            ) as i32),
-            exclusive_zone: Some(exclusive_zone.into()),
-            layer: Some(layer::v0alpha1::Layer::from(layer) as i32),
-        }))?;
+        let response = block_on_tokio(
+            crate::layer().new_layer(NewLayerRequest {
+                widget_def: Some(widget.into().into()),
+                width,
+                height,
+                anchor: anchor
+                    .map(From::from)
+                    .unwrap_or(layer::v1::Anchor::Unspecified) as i32,
+                keyboard_interactivity: layer::v1::KeyboardInteractivity::from(
+                    keyboard_interactivity,
+                ) as i32,
+                exclusive_zone: exclusive_zone.into(),
+                layer: layer::v1::Layer::from(layer) as i32,
+            }),
+        )?;
 
-        let id = response
-            .into_inner()
-            .layer_id
-            .ok_or(NewLayerError::NoLayerId)?;
+        let id = response.into_inner().layer_id;
 
         Ok(LayerHandle { id: id.into() })
     }
@@ -172,7 +170,7 @@ impl LayerHandle {
     /// Close this layer widget.
     pub fn close(&self) {
         if let Err(status) = block_on_tokio(crate::layer().close(CloseRequest {
-            layer_id: Some(self.id.into_inner()),
+            layer_id: self.id.to_inner(),
         })) {
             error!("Failed to close {self:?}: {status}");
         }
@@ -184,7 +182,7 @@ impl LayerHandle {
         mut on_press: impl FnMut(LayerHandle, Keysym, Modifiers) + Send + 'static,
     ) {
         let mut stream = match block_on_tokio(crate::input().keyboard_key(KeyboardKeyRequest {
-            id: Some(self.id.into_inner()),
+            id: self.id.to_inner(),
         })) {
             Ok(stream) => stream.into_inner(),
             Err(status) => {
@@ -197,11 +195,11 @@ impl LayerHandle {
 
         tokio::spawn(async move {
             while let Some(Ok(response)) = stream.next().await {
-                if !response.pressed() {
+                if !response.pressed {
                     continue;
                 }
 
-                let key = Keysym::new(response.key());
+                let key = Keysym::new(response.key);
                 let mods = Modifiers::from(response.modifiers.unwrap_or_default());
 
                 on_press(handle, key, mods);

@@ -37,11 +37,11 @@ local snowcap = {
 ---THe thickness of the prompt border.
 ---@field border_thickness number
 ---The color of the prompt background.
----@field background_color snowcap.Color
+---@field background_color snowcap.widget.Color
 ---The color of the prompt border.
----@field border_color snowcap.Color
+---@field border_color snowcap.widget.Color
 ---The font of the prompt.
----@field font snowcap.Font
+---@field font snowcap.widget.Font
 ---The width of the prompt.
 ---@field width integer
 ---The height of the prompt.
@@ -55,11 +55,11 @@ local QuitPrompt = {}
 ---The thickness of the overlay border.
 ---@field border_thickness number
 ---The color of the overlay background.
----@field background_color snowcap.Color
+---@field background_color snowcap.widget.Color
 ---The color of the overlay border.
----@field border_color snowcap.Color
+---@field border_color snowcap.widget.Color
 ---The font of the overlay.
----@field font snowcap.Font
+---@field font snowcap.widget.Font
 ---The width of the overlay.
 ---@field width integer
 ---The height of the overlay.
@@ -79,22 +79,35 @@ function QuitPrompt:show()
         height = Widget.length.Fill,
         valign = Widget.alignment.CENTER,
         halign = Widget.alignment.CENTER,
-        border_radius = self.border_radius,
-        border_thickness = self.border_thickness,
-        border_color = self.border_color,
-        background_color = self.background_color,
+        style = {
+            background_color = self.background_color,
+            border = {
+                width = self.border_thickness,
+                color = self.border_color,
+                radius = {
+                    top_left = self.border_radius,
+                    top_right = self.border_radius,
+                    bottom_left = self.border_radius,
+                    bottom_right = self.border_radius,
+                },
+            },
+        },
         child = Widget.column({
             children = {
                 Widget.text({
                     text = "Quit Pinnacle?",
-                    font = quit_font,
-                    size = 20.0,
+                    style = {
+                        font = quit_font,
+                        pixels = 20.0,
+                    },
                 }),
-                Widget.text({ text = "", size = 8.0 }),
+                Widget.text({ text = "", style = { pixels = 8.0 } }),
                 Widget.text({
                     text = "Press ENTER to confirm, or\nany other key to close this",
-                    font = self.font,
-                    size = 14.0,
+                    style = {
+                        font = self.font,
+                        pixels = 14.0,
+                    },
                 }),
             },
         }),
@@ -109,6 +122,10 @@ function QuitPrompt:show()
         exclusive_zone = "respect",
         layer = Layer.zlayer.OVERLAY,
     })
+
+    if not prompt then
+        return
+    end
 
     prompt:on_key_press(function(_, key)
         if key == require("snowcap.input.keys").Return then
@@ -260,7 +277,7 @@ function BindOverlay:show()
 
     --
 
-    ---@type snowcap.WidgetDef[]
+    ---@type snowcap.widget.WidgetDef[]
     local sections = {}
 
     local Widget = require("snowcap.widget")
@@ -274,14 +291,31 @@ function BindOverlay:show()
             group_name = "Other"
         end
 
-        table.insert(sections, Widget.text({ text = group_name, font = bold_font, size = 19.0 }))
+        table.insert(
+            sections,
+            Widget.text({
+                text = group_name,
+                style = {
+                    font = bold_font,
+                    pixels = 19.0,
+                },
+            })
+        )
 
         for _, keybind in ipairs(group.keybinds) do
             local repr = keybind.keybind
             local descs = keybind.descs
 
             if #descs == 0 then
-                table.insert(sections, Widget.text({ text = repr, font = self.font }))
+                table.insert(
+                    sections,
+                    Widget.text({
+                        text = repr,
+                        style = {
+                            font = self.font,
+                        },
+                    })
+                )
             elseif #descs == 1 then
                 table.insert(
                     sections,
@@ -290,12 +324,16 @@ function BindOverlay:show()
                             Widget.text({
                                 text = repr,
                                 width = Widget.length.FillPortion(1),
-                                font = self.font,
+                                style = {
+                                    font = self.font,
+                                },
                             }),
                             Widget.text({
                                 text = descs[1],
                                 width = Widget.length.FillPortion(2),
-                                font = self.font,
+                                style = {
+                                    font = self.font,
+                                },
                             }),
                         },
                     })
@@ -307,7 +345,9 @@ function BindOverlay:show()
                     children,
                     Widget.text({
                         text = repr .. ":",
-                        font = self.font,
+                        style = {
+                            font = self.font,
+                        },
                     })
                 )
 
@@ -316,7 +356,9 @@ function BindOverlay:show()
                         children,
                         Widget.text({
                             text = "\t" .. desc,
-                            font = self.font,
+                            style = {
+                                font = self.font,
+                            },
                         })
                     )
                 end
@@ -335,7 +377,15 @@ function BindOverlay:show()
             local descs = mousebind.descs
 
             if #descs == 0 then
-                table.insert(sections, Widget.text({ text = repr, font = self.font }))
+                table.insert(
+                    sections,
+                    Widget.text({
+                        text = repr,
+                        style = {
+                            font = self.font,
+                        },
+                    })
+                )
             elseif #descs == 1 then
                 table.insert(
                     sections,
@@ -344,12 +394,16 @@ function BindOverlay:show()
                             Widget.text({
                                 text = repr,
                                 width = Widget.length.FillPortion(1),
-                                font = self.font,
+                                style = {
+                                    font = self.font,
+                                },
                             }),
                             Widget.text({
                                 text = descs[1],
                                 width = Widget.length.FillPortion(2),
-                                font = self.font,
+                                style = {
+                                    font = self.font,
+                                },
                             }),
                         },
                     })
@@ -361,7 +415,9 @@ function BindOverlay:show()
                     children,
                     Widget.text({
                         text = repr .. ":",
-                        font = self.font,
+                        style = {
+                            font = self.font,
+                        },
                     })
                 )
 
@@ -370,7 +426,9 @@ function BindOverlay:show()
                         children,
                         Widget.text({
                             text = "\t" .. desc,
-                            font = self.font,
+                            style = {
+                                font = self.font,
+                            },
                         })
                     )
                 end
@@ -384,7 +442,13 @@ function BindOverlay:show()
             end
         end
 
-        table.insert(sections, Widget.text({ text = "", size = 8.0 }))
+        table.insert(
+            sections,
+            Widget.text({
+                text = "",
+                style = { pixels = 8.0 },
+            })
+        )
     end
 
     local scrollable = Widget.scrollable({
@@ -400,13 +464,17 @@ function BindOverlay:show()
             children = {
                 Widget.text({
                     text = "Keybinds",
-                    font = bold_font,
-                    size = 24.0,
+                    style = {
+                        font = bold_font,
+                        pixels = 24.0,
+                    },
                     width = Widget.length.Fill,
                 }),
                 Widget.text({
                     text = "",
-                    size = 8.0,
+                    style = {
+                        pixels = 8.0,
+                    },
                 }),
                 scrollable,
             },
@@ -414,17 +482,26 @@ function BindOverlay:show()
         width = Widget.length.Fill,
         height = Widget.length.Fill,
         padding = {
-            top = 16.0,
-            left = 16.0,
-            bottom = 16.0,
-            right = 16.0,
+            top = self.border_thickness + 10.0,
+            left = self.border_thickness + 10.0,
+            right = self.border_thickness + 10.0,
+            bottom = self.border_thickness + 10.0,
         },
         valign = Widget.alignment.CENTER,
         halign = Widget.alignment.CENTER,
-        border_radius = self.border_radius,
-        border_color = self.border_color,
-        border_thickness = self.border_thickness,
-        background_color = self.background_color,
+        style = {
+            background_color = self.background_color,
+            border = {
+                width = self.border_thickness,
+                color = self.border_color,
+                radius = {
+                    top_left = self.border_radius,
+                    top_right = self.border_radius,
+                    bottom_left = self.border_radius,
+                    bottom_right = self.border_radius,
+                },
+            },
+        },
     })
 
     local Layer = require("snowcap.layer")
@@ -438,6 +515,10 @@ function BindOverlay:show()
         exclusive_zone = "respect",
         layer = Layer.zlayer.OVERLAY,
     })
+
+    if not overlay then
+        return
+    end
 
     overlay:on_key_press(function(_, _)
         overlay:close()

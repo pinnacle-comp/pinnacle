@@ -12,13 +12,13 @@ pub struct Modifiers {
     pub logo: bool,
 }
 
-impl From<input::v0alpha1::Modifiers> for Modifiers {
-    fn from(value: input::v0alpha1::Modifiers) -> Self {
+impl From<input::v1::Modifiers> for Modifiers {
+    fn from(value: input::v1::Modifiers) -> Self {
         Self {
-            shift: value.shift(),
-            ctrl: value.ctrl(),
-            alt: value.alt(),
-            logo: value.super_(),
+            shift: value.shift,
+            ctrl: value.ctrl,
+            alt: value.alt,
+            logo: value.super_,
         }
     }
 }
