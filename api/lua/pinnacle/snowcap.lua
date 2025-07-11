@@ -33,7 +33,7 @@ local snowcap = {
 ---When opened, pressing ENTER will quit the compositor.
 ---@class pinnacle.snowcap.integration.QuitPrompt
 ---The radius of the prompt's corners.
----@field border_radius snowcap.widget.Radius
+---@field border_radius number
 ---THe thickness of the prompt border.
 ---@field border_thickness number
 ---The color of the prompt background.
@@ -51,7 +51,7 @@ local QuitPrompt = {}
 ---An overlay that shows various input binds.
 ---@class pinnacle.snowcap.integration.BindOverlay
 ---The radius of the overlay's corners.
----@field border_radius snowcap.widget.Radius
+---@field border_radius number
 ---The thickness of the overlay border.
 ---@field border_thickness number
 ---The color of the overlay background.
@@ -84,7 +84,12 @@ function QuitPrompt:show()
             border = {
                 width = self.border_thickness,
                 color = self.border_color,
-                radius = self.border_radius,
+                radius = {
+                    top_left = self.border_radius,
+                    top_right = self.border_radius,
+                    bottom_left = self.border_radius,
+                    bottom_right = self.border_radius,
+                },
             },
         },
         child = Widget.column({
@@ -489,7 +494,12 @@ function BindOverlay:show()
             border = {
                 width = self.border_thickness,
                 color = self.border_color,
-                radius = self.border_radius,
+                radius = {
+                    top_left = self.border_radius,
+                    top_right = self.border_radius,
+                    bottom_left = self.border_radius,
+                    bottom_right = self.border_radius,
+                },
             },
         },
     })
@@ -525,12 +535,7 @@ function integration.quit_prompt()
 
     ---@type pinnacle.snowcap.integration.QuitPrompt
     local prompt = {
-        border_radius = {
-            top_left = 12.0,
-            bottom_left = 12.0,
-            bottom_right = 12.0,
-            top_right = 12.0,
-        },
+        border_radius = 12.0,
         border_thickness = 6.0,
         background_color = Widget.color.from_rgba(0.15, 0.03, 0.1, 0.65),
         border_color = Widget.color.from_rgba(0.8, 0.2, 0.4),
@@ -556,12 +561,7 @@ function integration.bind_overlay()
 
     ---@type pinnacle.snowcap.integration.BindOverlay
     local prompt = {
-        border_radius = {
-            top_left = 12.0,
-            bottom_left = 12.0,
-            bottom_right = 12.0,
-            top_right = 12.0,
-        },
+        border_radius = 12.0,
         border_thickness = 6.0,
         background_color = Widget.color.from_rgba(0.15, 0.15, 0.225, 0.8),
         border_color = Widget.color.from_rgba(0.4, 0.4, 0.7),
