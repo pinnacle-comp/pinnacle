@@ -1,8 +1,8 @@
-use std::{any::Any, collections::HashMap, num::NonZeroU32, ptr::NonNull};
+use std::{num::NonZeroU32, ptr::NonNull};
 
-use iced::{Color, Size, Theme, window::RedrawRequest};
+use iced::{Color, Size, window::RedrawRequest};
 use iced_graphics::Compositor;
-use iced_runtime::{UserInterface, user_interface};
+use iced_runtime::user_interface;
 use iced_wgpu::graphics::Viewport;
 use raw_window_handle::{
     HasDisplayHandle, HasWindowHandle, RawDisplayHandle, RawWindowHandle, WaylandDisplayHandle,
@@ -27,7 +27,7 @@ use crate::{
     handlers::keyboard::KeyboardKey,
     state::State,
     util::BlockOnTokio,
-    widget::{SnowcapMessage, SnowcapWidgetProgram, WidgetEvent, WidgetFn, WidgetId},
+    widget::{SnowcapMessage, SnowcapWidgetProgram, ViewFn, WidgetEvent, WidgetId},
 };
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Default)]
@@ -132,8 +132,7 @@ impl SnowcapLayer {
         anchor: Anchor,
         exclusive_zone: ExclusiveZone,
         keyboard_interactivity: wlr_layer::KeyboardInteractivity,
-        widgets: WidgetFn,
-        states: HashMap<u32, Box<dyn Any + Send>>,
+        widgets: ViewFn,
     ) -> Self {
         let surface = state.compositor_state.create_surface(&state.queue_handle);
         let layer = state.layer_shell_state.create_layer_surface(
@@ -191,8 +190,7 @@ impl SnowcapLayer {
 
         let viewport = Viewport::with_physical_size(Size::new(width, height), 1.0);
 
-        let widgets =
-            SnowcapWidgetProgram::new(widgets, states, viewport.logical_size(), &mut renderer);
+        let widgets = SnowcapWidgetProgram::new(widgets, viewport.logical_size(), &mut renderer);
 
         Self {
             surface: iced_surface,
@@ -228,14 +226,7 @@ impl SnowcapLayer {
             None => iced::mouse::Cursor::Unavailable,
         };
 
-        self.widgets.user_interface.as_mut().unwrap().draw(
-            &mut self.renderer,
-            &Theme::CatppuccinFrappe,
-            &iced_wgpu::core::renderer::Style {
-                text_color: Color::WHITE,
-            },
-            cursor,
-        );
+        self.widgets.draw(&mut self.renderer, cursor);
 
         match &mut self.renderer {
             Renderer::Primary(wgpu) => {
@@ -282,18 +273,12 @@ impl SnowcapLayer {
 
         let mut messages = Vec::new();
 
-        let (state, statuses) = self
-            .widgets
-            .user_interface
-            .as_mut()
-            .expect("ui should exist")
-            .update(
-                &self.widgets.queued_events,
-                cursor,
-                &mut self.renderer,
-                &mut self.clipboard,
-                &mut messages,
-            );
+        let (state, statuses) = self.widgets.update(
+            cursor,
+            &mut self.renderer,
+            &mut self.clipboard,
+            &mut messages,
+        );
 
         let mut ui_stale = false;
         let mut request_frame = false;
@@ -324,16 +309,13 @@ impl SnowcapLayer {
             },
         }
 
-        for (event, status) in self.widgets.queued_events.iter().zip(statuses) {
+        for (event, status) in self.widgets.drain_events().zip(statuses) {
             runtime.broadcast(iced_futures::subscription::Event::Interaction {
                 window: self.window_id,
-                event: event.clone(),
+                event,
                 status,
             });
         }
-
-        self.widgets.queued_events.clear();
-        messages.append(&mut self.widgets.queued_messages);
 
         // If there are messages, we'll need to recreate the UI with the new state.
         if !messages.is_empty() || ui_stale {
@@ -348,14 +330,8 @@ impl SnowcapLayer {
                 }
             }
 
-            let cache = self.widgets.user_interface.take().unwrap().into_cache();
-            let view = (self.widgets.widgets)(&self.widgets.widget_state);
-            self.widgets.user_interface = Some(UserInterface::build(
-                view,
-                self.viewport.logical_size(),
-                cache,
-                &mut self.renderer,
-            ));
+            self.widgets
+                .rebuild_ui(self.viewport.logical_size(), &mut self.renderer);
         }
 
         if request_frame {

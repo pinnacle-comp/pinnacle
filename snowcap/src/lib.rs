@@ -88,7 +88,7 @@ pub fn start(stop_signal_sender: Option<tokio::sync::oneshot::Sender<SnowcapHand
             }
 
             for layer in state.layers.iter_mut() {
-                if !layer.widgets.queued_events.is_empty() {
+                if layer.widgets.has_events_queued() {
                     layer.update(&state.queue_handle, &mut state.runtime);
                 }
 

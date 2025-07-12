@@ -69,7 +69,7 @@ impl layer_service_server::LayerService for super::LayerService {
         };
 
         run_unary(&self.sender, move |state| {
-            let Some((f, states)) = crate::api::widget::v1::widget_def_to_fn(widget_def) else {
+            let Some(f) = crate::api::widget::v1::widget_def_to_fn(widget_def) else {
                 return Err(Status::invalid_argument("widget def was null"));
             };
 
@@ -82,7 +82,6 @@ impl layer_service_server::LayerService for super::LayerService {
                 exclusive_zone,
                 keyboard_interactivity,
                 f,
-                states,
             );
 
             let ret = Ok(NewLayerResponse {

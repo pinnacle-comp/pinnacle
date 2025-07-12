@@ -1,27 +1,12 @@
-use std::{any::Any, collections::HashMap};
-
 use iced::widget::{Column, Container, Row, Scrollable, scrollable::Scrollbar};
 use snowcap_api_defs::snowcap::widget::{
     self,
     v0alpha1::{WidgetDef, widget_def},
 };
 
-use crate::{util::convert::FromApi, widget::WidgetFn};
+use crate::{util::convert::FromApi, widget::ViewFn};
 
-pub fn widget_def_to_fn(def: WidgetDef) -> Option<(WidgetFn, HashMap<u32, Box<dyn Any + Send>>)> {
-    let mut states = HashMap::new();
-    let mut current_id = 0;
-
-    let f = widget_def_to_fn_inner(def, &mut current_id, &mut states);
-
-    f.map(|f| (f, states))
-}
-
-fn widget_def_to_fn_inner(
-    def: WidgetDef,
-    current_id: &mut u32,
-    _states: &mut HashMap<u32, Box<dyn Any + Send>>,
-) -> Option<WidgetFn> {
+pub fn widget_def_to_fn(def: WidgetDef) -> Option<ViewFn> {
     let def = def.widget?;
     match def {
         widget_def::Widget::Text(text_def) => {
@@ -39,7 +24,7 @@ fn widget_def_to_fn_inner(
                 font,
             } = text_def;
 
-            let f: WidgetFn = Box::new(move |_states| {
+            let f: ViewFn = Box::new(move || {
                 let mut text = iced::widget::Text::new(text.clone().unwrap_or_default());
                 if let Some(pixels) = pixels {
                     text = text.size(pixels);
@@ -102,13 +87,10 @@ fn widget_def_to_fn_inner(
         }) => {
             let children_widget_fns = children
                 .into_iter()
-                .flat_map(|def| {
-                    *current_id += 1;
-                    widget_def_to_fn_inner(def, current_id, _states)
-                })
+                .flat_map(widget_def_to_fn)
                 .collect::<Vec<_>>();
 
-            let f: WidgetFn = Box::new(move |states| {
+            let f: ViewFn = Box::new(move || {
                 let mut column = Column::new();
 
                 if let Some(spacing) = spacing {
@@ -143,7 +125,7 @@ fn widget_def_to_fn_inner(
                 }
 
                 for child in children_widget_fns.iter() {
-                    column = column.push(child(states));
+                    column = column.push(child());
                 }
 
                 column.into()
@@ -162,13 +144,10 @@ fn widget_def_to_fn_inner(
         }) => {
             let children_widget_fns = children
                 .into_iter()
-                .flat_map(|def| {
-                    *current_id += 1;
-                    widget_def_to_fn_inner(def, current_id, _states)
-                })
+                .flat_map(widget_def_to_fn)
                 .collect::<Vec<_>>();
 
-            let f: WidgetFn = Box::new(move |states| {
+            let f: ViewFn = Box::new(move || {
                 let mut row = Row::new();
 
                 if let Some(spacing) = spacing {
@@ -211,7 +190,7 @@ fn widget_def_to_fn_inner(
                 }
 
                 for child in children_widget_fns.iter() {
-                    row = row.push(child(states));
+                    row = row.push(child());
                 }
 
                 row.into()
@@ -227,16 +206,13 @@ fn widget_def_to_fn_inner(
                 child,
             } = *scrollable_def;
 
-            let child_widget_fn = child.and_then(|def| {
-                *current_id += 1;
-                widget_def_to_fn_inner(*def, current_id, _states)
-            });
+            let child_widget_fn = child.and_then(|def| widget_def_to_fn(*def));
 
-            let f: WidgetFn = Box::new(move |states| {
+            let f: ViewFn = Box::new(move || {
                 let mut scrollable = Scrollable::new(
                     child_widget_fn
                         .as_ref()
-                        .map(|child| child(states))
+                        .map(|child| child())
                         .unwrap_or_else(|| iced::widget::Text::new("NULL").into()),
                 );
 
@@ -278,16 +254,13 @@ fn widget_def_to_fn_inner(
                 border_color,
             } = *container_def;
 
-            let child_widget_fn = child.and_then(|def| {
-                *current_id += 1;
-                widget_def_to_fn_inner(*def, current_id, _states)
-            });
+            let child_widget_fn = child.and_then(|def| widget_def_to_fn(*def));
 
-            let f: WidgetFn = Box::new(move |states| {
+            let f: ViewFn = Box::new(move || {
                 let mut container = Container::new(
                     child_widget_fn
                         .as_ref()
-                        .map(|child| child(states))
+                        .map(|child| child())
                         .unwrap_or_else(|| iced::widget::Text::new("NULL").into()),
                 );
 

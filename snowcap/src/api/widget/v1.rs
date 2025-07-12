@@ -1,5 +1,3 @@
-use std::{any::Any, collections::HashMap};
-
 use iced::widget::{
     Column, Container, Row, Scrollable, button, image::FilterMethod, scrollable::Scrollbar,
 };
@@ -16,7 +14,7 @@ use crate::{
     api::{ResponseStream, run_server_streaming_mapped},
     layer::LayerId,
     util::convert::FromApi,
-    widget::{WidgetEvent, WidgetFn, WidgetId},
+    widget::{ViewFn, WidgetEvent, WidgetId},
 };
 
 #[tonic::async_trait]
@@ -53,20 +51,7 @@ impl widget_service_server::WidgetService for super::WidgetService {
     }
 }
 
-pub fn widget_def_to_fn(def: WidgetDef) -> Option<(WidgetFn, HashMap<u32, Box<dyn Any + Send>>)> {
-    let mut states = HashMap::new();
-    let mut current_id = 0;
-
-    let f = widget_def_to_fn_inner(def, &mut current_id, &mut states);
-
-    f.map(|f| (f, states))
-}
-
-fn widget_def_to_fn_inner(
-    def: WidgetDef,
-    current_id: &mut u32,
-    _states: &mut HashMap<u32, Box<dyn Any + Send>>,
-) -> Option<WidgetFn> {
+pub fn widget_def_to_fn(def: WidgetDef) -> Option<ViewFn> {
     let def = def.widget?;
     match def {
         widget_def::Widget::Text(text_def) => {
@@ -82,7 +67,7 @@ fn widget_def_to_fn_inner(
                 style,
             } = text_def;
 
-            let f: WidgetFn = Box::new(move |_states| {
+            let f: ViewFn = Box::new(move || {
                 let mut text = iced::widget::Text::new(text.clone());
                 if let Some(pixels) = style.as_ref().and_then(|style| style.pixels) {
                     text = text.size(pixels);
@@ -145,13 +130,10 @@ fn widget_def_to_fn_inner(
         }) => {
             let children_widget_fns = children
                 .into_iter()
-                .flat_map(|def| {
-                    *current_id += 1;
-                    widget_def_to_fn_inner(def, current_id, _states)
-                })
+                .flat_map(widget_def_to_fn)
                 .collect::<Vec<_>>();
 
-            let f: WidgetFn = Box::new(move |states| {
+            let f: ViewFn = Box::new(move || {
                 let mut column = Column::new();
 
                 if let Some(spacing) = spacing {
@@ -186,7 +168,7 @@ fn widget_def_to_fn_inner(
                 }
 
                 for child in children_widget_fns.iter() {
-                    column = column.push(child(states));
+                    column = column.push(child());
                 }
 
                 column.into()
@@ -205,13 +187,10 @@ fn widget_def_to_fn_inner(
         }) => {
             let children_widget_fns = children
                 .into_iter()
-                .flat_map(|def| {
-                    *current_id += 1;
-                    widget_def_to_fn_inner(def, current_id, _states)
-                })
+                .flat_map(widget_def_to_fn)
                 .collect::<Vec<_>>();
 
-            let f: WidgetFn = Box::new(move |states| {
+            let f: ViewFn = Box::new(move || {
                 let mut row = Row::new();
 
                 if let Some(spacing) = spacing {
@@ -254,7 +233,7 @@ fn widget_def_to_fn_inner(
                 }
 
                 for child in children_widget_fns.iter() {
-                    row = row.push(child(states));
+                    row = row.push(child());
                 }
 
                 row.into()
@@ -271,16 +250,13 @@ fn widget_def_to_fn_inner(
                 style,
             } = *scrollable_def;
 
-            let child_widget_fn = child.and_then(|def| {
-                *current_id += 1;
-                widget_def_to_fn_inner(*def, current_id, _states)
-            });
+            let child_widget_fn = child.and_then(|def| widget_def_to_fn(*def));
 
-            let f: WidgetFn = Box::new(move |states| {
+            let f: ViewFn = Box::new(move || {
                 let mut scrollable = Scrollable::new(
                     child_widget_fn
                         .as_ref()
-                        .map(|child| child(states))
+                        .map(|child| child())
                         .unwrap_or_else(|| iced::widget::Text::new("NULL").into()),
                 );
 
@@ -369,16 +345,13 @@ fn widget_def_to_fn_inner(
                 style,
             } = *container_def;
 
-            let child_widget_fn = child.and_then(|def| {
-                *current_id += 1;
-                widget_def_to_fn_inner(*def, current_id, _states)
-            });
+            let child_widget_fn = child.and_then(|def| widget_def_to_fn(*def));
 
-            let f: WidgetFn = Box::new(move |states| {
+            let f: ViewFn = Box::new(move || {
                 let mut container = Container::new(
                     child_widget_fn
                         .as_ref()
-                        .map(|child| child(states))
+                        .map(|child| child())
                         .unwrap_or_else(|| iced::widget::Text::new("NULL").into()),
                 );
 
@@ -462,16 +435,13 @@ fn widget_def_to_fn_inner(
                 widget_id,
             } = *button;
 
-            let child_widget_fn = child.and_then(|def| {
-                *current_id += 1;
-                widget_def_to_fn_inner(*def, current_id, _states)
-            });
+            let child_widget_fn = child.and_then(|def| widget_def_to_fn(*def));
 
-            let f: WidgetFn = Box::new(move |states| {
+            let f: ViewFn = Box::new(move || {
                 let mut button = iced::widget::Button::new(
                     child_widget_fn
                         .as_ref()
-                        .map(|child| child(states))
+                        .map(|child| child())
                         .unwrap_or_else(|| iced::widget::Text::new("NULL").into()),
                 );
 
@@ -544,7 +514,7 @@ fn widget_def_to_fn_inner(
 
             let handle = handle?;
 
-            let f: WidgetFn = Box::new(move |_| {
+            let f: ViewFn = Box::new(move || {
                 // FIXME: don't clone the entire image
                 let mut image = match handle.clone() {
                     widget::v1::image::Handle::Path(path) => {
