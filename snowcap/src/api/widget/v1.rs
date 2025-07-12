@@ -1,6 +1,8 @@
 use std::{any::Any, collections::HashMap};
 
-use iced::widget::{Column, Container, Row, Scrollable, button, scrollable::Scrollbar};
+use iced::widget::{
+    Column, Container, Row, Scrollable, button, image::FilterMethod, scrollable::Scrollbar,
+};
 use snowcap_api_defs::snowcap::widget::{
     self,
     v1::{
@@ -521,6 +523,81 @@ fn widget_def_to_fn_inner(
                 button = button.style(style);
 
                 button.into()
+            });
+
+            Some(f)
+        }
+        widget_def::Widget::Image(image) => {
+            let content_fit = image.content_fit();
+
+            let widget::v1::Image {
+                nearest_neighbor,
+                rotation_degrees,
+                opacity,
+                handle,
+                width,
+                height,
+                expand,
+                content_fit: _,
+                scale,
+            } = image;
+
+            let handle = handle?;
+
+            let f: WidgetFn = Box::new(move |_| {
+                // FIXME: don't clone the entire image
+                let mut image = match handle.clone() {
+                    widget::v1::image::Handle::Path(path) => {
+                        iced::widget::Image::new(iced::widget::image::Handle::from_path(path))
+                    }
+                    widget::v1::image::Handle::Bytes(bytes) => {
+                        iced::widget::Image::new(iced::widget::image::Handle::from_bytes(bytes))
+                    }
+                    widget::v1::image::Handle::Rgba(widget::v1::image::Rgba {
+                        width,
+                        height,
+                        rgba,
+                    }) => iced::widget::Image::new(iced::widget::image::Handle::from_rgba(
+                        width, height, rgba,
+                    )),
+                };
+
+                if let Some(true) = nearest_neighbor {
+                    image = image.filter_method(FilterMethod::Nearest);
+                }
+                if let Some(degrees) = rotation_degrees {
+                    image = image.rotation(iced::Radians::from(iced::Degrees::from(degrees)));
+                }
+                if let Some(opacity) = opacity {
+                    image = image.opacity(opacity.clamp(0.0, 1.0));
+                }
+                if let Some(width) = width {
+                    image = image.width(iced::Length::from_api(width));
+                }
+                if let Some(height) = height {
+                    image = image.height(iced::Length::from_api(height));
+                }
+                if let Some(expand) = expand {
+                    image = image.expand(expand);
+                }
+
+                let content_fit = match content_fit {
+                    widget::v1::image::ContentFit::Unspecified => None,
+                    widget::v1::image::ContentFit::Contain => Some(iced::ContentFit::Contain),
+                    widget::v1::image::ContentFit::Cover => Some(iced::ContentFit::Cover),
+                    widget::v1::image::ContentFit::Fill => Some(iced::ContentFit::Fill),
+                    widget::v1::image::ContentFit::None => Some(iced::ContentFit::None),
+                    widget::v1::image::ContentFit::ScaleDown => Some(iced::ContentFit::ScaleDown),
+                };
+
+                if let Some(content_fit) = content_fit {
+                    image = image.content_fit(content_fit);
+                }
+                if let Some(scale) = scale {
+                    image = image.scale(scale);
+                }
+
+                image.into()
             });
 
             Some(f)

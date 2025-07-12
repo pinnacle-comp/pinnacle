@@ -7,7 +7,7 @@ rust-version.workspace = true
 [dependencies]
 smithay-client-toolkit = "0.19.2"
 anyhow = { workspace = true }
-iced = { git = "https://github.com/iced-rs/iced", rev = "283d0e7", default-features = false, features = ["wgpu", "tokio", "tiny-skia"] }
+iced = { git = "https://github.com/iced-rs/iced", rev = "283d0e7", default-features = false, features = ["wgpu", "tokio", "tiny-skia", "image"] }
 iced_wgpu = { git = "https://github.com/iced-rs/iced", rev = "283d0e7" }
 iced_runtime = { git = "https://github.com/iced-rs/iced", rev = "283d0e7" }
 iced_futures = { git = "https://github.com/iced-rs/iced", rev = "283d0e7" }

@@ -6,6 +6,7 @@ pub mod button;
 pub mod column;
 pub mod container;
 pub mod font;
+pub mod image;
 pub mod row;
 pub mod scrollable;
 pub mod text;
@@ -18,6 +19,7 @@ use std::{
 use button::{Button, ButtonCallback};
 use column::Column;
 use container::Container;
+use image::Image;
 use row::Row;
 use scrollable::Scrollable;
 use snowcap_api_defs::snowcap::widget;
@@ -125,6 +127,7 @@ impl WidgetDef {
             Widget::Button(button) => {
                 button.child.traverse(callbacks, with_widget);
             }
+            Widget::Image(_) => (),
         }
     }
 }
@@ -148,6 +151,7 @@ pub enum Widget {
     Scrollable(Box<Scrollable>),
     Container(Box<Container>),
     Button(Box<Button>),
+    Image(Image),
 }
 
 impl<T: Into<Widget>> From<T> for WidgetDef {
@@ -174,6 +178,7 @@ impl From<Widget> for widget::v1::widget_def::Widget {
             Widget::Button(button) => {
                 widget::v1::widget_def::Widget::Button(Box::new((*button).into()))
             }
+            Widget::Image(image) => widget::v1::widget_def::Widget::Image(image.into()),
         }
     }
 }

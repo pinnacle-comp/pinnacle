@@ -126,6 +126,7 @@ message WidgetDef {
     Scrollable scrollable = 5;
     Container container = 6;
     Button button = 7;
+    Image image = 8;
   }
 }
 
@@ -248,6 +249,37 @@ message Button {
 
   // A button was pressed.
   message Event {}
+}
+
+message Image {
+  oneof handle {
+    string path = 1;
+    bytes bytes = 2;
+    Rgba rgba = 3;
+  }
+  optional Length width = 4;
+  optional Length height = 5;
+  optional bool expand = 6;
+  optional ContentFit content_fit = 7;
+  optional bool nearest_neighbor = 8;
+  optional float rotation_degrees = 9;
+  optional float opacity = 10;
+  optional float scale = 11;
+
+  enum ContentFit {
+    CONTENT_FIT_UNSPECIFIED = 0;
+    CONTENT_FIT_CONTAIN = 1;
+    CONTENT_FIT_COVER = 2;
+    CONTENT_FIT_FILL = 3;
+    CONTENT_FIT_NONE = 4;
+    CONTENT_FIT_SCALE_DOWN = 5;
+  }
+
+  message Rgba {
+    uint32 width = 1;
+    uint32 height = 2;
+    bytes rgba = 3;
+  }
 }
 
 message GetWidgetEventsRequest {

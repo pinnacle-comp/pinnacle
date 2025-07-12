@@ -24,6 +24,7 @@
 ---@field scrollable snowcap.widget.Scrollable?
 ---@field container snowcap.widget.Container?
 ---@field button snowcap.widget.Button?
+---@field image snowcap.widget.Image?
 
 ---@class snowcap.widget.Border
 ---@field color snowcap.widget.Color?
@@ -134,6 +135,31 @@
 ---@field text_color snowcap.widget.Color?
 ---@field background_color snowcap.widget.Color?
 ---@field border snowcap.widget.Border?
+
+---@class snowcap.widget.Image
+---@field handle snowcap.widget.image.Handle
+---@field width snowcap.widget.Length?
+---@field height snowcap.widget.Length?
+---@field expand boolean?
+---@field content_fit snowcap.widget.image.ContentFit?
+---@field nearest_neighbor boolean?
+---@field rotation_degrees number?
+---@field opacity number?
+---@field scale number?
+
+---@enum snowcap.widget.image.ContentFit
+local content_fit = {
+    CONTAIN = 1,
+    COVER = 2,
+    FILL = 3,
+    NONE = 4,
+    SCALE_DOWN = 5,
+}
+
+---@class snowcap.widget.image.Handle
+---@field path string?
+---@field bytes string?
+---@field rgba { width: integer, height: integer, rgba: string }?
 
 ---@class snowcap.widget.Length
 ---@field fill {}?
@@ -266,6 +292,9 @@ local widget = {
     alignment = alignment,
     color = color,
     font = font,
+    image = {
+        content_fit = content_fit,
+    },
 }
 
 local widget_id_counter = 0
@@ -370,6 +399,25 @@ local function button_into_api(def)
     }
 end
 
+---@param def snowcap.widget.Image
+---@return snowcap.widget.v1.Image
+local function image_into_api(def)
+    ---@type snowcap.widget.v1.Image
+    return {
+        path = def.handle.path,
+        bytes = def.handle.bytes,
+        rgba = def.handle.rgba,
+        width = def.width --[[@as snowcap.widget.v1.Length]],
+        height = def.height --[[@as snowcap.widget.v1.Length]],
+        expand = def.expand,
+        content_fit = def.content_fit,
+        nearest_neighbor = def.nearest_neighbor,
+        rotation_degrees = def.rotation_degrees,
+        opacity = def.opacity,
+        scale = def.scale,
+    }
+end
+
 ---@param def snowcap.widget.WidgetDef
 ---@return snowcap.widget.v1.WidgetDef
 function widget.widget_def_into_api(def)
@@ -390,6 +438,9 @@ function widget.widget_def_into_api(def)
     end
     if def.button then
         def.button = button_into_api(def.button)
+    end
+    if def.image then
+        def.image = image_into_api(def.image)
     end
 
     return def --[[@as snowcap.widget.v1.WidgetDef]]
@@ -452,6 +503,16 @@ function widget.button(button)
     ---@type snowcap.widget.WidgetDef
     return {
         button = button,
+    }
+end
+
+---@param image snowcap.widget.Image
+---
+---@return snowcap.widget.WidgetDef
+function widget.Image(image)
+    ---@type snowcap.widget.WidgetDef
+    return {
+        image = image,
     }
 end
 

@@ -526,6 +526,16 @@ local snowcap_widget_v1_Font_Style = {
     STYLE_OBLIQUE = 3,
 }
 
+---@enum snowcap.widget.v1.Image.ContentFit
+local snowcap_widget_v1_Image_ContentFit = {
+    CONTENT_FIT_UNSPECIFIED = 0,
+    CONTENT_FIT_CONTAIN = 1,
+    CONTENT_FIT_COVER = 2,
+    CONTENT_FIT_FILL = 3,
+    CONTENT_FIT_NONE = 4,
+    CONTENT_FIT_SCALE_DOWN = 5,
+}
+
 ---@enum snowcap.layer.v1.Anchor
 local snowcap_layer_v1_Anchor = {
     ANCHOR_UNSPECIFIED = 0,
@@ -782,6 +792,7 @@ local snowcap_layer_v1_Layer = {
 ---@field scrollable snowcap.widget.v1.Scrollable?
 ---@field container snowcap.widget.v1.Container?
 ---@field button snowcap.widget.v1.Button?
+---@field image snowcap.widget.v1.Image?
 
 ---@class snowcap.widget.v1.Text
 ---@field text string?
@@ -883,6 +894,24 @@ local snowcap_layer_v1_Layer = {
 
 ---@class snowcap.widget.v1.Button.Event
 
+---@class snowcap.widget.v1.Image
+---@field path string?
+---@field bytes string?
+---@field rgba snowcap.widget.v1.Image.Rgba?
+---@field width snowcap.widget.v1.Length?
+---@field height snowcap.widget.v1.Length?
+---@field expand boolean?
+---@field content_fit snowcap.widget.v1.Image.ContentFit?
+---@field nearest_neighbor boolean?
+---@field rotation_degrees number?
+---@field opacity number?
+---@field scale number?
+
+---@class snowcap.widget.v1.Image.Rgba
+---@field width integer?
+---@field height integer?
+---@field rgba string?
+
 ---@class snowcap.widget.v1.GetWidgetEventsRequest
 ---@field layer_id integer?
 
@@ -972,6 +1001,8 @@ snowcap.widget.v1.Button = {}
 snowcap.widget.v1.Button.Style = {}
 snowcap.widget.v1.Button.Style.Inner = {}
 snowcap.widget.v1.Button.Event = {}
+snowcap.widget.v1.Image = {}
+snowcap.widget.v1.Image.Rgba = {}
 snowcap.widget.v1.GetWidgetEventsRequest = {}
 snowcap.widget.v1.GetWidgetEventsResponse = {}
 snowcap.layer.v1 = {}
@@ -994,6 +1025,7 @@ snowcap.widget.v1.Alignment = snowcap_widget_v1_Alignment
 snowcap.widget.v1.Font.Weight = snowcap_widget_v1_Font_Weight
 snowcap.widget.v1.Font.Stretch = snowcap_widget_v1_Font_Stretch
 snowcap.widget.v1.Font.Style = snowcap_widget_v1_Font_Style
+snowcap.widget.v1.Image.ContentFit = snowcap_widget_v1_Image_ContentFit
 snowcap.layer.v1.Anchor = snowcap_layer_v1_Anchor
 snowcap.layer.v1.KeyboardInteractivity = snowcap_layer_v1_KeyboardInteractivity
 snowcap.layer.v1.Layer = snowcap_layer_v1_Layer
