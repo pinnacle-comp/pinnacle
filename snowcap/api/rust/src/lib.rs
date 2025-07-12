@@ -19,6 +19,7 @@ use hyper_util::rt::TokioIo;
 use snowcap_api_defs::snowcap::{
     input::v1::input_service_client::InputServiceClient,
     layer::v1::layer_service_client::LayerServiceClient,
+    widget::v1::widget_service_client::WidgetServiceClient,
 };
 pub use xkbcommon;
 
@@ -31,6 +32,7 @@ use tower::service_fn;
 
 static LAYER: RwLock<Option<LayerServiceClient<Channel>>> = RwLock::new(None);
 static INPUT: RwLock<Option<InputServiceClient<Channel>>> = RwLock::new(None);
+static WIDGET: RwLock<Option<WidgetServiceClient<Channel>>> = RwLock::new(None);
 
 pub(crate) fn layer() -> LayerServiceClient<Channel> {
     LAYER
@@ -41,6 +43,13 @@ pub(crate) fn layer() -> LayerServiceClient<Channel> {
 }
 pub(crate) fn input() -> InputServiceClient<Channel> {
     INPUT
+        .read()
+        .expect("grpc connection was not initialized")
+        .clone()
+        .unwrap()
+}
+pub(crate) fn widget() -> WidgetServiceClient<Channel> {
+    WIDGET
         .read()
         .expect("grpc connection was not initialized")
         .clone()
@@ -81,6 +90,10 @@ pub async fn connect() -> Result<Layer, Box<dyn std::error::Error>> {
         .write()
         .unwrap()
         .replace(InputServiceClient::new(channel.clone()));
+    let _ = WIDGET
+        .write()
+        .unwrap()
+        .replace(WidgetServiceClient::new(channel.clone()));
 
     Ok(Layer)
 }

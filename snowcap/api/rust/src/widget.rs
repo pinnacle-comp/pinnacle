@@ -2,6 +2,7 @@
 
 #![allow(missing_docs)] // TODO:
 
+pub mod button;
 pub mod column;
 pub mod container;
 pub mod font;
@@ -9,6 +10,12 @@ pub mod row;
 pub mod scrollable;
 pub mod text;
 
+use std::{
+    collections::HashMap,
+    sync::atomic::{AtomicU32, Ordering},
+};
+
+use button::{Button, ButtonCallback};
 use column::Column;
 use container::Container;
 use row::Row;
@@ -18,7 +25,9 @@ use text::Text;
 
 /// A unique identifier for a widget.
 #[derive(Copy, Clone, Default, Debug, PartialEq, Eq, Hash)]
-pub struct WidgetId(u32);
+pub struct WidgetId(pub u32);
+
+static WIDGET_ID_COUNTER: AtomicU32 = AtomicU32::new(0);
 
 impl WidgetId {
     /// Get the raw u32.
@@ -26,8 +35,8 @@ impl WidgetId {
         self.0
     }
 
-    pub fn new(id: u32) -> Self {
-        Self::from(id)
+    pub fn next() -> Self {
+        Self(WIDGET_ID_COUNTER.fetch_add(1, Ordering::Relaxed))
     }
 }
 
@@ -67,6 +76,7 @@ pub struct Theme {
     pub text_style: Option<text::Style>,
     pub scrollable_style: Option<scrollable::Style>,
     pub container_style: Option<container::Style>,
+    pub button_style: Option<button::Styles>,
 }
 
 impl From<Theme> for widget::v1::Theme {
@@ -76,6 +86,7 @@ impl From<Theme> for widget::v1::Theme {
             text_style: value.text_style.map(From::from),
             scrollable_style: value.scrollable_style.map(From::from),
             container_style: value.container_style.map(From::from),
+            button_style: value.button_style.map(From::from),
         }
     }
 }
@@ -84,6 +95,38 @@ impl From<Theme> for widget::v1::Theme {
 pub struct WidgetDef {
     pub theme: Option<Theme>,
     pub widget: Widget,
+}
+
+impl WidgetDef {
+    pub(crate) fn traverse(
+        &self,
+        callbacks: &mut HashMap<WidgetId, WidgetCallback>,
+        with_widget: fn(&WidgetDef, &mut HashMap<WidgetId, WidgetCallback>),
+    ) {
+        with_widget(self, callbacks);
+        match &self.widget {
+            Widget::Text(_) => (),
+            Widget::Column(column) => {
+                for widget in column.children.iter() {
+                    widget.traverse(callbacks, with_widget);
+                }
+            }
+            Widget::Row(row) => {
+                for widget in row.children.iter() {
+                    widget.traverse(callbacks, with_widget);
+                }
+            }
+            Widget::Scrollable(scrollable) => {
+                scrollable.child.traverse(callbacks, with_widget);
+            }
+            Widget::Container(container) => {
+                container.child.traverse(callbacks, with_widget);
+            }
+            Widget::Button(button) => {
+                button.child.traverse(callbacks, with_widget);
+            }
+        }
+    }
 }
 
 impl From<WidgetDef> for widget::v1::WidgetDef {
@@ -104,6 +147,7 @@ pub enum Widget {
     Row(Row),
     Scrollable(Box<Scrollable>),
     Container(Box<Container>),
+    Button(Box<Button>),
 }
 
 impl<T: Into<Widget>> From<T> for WidgetDef {
@@ -126,6 +170,9 @@ impl From<Widget> for widget::v1::widget_def::Widget {
             }
             Widget::Container(container) => {
                 widget::v1::widget_def::Widget::Container(Box::new((*container).into()))
+            }
+            Widget::Button(button) => {
+                widget::v1::widget_def::Widget::Button(Box::new((*button).into()))
             }
         }
     }
@@ -278,4 +325,8 @@ impl From<Radius> for widget::v1::Radius {
             bottom_left: value.bottom_left,
         }
     }
+}
+
+pub(crate) enum WidgetCallback {
+    Button(ButtonCallback),
 }

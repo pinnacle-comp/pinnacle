@@ -14,6 +14,7 @@ use crate::api::run_unary;
 use crate::api::run_unary_no_response;
 use crate::api::widget::v0alpha1::widget_def_to_fn;
 use crate::layer::ExclusiveZone;
+use crate::layer::LayerId;
 use crate::layer::SnowcapLayer;
 
 #[tonic::async_trait]
@@ -96,7 +97,7 @@ impl layer_service_server::LayerService for super::LayerService {
             );
 
             let ret = Ok(NewLayerResponse {
-                layer_id: Some(layer.widget_id.into_inner()),
+                layer_id: Some(layer.layer_id.0),
             });
 
             state.layers.push(layer);
@@ -113,10 +114,10 @@ impl layer_service_server::LayerService for super::LayerService {
             return Err(Status::invalid_argument("layer id was null"));
         };
 
+        let id = LayerId(id);
+
         run_unary_no_response(&self.sender, move |state| {
-            state
-                .layers
-                .retain(|sn_layer| sn_layer.widget_id.into_inner() != id);
+            state.layers.retain(|sn_layer| sn_layer.layer_id != id);
         })
         .await
     }

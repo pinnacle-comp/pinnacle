@@ -104,6 +104,7 @@ message Theme {
   optional Text.Style text_style = 2;
   optional Scrollable.Style scrollable_style = 3;
   optional Container.Style container_style = 4;
+  optional Button.Style button_style = 5;
 }
 
 message Palette {
@@ -124,6 +125,7 @@ message WidgetDef {
     Row row = 4;
     Scrollable scrollable = 5;
     Container container = 6;
+    Button button = 7;
   }
 }
 
@@ -219,4 +221,47 @@ message Container {
     optional Border border = 3;
     // TODO: shadow
   }
+}
+
+message Button {
+  WidgetDef child = 1;
+  optional Length width = 2;
+  optional Length height = 3;
+  optional Padding padding = 4;
+  optional bool clip = 5;
+  optional Style style = 6;
+  optional uint32 widget_id = 7;
+
+  message Style {
+    optional Inner active = 1;
+    optional Inner hovered = 2;
+    optional Inner pressed = 3;
+    optional Inner disabled = 4;
+
+    message Inner {
+      optional Color text_color = 1;
+      optional Color background_color = 2;
+      optional Border border = 3;
+      // TODO: shadow
+    }
+  }
+
+  // A button was pressed.
+  message Event {}
+}
+
+message GetWidgetEventsRequest {
+  uint32 layer_id = 1;
+}
+
+message GetWidgetEventsResponse {
+  uint32 widget_id = 1;
+
+  oneof event {
+    Button.Event button = 2;
+  }
+}
+
+service WidgetService {
+  rpc GetWidgetEvents(GetWidgetEventsRequest) returns (stream GetWidgetEventsResponse);
 }

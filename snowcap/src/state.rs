@@ -21,10 +21,10 @@ use xkbcommon::xkb::Keysym;
 
 use crate::{
     handlers::keyboard::KeyboardFocus,
-    layer::SnowcapLayer,
+    layer::{LayerIdCounter, SnowcapLayer},
     runtime::{CalloopSenderSink, CurrentTokioExecutor},
     server::GrpcServerState,
-    widget::{SnowcapMessage, WidgetIdCounter},
+    widget::SnowcapMessage,
 };
 
 pub struct State {
@@ -54,7 +54,7 @@ pub struct State {
 
     pub pointer: Option<WlPointer>, // TODO: multiple
 
-    pub widget_id_counter: WidgetIdCounter,
+    pub layer_id_counter: LayerIdCounter,
 }
 
 impl State {
@@ -102,12 +102,12 @@ impl State {
                     match msg {
                         SnowcapMessage::Noop => (),
                         SnowcapMessage::Close => (),
-                        SnowcapMessage::Update(_, _) => (),
                         SnowcapMessage::KeyboardKey(key) => {
                             if let Some(sender) = layer.keyboard_key_sender.as_ref() {
                                 let _ = sender.send(key);
                             }
                         }
+                        SnowcapMessage::WidgetEvent(..) => (),
                     }
                 }
                 calloop::channel::Event::Closed => (),
@@ -182,7 +182,7 @@ impl State {
             keyboard_modifiers: smithay_client_toolkit::seat::keyboard::Modifiers::default(),
             keyboard: None,
             pointer: None,
-            widget_id_counter: WidgetIdCounter::default(),
+            layer_id_counter: LayerIdCounter::default(),
         };
 
         Ok(state)

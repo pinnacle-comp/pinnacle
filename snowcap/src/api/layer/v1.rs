@@ -9,7 +9,7 @@ use tonic::{Request, Response, Status};
 
 use crate::{
     api::{run_unary, run_unary_no_response},
-    layer::{ExclusiveZone, SnowcapLayer},
+    layer::{ExclusiveZone, LayerId, SnowcapLayer},
 };
 
 #[tonic::async_trait]
@@ -86,7 +86,7 @@ impl layer_service_server::LayerService for super::LayerService {
             );
 
             let ret = Ok(NewLayerResponse {
-                layer_id: layer.widget_id.into_inner(),
+                layer_id: layer.layer_id.0,
             });
 
             state.layers.push(layer);
@@ -100,11 +100,10 @@ impl layer_service_server::LayerService for super::LayerService {
         let request = request.into_inner();
 
         let id = request.layer_id;
+        let id = LayerId(id);
 
         run_unary_no_response(&self.sender, move |state| {
-            state
-                .layers
-                .retain(|sn_layer| sn_layer.widget_id.into_inner() != id);
+            state.layers.retain(|sn_layer| sn_layer.layer_id != id);
         })
         .await
     }

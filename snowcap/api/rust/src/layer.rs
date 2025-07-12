@@ -1,6 +1,6 @@
 //! Support for layer surface widgets using `wlr-layer-shell`.
 
-use std::num::NonZeroU32;
+use std::{collections::HashMap, num::NonZeroU32};
 
 use snowcap_api_defs::snowcap::{
     input::v1::KeyboardKeyRequest,
@@ -8,6 +8,7 @@ use snowcap_api_defs::snowcap::{
         self,
         v1::{CloseRequest, NewLayerRequest},
     },
+    widget::v1::{GetWidgetEventsRequest, get_widget_events_response},
 };
 use tokio_stream::StreamExt;
 use tracing::error;
@@ -16,7 +17,7 @@ use xkbcommon::xkb::Keysym;
 use crate::{
     block_on_tokio,
     input::Modifiers,
-    widget::{WidgetDef, WidgetId},
+    widget::{Widget, WidgetCallback, WidgetDef, WidgetId},
 };
 
 /// The Layer API.
@@ -138,9 +139,24 @@ impl Layer {
         exclusive_zone: ExclusiveZone,
         layer: ZLayer,
     ) -> Result<LayerHandle, NewLayerError> {
+        let mut widget_def: WidgetDef = widget.into();
+
+        let mut callbacks = HashMap::<WidgetId, WidgetCallback>::new();
+
+        widget_def.traverse(&mut callbacks, |def, cbs| {
+            if let Widget::Button(button) = &def.widget {
+                cbs.extend(
+                    button
+                        .on_press
+                        .clone()
+                        .map(|(id, on_press)| (id, WidgetCallback::Button(on_press))),
+                );
+            }
+        });
+
         let response = block_on_tokio(
             crate::layer().new_layer(NewLayerRequest {
-                widget_def: Some(widget.into().into()),
+                widget_def: Some(widget_def.clone().into()),
                 width,
                 height,
                 anchor: anchor
@@ -155,6 +171,28 @@ impl Layer {
         )?;
 
         let id = response.into_inner().layer_id;
+
+        let mut event_stream = block_on_tokio(
+            crate::widget().get_widget_events(GetWidgetEventsRequest { layer_id: id }),
+        )?
+        .into_inner();
+
+        tokio::spawn(async move {
+            while let Some(Ok(event)) = event_stream.next().await {
+                let id = WidgetId(event.widget_id);
+                let Some(event) = event.event else {
+                    continue;
+                };
+                match event {
+                    get_widget_events_response::Event::Button(_event) => {
+                        if let Some(WidgetCallback::Button(callback)) = callbacks.get(&id) {
+                            callback(&mut widget_def);
+                            // TODO: update layer based on this callback
+                        }
+                    }
+                }
+            }
+        });
 
         Ok(LayerHandle { id: id.into() })
     }
