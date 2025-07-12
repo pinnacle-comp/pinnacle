@@ -80,9 +80,42 @@ end
 ---@field exclusive_zone snowcap.layer.ExclusiveZone
 ---@field layer snowcap.layer.ZLayer
 
+---comment
+---@param widget snowcap.widget.WidgetDef
+---@param callbacks table<integer, snowcap.widget.Callback>
+---@param with_widget fun(callbacks: table<integer, snowcap.widget.Callback>, widget: snowcap.widget.WidgetDef)
+local function traverse_widget_tree(widget, callbacks, with_widget)
+    with_widget(callbacks, widget)
+    if widget.column then
+        for _, w in ipairs(widget.column.children or {}) do
+            traverse_widget_tree(w, callbacks, with_widget)
+        end
+    elseif widget.row then
+        for _, w in ipairs(widget.row.children or {}) do
+            traverse_widget_tree(w, callbacks, with_widget)
+        end
+    elseif widget.scrollable then
+        traverse_widget_tree(widget.scrollable.child, callbacks, with_widget)
+    elseif widget.container then
+        traverse_widget_tree(widget.container.child, callbacks, with_widget)
+    elseif widget.button then
+        traverse_widget_tree(widget.button.child, callbacks, with_widget)
+    end
+end
+
 ---@param args LayerArgs
 ---@return snowcap.layer.LayerHandle|nil handle A handle to the layer surface, or nil if an error occurred.
 function layer.new_widget(args)
+    ---@type table<integer, snowcap.widget.Callback>
+    local callbacks = {}
+    traverse_widget_tree(args.widget, callbacks, function(callbacks, widget)
+        if widget.button and widget.button.on_press then
+            callbacks[widget.button.widget_id] = {
+                button = widget.button.on_press,
+            }
+        end
+    end)
+
     ---@type snowcap.layer.v1.NewLayerRequest
     local request = {
         layer = args.layer,
@@ -108,7 +141,21 @@ function layer.new_widget(args)
         return nil
     end
 
-    return layer_handle.new(response.layer_id)
+    local layer_id = response.layer_id
+
+    local err = client:snowcap_widget_v1_WidgetService_GetWidgetEvents({
+        layer_id = layer_id,
+    }, function(response)
+        local widget_id = response.widget_id or 0
+        if response.button then
+            if callbacks[widget_id] and callbacks[widget_id].button then
+                callbacks[widget_id].button(args.widget)
+                -- TODO: update layer after this cb
+            end
+        end
+    end)
+
+    return layer_handle.new(layer_id)
 end
 
 ---@param on_press fun(mods: snowcap.input.Modifiers, key: snowcap.Key)
