@@ -15,14 +15,11 @@ use tracing::error;
 use xkbcommon::xkb::Keysym;
 
 use crate::{
-    block_on_tokio,
+    BlockOnTokio,
+    client::Client,
     input::Modifiers,
     widget::{Widget, WidgetCallback, WidgetDef, WidgetId},
 };
-
-/// The Layer API.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
-pub struct Layer;
 
 // TODO: change to bitflag
 /// An anchor for a layer surface.
@@ -127,75 +124,71 @@ pub enum NewLayerError {
     GrpcStatus(#[from] tonic::Status),
 }
 
-impl Layer {
-    /// Create a new widget.
-    pub fn new_widget(
-        &self,
-        widget: impl Into<WidgetDef>,
-        width: u32,
-        height: u32,
-        anchor: Option<Anchor>,
-        keyboard_interactivity: KeyboardInteractivity,
-        exclusive_zone: ExclusiveZone,
-        layer: ZLayer,
-    ) -> Result<LayerHandle, NewLayerError> {
-        let mut widget_def: WidgetDef = widget.into();
+/// Create a new widget.
+pub fn new_widget(
+    widget: impl Into<WidgetDef>,
+    width: u32,
+    height: u32,
+    anchor: Option<Anchor>,
+    keyboard_interactivity: KeyboardInteractivity,
+    exclusive_zone: ExclusiveZone,
+    layer: ZLayer,
+) -> Result<LayerHandle, NewLayerError> {
+    let mut widget_def: WidgetDef = widget.into();
 
-        let mut callbacks = HashMap::<WidgetId, WidgetCallback>::new();
+    let mut callbacks = HashMap::<WidgetId, WidgetCallback>::new();
 
-        widget_def.traverse(&mut callbacks, |def, cbs| {
-            if let Widget::Button(button) = &def.widget {
-                cbs.extend(
-                    button
-                        .on_press
-                        .clone()
-                        .map(|(id, on_press)| (id, WidgetCallback::Button(on_press))),
-                );
-            }
-        });
+    widget_def.traverse(&mut callbacks, |def, cbs| {
+        if let Widget::Button(button) = &def.widget {
+            cbs.extend(
+                button
+                    .on_press
+                    .clone()
+                    .map(|(id, on_press)| (id, WidgetCallback::Button(on_press))),
+            );
+        }
+    });
 
-        let response = block_on_tokio(
-            crate::layer().new_layer(NewLayerRequest {
-                widget_def: Some(widget_def.clone().into()),
-                width,
-                height,
-                anchor: anchor
-                    .map(From::from)
-                    .unwrap_or(layer::v1::Anchor::Unspecified) as i32,
-                keyboard_interactivity: layer::v1::KeyboardInteractivity::from(
-                    keyboard_interactivity,
-                ) as i32,
-                exclusive_zone: exclusive_zone.into(),
-                layer: layer::v1::Layer::from(layer) as i32,
-            }),
-        )?;
+    let response = Client::layer()
+        .new_layer(NewLayerRequest {
+            widget_def: Some(widget_def.clone().into()),
+            width,
+            height,
+            anchor: anchor
+                .map(From::from)
+                .unwrap_or(layer::v1::Anchor::Unspecified) as i32,
+            keyboard_interactivity: layer::v1::KeyboardInteractivity::from(keyboard_interactivity)
+                as i32,
+            exclusive_zone: exclusive_zone.into(),
+            layer: layer::v1::Layer::from(layer) as i32,
+        })
+        .block_on_tokio()?;
 
-        let id = response.into_inner().layer_id;
+    let id = response.into_inner().layer_id;
 
-        let mut event_stream = block_on_tokio(
-            crate::widget().get_widget_events(GetWidgetEventsRequest { layer_id: id }),
-        )?
+    let mut event_stream = Client::widget()
+        .get_widget_events(GetWidgetEventsRequest { layer_id: id })
+        .block_on_tokio()?
         .into_inner();
 
-        tokio::spawn(async move {
-            while let Some(Ok(event)) = event_stream.next().await {
-                let id = WidgetId(event.widget_id);
-                let Some(event) = event.event else {
-                    continue;
-                };
-                match event {
-                    get_widget_events_response::Event::Button(_event) => {
-                        if let Some(WidgetCallback::Button(callback)) = callbacks.get(&id) {
-                            callback(&mut widget_def);
-                            // TODO: update layer based on this callback
-                        }
+    tokio::spawn(async move {
+        while let Some(Ok(event)) = event_stream.next().await {
+            let id = WidgetId(event.widget_id);
+            let Some(event) = event.event else {
+                continue;
+            };
+            match event {
+                get_widget_events_response::Event::Button(_event) => {
+                    if let Some(WidgetCallback::Button(callback)) = callbacks.get(&id) {
+                        callback(&mut widget_def);
+                        // TODO: update layer based on this callback
                     }
                 }
             }
-        });
+        }
+    });
 
-        Ok(LayerHandle { id: id.into() })
-    }
+    Ok(LayerHandle { id: id.into() })
 }
 
 /// A handle to a layer surface widget.
@@ -207,9 +200,12 @@ pub struct LayerHandle {
 impl LayerHandle {
     /// Close this layer widget.
     pub fn close(&self) {
-        if let Err(status) = block_on_tokio(crate::layer().close(CloseRequest {
-            layer_id: self.id.to_inner(),
-        })) {
+        if let Err(status) = Client::layer()
+            .close(CloseRequest {
+                layer_id: self.id.to_inner(),
+            })
+            .block_on_tokio()
+        {
             error!("Failed to close {self:?}: {status}");
         }
     }
@@ -219,9 +215,12 @@ impl LayerHandle {
         &self,
         mut on_press: impl FnMut(LayerHandle, Keysym, Modifiers) + Send + 'static,
     ) {
-        let mut stream = match block_on_tokio(crate::input().keyboard_key(KeyboardKeyRequest {
-            id: self.id.to_inner(),
-        })) {
+        let mut stream = match Client::input()
+            .keyboard_key(KeyboardKeyRequest {
+                id: self.id.to_inner(),
+            })
+            .block_on_tokio()
+        {
             Ok(stream) => stream.into_inner(),
             Err(status) => {
                 error!("Failed to set `on_key_press` handler: {status}");

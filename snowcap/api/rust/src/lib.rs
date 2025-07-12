@@ -11,50 +11,20 @@
 //! of Snowcap are designed to be compositor-agnostic. You'll just need a compositor that
 //! implements the `wlr-layer-shell` protocol.
 
+mod client;
 pub mod input;
 pub mod layer;
 pub mod widget;
 
+use client::Client;
 use hyper_util::rt::TokioIo;
-use snowcap_api_defs::snowcap::{
-    input::v1::input_service_client::InputServiceClient,
-    layer::v1::layer_service_client::LayerServiceClient,
-    widget::v1::widget_service_client::WidgetServiceClient,
-};
 pub use xkbcommon;
 
-use std::{path::PathBuf, sync::RwLock, time::Duration};
+use std::{path::PathBuf, time::Duration};
 
 use futures::Future;
-use layer::Layer;
-use tonic::transport::{Channel, Endpoint, Uri};
+use tonic::transport::{Endpoint, Uri};
 use tower::service_fn;
-
-static LAYER: RwLock<Option<LayerServiceClient<Channel>>> = RwLock::new(None);
-static INPUT: RwLock<Option<InputServiceClient<Channel>>> = RwLock::new(None);
-static WIDGET: RwLock<Option<WidgetServiceClient<Channel>>> = RwLock::new(None);
-
-pub(crate) fn layer() -> LayerServiceClient<Channel> {
-    LAYER
-        .read()
-        .expect("grpc connection was not initialized")
-        .clone()
-        .unwrap()
-}
-pub(crate) fn input() -> InputServiceClient<Channel> {
-    INPUT
-        .read()
-        .expect("grpc connection was not initialized")
-        .clone()
-        .unwrap()
-}
-pub(crate) fn widget() -> WidgetServiceClient<Channel> {
-    WIDGET
-        .read()
-        .expect("grpc connection was not initialized")
-        .clone()
-        .unwrap()
-}
 
 fn socket_dir() -> PathBuf {
     xdg::BaseDirectories::with_prefix("snowcap")
@@ -73,7 +43,7 @@ fn socket_name() -> String {
 /// Only one snowcap instance can be open per Wayland session.
 /// This function will search for a Snowcap socket at
 /// `$XDG_RUNTIME_DIR/snowcap-grpc-$WAYLAND_DISPLAY.sock` and connect to it.
-pub async fn connect() -> Result<Layer, Box<dyn std::error::Error>> {
+pub async fn connect() -> Result<(), Box<dyn std::error::Error>> {
     let channel = Endpoint::try_from("http://[::]:50051")?
         .connect_with_connector(service_fn(|_: Uri| async {
             Ok::<_, std::io::Error>(TokioIo::new(
@@ -82,20 +52,9 @@ pub async fn connect() -> Result<Layer, Box<dyn std::error::Error>> {
         }))
         .await?;
 
-    let _ = LAYER
-        .write()
-        .unwrap()
-        .replace(LayerServiceClient::new(channel.clone()));
-    let _ = INPUT
-        .write()
-        .unwrap()
-        .replace(InputServiceClient::new(channel.clone()));
-    let _ = WIDGET
-        .write()
-        .unwrap()
-        .replace(WidgetServiceClient::new(channel.clone()));
+    Client::init(channel);
 
-    Ok(Layer)
+    Ok(())
 }
 
 /// Listen to Snowcap for events.
@@ -105,9 +64,20 @@ pub async fn listen() {
     }
 }
 
-pub(crate) fn block_on_tokio<F: Future>(future: F) -> F::Output {
-    tokio::task::block_in_place(|| {
-        let handle = tokio::runtime::Handle::current();
-        handle.block_on(future)
-    })
+trait BlockOnTokio {
+    type Output;
+
+    fn block_on_tokio(self) -> Self::Output;
+}
+
+impl<F: Future> BlockOnTokio for F {
+    type Output = F::Output;
+
+    /// Blocks on a future using the current Tokio runtime.
+    fn block_on_tokio(self) -> Self::Output {
+        tokio::task::block_in_place(|| {
+            let handle = tokio::runtime::Handle::current();
+            handle.block_on(self)
+        })
+    }
 }

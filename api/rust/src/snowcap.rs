@@ -85,24 +85,23 @@ impl QuitPrompt {
             }),
         });
 
-        snowcap_api::layer::Layer
-            .new_widget(
-                widget,
-                self.width,
-                self.height,
-                None,
-                KeyboardInteractivity::Exclusive,
-                ExclusiveZone::Respect,
-                ZLayer::Overlay,
-            )
-            .unwrap()
-            .on_key_press(|handle, key, _mods| {
-                if key == Keysym::Return {
-                    crate::pinnacle::quit();
-                } else {
-                    handle.close();
-                }
-            });
+        snowcap_api::layer::new_widget(
+            widget,
+            self.width,
+            self.height,
+            None,
+            KeyboardInteractivity::Exclusive,
+            ExclusiveZone::Respect,
+            ZLayer::Overlay,
+        )
+        .unwrap()
+        .on_key_press(|handle, key, _mods| {
+            if key == Keysym::Return {
+                crate::pinnacle::quit();
+            } else {
+                handle.close();
+            }
+        });
     }
 }
 
@@ -390,20 +389,19 @@ impl BindOverlay {
             }),
         });
 
-        snowcap_api::layer::Layer
-            .new_widget(
-                widget,
-                self.width,
-                self.height,
-                None,
-                KeyboardInteractivity::Exclusive,
-                ExclusiveZone::Respect,
-                ZLayer::Top,
-            )
-            .unwrap()
-            .on_key_press(|handle, _key, _mods| {
-                handle.close();
-            });
+        snowcap_api::layer::new_widget(
+            widget,
+            self.width,
+            self.height,
+            None,
+            KeyboardInteractivity::Exclusive,
+            ExclusiveZone::Respect,
+            ZLayer::Top,
+        )
+        .unwrap()
+        .on_key_press(|handle, _key, _mods| {
+            handle.close();
+        });
     }
 }
 
@@ -517,21 +515,20 @@ impl ConfigCrashedMessage {
             }),
         });
 
-        snowcap_api::layer::Layer
-            .new_widget(
-                widget,
-                self.width,
-                self.height,
-                None,
-                KeyboardInteractivity::Exclusive,
-                ExclusiveZone::Respect,
-                ZLayer::Overlay,
-            )
-            .unwrap()
-            .on_key_press(|handle, key, _mods| {
-                if key == Keysym::Return || key == Keysym::Escape {
-                    handle.close();
-                }
-            });
+        snowcap_api::layer::new_widget(
+            widget,
+            self.width,
+            self.height,
+            None,
+            KeyboardInteractivity::Exclusive,
+            ExclusiveZone::Respect,
+            ZLayer::Overlay,
+        )
+        .unwrap()
+        .on_key_press(|handle, key, _mods| {
+            if key == Keysym::Return || key == Keysym::Escape {
+                handle.close();
+            }
+        });
     }
 }
