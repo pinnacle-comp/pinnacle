@@ -303,6 +303,10 @@ pub fn resize_grab(state: &mut State, button: u32) {
     let edges = if edges != server::xdg_toplevel::ResizeEdge::None {
         edges
     } else {
+        // Find the closest edge by figuring out which corners the pointer is between.
+        // This works by drawing lines from the window's center to all four corners and the pointer.
+        // Whichever two lines the pointer line is between determines the edge chosen.
+        
         // A bit of an explanation here.
         //
         // The cross product of two vector is `||v1|| * ||v2|| * sin(th)`, with `th` being the
