@@ -5,7 +5,7 @@ use smithay::{
     reexports::wayland_protocols::xdg::{
         decoration::zv1::server::zxdg_toplevel_decoration_v1, shell::server,
     },
-    utils::{Point, SERIAL_COUNTER},
+    utils::{Point, SERIAL_COUNTER, Size},
     wayland::seat::WaylandFocus,
 };
 use tracing::warn;
@@ -259,7 +259,7 @@ pub fn resize_grab(state: &mut State, button: u32) {
     else {
         return;
     };
-    let Some((pointer_focus, window_loc)) = state.pinnacle.pointer_contents.focus_under.as_ref()
+    let Some((pointer_focus, _window_loc)) = state.pinnacle.pointer_contents.focus_under.as_ref()
     else {
         return;
     };
@@ -269,40 +269,89 @@ pub fn resize_grab(state: &mut State, button: u32) {
     let Some(wl_surf) = window.wl_surface() else {
         return;
     };
+    let Some(window_loc) = state.pinnacle.space.element_location(&window) else {
+        return;
+    };
+
+    let pointer_loc: Point<i32, _> = pointer_loc.to_i32_round();
 
     let window_geometry = window.geometry();
-    let window_x = window_loc.x;
-    let window_y = window_loc.y;
-    let window_width = window_geometry.size.w as f64;
-    let window_height = window_geometry.size.h as f64;
-    let half_width = window_x + window_width / 2.0;
-    let half_height = window_y + window_height / 2.0;
-    let full_width = window_x + window_width;
-    let full_height = window_y + window_height;
+    let window_sz = window_geometry.size;
+    let window_width = Size::new(window_sz.w, 0);
+    let window_height = Size::new(0, window_sz.h);
 
-    let edges = match pointer_loc {
-        Point { x, y, .. }
-            if (window_x..=half_width).contains(&x) && (window_y..=half_height).contains(&y) =>
-        {
-            server::xdg_toplevel::ResizeEdge::TopLeft
-        }
-        Point { x, y, .. }
-            if (half_width..=full_width).contains(&x) && (window_y..=half_height).contains(&y) =>
-        {
-            server::xdg_toplevel::ResizeEdge::TopRight
-        }
-        Point { x, y, .. }
-            if (window_x..=half_width).contains(&x) && (half_height..=full_height).contains(&y) =>
-        {
-            server::xdg_toplevel::ResizeEdge::BottomLeft
-        }
-        Point { x, y, .. }
-            if (half_width..=full_width).contains(&x)
-                && (half_height..=full_height).contains(&y) =>
-        {
-            server::xdg_toplevel::ResizeEdge::BottomRight
-        }
+    let rel_x = (pointer_loc.x - window_loc.x).clamp(0, window_sz.w);
+    let rel_y = (pointer_loc.y - window_loc.y).clamp(0, window_sz.h);
+
+    let quadrant_x = (rel_x * 3 / window_sz.w).clamp(0, 2);
+    let quadrant_y = (rel_y * 3 / window_sz.h).clamp(0, 2);
+
+    let edges = match (quadrant_x, quadrant_y) {
+        (0, 0) => server::xdg_toplevel::ResizeEdge::TopLeft,
+        (2, 0) => server::xdg_toplevel::ResizeEdge::TopRight,
+        (0, 2) => server::xdg_toplevel::ResizeEdge::BottomLeft,
+        (2, 2) => server::xdg_toplevel::ResizeEdge::BottomRight,
+
+        (1, 0) => server::xdg_toplevel::ResizeEdge::Top,
+        (1, 2) => server::xdg_toplevel::ResizeEdge::Bottom,
+        (0, 1) => server::xdg_toplevel::ResizeEdge::Left,
+        (2, 1) => server::xdg_toplevel::ResizeEdge::Right,
+
         _ => server::xdg_toplevel::ResizeEdge::None,
+    };
+
+    let edges = if edges != server::xdg_toplevel::ResizeEdge::None {
+        edges
+    } else {
+        // Find the closest edge by figuring out which corners the pointer is between.
+        // This works by drawing lines from the window's center to all four corners and the pointer.
+        // Whichever two lines the pointer line is between determines the edge chosen.
+        
+        // A bit of an explanation here.
+        //
+        // The cross product of two vector is `||v1|| * ||v2|| * sin(th)`, with `th` being the
+        // angle between the vectors. Since `sin(th)` is the only factor influencing the
+        // signed-ness, we can use that to find the 'direction' of the rotation to go from one
+        // vector to the other.
+        //
+        // More formally, given v1 and v2 such that the angle v1->v2 is between 0 and 180⁰, a
+        // third vector v is between v1 and v2 if (v1)x(v) > 0 and (v)x(v2) > 0.
+
+        fn cross(lhs: (i32, i32), rhs: (i32, i32)) -> i32 {
+            lhs.0 * rhs.1 - lhs.1 * rhs.0
+        }
+
+        let top_left = window_loc;
+        let top_right = window_loc + window_width;
+        let bottom_left = window_loc + window_height;
+        let bottom_right = window_loc + window_sz;
+        let window_center = window_loc + window_sz.downscale(2);
+
+        let v_tl: (i32, i32) = (top_left - window_center).into();
+        let v_tr: (i32, i32) = (top_right - window_center).into();
+        let v_bl: (i32, i32) = (bottom_left - window_center).into();
+        let v_br: (i32, i32) = (bottom_right - window_center).into();
+        let v_pointer: (i32, i32) = (pointer_loc - window_center).into();
+
+        let vectors = [
+            (v_tl, v_tr, server::xdg_toplevel::ResizeEdge::Top),
+            (v_tr, v_br, server::xdg_toplevel::ResizeEdge::Right),
+            (v_br, v_bl, server::xdg_toplevel::ResizeEdge::Bottom),
+            (v_bl, v_tl, server::xdg_toplevel::ResizeEdge::Left),
+        ];
+
+        vectors
+            .into_iter()
+            .map(|(v1, v2, e)| {
+                (
+                    cross(v1, v_pointer).signum(),
+                    cross(v_pointer, v2).signum(),
+                    e,
+                )
+            })
+            .find(|(s1, s2, _)| *s1 >= 0 && *s2 >= 0)
+            .map(|(_, _, e)| e)
+            .unwrap_or(server::xdg_toplevel::ResizeEdge::None)
     };
 
     state.resize_request_server(
