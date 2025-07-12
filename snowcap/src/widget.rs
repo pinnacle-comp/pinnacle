@@ -3,10 +3,10 @@ use std::{any::Any, collections::HashMap};
 use iced_runtime::{UserInterface, user_interface};
 use iced_wgpu::core::Element;
 
-use crate::{handlers::keyboard::KeyboardKey, layer::SnowcapLayer, state::State};
+use crate::handlers::keyboard::KeyboardKey;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Default)]
-pub struct WidgetId(u32);
+pub struct WidgetId(pub u32);
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Default)]
 pub struct WidgetIdCounter(WidgetId);
@@ -22,13 +22,6 @@ impl WidgetIdCounter {
 impl WidgetId {
     pub fn into_inner(self) -> u32 {
         self.0
-    }
-
-    pub fn layer_for_mut<'a>(&self, state: &'a mut State) -> Option<&'a mut SnowcapLayer> {
-        state
-            .layers
-            .iter_mut()
-            .find(|sn_layer| &sn_layer.widget_id == self)
     }
 }
 
@@ -77,10 +70,15 @@ pub type WidgetFn = Box<
     ) -> Element<'static, SnowcapMessage, iced::Theme, iced_renderer::Renderer>,
 >;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum SnowcapMessage {
     Noop,
     Close,
-    Update(u32, Box<dyn Any + Send>),
     KeyboardKey(KeyboardKey),
+    WidgetEvent(WidgetId, WidgetEvent),
+}
+
+#[derive(Debug, Clone)]
+pub enum WidgetEvent {
+    Button,
 }

@@ -27,8 +27,29 @@ use crate::{
     handlers::keyboard::KeyboardKey,
     state::State,
     util::BlockOnTokio,
-    widget::{SnowcapWidgetProgram, WidgetFn, WidgetId},
+    widget::{SnowcapMessage, SnowcapWidgetProgram, WidgetEvent, WidgetFn, WidgetId},
 };
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Default)]
+pub struct LayerId(pub u32);
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Default)]
+pub struct LayerIdCounter(LayerId);
+
+impl LayerIdCounter {
+    #[allow(clippy::should_implement_trait)]
+    pub fn next(&mut self) -> LayerId {
+        let ret = self.0;
+        self.0.0 += 1;
+        ret
+    }
+}
+
+impl State {
+    pub fn layer_for_id(&mut self, id: LayerId) -> Option<&mut SnowcapLayer> {
+        self.layers.iter_mut().find(|layer| layer.layer_id == id)
+    }
+}
 
 pub struct SnowcapLayer {
     // SAFETY: Drop order: surface needs to be dropped before the layer
@@ -50,11 +71,12 @@ pub struct SnowcapLayer {
 
     pub pointer_location: Option<(f64, f64)>,
 
-    pub widget_id: WidgetId,
+    pub layer_id: LayerId,
     pub window_id: iced::window::Id,
 
     pub keyboard_key_sender: Option<UnboundedSender<KeyboardKey>>,
     pub pointer_button_sender: Option<UnboundedSender<Result<PointerButtonResponse, Status>>>,
+    pub widget_event_sender: Option<UnboundedSender<(WidgetId, WidgetEvent)>>,
 
     pub initial_configure: bool,
 }
@@ -165,7 +187,7 @@ impl SnowcapLayer {
         let clipboard =
             unsafe { WaylandClipboard::new(state.conn.backend().display_ptr() as *mut _) };
 
-        let next_id = state.widget_id_counter.next_and_increment();
+        let next_id = state.layer_id_counter.next();
 
         let viewport = Viewport::with_physical_size(Size::new(width, height), 1.0);
 
@@ -184,10 +206,11 @@ impl SnowcapLayer {
             renderer,
             clipboard,
             pointer_location: None,
-            widget_id: next_id,
+            layer_id: next_id,
             window_id: iced::window::Id::unique(),
             keyboard_key_sender: None,
             pointer_button_sender: None,
+            widget_event_sender: None,
             initial_configure: false,
             redraw_requested: false,
         }
@@ -316,6 +339,15 @@ impl SnowcapLayer {
         if !messages.is_empty() || ui_stale {
             // TODO: Update SnowcapWidgetProgram with messages
             request_frame = true;
+
+            for message in messages {
+                if let SnowcapMessage::WidgetEvent(id, widget_event) = message
+                    && let Some(sender) = self.widget_event_sender.as_ref()
+                {
+                    let _ = sender.send((id, widget_event));
+                }
+            }
+
             let cache = self.widgets.user_interface.take().unwrap().into_cache();
             let view = (self.widgets.widgets)(&self.widgets.widget_state);
             self.widgets.user_interface = Some(UserInterface::build(

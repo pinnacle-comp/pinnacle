@@ -127,6 +127,9 @@ impl LayerShellHandler for State {
             if !layer.initial_configure {
                 layer.initial_configure = true;
                 layer.update(qh, &mut self.runtime);
+                layer.widgets.queued_events.push(iced::Event::Window(
+                    iced::window::Event::RedrawRequested(Instant::now()),
+                ));
                 layer.redraw_requested = true;
             }
         }

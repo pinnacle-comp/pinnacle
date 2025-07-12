@@ -23,6 +23,7 @@
 ---@field row snowcap.widget.Row?
 ---@field scrollable snowcap.widget.Scrollable?
 ---@field container snowcap.widget.Container?
+---@field button snowcap.widget.Button?
 
 ---@class snowcap.widget.Border
 ---@field color snowcap.widget.Color?
@@ -96,7 +97,7 @@
 ---@field scroller_color snowcap.widget.Color?
 ---@field scroller_border snowcap.widget.Border?
 
----@class (exact) snowcap.widget.Container
+---@class snowcap.widget.Container
 ---@field padding snowcap.widget.Padding?
 ---@field width snowcap.widget.Length?
 ---@field height snowcap.widget.Length?
@@ -109,6 +110,27 @@
 ---@field style snowcap.widget.container.Style?
 
 ---@class snowcap.widget.container.Style
+---@field text_color snowcap.widget.Color?
+---@field background_color snowcap.widget.Color?
+---@field border snowcap.widget.Border?
+
+---@class snowcap.widget.Button
+---@field child snowcap.widget.WidgetDef
+---@field width snowcap.widget.Length?
+---@field height snowcap.widget.Length?
+---@field padding snowcap.widget.Padding?
+---@field clip boolean?
+---@field style snowcap.widget.button.Styles?
+---@field on_press fun(widget: snowcap.widget.WidgetDef)?
+---@field private widget_id integer?
+
+---@class snowcap.widget.button.Styles
+---@field active snowcap.widget.button.Style?
+---@field hovered snowcap.widget.button.Style?
+---@field pressed snowcap.widget.button.Style?
+---@field disabled snowcap.widget.button.Style?
+
+---@class snowcap.widget.button.Style
 ---@field text_color snowcap.widget.Color?
 ---@field background_color snowcap.widget.Color?
 ---@field border snowcap.widget.Border?
@@ -236,12 +258,17 @@ local font = {
 ---@field bottom number?
 ---@field left number?
 
+---@class snowcap.widget.Callback
+---@field button fun(widget: snowcap.widget.WidgetDef)?
+
 local widget = {
     length = length,
     alignment = alignment,
     color = color,
     font = font,
 }
+
+local widget_id_counter = 0
 
 ---@param def snowcap.widget.Text
 ---@return snowcap.widget.v1.Text
@@ -328,6 +355,21 @@ local function scrollable_into_api(def)
     }
 end
 
+---@param def snowcap.widget.Button
+---@return snowcap.widget.v1.Button
+local function button_into_api(def)
+    ---@type snowcap.widget.v1.Button
+    return {
+        child = widget.widget_def_into_api(def.child),
+        width = def.width --[[@as snowcap.widget.v1.Length]],
+        height = def.height --[[@as snowcap.widget.v1.Length]],
+        padding = def.padding --[[@as snowcap.widget.v1.Padding]],
+        clip = def.clip,
+        style = def.style --[[@as snowcap.widget.v1.Button.Style]],
+        widget_id = def.widget_id,
+    }
+end
+
 ---@param def snowcap.widget.WidgetDef
 ---@return snowcap.widget.v1.WidgetDef
 function widget.widget_def_into_api(def)
@@ -345,6 +387,9 @@ function widget.widget_def_into_api(def)
     end
     if def.scrollable then
         def.scrollable = scrollable_into_api(def.scrollable)
+    end
+    if def.button then
+        def.button = button_into_api(def.button)
     end
 
     return def --[[@as snowcap.widget.v1.WidgetDef]]
@@ -392,6 +437,21 @@ end
 function widget.container(container)
     return {
         container = container,
+    }
+end
+
+---@param button snowcap.widget.Button
+---
+---@return snowcap.widget.WidgetDef
+function widget.button(button)
+    if button.on_press then
+        button.widget_id = widget_id_counter
+        widget_id_counter = widget_id_counter + 1
+    end
+
+    ---@type snowcap.widget.WidgetDef
+    return {
+        button = button,
     }
 end
 

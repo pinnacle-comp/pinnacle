@@ -9,7 +9,7 @@ use tonic::{Request, Response, Status};
 
 use crate::{
     api::{ResponseStream, run_server_streaming, run_server_streaming_mapped},
-    widget::WidgetId,
+    layer::LayerId,
 };
 
 #[tonic::async_trait]
@@ -23,12 +23,12 @@ impl input_service_server::InputService for super::InputService {
     ) -> Result<Response<Self::KeyboardKeyStream>, Status> {
         let request = request.into_inner();
 
-        let id = request.id;
+        let id = LayerId(request.id);
 
         run_server_streaming_mapped(
             &self.sender,
             move |state, sender| {
-                if let Some(layer) = WidgetId::from(id).layer_for_mut(state) {
+                if let Some(layer) = state.layer_for_id(id) {
                     layer.keyboard_key_sender = Some(sender);
                 }
             },

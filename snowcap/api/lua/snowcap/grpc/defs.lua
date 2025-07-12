@@ -764,6 +764,7 @@ local snowcap_layer_v1_Layer = {
 ---@field text_style snowcap.widget.v1.Text.Style?
 ---@field scrollable_style snowcap.widget.v1.Scrollable.Style?
 ---@field container_style snowcap.widget.v1.Container.Style?
+---@field button_style snowcap.widget.v1.Button.Style?
 
 ---@class snowcap.widget.v1.Palette
 ---@field background snowcap.widget.v1.Color?
@@ -780,6 +781,7 @@ local snowcap_layer_v1_Layer = {
 ---@field row snowcap.widget.v1.Row?
 ---@field scrollable snowcap.widget.v1.Scrollable?
 ---@field container snowcap.widget.v1.Container?
+---@field button snowcap.widget.v1.Button?
 
 ---@class snowcap.widget.v1.Text
 ---@field text string?
@@ -859,6 +861,35 @@ local snowcap_layer_v1_Layer = {
 ---@field background_color snowcap.widget.v1.Color?
 ---@field border snowcap.widget.v1.Border?
 
+---@class snowcap.widget.v1.Button
+---@field child snowcap.widget.v1.WidgetDef?
+---@field width snowcap.widget.v1.Length?
+---@field height snowcap.widget.v1.Length?
+---@field padding snowcap.widget.v1.Padding?
+---@field clip boolean?
+---@field style snowcap.widget.v1.Button.Style?
+---@field widget_id integer?
+
+---@class snowcap.widget.v1.Button.Style
+---@field active snowcap.widget.v1.Button.Style.Inner?
+---@field hovered snowcap.widget.v1.Button.Style.Inner?
+---@field pressed snowcap.widget.v1.Button.Style.Inner?
+---@field disabled snowcap.widget.v1.Button.Style.Inner?
+
+---@class snowcap.widget.v1.Button.Style.Inner
+---@field text_color snowcap.widget.v1.Color?
+---@field background_color snowcap.widget.v1.Color?
+---@field border snowcap.widget.v1.Border?
+
+---@class snowcap.widget.v1.Button.Event
+
+---@class snowcap.widget.v1.GetWidgetEventsRequest
+---@field layer_id integer?
+
+---@class snowcap.widget.v1.GetWidgetEventsResponse
+---@field widget_id integer?
+---@field button snowcap.widget.v1.Button.Event?
+
 ---@class snowcap.layer.v1.NewLayerRequest
 ---@field widget_def snowcap.widget.v1.WidgetDef?
 ---@field width integer?
@@ -937,6 +968,12 @@ snowcap.widget.v1.Scrollable.Direction = {}
 snowcap.widget.v1.Scrollable.Scrollbar = {}
 snowcap.widget.v1.Container = {}
 snowcap.widget.v1.Container.Style = {}
+snowcap.widget.v1.Button = {}
+snowcap.widget.v1.Button.Style = {}
+snowcap.widget.v1.Button.Style.Inner = {}
+snowcap.widget.v1.Button.Event = {}
+snowcap.widget.v1.GetWidgetEventsRequest = {}
+snowcap.widget.v1.GetWidgetEventsResponse = {}
 snowcap.layer.v1 = {}
 snowcap.layer.v1.NewLayerRequest = {}
 snowcap.layer.v1.NewLayerResponse = {}
@@ -1073,6 +1110,26 @@ snowcap.layer.v0alpha1.LayerService.Close.response = ".google.protobuf.Empty"
 ---@return string | nil error An error string, if any
 function Client:snowcap_layer_v0alpha1_LayerService_Close(data)
     return self:unary_request(snowcap.layer.v0alpha1.LayerService.Close, data)
+end
+snowcap.widget.v1.WidgetService = {}
+snowcap.widget.v1.WidgetService.GetWidgetEvents = {}
+snowcap.widget.v1.WidgetService.GetWidgetEvents.service = "snowcap.widget.v1.WidgetService"
+snowcap.widget.v1.WidgetService.GetWidgetEvents.method = "GetWidgetEvents"
+snowcap.widget.v1.WidgetService.GetWidgetEvents.request = ".snowcap.widget.v1.GetWidgetEventsRequest"
+snowcap.widget.v1.WidgetService.GetWidgetEvents.response = ".snowcap.widget.v1.GetWidgetEventsResponse"
+
+---Performs a server-streaming request.
+---
+---`callback` will be called with every streamed response.
+---
+---@nodiscard
+---
+---@param data snowcap.widget.v1.GetWidgetEventsRequest
+---@param callback fun(response: snowcap.widget.v1.GetWidgetEventsResponse)
+---
+---@return string | nil An error string, if any
+function Client:snowcap_widget_v1_WidgetService_GetWidgetEvents(data, callback)
+    return self:server_streaming_request(snowcap.widget.v1.WidgetService.GetWidgetEvents, data, callback)
 end
 snowcap.layer.v1.LayerService = {}
 snowcap.layer.v1.LayerService.NewLayer = {}

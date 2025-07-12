@@ -1,12 +1,55 @@
 use std::{any::Any, collections::HashMap};
 
-use iced::widget::{Column, Container, Row, Scrollable, scrollable::Scrollbar};
+use iced::widget::{Column, Container, Row, Scrollable, button, scrollable::Scrollbar};
 use snowcap_api_defs::snowcap::widget::{
     self,
-    v1::{WidgetDef, widget_def},
+    v1::{
+        GetWidgetEventsRequest, GetWidgetEventsResponse, WidgetDef, widget_def,
+        widget_service_server,
+    },
+};
+use tonic::{Request, Response, Status};
+
+use crate::{
+    api::{ResponseStream, run_server_streaming_mapped},
+    layer::LayerId,
+    util::convert::FromApi,
+    widget::{WidgetEvent, WidgetFn, WidgetId},
 };
 
-use crate::{util::convert::FromApi, widget::WidgetFn};
+#[tonic::async_trait]
+impl widget_service_server::WidgetService for super::WidgetService {
+    type GetWidgetEventsStream = ResponseStream<GetWidgetEventsResponse>;
+
+    async fn get_widget_events(
+        &self,
+        request: Request<GetWidgetEventsRequest>,
+    ) -> Result<Response<Self::GetWidgetEventsStream>, Status> {
+        let layer_id = request.into_inner().layer_id;
+        let layer_id = LayerId(layer_id);
+
+        run_server_streaming_mapped(
+            &self.sender,
+            move |state, sender| {
+                if let Some(layer) = state.layer_for_id(layer_id) {
+                    layer.widget_event_sender = Some(sender);
+                }
+            },
+            |(id, event)| {
+                Ok(GetWidgetEventsResponse {
+                    widget_id: id.into_inner(),
+                    event: Some(match event {
+                        WidgetEvent::Button => {
+                            widget::v1::get_widget_events_response::Event::Button(
+                                widget::v1::button::Event {},
+                            )
+                        }
+                    }),
+                })
+            },
+        )
+    }
+}
 
 pub fn widget_def_to_fn(def: WidgetDef) -> Option<(WidgetFn, HashMap<u32, Box<dyn Any + Send>>)> {
     let mut states = HashMap::new();
@@ -373,19 +416,8 @@ fn widget_def_to_fn_inner(
                 let border_color_clone = style.and_then(|s| s.border);
 
                 let style = move |theme: &iced::Theme| {
-                    let palette = theme.extended_palette();
-
-                    let mut style = iced::widget::container::Style {
-                        text_color: None,
-                        background: Some(palette.background.weak.color.into()),
-                        border: iced::Border {
-                            color: palette.background.base.color,
-                            width: 0.0,
-                            radius: 2.0.into(),
-                        },
-                        shadow: iced::Shadow::default(),
-                        snap: false,
-                    };
+                    let mut style =
+                        <iced::Theme as iced::widget::container::Catalog>::default()(theme);
 
                     if let Some(text_color) = text_color_clone {
                         style.text_color = Some(iced::Color::from_api(text_color));
@@ -413,6 +445,82 @@ fn widget_def_to_fn_inner(
                 container = container.style(style);
 
                 container.into()
+            });
+
+            Some(f)
+        }
+        widget_def::Widget::Button(button) => {
+            let widget::v1::Button {
+                child,
+                width,
+                height,
+                padding,
+                clip,
+                style,
+                widget_id,
+            } = *button;
+
+            let child_widget_fn = child.and_then(|def| {
+                *current_id += 1;
+                widget_def_to_fn_inner(*def, current_id, _states)
+            });
+
+            let f: WidgetFn = Box::new(move |states| {
+                let mut button = iced::widget::Button::new(
+                    child_widget_fn
+                        .as_ref()
+                        .map(|child| child(states))
+                        .unwrap_or_else(|| iced::widget::Text::new("NULL").into()),
+                );
+
+                if let Some(width) = width {
+                    button = button.width(iced::Length::from_api(width));
+                }
+                if let Some(height) = height {
+                    button = button.height(iced::Length::from_api(height));
+                }
+                if let Some(padding) = padding {
+                    button = button.padding(iced::Padding::from_api(padding));
+                }
+                if let Some(clip) = clip {
+                    button = button.clip(clip);
+                }
+                if let Some(widget_id) = widget_id {
+                    button = button.on_press(crate::widget::SnowcapMessage::WidgetEvent(
+                        WidgetId(widget_id),
+                        WidgetEvent::Button,
+                    ));
+                }
+
+                let style = move |theme: &iced::Theme, status| {
+                    let mut s = <iced::Theme as button::Catalog>::default()(theme, status);
+
+                    let inner = match status {
+                        button::Status::Active => style.and_then(|s| s.active),
+                        button::Status::Hovered => style.and_then(|s| s.hovered),
+                        button::Status::Pressed => style.and_then(|s| s.pressed),
+                        button::Status::Disabled => style.and_then(|s| s.disabled),
+                    };
+
+                    if let Some(style) = inner {
+                        if let Some(text_color) = style.text_color {
+                            s.text_color = FromApi::from_api(text_color);
+                        }
+                        if let Some(background_color) = style.background_color {
+                            s.background =
+                                Some(iced::Background::Color(FromApi::from_api(background_color)));
+                        }
+                        if let Some(border) = style.border {
+                            s.border = FromApi::from_api(border);
+                        }
+                    }
+
+                    s
+                };
+
+                button = button.style(style);
+
+                button.into()
             });
 
             Some(f)
