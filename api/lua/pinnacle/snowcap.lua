@@ -511,6 +511,8 @@ function BindOverlay:view()
     return overlay
 end
 
+function BindOverlay:update(_) end
+
 ---Shows this bind overlay.
 function BindOverlay:show()
     local Layer = require("snowcap.layer")
