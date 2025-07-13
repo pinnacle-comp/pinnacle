@@ -1,23 +1,19 @@
-use std::sync::Arc;
-
 use snowcap_api_defs::snowcap::widget;
 
 use super::{Border, Color, Length, Padding, Widget, WidgetDef, WidgetId};
 
-pub(crate) type ButtonCallback = Arc<dyn Fn(&mut WidgetDef) + Send + Sync + 'static>;
-
 #[derive(Clone)]
-pub struct Button {
-    pub child: WidgetDef,
+pub struct Button<Msg> {
+    pub child: WidgetDef<Msg>,
     pub width: Option<Length>,
     pub height: Option<Length>,
     pub padding: Option<Padding>,
     pub clip: Option<bool>,
     pub style: Option<Styles>,
-    pub(crate) on_press: Option<(WidgetId, ButtonCallback)>,
+    pub(crate) on_press: Option<(WidgetId, Msg)>,
 }
 
-impl std::fmt::Debug for Button {
+impl<Msg: std::fmt::Debug> std::fmt::Debug for Button<Msg> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Button")
             .field("child", &self.child)
@@ -31,7 +27,7 @@ impl std::fmt::Debug for Button {
     }
 }
 
-impl PartialEq for Button {
+impl<Msg: PartialEq> PartialEq for Button<Msg> {
     fn eq(&self, other: &Self) -> bool {
         self.child == other.child
             && self.width == other.width
@@ -39,19 +35,12 @@ impl PartialEq for Button {
             && self.padding == other.padding
             && self.clip == other.clip
             && self.style == other.style
-            && match (self.on_press.as_ref(), other.on_press.as_ref()) {
-                (None, None) => true,
-                (None, Some(_)) => false,
-                (Some(_), None) => false,
-                (Some((id1, on_press1)), Some((id2, on_press2))) => {
-                    id1 == id2 && Arc::ptr_eq(on_press1, on_press2)
-                }
-            }
+            && self.on_press == other.on_press
     }
 }
 
-impl Button {
-    pub fn new(child: impl Into<WidgetDef>) -> Self {
+impl<Msg> Button<Msg> {
+    pub fn new(child: impl Into<WidgetDef<Msg>>) -> Self {
         Self {
             child: child.into(),
             width: None,
@@ -91,12 +80,9 @@ impl Button {
         }
     }
 
-    pub fn on_press<F>(self, on_press: F) -> Self
-    where
-        F: Fn(&mut WidgetDef) + Send + Sync + 'static,
-    {
+    pub fn on_press(self, message: Msg) -> Self {
         Self {
-            on_press: Some((WidgetId::next(), Arc::new(on_press))),
+            on_press: Some((WidgetId::next(), message)),
             ..self
         }
     }
@@ -109,14 +95,14 @@ impl Button {
     }
 }
 
-impl From<Button> for Widget {
-    fn from(value: Button) -> Self {
+impl<Msg> From<Button<Msg>> for Widget<Msg> {
+    fn from(value: Button<Msg>) -> Self {
         Widget::Button(Box::new(value))
     }
 }
 
-impl From<Button> for widget::v1::Button {
-    fn from(value: Button) -> Self {
+impl<Msg> From<Button<Msg>> for widget::v1::Button {
+    fn from(value: Button<Msg>) -> Self {
         Self {
             child: Some(Box::new(value.child.into())),
             width: value.width.map(From::from),

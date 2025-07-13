@@ -2,8 +2,8 @@ use snowcap_api_defs::snowcap::widget;
 
 use super::{Alignment, Length, Padding, WidgetDef};
 
-#[derive(Debug, Clone, PartialEq, Default)]
-pub struct Column {
+#[derive(Debug, Clone, PartialEq)]
+pub struct Column<Msg> {
     pub spacing: Option<f32>,
     pub padding: Option<Padding>,
     pub item_alignment: Option<Alignment>,
@@ -11,15 +11,30 @@ pub struct Column {
     pub height: Option<Length>,
     pub max_width: Option<f32>,
     pub clip: Option<bool>,
-    pub children: Vec<WidgetDef>,
+    pub children: Vec<WidgetDef<Msg>>,
 }
 
-impl Column {
+impl<Msg> Default for Column<Msg> {
+    fn default() -> Self {
+        Self {
+            spacing: Default::default(),
+            padding: Default::default(),
+            item_alignment: Default::default(),
+            width: Default::default(),
+            height: Default::default(),
+            max_width: Default::default(),
+            clip: Default::default(),
+            children: Default::default(),
+        }
+    }
+}
+
+impl<Msg> Column<Msg> {
     pub fn new() -> Self {
         Self::default()
     }
 
-    pub fn new_with_children(children: impl IntoIterator<Item = WidgetDef>) -> Self {
+    pub fn new_with_children(children: impl IntoIterator<Item = WidgetDef<Msg>>) -> Self {
         Self {
             children: children.into_iter().collect(),
             ..Default::default()
@@ -75,14 +90,14 @@ impl Column {
         }
     }
 
-    pub fn push(mut self, child: impl Into<WidgetDef>) -> Self {
+    pub fn push(mut self, child: impl Into<WidgetDef<Msg>>) -> Self {
         self.children.push(child.into());
         self
     }
 }
 
-impl From<Column> for widget::v1::Column {
-    fn from(value: Column) -> Self {
+impl<Msg> From<Column<Msg>> for widget::v1::Column {
+    fn from(value: Column<Msg>) -> Self {
         widget::v1::Column {
             spacing: value.spacing,
             padding: value.padding.map(From::from),

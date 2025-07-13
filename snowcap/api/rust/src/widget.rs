@@ -16,7 +16,7 @@ use std::{
     sync::atomic::{AtomicU32, Ordering},
 };
 
-use button::{Button, ButtonCallback};
+use button::Button;
 use column::Column;
 use container::Container;
 use image::Image;
@@ -94,46 +94,47 @@ impl From<Theme> for widget::v1::Theme {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct WidgetDef {
+pub struct WidgetDef<Msg> {
     pub theme: Option<Theme>,
-    pub widget: Widget,
+    pub id: Option<String>,
+    pub widget: Widget<Msg>,
 }
 
-impl WidgetDef {
-    pub(crate) fn traverse(
+impl<Msg> WidgetDef<Msg> {
+    pub(crate) fn collect_messages(
         &self,
-        callbacks: &mut HashMap<WidgetId, WidgetCallback>,
-        with_widget: fn(&WidgetDef, &mut HashMap<WidgetId, WidgetCallback>),
+        callbacks: &mut HashMap<WidgetId, Msg>,
+        with_widget: fn(&WidgetDef<Msg>, &mut HashMap<WidgetId, Msg>),
     ) {
         with_widget(self, callbacks);
         match &self.widget {
             Widget::Text(_) => (),
             Widget::Column(column) => {
                 for widget in column.children.iter() {
-                    widget.traverse(callbacks, with_widget);
+                    widget.collect_messages(callbacks, with_widget);
                 }
             }
             Widget::Row(row) => {
                 for widget in row.children.iter() {
-                    widget.traverse(callbacks, with_widget);
+                    widget.collect_messages(callbacks, with_widget);
                 }
             }
             Widget::Scrollable(scrollable) => {
-                scrollable.child.traverse(callbacks, with_widget);
+                scrollable.child.collect_messages(callbacks, with_widget);
             }
             Widget::Container(container) => {
-                container.child.traverse(callbacks, with_widget);
+                container.child.collect_messages(callbacks, with_widget);
             }
             Widget::Button(button) => {
-                button.child.traverse(callbacks, with_widget);
+                button.child.collect_messages(callbacks, with_widget);
             }
             Widget::Image(_) => (),
         }
     }
 }
 
-impl From<WidgetDef> for widget::v1::WidgetDef {
-    fn from(value: WidgetDef) -> Self {
+impl<Msg> From<WidgetDef<Msg>> for widget::v1::WidgetDef {
+    fn from(value: WidgetDef<Msg>) -> Self {
         Self {
             theme: value.theme.map(From::from),
             widget: Some(value.widget.into()),
@@ -144,27 +145,28 @@ impl From<WidgetDef> for widget::v1::WidgetDef {
 /// A widget definition.
 #[allow(missing_docs)]
 #[derive(Debug, Clone, PartialEq, from_variants::FromVariants)]
-pub enum Widget {
+pub enum Widget<Msg> {
     Text(Text),
-    Column(Column),
-    Row(Row),
-    Scrollable(Box<Scrollable>),
-    Container(Box<Container>),
-    Button(Box<Button>),
+    Column(Column<Msg>),
+    Row(Row<Msg>),
+    Scrollable(Box<Scrollable<Msg>>),
+    Container(Box<Container<Msg>>),
+    Button(Box<Button<Msg>>),
     Image(Image),
 }
 
-impl<T: Into<Widget>> From<T> for WidgetDef {
+impl<Msg, T: Into<Widget<Msg>>> From<T> for WidgetDef<Msg> {
     fn from(value: T) -> Self {
         Self {
             theme: None,
+            id: None,
             widget: value.into(),
         }
     }
 }
 
-impl From<Widget> for widget::v1::widget_def::Widget {
-    fn from(value: Widget) -> widget::v1::widget_def::Widget {
+impl<Msg> From<Widget<Msg>> for widget::v1::widget_def::Widget {
+    fn from(value: Widget<Msg>) -> widget::v1::widget_def::Widget {
         match value {
             Widget::Text(text) => widget::v1::widget_def::Widget::Text(text.into()),
             Widget::Column(column) => widget::v1::widget_def::Widget::Column(column.into()),
@@ -332,6 +334,12 @@ impl From<Radius> for widget::v1::Radius {
     }
 }
 
-pub(crate) enum WidgetCallback {
-    Button(ButtonCallback),
+// INFO: experimentation
+
+pub trait Program {
+    type Message;
+
+    fn update(&mut self, msg: Self::Message);
+
+    fn view(&self) -> WidgetDef<Self::Message>;
 }

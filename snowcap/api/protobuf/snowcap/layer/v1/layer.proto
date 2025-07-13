@@ -15,6 +15,7 @@ enum Anchor {
   ANCHOR_TOP_RIGHT = 6;
   ANCHOR_BOTTOM_LEFT = 7;
   ANCHOR_BOTTOM_RIGHT = 8;
+  ANCHOR_NONE = 9;
 }
 
 enum KeyboardInteractivity {
@@ -50,7 +51,20 @@ message CloseRequest {
   uint32 layer_id = 2;
 }
 
+message UpdateLayerRequest {
+  uint32 layer_id = 8;
+  optional snowcap.widget.v1.WidgetDef widget_def = 1;
+  optional uint32 width = 2;
+  optional uint32 height = 3;
+  optional Anchor anchor = 4;
+  optional KeyboardInteractivity keyboard_interactivity = 5;
+  optional int32 exclusive_zone = 6;
+  optional Layer layer = 7;
+}
+message UpdateLayerResponse {}
+
 service LayerService {
   rpc NewLayer(NewLayerRequest) returns (NewLayerResponse);
   rpc Close(CloseRequest) returns (google.protobuf.Empty);
+  rpc UpdateLayer(UpdateLayerRequest) returns (UpdateLayerResponse);
 }

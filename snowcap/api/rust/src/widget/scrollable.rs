@@ -3,22 +3,22 @@ use snowcap_api_defs::snowcap::widget;
 use super::{Border, Color, Length, Widget, WidgetDef, container};
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct Scrollable {
+pub struct Scrollable<Msg> {
     pub width: Option<Length>,
     pub height: Option<Length>,
     pub direction: Option<Direction>,
-    pub child: WidgetDef,
+    pub child: WidgetDef<Msg>,
     pub style: Option<Style>,
 }
 
-impl From<Scrollable> for Widget {
-    fn from(value: Scrollable) -> Self {
+impl<Msg> From<Scrollable<Msg>> for Widget<Msg> {
+    fn from(value: Scrollable<Msg>) -> Self {
         Self::Scrollable(Box::new(value))
     }
 }
 
-impl From<Scrollable> for widget::v1::Scrollable {
-    fn from(value: Scrollable) -> Self {
+impl<Msg> From<Scrollable<Msg>> for widget::v1::Scrollable {
+    fn from(value: Scrollable<Msg>) -> Self {
         widget::v1::Scrollable {
             width: value.width.map(From::from),
             height: value.height.map(From::from),
@@ -29,8 +29,8 @@ impl From<Scrollable> for widget::v1::Scrollable {
     }
 }
 
-impl Scrollable {
-    pub fn new(child: impl Into<WidgetDef>) -> Self {
+impl<Msg> Scrollable<Msg> {
+    pub fn new(child: impl Into<WidgetDef<Msg>>) -> Self {
         Self {
             child: child.into(),
             width: None,

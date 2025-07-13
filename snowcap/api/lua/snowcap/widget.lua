@@ -2,6 +2,10 @@
 -- License, v. 2.0. If a copy of the MPL was not distributed with this
 -- file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
+---@class snowcap.widget.Program
+---@field update fun(self: self, message: any)
+---@field view fun(self: self): snowcap.widget.WidgetDef
+
 ---@class snowcap.widget.Palette
 ---@field background snowcap.widget.Color
 ---@field text snowcap.widget.Color
@@ -122,7 +126,7 @@
 ---@field padding snowcap.widget.Padding?
 ---@field clip boolean?
 ---@field style snowcap.widget.button.Styles?
----@field on_press fun(widget: snowcap.widget.WidgetDef)?
+---@field on_press any?
 ---@field private widget_id integer?
 
 ---@class snowcap.widget.button.Styles

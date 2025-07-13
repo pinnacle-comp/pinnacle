@@ -6,7 +6,7 @@ use snowcap_api_defs::snowcap::{
     input::v1::KeyboardKeyRequest,
     layer::{
         self,
-        v1::{CloseRequest, NewLayerRequest},
+        v1::{CloseRequest, NewLayerRequest, UpdateLayerRequest},
     },
     widget::v1::{GetWidgetEventsRequest, get_widget_events_response},
 };
@@ -18,7 +18,7 @@ use crate::{
     BlockOnTokio,
     client::Client,
     input::Modifiers,
-    widget::{Widget, WidgetCallback, WidgetDef, WidgetId},
+    widget::{Program, Widget, WidgetId},
 };
 
 // TODO: change to bitflag
@@ -125,27 +125,26 @@ pub enum NewLayerError {
 }
 
 /// Create a new widget.
-pub fn new_widget(
-    widget: impl Into<WidgetDef>,
+pub fn new_widget<Msg, P>(
+    mut program: P,
     width: u32,
     height: u32,
     anchor: Option<Anchor>,
     keyboard_interactivity: KeyboardInteractivity,
     exclusive_zone: ExclusiveZone,
     layer: ZLayer,
-) -> Result<LayerHandle, NewLayerError> {
-    let mut widget_def: WidgetDef = widget.into();
+) -> Result<LayerHandle, NewLayerError>
+where
+    Msg: Clone + Send + 'static,
+    P: Program<Message = Msg> + Send + 'static,
+{
+    let mut callbacks = HashMap::<WidgetId, Msg>::new();
 
-    let mut callbacks = HashMap::<WidgetId, WidgetCallback>::new();
+    let widget_def = program.view();
 
-    widget_def.traverse(&mut callbacks, |def, cbs| {
+    widget_def.collect_messages(&mut callbacks, |def, cbs| {
         if let Widget::Button(button) = &def.widget {
-            cbs.extend(
-                button
-                    .on_press
-                    .clone()
-                    .map(|(id, on_press)| (id, WidgetCallback::Button(on_press))),
-            );
+            cbs.extend(button.on_press.clone());
         }
     });
 
@@ -164,10 +163,10 @@ pub fn new_widget(
         })
         .block_on_tokio()?;
 
-    let id = response.into_inner().layer_id;
+    let layer_id = response.into_inner().layer_id;
 
     let mut event_stream = Client::widget()
-        .get_widget_events(GetWidgetEventsRequest { layer_id: id })
+        .get_widget_events(GetWidgetEventsRequest { layer_id })
         .block_on_tokio()?
         .into_inner();
 
@@ -179,16 +178,40 @@ pub fn new_widget(
             };
             match event {
                 get_widget_events_response::Event::Button(_event) => {
-                    if let Some(WidgetCallback::Button(callback)) = callbacks.get(&id) {
-                        callback(&mut widget_def);
-                        // TODO: update layer based on this callback
+                    if let Some(msg) = callbacks.get(&id) {
+                        program.update(msg.clone());
+                        let widget_def = program.view();
+
+                        callbacks.clear();
+
+                        widget_def.collect_messages(&mut callbacks, |def, cbs| {
+                            if let Widget::Button(button) = &def.widget {
+                                cbs.extend(button.on_press.clone());
+                            }
+                        });
+
+                        Client::layer()
+                            .update_layer(UpdateLayerRequest {
+                                layer_id,
+                                widget_def: Some(widget_def.into()),
+                                width: None,
+                                height: None,
+                                anchor: None,
+                                keyboard_interactivity: None,
+                                exclusive_zone: None,
+                                layer: None,
+                            })
+                            .await
+                            .unwrap();
                     }
                 }
             }
         }
     });
 
-    Ok(LayerHandle { id: id.into() })
+    Ok(LayerHandle {
+        id: layer_id.into(),
+    })
 }
 
 /// A handle to a layer surface widget.

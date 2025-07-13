@@ -547,6 +547,7 @@ local snowcap_layer_v1_Anchor = {
     ANCHOR_TOP_RIGHT = 6,
     ANCHOR_BOTTOM_LEFT = 7,
     ANCHOR_BOTTOM_RIGHT = 8,
+    ANCHOR_NONE = 9,
 }
 
 ---@enum snowcap.layer.v1.KeyboardInteractivity
@@ -934,6 +935,18 @@ local snowcap_layer_v1_Layer = {
 ---@class snowcap.layer.v1.CloseRequest
 ---@field layer_id integer?
 
+---@class snowcap.layer.v1.UpdateLayerRequest
+---@field layer_id integer?
+---@field widget_def snowcap.widget.v1.WidgetDef?
+---@field width integer?
+---@field height integer?
+---@field anchor snowcap.layer.v1.Anchor?
+---@field keyboard_interactivity snowcap.layer.v1.KeyboardInteractivity?
+---@field exclusive_zone integer?
+---@field layer snowcap.layer.v1.Layer?
+
+---@class snowcap.layer.v1.UpdateLayerResponse
+
 ---@class snowcap.v0alpha1.Nothing
 
 ---@class snowcap.v1.Nothing
@@ -1009,6 +1022,8 @@ snowcap.layer.v1 = {}
 snowcap.layer.v1.NewLayerRequest = {}
 snowcap.layer.v1.NewLayerResponse = {}
 snowcap.layer.v1.CloseRequest = {}
+snowcap.layer.v1.UpdateLayerRequest = {}
+snowcap.layer.v1.UpdateLayerResponse = {}
 snowcap.v0alpha1 = {}
 snowcap.v0alpha1.Nothing = {}
 snowcap.v1 = {}
@@ -1197,6 +1212,23 @@ snowcap.layer.v1.LayerService.Close.response = ".google.protobuf.Empty"
 ---@return string | nil error An error string, if any
 function Client:snowcap_layer_v1_LayerService_Close(data)
     return self:unary_request(snowcap.layer.v1.LayerService.Close, data)
+end
+snowcap.layer.v1.LayerService.UpdateLayer = {}
+snowcap.layer.v1.LayerService.UpdateLayer.service = "snowcap.layer.v1.LayerService"
+snowcap.layer.v1.LayerService.UpdateLayer.method = "UpdateLayer"
+snowcap.layer.v1.LayerService.UpdateLayer.request = ".snowcap.layer.v1.UpdateLayerRequest"
+snowcap.layer.v1.LayerService.UpdateLayer.response = ".snowcap.layer.v1.UpdateLayerResponse"
+
+---Performs a unary request.
+---
+---@nodiscard
+---
+---@param data snowcap.layer.v1.UpdateLayerRequest
+---
+---@return snowcap.layer.v1.UpdateLayerResponse | nil response
+---@return string | nil error An error string, if any
+function Client:snowcap_layer_v1_LayerService_UpdateLayer(data)
+    return self:unary_request(snowcap.layer.v1.LayerService.UpdateLayer, data)
 end
 return {
     google = google,

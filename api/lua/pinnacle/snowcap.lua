@@ -31,7 +31,7 @@ local snowcap = {
 ---A quit prompt.
 ---
 ---When opened, pressing ENTER will quit the compositor.
----@class pinnacle.snowcap.integration.QuitPrompt
+---@class pinnacle.snowcap.integration.QuitPrompt : snowcap.widget.Program
 ---The radius of the prompt's corners.
 ---@field border_radius number
 ---THe thickness of the prompt border.
@@ -49,7 +49,7 @@ local snowcap = {
 local QuitPrompt = {}
 
 ---An overlay that shows various input binds.
----@class pinnacle.snowcap.integration.BindOverlay
+---@class pinnacle.snowcap.integration.BindOverlay : snowcap.widget.Program
 ---The radius of the overlay's corners.
 ---@field border_radius number
 ---The thickness of the overlay border.
@@ -66,10 +66,8 @@ local QuitPrompt = {}
 ---@field height integer
 local BindOverlay = {}
 
----Shows this quit prompt.
-function QuitPrompt:show()
+function QuitPrompt:view()
     local Widget = require("snowcap.widget")
-    local Layer = require("snowcap.layer")
 
     local quit_font = require("pinnacle.util").deep_copy(self.font)
     quit_font.weight = Widget.font.weight.BOLD
@@ -113,8 +111,16 @@ function QuitPrompt:show()
         }),
     })
 
+    return prompt
+end
+
+function QuitPrompt:update(_) end
+
+---Shows this quit prompt.
+function QuitPrompt:show()
+    local Layer = require("snowcap.layer")
     local prompt = Layer.new_widget({
-        widget = prompt,
+        program = self,
         width = self.width,
         height = self.height,
         anchor = nil,
@@ -136,8 +142,7 @@ function QuitPrompt:show()
     end)
 end
 
----Shows this bind overlay.
-function BindOverlay:show()
+function BindOverlay:view()
     ---@param mods pinnacle.input.Mod[]
     ---@return string?
     local function mods_to_string(mods)
@@ -503,11 +508,15 @@ function BindOverlay:show()
             },
         },
     })
+    return overlay
+end
 
+---Shows this bind overlay.
+function BindOverlay:show()
     local Layer = require("snowcap.layer")
 
     local overlay = Layer.new_widget({
-        widget = overlay,
+        program = self,
         width = self.width,
         height = self.height,
         anchor = nil,

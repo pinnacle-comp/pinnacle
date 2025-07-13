@@ -3,7 +3,7 @@ use snowcap_api_defs::snowcap::widget;
 use super::{Alignment, Border, Color, Length, Padding, Widget, WidgetDef};
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct Container {
+pub struct Container<Msg> {
     pub padding: Option<Padding>,
     pub width: Option<Length>,
     pub height: Option<Length>,
@@ -12,12 +12,12 @@ pub struct Container {
     pub horizontal_alignment: Option<Alignment>,
     pub vertical_alignment: Option<Alignment>,
     pub clip: Option<bool>,
-    pub child: WidgetDef,
+    pub child: WidgetDef<Msg>,
     pub style: Option<Style>,
 }
 
-impl Container {
-    pub fn new(child: impl Into<WidgetDef>) -> Self {
+impl<Msg> Container<Msg> {
+    pub fn new(child: impl Into<WidgetDef<Msg>>) -> Self {
         Self {
             child: child.into(),
             padding: None,
@@ -96,8 +96,8 @@ impl Container {
     }
 }
 
-impl From<Container> for widget::v1::Container {
-    fn from(value: Container) -> Self {
+impl<Msg> From<Container<Msg>> for widget::v1::Container {
+    fn from(value: Container<Msg>) -> Self {
         Self {
             padding: value.padding.map(From::from),
             width: value.width.map(From::from),
@@ -161,8 +161,8 @@ impl From<Style> for widget::v1::container::Style {
     }
 }
 
-impl From<Container> for Widget {
-    fn from(value: Container) -> Self {
+impl<Msg> From<Container<Msg>> for Widget<Msg> {
+    fn from(value: Container<Msg>) -> Self {
         Self::Container(Box::new(value))
     }
 }

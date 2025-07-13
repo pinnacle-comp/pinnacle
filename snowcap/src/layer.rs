@@ -214,6 +214,69 @@ impl SnowcapLayer {
         }
     }
 
+    pub fn update_properties(
+        &mut self,
+        width: Option<u32>,
+        height: Option<u32>,
+        layer: Option<wlr_layer::Layer>,
+        anchor: Option<Anchor>,
+        exclusive_zone: Option<ExclusiveZone>,
+        keyboard_interactivity: Option<wlr_layer::KeyboardInteractivity>,
+        widgets: Option<ViewFn>,
+
+        queue_handle: &QueueHandle<State>,
+        compositor: &mut crate::compositor::Compositor,
+    ) {
+        if width.is_some() || height.is_some() {
+            self.width = width.unwrap_or(self.width);
+            self.height = height.unwrap_or(self.height);
+            compositor.configure_surface(
+                &mut self.surface,
+                self.width * self.scale as u32,
+                self.height * self.scale as u32,
+            );
+        }
+
+        if let Some(layer) = layer {
+            self.layer.set_layer(layer);
+        }
+
+        if let Some(anchor) = anchor {
+            self.layer.set_anchor(anchor);
+        }
+
+        if let Some(zone) = exclusive_zone {
+            self.layer.set_exclusive_zone(match zone {
+                ExclusiveZone::Exclusive(size) => size.get() as i32,
+                ExclusiveZone::Respect => 0,
+                ExclusiveZone::Ignore => -1,
+            });
+        }
+
+        if let Some(keyboard_interactivity) = keyboard_interactivity {
+            self.layer
+                .set_keyboard_interactivity(keyboard_interactivity);
+        }
+
+        self.viewport = Viewport::with_physical_size(
+            iced::Size::new(
+                self.width * self.scale as u32,
+                self.height * self.scale as u32,
+            ),
+            self.scale as f64,
+        );
+
+        if let Some(widgets) = widgets {
+            self.widgets
+                .update_view(widgets, self.viewport.logical_size(), &mut self.renderer);
+        }
+
+        self.layer
+            .wl_surface()
+            .frame(queue_handle, self.layer.wl_surface().clone());
+        self.layer.wl_surface().commit();
+    }
+
     pub fn draw(&mut self) {
         use iced_renderer::fallback::Renderer;
         use iced_renderer::fallback::Surface;

@@ -8,7 +8,7 @@ use indexmap::IndexMap;
 use snowcap_api::{
     layer::{ExclusiveZone, KeyboardInteractivity, ZLayer},
     widget::{
-        Alignment, Color, Length, Padding, WidgetDef,
+        Alignment, Color, Length, Padding, Program, WidgetDef,
         column::Column,
         container::Container,
         font::{Family, Font, Weight},
@@ -42,22 +42,12 @@ pub struct QuitPrompt {
     pub height: u32,
 }
 
-impl QuitPrompt {
-    /// Creates a quit prompt with sane defaults.
-    pub fn new() -> Self {
-        QuitPrompt {
-            border_radius: 12.0,
-            border_thickness: 6.0,
-            background_color: [0.15, 0.03, 0.1, 0.65].into(),
-            border_color: [0.8, 0.2, 0.4].into(),
-            font: Font::new_with_family(Family::Name("Ubuntu".into())),
-            width: 220,
-            height: 120,
-        }
-    }
+impl Program for QuitPrompt {
+    type Message = ();
 
-    /// Shows this quit prompt.
-    pub fn show(&self) {
+    fn update(&mut self, _msg: Self::Message) {}
+
+    fn view(&self) -> WidgetDef<Self::Message> {
         let widget = Container::new(Column::new_with_children([
             Text::new("Quit Pinnacle?")
                 .style(
@@ -85,10 +75,32 @@ impl QuitPrompt {
             }),
         });
 
+        widget.into()
+    }
+}
+
+impl QuitPrompt {
+    /// Creates a quit prompt with sane defaults.
+    pub fn new() -> Self {
+        QuitPrompt {
+            border_radius: 12.0,
+            border_thickness: 6.0,
+            background_color: [0.15, 0.03, 0.1, 0.65].into(),
+            border_color: [0.8, 0.2, 0.4].into(),
+            font: Font::new_with_family(Family::Name("Ubuntu".into())),
+            width: 220,
+            height: 120,
+        }
+    }
+
+    /// Shows this quit prompt.
+    pub fn show(self) {
+        let width = self.width;
+        let height = self.height;
         snowcap_api::layer::new_widget(
-            widget,
-            self.width,
-            self.height,
+            self,
+            width,
+            height,
             None,
             KeyboardInteractivity::Exclusive,
             ExclusiveZone::Respect,
@@ -124,24 +136,12 @@ pub struct BindOverlay {
     pub height: u32,
 }
 
-impl BindOverlay {
-    /// Creates the default bind overlay.
-    ///
-    /// Some of its characteristics can be changed by setting its fields.
-    pub fn new() -> Self {
-        BindOverlay {
-            border_radius: 12.0,
-            border_thickness: 6.0,
-            background_color: [0.15, 0.15, 0.225, 0.8].into(),
-            border_color: [0.4, 0.4, 0.7].into(),
-            font: Font::new_with_family(Family::Name("Ubuntu".into())),
-            width: 700,
-            height: 500,
-        }
-    }
+impl Program for BindOverlay {
+    type Message = ();
 
-    /// Shows this bind overlay.
-    pub fn show(&self) {
+    fn update(&mut self, _msg: Self::Message) {}
+
+    fn view(&self) -> WidgetDef<Self::Message> {
         #[derive(PartialEq, Eq, Hash)]
         struct KeybindRepr {
             mods: Mod,
@@ -287,7 +287,7 @@ impl BindOverlay {
                     ])
                     .into()
                 } else {
-                    let mut children = Vec::<WidgetDef>::new();
+                    let mut children = Vec::<WidgetDef<()>>::new();
                     children.push(
                         Text::new(key.to_string() + ":")
                             .style(text::Style::new().font(self.font.clone()))
@@ -325,7 +325,7 @@ impl BindOverlay {
                     ])
                     .into()
                 } else {
-                    let mut children = Vec::<WidgetDef>::new();
+                    let mut children = Vec::<WidgetDef<()>>::new();
                     children.push(
                         Text::new(mouse.to_string() + ":")
                             .style(text::Style::new().font(self.font.clone()))
@@ -344,7 +344,7 @@ impl BindOverlay {
                 }
             });
 
-            let mut children = Vec::<WidgetDef>::new();
+            let mut children = Vec::<WidgetDef<()>>::new();
             children.push(group_title.into());
             children.extend(keybinds);
             children.extend(mousebinds);
@@ -389,10 +389,34 @@ impl BindOverlay {
             }),
         });
 
+        widget.into()
+    }
+}
+
+impl BindOverlay {
+    /// Creates the default bind overlay.
+    ///
+    /// Some of its characteristics can be changed by setting its fields.
+    pub fn new() -> Self {
+        BindOverlay {
+            border_radius: 12.0,
+            border_thickness: 6.0,
+            background_color: [0.15, 0.15, 0.225, 0.8].into(),
+            border_color: [0.4, 0.4, 0.7].into(),
+            font: Font::new_with_family(Family::Name("Ubuntu".into())),
+            width: 700,
+            height: 500,
+        }
+    }
+
+    /// Shows this bind overlay.
+    pub fn show(self) {
+        let width = self.width;
+        let height = self.height;
         snowcap_api::layer::new_widget(
-            widget,
-            self.width,
-            self.height,
+            self,
+            width,
+            height,
             None,
             KeyboardInteractivity::Exclusive,
             ExclusiveZone::Respect,
@@ -450,24 +474,16 @@ pub struct ConfigCrashedMessage {
     pub width: u32,
     /// The height of the prompt.
     pub height: u32,
+    /// The error message.
+    pub message: String,
 }
 
-impl ConfigCrashedMessage {
-    /// Creates an error message.
-    pub fn new() -> Self {
-        ConfigCrashedMessage {
-            border_radius: 12.0,
-            border_thickness: 6.0,
-            background_color: [0.15, 0.03, 0.1, 0.65].into(),
-            border_color: [0.8, 0.2, 0.4].into(),
-            font: Font::new_with_family(Family::Name("Ubuntu".into())),
-            width: 700,
-            height: 400,
-        }
-    }
+impl Program for ConfigCrashedMessage {
+    type Message = ();
 
-    /// Shows an error message.
-    pub fn show(&self, message: impl std::fmt::Display) {
+    fn update(&mut self, _msg: Self::Message) {}
+
+    fn view(&self) -> WidgetDef<Self::Message> {
         let widget = Container::new(Column::new_with_children([
             Text::new("Config crashed!")
                 .style(
@@ -482,7 +498,8 @@ impl ConfigCrashedMessage {
                 .into(),
             Text::new("").style(text::Style::new().pixels(8.0)).into(), // Spacing
             Scrollable::new(
-                Text::new(message).style(text::Style::new().font(self.font.clone()).pixels(14.0)),
+                Text::new(&self.message)
+                    .style(text::Style::new().font(self.font.clone()).pixels(14.0)),
             )
             .width(Length::Fill)
             .height(Length::Fill)
@@ -515,10 +532,33 @@ impl ConfigCrashedMessage {
             }),
         });
 
+        widget.into()
+    }
+}
+
+impl ConfigCrashedMessage {
+    /// Creates an error message.
+    pub fn new(message: impl std::fmt::Display) -> Self {
+        ConfigCrashedMessage {
+            border_radius: 12.0,
+            border_thickness: 6.0,
+            background_color: [0.15, 0.03, 0.1, 0.65].into(),
+            border_color: [0.8, 0.2, 0.4].into(),
+            font: Font::new_with_family(Family::Name("Ubuntu".into())),
+            width: 700,
+            height: 400,
+            message: message.to_string(),
+        }
+    }
+
+    /// Shows an error message.
+    pub fn show(self) {
+        let width = self.width;
+        let height = self.height;
         snowcap_api::layer::new_widget(
-            widget,
-            self.width,
-            self.height,
+            self,
+            width,
+            height,
             None,
             KeyboardInteractivity::Exclusive,
             ExclusiveZone::Respect,

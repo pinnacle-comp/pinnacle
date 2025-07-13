@@ -71,8 +71,8 @@ local function exclusive_zone_to_api(zone)
     return -1
 end
 
----@class LayerArgs
----@field widget snowcap.widget.WidgetDef
+---@class snowcap.layer.LayerArgs
+---@field program snowcap.widget.Program
 ---@field width integer
 ---@field height integer
 ---@field anchor snowcap.layer.Anchor?
@@ -82,8 +82,8 @@ end
 
 ---comment
 ---@param widget snowcap.widget.WidgetDef
----@param callbacks table<integer, snowcap.widget.Callback>
----@param with_widget fun(callbacks: table<integer, snowcap.widget.Callback>, widget: snowcap.widget.WidgetDef)
+---@param callbacks table<integer, any>
+---@param with_widget fun(callbacks: table<integer, any>, widget: snowcap.widget.WidgetDef)
 local function traverse_widget_tree(widget, callbacks, with_widget)
     with_widget(callbacks, widget)
     if widget.column then
@@ -103,16 +103,17 @@ local function traverse_widget_tree(widget, callbacks, with_widget)
     end
 end
 
----@param args LayerArgs
+---@param args snowcap.layer.LayerArgs
 ---@return snowcap.layer.LayerHandle|nil handle A handle to the layer surface, or nil if an error occurred.
 function layer.new_widget(args)
-    ---@type table<integer, snowcap.widget.Callback>
+    ---@type table<integer, any>
     local callbacks = {}
-    traverse_widget_tree(args.widget, callbacks, function(callbacks, widget)
+
+    local widget_def = args.program:view()
+
+    traverse_widget_tree(widget_def, callbacks, function(callbacks, widget)
         if widget.button and widget.button.on_press then
-            callbacks[widget.button.widget_id] = {
-                button = widget.button.on_press,
-            }
+            callbacks[widget.button.widget_id] = widget.button.on_press
         end
     end)
 
@@ -124,7 +125,7 @@ function layer.new_widget(args)
         height = args.height,
         anchor = args.anchor,
         keyboard_interactivity = args.keyboard_interactivity,
-        widget_def = widget.widget_def_into_api(args.widget),
+        widget_def = widget.widget_def_into_api(widget_def),
     }
 
     local response, err = client:snowcap_layer_v1_LayerService_NewLayer(request)
@@ -148,9 +149,21 @@ function layer.new_widget(args)
     }, function(response)
         local widget_id = response.widget_id or 0
         if response.button then
-            if callbacks[widget_id] and callbacks[widget_id].button then
-                callbacks[widget_id].button(args.widget)
-                -- TODO: update layer after this cb
+            if callbacks[widget_id] then
+                args.program:update(callbacks[widget_id])
+                local widget_def = args.program:view()
+                callbacks = {}
+
+                traverse_widget_tree(widget_def, callbacks, function(callbacks, widget)
+                    if widget.button and widget.button.on_press then
+                        callbacks[widget.button.widget_id] = widget.button.on_press
+                    end
+                end)
+
+                local _, err = client:snowcap_layer_v1_LayerService_UpdateLayer({
+                    layer_id = layer_id,
+                    widget_def = widget.widget_def_into_api(widget_def),
+                })
             end
         end
     end)
