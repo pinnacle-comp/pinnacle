@@ -461,6 +461,22 @@ function WindowHandle:set_decoration_mode(mode)
     end
 end
 
+---Moves this window to the specified output.
+---
+---This will set the window tags to the output tags, and update the window position.
+---
+---@param output pinnacle.output.OutputHandle The output to move this window to.
+function WindowHandle:move_to_output(output)
+    local _, err = client:pinnacle_window_v1_WindowService_MoveToOutput({
+        window_id = self.id,
+        output_name = output.name,
+    })
+
+    if err then
+        log.error(err)
+    end
+end
+
 ---Moves this window to the specified tag.
 ---
 ---This will remove all tags from this window and add the tag `tag`.

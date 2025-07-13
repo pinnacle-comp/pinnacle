@@ -20,9 +20,10 @@ use pinnacle_api_defs::pinnacle::{
         v1::{
             GetAppIdRequest, GetFocusedRequest, GetLayoutModeRequest, GetLocRequest,
             GetSizeRequest, GetTagIdsRequest, GetTitleRequest, GetWindowsInDirRequest,
-            MoveGrabRequest, MoveToTagRequest, RaiseRequest, ResizeGrabRequest, ResizeTileRequest,
-            SetDecorationModeRequest, SetFloatingRequest, SetFocusedRequest, SetFullscreenRequest,
-            SetGeometryRequest, SetMaximizedRequest, SetTagRequest, SetTagsRequest,
+            MoveGrabRequest, MoveToOutputRequest, MoveToTagRequest, RaiseRequest,
+            ResizeGrabRequest, ResizeTileRequest, SetDecorationModeRequest, SetFloatingRequest,
+            SetFocusedRequest, SetFullscreenRequest, SetGeometryRequest, SetMaximizedRequest,
+            SetTagRequest, SetTagsRequest,
         },
     },
 };
@@ -410,6 +411,34 @@ impl WindowHandle {
                     DecorationMode::ServerSide => window::v1::DecorationMode::ServerSide,
                 }
                 .into(),
+            })
+            .block_on_tokio()
+            .unwrap();
+    }
+
+    /// Moves this window to the specified output.
+    ///
+    /// This will set the window tags to the output tags, and update the window position.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// # use pinnacle_api::window;
+    /// # use pinnacle_api::output;
+    /// # || {
+    /// // Move the focused window to output DP-2
+    /// window::get_focused()?.move_to_output(&output::get_by_name("DP-2")?);
+    /// # Some(())
+    /// # };
+    /// ```
+    pub fn move_to_output(&self, output: &OutputHandle) {
+        let window_id = self.id;
+        let output_name = output.name();
+
+        Client::window()
+            .move_to_output(MoveToOutputRequest {
+                window_id,
+                output_name,
             })
             .block_on_tokio()
             .unwrap();
