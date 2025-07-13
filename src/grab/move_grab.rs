@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use smithay::{
-    desktop::{layer_map_for_output, space::SpaceElement},
+    desktop::space::SpaceElement,
     // NOTE: maybe alias this to PointerGrabStartData because there's another GrabStartData in
     // |     input::keyboard
     input::{
@@ -170,29 +170,7 @@ impl PointerGrab<State> for MoveSurfaceGrab {
                 let tag_output = self.window.output(&state.pinnacle);
                 if let Some(output_under_pointer) = output_under_pointer {
                     if Some(&output_under_pointer) != tag_output.as_ref() {
-                        self.window.set_tags_to_output(&output_under_pointer);
-
-                        // Since we've changed output, we want to reset the window floating
-                        // location to prevent it to jump back to where it was when we change its
-                        // current mode.
-                        let output_loc = output_under_pointer.current_location();
-                        let Rectangle { mut loc, size } =
-                            layer_map_for_output(&output_under_pointer).non_exclusive_zone();
-
-                        // Slightly offset the location so the window is not jammed in a corner
-                        let offset = {
-                            let (w, h) = size.downscale(100).into();
-                            i32::min(w, h)
-                        };
-
-                        loc += output_loc + Point::new(offset, offset);
-
-                        // No need to setup a transaction for this. floating_loc is ignored when
-                        // the window is maximized or fullscreen
-                        self.window
-                            .with_state_mut(|state| state.set_floating_loc(Some(loc)));
-
-                        state.update_window_layout_mode_and_layout(&self.window, |_| ());
+                        state.move_window_to_output(&self.window, output_under_pointer.clone());
                     }
                 }
             }
