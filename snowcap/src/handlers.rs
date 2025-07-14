@@ -1,9 +1,6 @@
 pub mod keyboard;
 pub mod pointer;
 
-use std::time::Instant;
-
-use iced_wgpu::graphics::Viewport;
 use smithay_client_toolkit::{
     compositor::CompositorHandler,
     delegate_compositor, delegate_layer, delegate_output, delegate_registry, delegate_seat,
@@ -25,7 +22,7 @@ use smithay_client_toolkit::{
     },
 };
 
-use crate::state::State;
+use crate::{layer::InitialConfigureState, state::State};
 
 impl ProvidesRegistryState for State {
     fn registry(&mut self) -> &mut RegistryState {
@@ -121,18 +118,22 @@ impl LayerShellHandler for State {
         _configure: LayerSurfaceConfigure,
         _serial: u32,
     ) {
-        let layer = self.layers.iter_mut().find(|l| &l.layer == layer);
+        let Some(layer) = self.layers.iter_mut().find(|l| &l.layer == layer) else {
+            return;
+        };
 
-        if let Some(layer) = layer {
-            if !layer.initial_configure {
-                layer.initial_configure = true;
-                layer.update(qh, &mut self.runtime);
-                layer.widgets.queue_event(iced::Event::Window(
-                    iced::window::Event::RedrawRequested(Instant::now()),
-                ));
-                layer.redraw_requested = true;
-            }
+        let InitialConfigureState::PreConfigure(size) = layer.initial_configure else {
+            return;
+        };
+
+        if let Some(size) = size {
+            layer.pending_size = Some((size.0 as u32, size.1 as u32));
+            layer.initial_configure = InitialConfigureState::PostOutputSize;
+        } else {
+            layer.initial_configure = InitialConfigureState::PostConfigure;
         }
+
+        layer.schedule_redraw();
     }
 }
 delegate_layer!(State);
@@ -145,28 +146,16 @@ impl CompositorHandler for State {
         surface: &WlSurface,
         new_factor: i32,
     ) {
-        if let Some(layer) = self
+        let Some(layer) = self
             .layers
             .iter_mut()
             .find(|sn_layer| sn_layer.layer.wl_surface() == surface)
-        {
-            layer.viewport = Viewport::with_physical_size(
-                iced::Size::new(
-                    layer.width * new_factor as u32,
-                    layer.height * new_factor as u32,
-                ),
-                new_factor as f64,
-            );
-            layer.set_scale(
-                new_factor,
-                self.compositor.as_mut().expect("should be initialized"),
-            );
-            layer
-                .layer
-                .wl_surface()
-                .frame(qh, layer.layer.wl_surface().clone());
-            layer.layer.wl_surface().commit();
-        }
+        else {
+            return;
+        };
+
+        layer.output_size_changed(layer.output_width, layer.output_height, new_factor);
+        layer.request_frame(qh);
     }
 
     fn transform_changed(
@@ -176,7 +165,6 @@ impl CompositorHandler for State {
         _surface: &WlSurface,
         _new_transform: wl_output::Transform,
     ) {
-        // TODO:
     }
 
     fn frame(
@@ -192,23 +180,47 @@ impl CompositorHandler for State {
             .find(|layer| layer.layer.wl_surface() == surface);
 
         if let Some(layer) = layer {
-            if !layer.redraw_requested {
-                layer.widgets.queue_event(iced::Event::Window(
-                    iced::window::Event::RedrawRequested(Instant::now()),
-                ));
-                layer.redraw_requested = true;
-            }
+            layer.schedule_redraw();
         }
     }
 
     fn surface_enter(
         &mut self,
         _conn: &Connection,
-        _qh: &QueueHandle<Self>,
-        _surface: &WlSurface,
-        _output: &wl_output::WlOutput,
+        qh: &QueueHandle<Self>,
+        surface: &WlSurface,
+        output: &wl_output::WlOutput,
     ) {
-        // TODO:
+        let Some(layer) = self
+            .layers
+            .iter_mut()
+            .find(|layer| layer.layer.wl_surface() == surface)
+        else {
+            return;
+        };
+
+        let Some(output_info) = self.output_state.info(output) else {
+            return;
+        };
+
+        let Some(size) = output_info.logical_size else {
+            return;
+        };
+
+        if let InitialConfigureState::PreConfigure(pending) = &mut layer.initial_configure {
+            *pending = Some(size);
+            return;
+        }
+
+        if layer.initial_configure == InitialConfigureState::PostConfigure {
+            return;
+        };
+
+        layer.initial_configure = InitialConfigureState::PostOutputSize;
+
+        layer.output_size_changed(size.0 as u32, size.1 as u32, layer.output_scale);
+
+        layer.request_frame(qh);
     }
 
     fn surface_leave(
@@ -218,7 +230,6 @@ impl CompositorHandler for State {
         _surface: &WlSurface,
         _output: &wl_output::WlOutput,
     ) {
-        // TODO:
     }
 }
 delegate_compositor!(State);

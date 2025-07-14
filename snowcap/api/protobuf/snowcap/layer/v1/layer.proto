@@ -35,12 +35,10 @@ enum Layer {
 
 message NewLayerRequest {
   snowcap.widget.v1.WidgetDef widget_def = 1;
-  uint32 width = 2;
-  uint32 height = 3;
-  Anchor anchor = 4;
-  KeyboardInteractivity keyboard_interactivity = 5;
-  int32 exclusive_zone = 6;
-  Layer layer = 7;
+  Anchor anchor = 2;
+  KeyboardInteractivity keyboard_interactivity = 3;
+  int32 exclusive_zone = 4;
+  Layer layer = 5;
 }
 
 message NewLayerResponse {
@@ -52,14 +50,12 @@ message CloseRequest {
 }
 
 message UpdateLayerRequest {
-  uint32 layer_id = 8;
-  optional snowcap.widget.v1.WidgetDef widget_def = 1;
-  optional uint32 width = 2;
-  optional uint32 height = 3;
-  optional Anchor anchor = 4;
-  optional KeyboardInteractivity keyboard_interactivity = 5;
-  optional int32 exclusive_zone = 6;
-  optional Layer layer = 7;
+  uint32 layer_id = 1;
+  optional snowcap.widget.v1.WidgetDef widget_def = 2;
+  optional Anchor anchor = 3;
+  optional KeyboardInteractivity keyboard_interactivity = 4;
+  optional int32 exclusive_zone = 5;
+  optional Layer layer = 6;
 }
 message UpdateLayerResponse {}
 

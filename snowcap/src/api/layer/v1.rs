@@ -32,9 +32,6 @@ impl layer_service_server::LayerService for super::LayerService {
             return Err(Status::invalid_argument("no widget def"));
         };
 
-        let width = request.width;
-        let height = request.height;
-
         let anchor = match anchor {
             layer::v1::Anchor::Unspecified | layer::v1::Anchor::None => wlr_layer::Anchor::empty(),
             layer::v1::Anchor::Top => wlr_layer::Anchor::TOP,
@@ -78,8 +75,6 @@ impl layer_service_server::LayerService for super::LayerService {
 
             let layer = SnowcapLayer::new(
                 state,
-                width,
-                height,
                 layer,
                 anchor,
                 exclusive_zone,
@@ -164,24 +159,18 @@ impl layer_service_server::LayerService for super::LayerService {
 
         let widget_def = request.widget_def;
 
-        let width = request.width;
-        let height = request.height;
-
         run_unary(&self.sender, move |state| {
             let Some(layer) = state.layers.iter_mut().find(|layer| layer.layer_id == id) else {
                 return Ok(UpdateLayerResponse {});
             };
 
             layer.update_properties(
-                width,
-                height,
                 z_layer,
                 anchor,
                 exclusive_zone,
                 keyboard_interactivity,
                 widget_def.and_then(widget_def_to_fn),
                 &state.queue_handle,
-                state.compositor.as_mut().unwrap(),
             );
 
             Ok(UpdateLayerResponse {})

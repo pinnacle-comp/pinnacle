@@ -73,8 +73,8 @@ function QuitPrompt:view()
     quit_font.weight = Widget.font.weight.BOLD
 
     local prompt = Widget.container({
-        width = Widget.length.Fill,
-        height = Widget.length.Fill,
+        width = Widget.length.Fixed(self.width),
+        height = Widget.length.Fixed(self.height),
         valign = Widget.alignment.CENTER,
         halign = Widget.alignment.CENTER,
         style = {
@@ -121,8 +121,6 @@ function QuitPrompt:show()
     local Layer = require("snowcap.layer")
     local prompt = Layer.new_widget({
         program = self,
-        width = self.width,
-        height = self.height,
         anchor = nil,
         keyboard_interactivity = Layer.keyboard_interactivity.EXCLUSIVE,
         exclusive_zone = "respect",
@@ -484,8 +482,8 @@ function BindOverlay:view()
                 scrollable,
             },
         }),
-        width = Widget.length.Fill,
-        height = Widget.length.Fill,
+        width = Widget.length.Fixed(self.width),
+        height = Widget.length.Fixed(self.height),
         padding = {
             top = self.border_thickness + 10.0,
             left = self.border_thickness + 10.0,
@@ -519,8 +517,6 @@ function BindOverlay:show()
 
     local overlay = Layer.new_widget({
         program = self,
-        width = self.width,
-        height = self.height,
         anchor = nil,
         keyboard_interactivity = Layer.keyboard_interactivity.EXCLUSIVE,
         exclusive_zone = "respect",

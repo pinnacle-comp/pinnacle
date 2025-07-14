@@ -34,8 +34,8 @@ impl layer_service_server::LayerService for super::LayerService {
             return Err(Status::invalid_argument("no widget def"));
         };
 
-        let width = request.width.unwrap_or(600);
-        let height = request.height.unwrap_or(480);
+        let _width = request.width.unwrap_or(600);
+        let _height = request.height.unwrap_or(480);
 
         let anchor = match anchor {
             layer::v0alpha1::Anchor::Unspecified => wlr_layer::Anchor::empty(),
@@ -86,8 +86,6 @@ impl layer_service_server::LayerService for super::LayerService {
 
             let layer = SnowcapLayer::new(
                 state,
-                width,
-                height,
                 layer,
                 anchor,
                 exclusive_zone,

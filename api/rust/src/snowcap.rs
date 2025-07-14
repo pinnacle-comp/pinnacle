@@ -61,8 +61,8 @@ impl Program for QuitPrompt {
                 .style(text::Style::new().font(self.font.clone()).pixels(14.0))
                 .into(),
         ]))
-        .width(Length::Fill)
-        .height(Length::Fill)
+        .width(Length::Fixed(self.width as f32))
+        .height(Length::Fixed(self.height as f32))
         .vertical_alignment(Alignment::Center)
         .horizontal_alignment(Alignment::Center)
         .style(snowcap_api::widget::container::Style {
@@ -95,12 +95,8 @@ impl QuitPrompt {
 
     /// Shows this quit prompt.
     pub fn show(self) {
-        let width = self.width;
-        let height = self.height;
         snowcap_api::layer::new_widget(
             self,
-            width,
-            height,
             None,
             KeyboardInteractivity::Exclusive,
             ExclusiveZone::Respect,
@@ -369,8 +365,8 @@ impl Program for BindOverlay {
             Text::new("").style(text::Style::new().pixels(8.0)).into(), // Spacing
             scrollable.into(),
         ]))
-        .width(Length::Fill)
-        .height(Length::Fill)
+        .width(Length::Fixed(self.width as f32))
+        .height(Length::Fixed(self.height as f32))
         .padding(Padding {
             top: self.border_thickness + 10.0,
             right: self.border_thickness + 10.0,
@@ -411,12 +407,8 @@ impl BindOverlay {
 
     /// Shows this bind overlay.
     pub fn show(self) {
-        let width = self.width;
-        let height = self.height;
         snowcap_api::layer::new_widget(
             self,
-            width,
-            height,
             None,
             KeyboardInteractivity::Exclusive,
             ExclusiveZone::Respect,
@@ -512,8 +504,8 @@ impl Program for ConfigCrashedMessage {
             .style(text::Style::new().font(self.font.clone()).pixels(14.0))
             .into(),
         ]))
-        .width(Length::Fill)
-        .height(Length::Fill)
+        .width(Length::Fixed(self.width as f32))
+        .height(Length::Fixed(self.height as f32))
         .padding(Padding {
             top: 16.0,
             right: 16.0,
@@ -553,12 +545,8 @@ impl ConfigCrashedMessage {
 
     /// Shows an error message.
     pub fn show(self) {
-        let width = self.width;
-        let height = self.height;
         snowcap_api::layer::new_widget(
             self,
-            width,
-            height,
             None,
             KeyboardInteractivity::Exclusive,
             ExclusiveZone::Respect,

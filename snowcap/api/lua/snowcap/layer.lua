@@ -73,8 +73,6 @@ end
 
 ---@class snowcap.layer.LayerArgs
 ---@field program snowcap.widget.Program
----@field width integer
----@field height integer
 ---@field anchor snowcap.layer.Anchor?
 ---@field keyboard_interactivity snowcap.layer.KeyboardInteractivity
 ---@field exclusive_zone snowcap.layer.ExclusiveZone
@@ -121,8 +119,6 @@ function layer.new_widget(args)
     local request = {
         layer = args.layer,
         exclusive_zone = exclusive_zone_to_api(args.exclusive_zone),
-        width = args.width,
-        height = args.height,
         anchor = args.anchor,
         keyboard_interactivity = args.keyboard_interactivity,
         widget_def = widget.widget_def_into_api(widget_def),
