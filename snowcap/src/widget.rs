@@ -70,7 +70,6 @@ impl SnowcapWidgetProgram {
     }
 
     pub fn rebuild_ui(&mut self, bounds: iced::Size, renderer: &mut iced_renderer::Renderer) {
-        println!("rebuilding ui, bounds = {bounds:?}");
         let cache = self.user_interface.take().unwrap().into_cache();
         let view = (self.view)();
         let mut tree = iced_wgpu::core::widget::Tree::empty();
@@ -134,12 +133,10 @@ impl SnowcapWidgetProgram {
         !self.queued_events.is_empty()
     }
 
-    pub fn viewport(&self, scale: i32) -> Viewport {
-        Viewport::with_physical_size(self.size, scale as f64)
-    }
-
-    pub fn viewport_scaled(&self, scale: i32) -> Viewport {
-        Viewport::with_physical_size(self.size * scale as u32, scale as f64)
+    pub fn viewport(&self, scale: f32) -> Viewport {
+        let buffer_width = (self.size.width as f32 * scale).ceil() as u32;
+        let buffer_height = (self.size.height as f32 * scale).ceil() as u32;
+        Viewport::with_physical_size(iced::Size::new(buffer_width, buffer_height), scale as f64)
     }
 }
 

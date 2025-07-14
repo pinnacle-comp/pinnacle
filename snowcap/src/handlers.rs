@@ -5,12 +5,21 @@ use smithay_client_toolkit::{
     compositor::CompositorHandler,
     delegate_compositor, delegate_layer, delegate_output, delegate_registry, delegate_seat,
     output::{OutputHandler, OutputState},
-    reexports::client::{
-        Connection, QueueHandle,
-        protocol::{
-            wl_output::{self, WlOutput},
-            wl_seat::WlSeat,
-            wl_surface::WlSurface,
+    reexports::{
+        client::{
+            Connection, Dispatch, QueueHandle, delegate_noop,
+            protocol::{
+                wl_output::{self, WlOutput},
+                wl_seat::WlSeat,
+                wl_surface::WlSurface,
+            },
+        },
+        protocols::wp::{
+            fractional_scale::v1::client::{
+                wp_fractional_scale_manager_v1::WpFractionalScaleManagerV1,
+                wp_fractional_scale_v1::{self, WpFractionalScaleV1},
+            },
+            viewporter::client::{wp_viewport::WpViewport, wp_viewporter::WpViewporter},
         },
     },
     registry::{ProvidesRegistryState, RegistryState},
@@ -91,16 +100,33 @@ impl OutputHandler for State {
         &mut self.output_state
     }
 
-    fn new_output(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _output: WlOutput) {
-        // TODO:
+    fn new_output(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _output: WlOutput) {}
+
+    fn update_output(&mut self, _conn: &Connection, qh: &QueueHandle<Self>, output: WlOutput) {
+        let Some(output_info) = self.output_state.info(&output) else {
+            return;
+        };
+
+        let Some(size) = output_info.logical_size else {
+            return;
+        };
+
+        for layer in self
+            .layers
+            .iter_mut()
+            .filter(|layer| layer.wl_output.as_ref() == Some(&output))
+        {
+            layer.output_size_changed(
+                iced::Size::new(size.0 as u32, size.1 as u32),
+                layer.output_scale,
+            );
+            layer.request_frame(qh);
+        }
     }
 
-    fn update_output(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _output: WlOutput) {
-        // TODO:
-    }
-
-    fn output_destroyed(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _output: WlOutput) {
-        // TODO:
+    fn output_destroyed(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, output: WlOutput) {
+        self.layers
+            .retain(|layer| layer.wl_output.as_ref() != Some(&output));
     }
 }
 delegate_output!(State);
@@ -113,7 +139,7 @@ impl LayerShellHandler for State {
     fn configure(
         &mut self,
         _conn: &Connection,
-        qh: &QueueHandle<Self>,
+        _qh: &QueueHandle<Self>,
         layer: &LayerSurface,
         _configure: LayerSurfaceConfigure,
         _serial: u32,
@@ -127,7 +153,7 @@ impl LayerShellHandler for State {
         };
 
         if let Some(size) = size {
-            layer.pending_size = Some((size.0 as u32, size.1 as u32));
+            layer.pending_size = Some(size);
             layer.initial_configure = InitialConfigureState::PostOutputSize;
         } else {
             layer.initial_configure = InitialConfigureState::PostConfigure;
@@ -142,20 +168,10 @@ impl CompositorHandler for State {
     fn scale_factor_changed(
         &mut self,
         _conn: &Connection,
-        qh: &QueueHandle<Self>,
-        surface: &WlSurface,
-        new_factor: i32,
+        _qh: &QueueHandle<Self>,
+        _surface: &WlSurface,
+        _new_factor: i32,
     ) {
-        let Some(layer) = self
-            .layers
-            .iter_mut()
-            .find(|sn_layer| sn_layer.layer.wl_surface() == surface)
-        else {
-            return;
-        };
-
-        layer.output_size_changed(layer.output_width, layer.output_height, new_factor);
-        layer.request_frame(qh);
     }
 
     fn transform_changed(
@@ -199,6 +215,8 @@ impl CompositorHandler for State {
             return;
         };
 
+        layer.wl_output = Some(output.clone());
+
         let Some(output_info) = self.output_state.info(output) else {
             return;
         };
@@ -206,6 +224,8 @@ impl CompositorHandler for State {
         let Some(size) = output_info.logical_size else {
             return;
         };
+
+        let size = iced::Size::new(size.0 as u32, size.1 as u32);
 
         if let InitialConfigureState::PreConfigure(pending) = &mut layer.initial_configure {
             *pending = Some(size);
@@ -218,7 +238,7 @@ impl CompositorHandler for State {
 
         layer.initial_configure = InitialConfigureState::PostOutputSize;
 
-        layer.output_size_changed(size.0 as u32, size.1 as u32, layer.output_scale);
+        layer.output_size_changed(size, layer.output_scale);
 
         layer.request_frame(qh);
     }
@@ -233,3 +253,34 @@ impl CompositorHandler for State {
     }
 }
 delegate_compositor!(State);
+
+delegate_noop!(State: WpFractionalScaleManagerV1);
+delegate_noop!(State: WpViewporter);
+delegate_noop!(State: WpViewport);
+
+impl Dispatch<WpFractionalScaleV1, WlSurface> for State {
+    fn event(
+        state: &mut Self,
+        _proxy: &WpFractionalScaleV1,
+        event: <WpFractionalScaleV1 as smithay_client_toolkit::reexports::client::Proxy>::Event,
+        surface: &WlSurface,
+        _conn: &Connection,
+        qhandle: &QueueHandle<Self>,
+    ) {
+        let Some(layer) = state
+            .layers
+            .iter_mut()
+            .find(|layer| layer.layer.wl_surface() == surface)
+        else {
+            return;
+        };
+
+        match event {
+            wp_fractional_scale_v1::Event::PreferredScale { scale } => {
+                layer.pending_output_scale = Some(scale as f32 / 120.0);
+                layer.request_frame(qhandle);
+            }
+            _ => unreachable!(),
+        }
+    }
+}

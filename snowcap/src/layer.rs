@@ -3,7 +3,6 @@ use std::{num::NonZeroU32, ptr::NonNull, time::Instant};
 use iced::{Color, Size, window::RedrawRequest};
 use iced_graphics::Compositor;
 use iced_runtime::user_interface;
-use iced_wgpu::graphics::Viewport;
 use raw_window_handle::{
     HasDisplayHandle, HasWindowHandle, RawDisplayHandle, RawWindowHandle, WaylandDisplayHandle,
     WaylandWindowHandle,
@@ -11,7 +10,11 @@ use raw_window_handle::{
 use smithay_client_toolkit::{
     reexports::{
         calloop::{self, LoopHandle, timer::Timer},
-        client::{Proxy, QueueHandle},
+        client::{Proxy, QueueHandle, protocol::wl_output::WlOutput},
+        protocols::wp::{
+            fractional_scale::v1::client::wp_fractional_scale_v1::WpFractionalScaleV1,
+            viewporter::client::wp_viewport::WpViewport,
+        },
     },
     shell::{
         WaylandSurface,
@@ -60,12 +63,12 @@ pub struct SnowcapLayer {
 
     pub renderer: iced_renderer::Renderer,
 
-    pub output_width: u32,
-    pub output_height: u32,
-    pub output_scale: i32,
-    pub pending_size: Option<(u32, u32)>,
-    pub pending_output_scale: Option<i32>,
-    pub output_viewport: Viewport,
+    /// The logical size of the output this layer is on.
+    pub output_size: iced::Size<u32>,
+    /// The scale of the output this layer is on.
+    pub output_scale: f32,
+    pub pending_size: Option<iced::Size<u32>>,
+    pub pending_output_scale: Option<f32>,
 
     redraw_requested: bool,
     pub widgets: SnowcapWidgetProgram,
@@ -76,6 +79,10 @@ pub struct SnowcapLayer {
     pub layer_id: LayerId,
     pub window_id: iced::window::Id,
 
+    pub wl_output: Option<WlOutput>,
+    pub viewport: WpViewport,
+    fractional_scale: WpFractionalScaleV1,
+
     pub keyboard_key_sender: Option<UnboundedSender<KeyboardKey>>,
     pub pointer_button_sender: Option<UnboundedSender<Result<PointerButtonResponse, Status>>>,
     pub widget_event_sender: Option<UnboundedSender<(WidgetId, WidgetEvent)>>,
@@ -83,9 +90,15 @@ pub struct SnowcapLayer {
     pub initial_configure: InitialConfigureState,
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+impl Drop for SnowcapLayer {
+    fn drop(&mut self) {
+        self.fractional_scale.destroy();
+    }
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum InitialConfigureState {
-    PreConfigure(Option<(i32, i32)>),
+    PreConfigure(Option<iced::Size<u32>>),
     PostConfigure,
     PostOutputSize,
 }
@@ -142,6 +155,14 @@ impl SnowcapLayer {
         widgets: ViewFn,
     ) -> Self {
         let surface = state.compositor_state.create_surface(&state.queue_handle);
+        let viewport = state
+            .viewporter
+            .get_viewport(&surface, &state.queue_handle, ());
+        let fractional_scale = state.fractional_scale_manager.get_fractional_scale(
+            &surface,
+            &state.queue_handle,
+            surface.clone(),
+        );
         let layer = state.layer_shell_state.create_layer_surface(
             &state.queue_handle,
             surface,
@@ -195,24 +216,23 @@ impl SnowcapLayer {
 
         let next_id = state.layer_id_counter.next();
 
-        let viewport = Viewport::with_physical_size(Size::new(1, 1), 1.0);
-
-        let widgets = SnowcapWidgetProgram::new(widgets, viewport.logical_size(), &mut renderer);
+        let widgets = SnowcapWidgetProgram::new(widgets, Size::new(1.0, 1.0), &mut renderer);
 
         Self {
             surface: iced_surface,
             loop_handle: state.loop_handle.clone(),
             layer,
-            output_width: 1,
-            output_height: 1,
+            output_size: iced::Size::new(1, 1),
             pending_size: None,
-            output_scale: 1,
+            output_scale: 1.0,
             pending_output_scale: None,
-            output_viewport: viewport,
             widgets,
             renderer,
             clipboard,
             pointer_location: None,
+            wl_output: None,
+            viewport,
+            fractional_scale,
             layer_id: next_id,
             window_id: iced::window::Id::unique(),
             keyboard_key_sender: None,
@@ -235,20 +255,10 @@ impl SnowcapLayer {
             )));
     }
 
-    pub fn output_size_changed(
-        &mut self,
-        output_width: u32,
-        output_height: u32,
-        output_scale: i32,
-    ) {
-        if output_width == self.output_width
-            && output_height == self.output_height
-            && output_scale == self.output_scale
-        {
-            return;
+    pub fn output_size_changed(&mut self, output_size: iced::Size<u32>, output_scale: f32) {
+        if output_size != self.output_size {
+            self.pending_size = Some(output_size);
         }
-
-        self.pending_size = Some((output_width, output_height));
 
         if output_scale != self.output_scale {
             self.pending_output_scale = Some(output_scale);
@@ -287,14 +297,18 @@ impl SnowcapLayer {
         }
 
         if let Some(widgets) = widgets {
-            self.widgets.update_view(
-                widgets,
-                self.output_viewport.logical_size(),
-                &mut self.renderer,
-            );
+            self.widgets
+                .update_view(widgets, self.output_size_f32(), &mut self.renderer);
         }
 
         self.request_frame(queue_handle);
+    }
+
+    pub fn output_size_f32(&self) -> iced::Size<f32> {
+        iced::Size::new(
+            self.output_size.width as f32,
+            self.output_size.height as f32,
+        )
     }
 
     pub fn draw_if_scheduled(&mut self, compositor: &mut crate::compositor::Compositor) {
@@ -314,40 +328,27 @@ impl SnowcapLayer {
         if self.pending_output_scale.is_some() || self.pending_size.is_some() {
             if let Some(scale) = self.pending_output_scale.take() {
                 self.output_scale = scale;
-                self.layer.wl_surface().set_buffer_scale(scale);
             }
-            if let Some((w, h)) = self.pending_size.take() {
-                self.output_width = w;
-                self.output_height = h;
+            if let Some(size) = self.pending_size.take() {
+                self.output_size = size;
             }
-
-            self.output_viewport = Viewport::with_physical_size(
-                iced::Size::new(self.output_width, self.output_height),
-                self.output_scale as f64,
-            );
 
             self.widgets
-                .rebuild_ui(self.output_viewport.logical_size(), &mut self.renderer);
+                .rebuild_ui(self.output_size_f32(), &mut self.renderer);
 
             self.layer
                 .set_size(self.widgets.size().width, self.widgets.size().height);
-
-            println!("CONFIGURED NEW SIZE: {:?}", self.widgets.size());
-
-            let buffer_size = self
-                .widgets
-                .viewport_scaled(self.output_scale)
-                .physical_size();
-
-            println!(
-                "buffer_size: {buffer_size:?}, scale = {}",
-                self.output_scale
+            self.viewport.set_destination(
+                self.widgets.size().width as i32,
+                self.widgets.size().height as i32,
             );
+
+            let buffer_size = self.widgets.viewport(self.output_scale).physical_size();
 
             compositor.configure_surface(&mut self.surface, buffer_size.width, buffer_size.height);
         }
 
-        if self.initial_configure > InitialConfigureState::PostConfigure {
+        if self.initial_configure == InitialConfigureState::PostOutputSize {
             self.widgets.draw(&mut self.renderer, cursor);
         }
 
@@ -355,7 +356,7 @@ impl SnowcapLayer {
             .present(
                 &mut self.renderer,
                 &mut self.surface,
-                &self.widgets.viewport_scaled(self.output_scale),
+                &self.widgets.viewport(self.output_scale),
                 Color::TRANSPARENT,
                 || {},
             )
@@ -423,7 +424,6 @@ impl SnowcapLayer {
 
         // If there are messages, we'll need to recreate the UI with the new state.
         if !messages.is_empty() || ui_stale {
-            // TODO: Update SnowcapWidgetProgram with messages
             request_frame = true;
 
             for message in messages {
@@ -435,7 +435,7 @@ impl SnowcapLayer {
             }
 
             self.widgets
-                .rebuild_ui(self.output_viewport.logical_size(), &mut self.renderer);
+                .rebuild_ui(self.output_size_f32(), &mut self.renderer);
         }
 
         if request_frame {

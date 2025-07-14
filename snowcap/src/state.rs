@@ -12,6 +12,10 @@ use smithay_client_toolkit::{
             globals::registry_queue_init,
             protocol::{wl_keyboard::WlKeyboard, wl_pointer::WlPointer},
         },
+        protocols::wp::{
+            fractional_scale::v1::client::wp_fractional_scale_manager_v1::WpFractionalScaleManagerV1,
+            viewporter::client::wp_viewporter::WpViewporter,
+        },
     },
     registry::RegistryState,
     seat::{SeatState, keyboard::Modifiers},
@@ -38,6 +42,8 @@ pub struct State {
     pub output_state: OutputState,
     pub compositor_state: CompositorState,
     pub layer_shell_state: LayerShell,
+    pub fractional_scale_manager: WpFractionalScaleManagerV1,
+    pub viewporter: WpViewporter,
 
     pub grpc_server_state: Option<GrpcServerState>,
 
@@ -70,14 +76,13 @@ impl State {
         let queue_handle = event_queue.handle();
 
         let layer_shell_state = LayerShell::bind(&globals, &queue_handle).unwrap();
-
         let seat_state = SeatState::new(&globals, &queue_handle);
-
         let registry_state = RegistryState::new(&globals);
-
         let output_state = OutputState::new(&globals, &queue_handle);
-
         let compositor_state = CompositorState::bind(&globals, &queue_handle).unwrap();
+        let fractional_scale_manager: WpFractionalScaleManagerV1 =
+            globals.bind(&queue_handle, 1..=1, ()).unwrap();
+        let viewporter: WpViewporter = globals.bind(&queue_handle, 1..=1, ()).unwrap();
 
         WaylandSource::new(conn.clone(), event_queue)
             .insert(loop_handle.clone())
@@ -169,11 +174,15 @@ impl State {
             loop_signal,
             conn: conn.clone(),
             runtime,
+
             registry_state,
             seat_state,
             output_state,
             compositor_state,
             layer_shell_state,
+            fractional_scale_manager,
+            viewporter,
+
             grpc_server_state: None,
             queue_handle,
             compositor,
