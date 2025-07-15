@@ -3,7 +3,10 @@ use crate::{
     spawn_lua_blocking,
 };
 use pinnacle::{focus::keyboard::KeyboardFocusTarget, state::WithState, tag::Tag};
-use pinnacle_api::layout::{LayoutGenerator as _, generators::MasterStack};
+use pinnacle_api::{
+    layout::{LayoutGenerator as _, generators::MasterStack},
+    output::OutputHandle,
+};
 use smithay::{
     output::Output,
     reexports::wayland_protocols::xdg::decoration::zv1::server::zxdg_toplevel_decoration_v1,
@@ -1422,6 +1425,58 @@ fn window_handle_in_direction() {
         assert(up == 0)
         assert(down == 0)
     };
+}
+
+#[test_log::test]
+fn window_handle_move_to_output() {
+    for_each_api(|lang| {
+        let (mut fixture, output1) = set_up();
+
+        let output_geo = Rectangle::new((1920, 0).into(), (1920, 1080).into());
+        let output2 = fixture.add_output(output_geo.clone());
+        output2.with_state_mut(|state| {
+            let tag = Tag::new("1".to_string());
+            tag.set_active(true);
+            state.add_tags([tag]);
+        });
+        fixture.pinnacle().focus_output(&output1);
+
+        let client_id = fixture.add_client();
+
+        let surface = fixture.spawn_floating_window_with(client_id, (500, 500), |_| ());
+
+        fixture
+            .client(client_id)
+            .window_for_surface(&surface)
+            .ack_and_commit();
+        fixture.roundtrip(client_id);
+
+        let output_name = output2.name();
+
+        match lang {
+            Lang::Rust => fixture.spawn_blocking(move || {
+                let handle = OutputHandle::from_name(output_name);
+                pinnacle_api::window::get_focused()
+                    .unwrap()
+                    .move_to_output(&handle);
+            }),
+            Lang::Lua => spawn_lua_blocking! {
+                fixture,
+                Window.get_focused():move_to_output(Output.get_by_name($output_name))
+            },
+        }
+
+        fixture
+            .client(client_id)
+            .window_for_surface(&surface)
+            .ack_and_commit();
+        fixture.roundtrip(client_id);
+
+        let window = fixture.pinnacle().windows[0].clone();
+        let geo = fixture.pinnacle().space.element_geometry(&window).unwrap();
+
+        assert!(output_geo.overlaps(geo));
+    });
 }
 
 // TODO: window_begin_move

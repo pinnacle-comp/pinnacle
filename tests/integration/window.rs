@@ -1,5 +1,8 @@
 use pinnacle::{state::WithState, tag::Tag};
-use pinnacle_api::layout::{LayoutGenerator as _, generators::MasterStack};
+use pinnacle_api::{
+    layout::{LayoutGenerator as _, generators::MasterStack},
+    output::OutputHandle,
+};
 use smithay::{output::Output, utils::Rectangle};
 
 use crate::common::fixture::Fixture;
@@ -117,7 +120,6 @@ fn window_spawned_without_tags_gets_tags_after_add() {
             .with_state(|state| !state.tags.is_empty())
     );
 }
-
 #[test_log::test]
 fn window_tags_update_after_set_geometry() {
     let (mut fixture, output1) = set_up();
@@ -168,4 +170,39 @@ fn windows_spill_correctly() {
             _ => unreachable!(),
         }
     }
+}
+
+#[test_log::test]
+fn window_move_to_output() {
+    let (mut fixture, output1) = set_up();
+
+    let output_geo = Rectangle::new((1920, 0).into(), (1920, 1080).into());
+    let output2 = fixture.add_output(output_geo.clone());
+    output2.with_state_mut(|state| {
+        let tag = Tag::new("1".to_string());
+        tag.set_active(true);
+        state.add_tags([tag]);
+    });
+    fixture.pinnacle().focus_output(&output1);
+
+    let handle = OutputHandle::from_name(output2.name());
+
+    let id = fixture.add_client();
+    fixture.spawn_floating_window_with(id, (500, 500), |_| ());
+
+    // sanity checks
+    let tags = fixture.pinnacle().windows[0].with_state(|state| state.tags.clone());
+    assert_eq!(tags, output1.with_state(|state| state.tags.clone()));
+    let win_geo = fixture.pinnacle().windows[0].geometry();
+    assert!(!output_geo.overlaps(win_geo));
+
+    fixture.spawn_blocking(move || {
+        pinnacle_api::window::get_focused()
+            .unwrap()
+            .move_to_output(&handle)
+    });
+
+    // check tags were updated
+    let tags = fixture.pinnacle().windows[0].with_state(|state| state.tags.clone());
+    assert_eq!(tags, output2.with_state(|state| state.tags.clone()));
 }
