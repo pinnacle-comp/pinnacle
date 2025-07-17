@@ -1445,12 +1445,6 @@ fn window_handle_move_to_output() {
 
         let surface = fixture.spawn_floating_window_with(client_id, (500, 500), |_| ());
 
-        fixture
-            .client(client_id)
-            .window_for_surface(&surface)
-            .ack_and_commit();
-        fixture.roundtrip(client_id);
-
         let output_name = output2.name();
 
         match lang {

@@ -241,7 +241,12 @@ impl Fixture {
         let window = self.client(id).window_for_surface(&surface);
         window.attach_buffer();
         window.set_size(size.0, size.1);
-        window.ack_and_commit();
+        window.commit();
+        self.roundtrip(id);
+
+        self.client(id)
+            .window_for_surface(&surface)
+            .ack_and_commit();
         self.roundtrip(id);
 
         surface

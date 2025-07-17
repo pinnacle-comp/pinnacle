@@ -43,7 +43,10 @@ impl State {
                 .toplevel()
                 .and_then(|toplevel| toplevel.send_pending_configure());
 
-            if serial.is_some() {
+            // if we have pending transactions, we don't want to map just yet.
+            let pending = window.with_state(|s| !s.pending_transactions.is_empty());
+
+            if serial.is_some() || pending {
                 // Send a frame to get unmapped windows to update
                 window.send_frame(
                     output,
