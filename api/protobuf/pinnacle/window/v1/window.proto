@@ -148,6 +148,11 @@ message SetTagsRequest {
 }
 message SetTagsResponse {}
 
+message MoveToOutputRequest {
+  uint32 window_id = 1;
+  string output_name = 2;
+}
+
 message RaiseRequest {
   uint32 window_id = 1;
 }
@@ -204,6 +209,7 @@ service WindowService {
   rpc SetTag(SetTagRequest) returns (google.protobuf.Empty);
   // Sets the exact tags of this window.
   rpc SetTags(SetTagsRequest) returns (SetTagsResponse);
+  rpc MoveToOutput(MoveToOutputRequest) returns (google.protobuf.Empty);
   rpc Raise(RaiseRequest) returns (google.protobuf.Empty);
   rpc MoveGrab(MoveGrabRequest) returns (google.protobuf.Empty);
   rpc ResizeGrab(ResizeGrabRequest) returns (google.protobuf.Empty);

@@ -426,8 +426,10 @@ impl State {
                 }
             }
 
+            let mut outputs = Vec::new();
+            let mut locs = HashMap::new();
+
             for transaction in transactions {
-                let mut outputs = Vec::new();
                 for (window, loc) in transaction.target_locs {
                     if !window.is_on_active_tag() {
                         warn!("Attempted to map a window without active tags");
@@ -458,15 +460,20 @@ impl State {
                         }
                     };
 
-                    if let Some(surface) = window.x11_surface() {
-                        let _ = surface.configure(Rectangle::new(loc, surface.geometry().size));
-                    }
+                    locs.insert(window, loc);
+                }
+            }
 
-                    self.pinnacle.space.map_element(window, loc, false);
+            for (window, loc) in locs {
+                if let Some(surface) = window.x11_surface() {
+                    let _ = surface.configure(Rectangle::new(loc, surface.geometry().size));
                 }
-                for output in outputs {
-                    self.schedule_render(&output);
-                }
+
+                self.pinnacle.space.map_element(window, loc, false);
+            }
+
+            for output in outputs {
+                self.schedule_render(&output);
             }
         }
 

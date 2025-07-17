@@ -13,11 +13,11 @@ use pinnacle_api_defs::pinnacle::{
             GetFocusedResponse, GetLayoutModeRequest, GetLayoutModeResponse, GetLocRequest,
             GetLocResponse, GetRequest, GetResponse, GetSizeRequest, GetSizeResponse,
             GetTagIdsRequest, GetTagIdsResponse, GetTitleRequest, GetTitleResponse,
-            GetWindowsInDirRequest, GetWindowsInDirResponse, MoveGrabRequest, MoveToTagRequest,
-            RaiseRequest, ResizeGrabRequest, ResizeTileRequest, SetDecorationModeRequest,
-            SetFloatingRequest, SetFocusedRequest, SetFullscreenRequest, SetGeometryRequest,
-            SetMaximizedRequest, SetTagRequest, SetTagsRequest, SetTagsResponse, WindowRuleRequest,
-            WindowRuleResponse,
+            GetWindowsInDirRequest, GetWindowsInDirResponse, MoveGrabRequest, MoveToOutputRequest,
+            MoveToTagRequest, RaiseRequest, ResizeGrabRequest, ResizeTileRequest,
+            SetDecorationModeRequest, SetFloatingRequest, SetFocusedRequest, SetFullscreenRequest,
+            SetGeometryRequest, SetMaximizedRequest, SetTagRequest, SetTagsRequest,
+            SetTagsResponse, WindowRuleRequest, WindowRuleResponse,
         },
     },
 };
@@ -35,6 +35,7 @@ use crate::{
     },
     focus::keyboard::KeyboardFocusTarget,
     layout::tree::ResizeDir,
+    output::OutputName,
     state::WithState,
     tag::TagId,
     util::rect::Direction,
@@ -666,6 +667,27 @@ impl v1::window_service_server::WindowService for super::WindowService {
             }
 
             Ok(SetTagsResponse {})
+        })
+        .await
+    }
+
+    async fn move_to_output(&self, request: Request<MoveToOutputRequest>) -> TonicResult<()> {
+        let request = request.into_inner();
+        let window_id = WindowId(request.window_id);
+        let output_name = OutputName(request.output_name);
+
+        run_unary_no_response(&self.sender, move |state| {
+            if let Some(output) = output_name.output(&state.pinnacle) {
+                if let Some(window) = window_id.window(&state.pinnacle) {
+                    state.move_window_to_output(&window, output);
+                } else if let Some(unmapped) = window_id.unmapped_window_mut(&mut state.pinnacle) {
+                    if let UnmappedState::WaitingForRules { rules, .. } = &mut unmapped.state {
+                        rules.tags = output.with_state(|s| {
+                            Some(s.focused_tags().cloned().collect::<IndexSet<_>>())
+                        });
+                    }
+                }
+            }
         })
         .await
     }
