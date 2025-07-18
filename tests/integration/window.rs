@@ -177,7 +177,7 @@ fn window_move_to_output() {
     let (mut fixture, output1) = set_up();
 
     let output_geo = Rectangle::new((1920, 0).into(), (1920, 1080).into());
-    let output2 = fixture.add_output(output_geo.clone());
+    let output2 = fixture.add_output(output_geo);
     output2.with_state_mut(|state| {
         let tag = Tag::new("1".to_string());
         tag.set_active(true);
