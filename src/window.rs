@@ -382,6 +382,12 @@ impl Pinnacle {
             });
         }
 
+        if let Some(handle) =
+            window.with_state_mut(|state| state.foreign_toplevel_list_handle.take())
+        {
+            self.foreign_toplevel_list_state.remove_toplevel(&handle);
+        }
+
         self.keyboard_focus_stack.remove(window);
 
         let to_schedule = self.space.outputs_for_element(window);
@@ -555,6 +561,18 @@ impl State {
             };
             (window, attempt_float_on_map, focus)
         };
+
+        let handle = self
+            .pinnacle
+            .foreign_toplevel_list_state
+            .new_toplevel::<State>(
+                window.title().unwrap_or_default(),
+                window.class().unwrap_or_default(),
+            );
+        window.with_state_mut(|state| {
+            assert!(state.foreign_toplevel_list_handle.is_none());
+            state.foreign_toplevel_list_handle = Some(handle);
+        });
 
         self.pinnacle.windows.push(window.clone());
 

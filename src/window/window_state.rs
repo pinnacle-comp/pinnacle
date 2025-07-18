@@ -9,7 +9,7 @@ use smithay::{
         decoration::zv1::server::zxdg_toplevel_decoration_v1, shell::server::xdg_toplevel,
     },
     utils::{Logical, Point, Rectangle, Serial, Size},
-    wayland::compositor::HookId,
+    wayland::{compositor::HookId, foreign_toplevel_list::ForeignToplevelHandle},
 };
 use tracing::warn;
 
@@ -361,8 +361,6 @@ pub struct WindowElementState {
     pub tags: IndexSet<Tag>,
     pub layout_mode: LayoutMode,
     pub minimized: bool,
-    pub snapshot: Option<WindowSnapshot>,
-    pub mapped_hook_id: Option<HookId>,
     pub decoration_mode: Option<zxdg_toplevel_decoration_v1::Mode>,
     pub floating_x: Option<i32>,
     pub floating_y: Option<i32>,
@@ -371,6 +369,12 @@ pub struct WindowElementState {
     pub pending_transactions: Vec<(Serial, Transaction)>,
 
     pub layout_node: Option<taffy::NodeId>,
+
+    // FIXME: Turn `WindowElement` into `Mapped`
+    // and move these fields into that
+    pub snapshot: Option<WindowSnapshot>,
+    pub mapped_hook_id: Option<HookId>,
+    pub foreign_toplevel_list_handle: Option<ForeignToplevelHandle>,
 }
 
 impl WindowElement {
@@ -630,6 +634,7 @@ impl WindowElementState {
             decoration_mode: None,
             pending_transactions: Default::default(),
             layout_node: None,
+            foreign_toplevel_list_handle: None,
         }
     }
 

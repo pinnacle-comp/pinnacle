@@ -2,6 +2,7 @@
 
 pub mod decoration;
 mod foreign_toplevel;
+pub mod foreign_toplevel_list;
 pub mod idle;
 pub mod session_lock;
 pub mod window;

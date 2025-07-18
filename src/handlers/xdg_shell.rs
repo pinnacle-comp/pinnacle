@@ -384,6 +384,32 @@ impl XdgShellHandler for State {
         //     self.space.unmap_elem(&window);
         // }
     }
+
+    fn app_id_changed(&mut self, surface: ToplevelSurface) {
+        let Some(window) = self.pinnacle.window_for_surface(surface.wl_surface()) else {
+            return;
+        };
+        let app_id = window.class().unwrap_or_default();
+        window.with_state(|state| {
+            if let Some(handle) = state.foreign_toplevel_list_handle.as_ref() {
+                handle.send_app_id(&app_id);
+                handle.send_done();
+            }
+        });
+    }
+
+    fn title_changed(&mut self, surface: ToplevelSurface) {
+        let Some(window) = self.pinnacle.window_for_surface(surface.wl_surface()) else {
+            return;
+        };
+        let title = window.title().unwrap_or_default();
+        window.with_state(|state| {
+            if let Some(handle) = state.foreign_toplevel_list_handle.as_ref() {
+                handle.send_title(&title);
+                handle.send_done();
+            }
+        });
+    }
 }
 delegate_xdg_shell!(State);
 

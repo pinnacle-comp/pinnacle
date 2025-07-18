@@ -61,6 +61,7 @@ use smithay::{
             with_surface_tree_downward,
         },
         cursor_shape::CursorShapeManagerState,
+        foreign_toplevel_list::ForeignToplevelListState,
         fractional_scale::{FractionalScaleManagerState, with_fractional_scale},
         idle_inhibit::IdleInhibitManagerState,
         idle_notify::IdleNotifierState,
@@ -165,6 +166,7 @@ pub struct Pinnacle {
     pub kde_decoration_state: KdeDecorationState,
     pub pointer_gestures_state: PointerGesturesState,
     pub single_pixel_buffer_state: SinglePixelBufferState,
+    pub foreign_toplevel_list_state: ForeignToplevelListState,
 
     pub lock_state: LockState,
 
@@ -451,6 +453,7 @@ impl Pinnacle {
             ),
             pointer_gestures_state: PointerGesturesState::new::<State>(&display_handle),
             single_pixel_buffer_state: SinglePixelBufferState::new::<State>(&display_handle),
+            foreign_toplevel_list_state: ForeignToplevelListState::new::<State>(&display_handle),
 
             lock_state: LockState::default(),
 
