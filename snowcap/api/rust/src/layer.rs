@@ -127,8 +127,6 @@ pub enum NewLayerError {
 /// Create a new widget.
 pub fn new_widget<Msg, P>(
     mut program: P,
-    width: u32,
-    height: u32,
     anchor: Option<Anchor>,
     keyboard_interactivity: KeyboardInteractivity,
     exclusive_zone: ExclusiveZone,
@@ -151,8 +149,6 @@ where
     let response = Client::layer()
         .new_layer(NewLayerRequest {
             widget_def: Some(widget_def.clone().into()),
-            width,
-            height,
             anchor: anchor
                 .map(From::from)
                 .unwrap_or(layer::v1::Anchor::Unspecified) as i32,
@@ -194,8 +190,6 @@ where
                             .update_layer(UpdateLayerRequest {
                                 layer_id,
                                 widget_def: Some(widget_def.into()),
-                                width: None,
-                                height: None,
                                 anchor: None,
                                 keyboard_interactivity: None,
                                 exclusive_zone: None,

@@ -92,10 +92,7 @@ pub fn start(stop_signal_sender: Option<tokio::sync::oneshot::Sender<SnowcapHand
                     layer.update(&state.queue_handle, &mut state.runtime);
                 }
 
-                if layer.redraw_requested {
-                    layer.redraw_requested = false;
-                    layer.draw();
-                }
+                layer.draw_if_scheduled(state.compositor.as_mut().unwrap());
             }
         })
         .unwrap();

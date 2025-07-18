@@ -86,8 +86,7 @@ impl layer_service_server::LayerService for super::LayerService {
 
             let layer = SnowcapLayer::new(
                 state,
-                width,
-                height,
+                Some((width, height)),
                 layer,
                 anchor,
                 exclusive_zone,

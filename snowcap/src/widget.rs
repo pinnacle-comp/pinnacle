@@ -1,6 +1,7 @@
 use iced::{Color, Theme, event::Status};
+use iced_graphics::Viewport;
 use iced_runtime::user_interface;
-use iced_wgpu::core::Clipboard;
+use iced_wgpu::core::{Clipboard, layout::Limits};
 
 use crate::handlers::keyboard::KeyboardKey;
 
@@ -38,10 +39,18 @@ pub struct SnowcapWidgetProgram {
     view: ViewFn,
     user_interface: Option<UserInterface>,
     queued_events: Vec<iced::Event>,
+    size: iced::Size<u32>,
 }
 
 impl SnowcapWidgetProgram {
     pub fn new(view: ViewFn, bounds: iced::Size, renderer: &mut iced_renderer::Renderer) -> Self {
+        let element = view();
+        let mut tree = iced_wgpu::core::widget::Tree::empty();
+        tree.diff(&element);
+        let node =
+            element
+                .as_widget()
+                .layout(&mut tree, renderer, &Limits::new(iced::Size::ZERO, bounds));
         let user_interface =
             UserInterface::build(view(), bounds, user_interface::Cache::default(), renderer);
 
@@ -49,13 +58,33 @@ impl SnowcapWidgetProgram {
             view,
             user_interface: Some(user_interface),
             queued_events: Vec::new(),
+            size: iced::Size {
+                width: node.size().width.ceil() as u32,
+                height: node.size().height.ceil() as u32,
+            },
         }
     }
 
-    pub fn rebuild_ui(&mut self, bounds: iced::Size, renderer: &mut iced_renderer::Renderer) {
+    pub fn size(&self) -> iced::Size<u32> {
+        self.size
+    }
+
+    pub fn rebuild_ui(&mut self, bounds: iced::Size<u32>, renderer: &mut iced_renderer::Renderer) {
         let cache = self.user_interface.take().unwrap().into_cache();
         let view = (self.view)();
+        let mut tree = iced_wgpu::core::widget::Tree::empty();
+        tree.diff(&view);
+
+        let bounds = iced::Size::new(bounds.width as f32, bounds.height as f32);
+
+        let node =
+            view.as_widget()
+                .layout(&mut tree, renderer, &Limits::new(iced::Size::ZERO, bounds));
         self.user_interface = Some(UserInterface::build(view, bounds, cache, renderer));
+        self.size = iced::Size {
+            width: node.size().width.ceil() as u32,
+            height: node.size().height.ceil() as u32,
+        };
     }
 
     pub fn draw(&mut self, renderer: &mut iced_renderer::Renderer, cursor: iced::mouse::Cursor) {
@@ -88,7 +117,7 @@ impl SnowcapWidgetProgram {
     pub fn update_view(
         &mut self,
         new_view: ViewFn,
-        bounds: iced::Size,
+        bounds: iced::Size<u32>,
         renderer: &mut iced_renderer::Renderer,
     ) {
         self.view = new_view;
@@ -105,6 +134,12 @@ impl SnowcapWidgetProgram {
 
     pub fn has_events_queued(&self) -> bool {
         !self.queued_events.is_empty()
+    }
+
+    pub fn viewport(&self, scale: f32) -> Viewport {
+        let buffer_width = (self.size.width as f32 * scale).ceil() as u32;
+        let buffer_height = (self.size.height as f32 * scale).ceil() as u32;
+        Viewport::with_physical_size(iced::Size::new(buffer_width, buffer_height), scale as f64)
     }
 }
 

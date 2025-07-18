@@ -922,8 +922,6 @@ local snowcap_layer_v1_Layer = {
 
 ---@class snowcap.layer.v1.NewLayerRequest
 ---@field widget_def snowcap.widget.v1.WidgetDef?
----@field width integer?
----@field height integer?
 ---@field anchor snowcap.layer.v1.Anchor?
 ---@field keyboard_interactivity snowcap.layer.v1.KeyboardInteractivity?
 ---@field exclusive_zone integer?
@@ -938,8 +936,6 @@ local snowcap_layer_v1_Layer = {
 ---@class snowcap.layer.v1.UpdateLayerRequest
 ---@field layer_id integer?
 ---@field widget_def snowcap.widget.v1.WidgetDef?
----@field width integer?
----@field height integer?
 ---@field anchor snowcap.layer.v1.Anchor?
 ---@field keyboard_interactivity snowcap.layer.v1.KeyboardInteractivity?
 ---@field exclusive_zone integer?

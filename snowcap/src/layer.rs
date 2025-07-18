@@ -1,9 +1,8 @@
-use std::{num::NonZeroU32, ptr::NonNull};
+use std::{num::NonZeroU32, ptr::NonNull, time::Instant};
 
 use iced::{Color, Size, window::RedrawRequest};
 use iced_graphics::Compositor;
 use iced_runtime::user_interface;
-use iced_wgpu::graphics::Viewport;
 use raw_window_handle::{
     HasDisplayHandle, HasWindowHandle, RawDisplayHandle, RawWindowHandle, WaylandDisplayHandle,
     WaylandWindowHandle,
@@ -11,7 +10,11 @@ use raw_window_handle::{
 use smithay_client_toolkit::{
     reexports::{
         calloop::{self, LoopHandle, timer::Timer},
-        client::{Proxy, QueueHandle},
+        client::{Proxy, QueueHandle, protocol::wl_output::WlOutput},
+        protocols::wp::{
+            fractional_scale::v1::client::wp_fractional_scale_v1::WpFractionalScaleV1,
+            viewporter::client::wp_viewport::WpViewport,
+        },
     },
     shell::{
         WaylandSurface,
@@ -53,19 +56,23 @@ impl State {
 
 pub struct SnowcapLayer {
     // SAFETY: Drop order: surface needs to be dropped before the layer
-    surface: <iced_renderer::Compositor as iced_graphics::Compositor>::Surface,
+    pub surface: <iced_renderer::Compositor as iced_graphics::Compositor>::Surface,
 
     pub layer: LayerSurface,
     pub loop_handle: LoopHandle<'static, State>,
 
     pub renderer: iced_renderer::Renderer,
 
-    pub width: u32,
-    pub height: u32,
-    pub scale: i32,
-    pub viewport: Viewport,
+    /// The logical size of the output this layer is on.
+    pub output_size: iced::Size<u32>,
+    /// The scale of the output this layer is on.
+    pub output_scale: f32,
+    pub pending_size: Option<iced::Size<u32>>,
+    pub pending_output_scale: Option<f32>,
+    // COMPAT: 0.1
+    pub max_size: Option<iced::Size<u32>>,
 
-    pub redraw_requested: bool,
+    redraw_requested: bool,
     pub widgets: SnowcapWidgetProgram,
     pub clipboard: WaylandClipboard,
 
@@ -74,11 +81,28 @@ pub struct SnowcapLayer {
     pub layer_id: LayerId,
     pub window_id: iced::window::Id,
 
+    pub wl_output: Option<WlOutput>,
+    pub viewport: WpViewport,
+    fractional_scale: WpFractionalScaleV1,
+
     pub keyboard_key_sender: Option<UnboundedSender<KeyboardKey>>,
     pub pointer_button_sender: Option<UnboundedSender<Result<PointerButtonResponse, Status>>>,
     pub widget_event_sender: Option<UnboundedSender<(WidgetId, WidgetEvent)>>,
 
-    pub initial_configure: bool,
+    pub initial_configure: InitialConfigureState,
+}
+
+impl Drop for SnowcapLayer {
+    fn drop(&mut self) {
+        self.fractional_scale.destroy();
+    }
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub enum InitialConfigureState {
+    PreConfigure(Option<iced::Size<u32>>),
+    PostConfigure,
+    PostOutputSize,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
@@ -126,8 +150,8 @@ impl HasWindowHandle for LayerWindowHandle {
 impl SnowcapLayer {
     pub fn new(
         state: &mut State,
-        width: u32,
-        height: u32,
+        // COMPAT: 0.1
+        max_size: Option<(u32, u32)>,
         layer: wlr_layer::Layer,
         anchor: Anchor,
         exclusive_zone: ExclusiveZone,
@@ -135,6 +159,14 @@ impl SnowcapLayer {
         widgets: ViewFn,
     ) -> Self {
         let surface = state.compositor_state.create_surface(&state.queue_handle);
+        let viewport = state
+            .viewporter
+            .get_viewport(&surface, &state.queue_handle, ());
+        let fractional_scale = state.fractional_scale_manager.get_fractional_scale(
+            &surface,
+            &state.queue_handle,
+            surface.clone(),
+        );
         let layer = state.layer_shell_state.create_layer_surface(
             &state.queue_handle,
             surface,
@@ -143,7 +175,7 @@ impl SnowcapLayer {
             None,
         );
 
-        layer.set_size(width, height);
+        layer.set_size(1, 1);
         layer.set_anchor(anchor);
         layer.set_keyboard_interactivity(keyboard_interactivity);
         layer.set_exclusive_zone(match exclusive_zone {
@@ -181,43 +213,65 @@ impl SnowcapLayer {
 
         let mut renderer = compositor.create_renderer();
 
-        let iced_surface = compositor.create_surface(layer_window_handle, width, height);
+        let iced_surface = compositor.create_surface(layer_window_handle, 1, 1);
 
         let clipboard =
             unsafe { WaylandClipboard::new(state.conn.backend().display_ptr() as *mut _) };
 
         let next_id = state.layer_id_counter.next();
 
-        let viewport = Viewport::with_physical_size(Size::new(width, height), 1.0);
-
-        let widgets = SnowcapWidgetProgram::new(widgets, viewport.logical_size(), &mut renderer);
+        let widgets = SnowcapWidgetProgram::new(widgets, Size::new(1.0, 1.0), &mut renderer);
 
         Self {
             surface: iced_surface,
             loop_handle: state.loop_handle.clone(),
             layer,
-            width,
-            height,
-            scale: 1,
-            viewport,
+            max_size: max_size.map(|(w, h)| iced::Size::new(w, h)),
+            output_size: iced::Size::new(1, 1),
+            pending_size: None,
+            output_scale: 1.0,
+            pending_output_scale: None,
             widgets,
             renderer,
             clipboard,
             pointer_location: None,
+            wl_output: None,
+            viewport,
+            fractional_scale,
             layer_id: next_id,
             window_id: iced::window::Id::unique(),
             keyboard_key_sender: None,
             pointer_button_sender: None,
             widget_event_sender: None,
-            initial_configure: false,
+            initial_configure: InitialConfigureState::PreConfigure(None),
             redraw_requested: false,
+        }
+    }
+
+    pub fn schedule_redraw(&mut self) {
+        if self.redraw_requested {
+            return;
+        }
+
+        self.redraw_requested = true;
+        self.widgets
+            .queue_event(iced::Event::Window(iced::window::Event::RedrawRequested(
+                Instant::now(),
+            )));
+    }
+
+    pub fn output_size_changed(&mut self, output_size: iced::Size<u32>, output_scale: f32) {
+        if output_size != self.output_size {
+            self.pending_size = Some(output_size);
+        }
+
+        if output_scale != self.output_scale {
+            self.pending_output_scale = Some(output_scale);
         }
     }
 
     pub fn update_properties(
         &mut self,
-        width: Option<u32>,
-        height: Option<u32>,
         layer: Option<wlr_layer::Layer>,
         anchor: Option<Anchor>,
         exclusive_zone: Option<ExclusiveZone>,
@@ -225,18 +279,7 @@ impl SnowcapLayer {
         widgets: Option<ViewFn>,
 
         queue_handle: &QueueHandle<State>,
-        compositor: &mut crate::compositor::Compositor,
     ) {
-        if width.is_some() || height.is_some() {
-            self.width = width.unwrap_or(self.width);
-            self.height = height.unwrap_or(self.height);
-            compositor.configure_surface(
-                &mut self.surface,
-                self.width * self.scale as u32,
-                self.height * self.scale as u32,
-            );
-        }
-
         if let Some(layer) = layer {
             self.layer.set_layer(layer);
         }
@@ -258,28 +301,19 @@ impl SnowcapLayer {
                 .set_keyboard_interactivity(keyboard_interactivity);
         }
 
-        self.viewport = Viewport::with_physical_size(
-            iced::Size::new(
-                self.width * self.scale as u32,
-                self.height * self.scale as u32,
-            ),
-            self.scale as f64,
-        );
-
         if let Some(widgets) = widgets {
             self.widgets
-                .update_view(widgets, self.viewport.logical_size(), &mut self.renderer);
+                .update_view(widgets, self.widget_bounds(), &mut self.renderer);
         }
 
-        self.layer
-            .wl_surface()
-            .frame(queue_handle, self.layer.wl_surface().clone());
-        self.layer.wl_surface().commit();
+        self.request_frame(queue_handle);
     }
 
-    pub fn draw(&mut self) {
-        use iced_renderer::fallback::Renderer;
-        use iced_renderer::fallback::Surface;
+    pub fn draw_if_scheduled(&mut self, compositor: &mut crate::compositor::Compositor) {
+        if !self.redraw_requested {
+            return;
+        }
+        self.redraw_requested = false;
 
         let cursor = match self.pointer_location {
             Some((x, y)) => iced::mouse::Cursor::Available(iced::Point {
@@ -289,36 +323,42 @@ impl SnowcapLayer {
             None => iced::mouse::Cursor::Unavailable,
         };
 
-        self.widgets.draw(&mut self.renderer, cursor);
+        if self.pending_output_scale.is_some() || self.pending_size.is_some() {
+            if let Some(scale) = self.pending_output_scale.take() {
+                self.output_scale = scale;
+            }
+            if let Some(size) = self.pending_size.take() {
+                self.output_size = size;
+            }
 
-        match &mut self.renderer {
-            Renderer::Primary(wgpu) => {
-                let Surface::Primary(surface) = &mut self.surface else {
-                    unreachable!();
-                };
-                iced_wgpu::window::compositor::present(
-                    wgpu,
-                    surface,
-                    &self.viewport,
-                    Color::TRANSPARENT,
-                    || {},
-                )
-                .unwrap();
-            }
-            Renderer::Secondary(skia) => {
-                let Surface::Secondary(surface) = &mut self.surface else {
-                    unreachable!();
-                };
-                iced_tiny_skia::window::compositor::present(
-                    skia,
-                    surface,
-                    &self.viewport,
-                    Color::TRANSPARENT,
-                    || {},
-                )
-                .unwrap();
-            }
+            self.widgets
+                .rebuild_ui(self.widget_bounds(), &mut self.renderer);
+
+            self.layer
+                .set_size(self.widgets.size().width, self.widgets.size().height);
+            self.viewport.set_destination(
+                self.widgets.size().width as i32,
+                self.widgets.size().height as i32,
+            );
+
+            let buffer_size = self.widgets.viewport(self.output_scale).physical_size();
+
+            compositor.configure_surface(&mut self.surface, buffer_size.width, buffer_size.height);
         }
+
+        if self.initial_configure == InitialConfigureState::PostOutputSize {
+            self.widgets.draw(&mut self.renderer, cursor);
+        }
+
+        compositor
+            .present(
+                &mut self.renderer,
+                &mut self.surface,
+                &self.widgets.viewport(self.output_scale),
+                Color::TRANSPARENT,
+                || {},
+            )
+            .unwrap();
     }
 
     pub fn update(
@@ -382,7 +422,6 @@ impl SnowcapLayer {
 
         // If there are messages, we'll need to recreate the UI with the new state.
         if !messages.is_empty() || ui_stale {
-            // TODO: Update SnowcapWidgetProgram with messages
             request_frame = true;
 
             for message in messages {
@@ -394,25 +433,29 @@ impl SnowcapLayer {
             }
 
             self.widgets
-                .rebuild_ui(self.viewport.logical_size(), &mut self.renderer);
+                .rebuild_ui(self.widget_bounds(), &mut self.renderer);
         }
 
         if request_frame {
-            self.layer
-                .wl_surface()
-                .frame(queue_handle, self.layer.wl_surface().clone());
-            self.layer.wl_surface().commit();
+            self.request_frame(queue_handle);
         }
     }
 
-    pub fn set_scale(&mut self, scale: i32, compositor: &mut crate::compositor::Compositor) {
-        self.scale = scale;
-        self.layer.wl_surface().set_buffer_scale(scale);
+    pub fn widget_bounds(&self) -> iced::Size<u32> {
+        if let Some(max_size) = self.max_size {
+            iced::Size::new(
+                self.output_size.width.min(max_size.width),
+                self.output_size.height.min(max_size.height),
+            )
+        } else {
+            self.output_size
+        }
+    }
 
-        compositor.configure_surface(
-            &mut self.surface,
-            self.width * scale as u32,
-            self.height * scale as u32,
-        );
+    pub fn request_frame(&self, queue_handle: &QueueHandle<State>) {
+        self.layer
+            .wl_surface()
+            .frame(queue_handle, self.layer.wl_surface().clone());
+        self.layer.wl_surface().commit();
     }
 }
