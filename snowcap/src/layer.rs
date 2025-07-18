@@ -69,6 +69,8 @@ pub struct SnowcapLayer {
     pub output_scale: f32,
     pub pending_size: Option<iced::Size<u32>>,
     pub pending_output_scale: Option<f32>,
+    // COMPAT: 0.1
+    pub max_size: Option<iced::Size<u32>>,
 
     redraw_requested: bool,
     pub widgets: SnowcapWidgetProgram,
@@ -148,6 +150,8 @@ impl HasWindowHandle for LayerWindowHandle {
 impl SnowcapLayer {
     pub fn new(
         state: &mut State,
+        // COMPAT: 0.1
+        max_size: Option<(u32, u32)>,
         layer: wlr_layer::Layer,
         anchor: Anchor,
         exclusive_zone: ExclusiveZone,
@@ -222,6 +226,7 @@ impl SnowcapLayer {
             surface: iced_surface,
             loop_handle: state.loop_handle.clone(),
             layer,
+            max_size: max_size.map(|(w, h)| iced::Size::new(w, h)),
             output_size: iced::Size::new(1, 1),
             pending_size: None,
             output_scale: 1.0,
@@ -298,17 +303,10 @@ impl SnowcapLayer {
 
         if let Some(widgets) = widgets {
             self.widgets
-                .update_view(widgets, self.output_size_f32(), &mut self.renderer);
+                .update_view(widgets, self.widget_bounds(), &mut self.renderer);
         }
 
         self.request_frame(queue_handle);
-    }
-
-    pub fn output_size_f32(&self) -> iced::Size<f32> {
-        iced::Size::new(
-            self.output_size.width as f32,
-            self.output_size.height as f32,
-        )
     }
 
     pub fn draw_if_scheduled(&mut self, compositor: &mut crate::compositor::Compositor) {
@@ -334,7 +332,7 @@ impl SnowcapLayer {
             }
 
             self.widgets
-                .rebuild_ui(self.output_size_f32(), &mut self.renderer);
+                .rebuild_ui(self.widget_bounds(), &mut self.renderer);
 
             self.layer
                 .set_size(self.widgets.size().width, self.widgets.size().height);
@@ -435,11 +433,22 @@ impl SnowcapLayer {
             }
 
             self.widgets
-                .rebuild_ui(self.output_size_f32(), &mut self.renderer);
+                .rebuild_ui(self.widget_bounds(), &mut self.renderer);
         }
 
         if request_frame {
             self.request_frame(queue_handle);
+        }
+    }
+
+    pub fn widget_bounds(&self) -> iced::Size<u32> {
+        if let Some(max_size) = self.max_size {
+            iced::Size::new(
+                self.output_size.width.min(max_size.width),
+                self.output_size.height.min(max_size.height),
+            )
+        } else {
+            self.output_size
         }
     }
 
