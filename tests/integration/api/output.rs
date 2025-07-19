@@ -812,6 +812,107 @@ fn output_handle_tags() {
 }
 
 #[test_log::test]
+fn output_handle_active_tags() {
+    for_each_api(|lang| {
+        let (mut fixture, output, _) = set_up();
+
+        fixture.pinnacle().focus_output(&output);
+
+        output.with_state_mut(|state| {
+            let tag2 = Tag::new("2".to_string());
+            tag2.set_active(false);
+
+            let tag3 = Tag::new("3".to_string());
+            tag3.set_active(true);
+
+            state.add_tags([tag2, tag3]);
+        });
+
+        match lang {
+            Lang::Rust => fixture.spawn_blocking(move || {
+                let mut tags = pinnacle_api::output::get_focused()
+                    .unwrap()
+                    .active_tags()
+                    .map(|t| t.name())
+                    .collect::<Vec<_>>();
+
+                tags.sort();
+
+                assert_eq!(tags.len(), 2);
+                assert_eq!(tags.as_slice(), ["1", "3"]);
+            }),
+            Lang::Lua => spawn_lua_blocking! {
+                fixture,
+                local tags = Output.get_focused():active_tags()
+                assert(#tags == 2)
+
+                local tagnames = {}
+                for k, v in ipairs(tags) do
+                    tagnames[k] = v:name()
+                end
+
+                table.sort(tagnames)
+
+                assert(tagnames[1] == "1")
+                assert(tagnames[2] == "3")
+            },
+        };
+    })
+}
+
+#[test_log::test]
+fn output_handle_inactive_tags() {
+    for_each_api(|lang| {
+        let (mut fixture, output, _) = set_up();
+
+        fixture.pinnacle().focus_output(&output);
+
+        output.with_state_mut(|state| {
+            let tag2 = Tag::new("2".to_string());
+            tag2.set_active(false);
+
+            let tag3 = Tag::new("3".to_string());
+            tag3.set_active(false);
+
+            let tag4 = Tag::new("4".to_string());
+            tag4.set_active(true);
+
+            state.add_tags([tag2, tag3, tag4]);
+        });
+
+        match lang {
+            Lang::Rust => fixture.spawn_blocking(move || {
+                let mut tags = pinnacle_api::output::get_focused()
+                    .unwrap()
+                    .inactive_tags()
+                    .map(|t| t.name())
+                    .collect::<Vec<_>>();
+
+                tags.sort();
+
+                assert_eq!(tags.len(), 2);
+                assert_eq!(tags.as_slice(), ["2", "3"]);
+            }),
+            Lang::Lua => spawn_lua_blocking! {
+                fixture,
+                local tags = Output.get_focused():inactive_tags()
+                assert(#tags == 2)
+
+                local tagnames = {}
+                for k, v in ipairs(tags) do
+                    tagnames[k] = v:name()
+                end
+
+                table.sort(tagnames)
+
+                assert(tagnames[1] == "2")
+                assert(tagnames[2] == "3")
+            },
+        };
+    })
+}
+
+#[test_log::test]
 fn output_handle_scale() {
     let (mut fixture, output, _) = set_up();
 
