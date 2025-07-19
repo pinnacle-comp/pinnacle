@@ -1210,6 +1210,12 @@ local pinnacle_window_v1_DecorationMode = {
 ---@class pinnacle.window.v1.ResizeGrabRequest
 ---@field button integer?
 
+---@class pinnacle.window.v1.SwapRequest
+---@field window_id integer?
+---@field target_id integer?
+
+---@class pinnacle.window.v1.SwapResponse
+
 ---@class pinnacle.window.v1.WindowRuleRequest
 ---@field finished pinnacle.window.v1.WindowRuleRequest.Finished?
 
@@ -1427,6 +1433,8 @@ pinnacle.window.v1.MoveToOutputRequest = {}
 pinnacle.window.v1.RaiseRequest = {}
 pinnacle.window.v1.MoveGrabRequest = {}
 pinnacle.window.v1.ResizeGrabRequest = {}
+pinnacle.window.v1.SwapRequest = {}
+pinnacle.window.v1.SwapResponse = {}
 pinnacle.window.v1.WindowRuleRequest = {}
 pinnacle.window.v1.WindowRuleRequest.Finished = {}
 pinnacle.window.v1.WindowRuleResponse = {}
@@ -3255,6 +3263,23 @@ pinnacle.window.v1.WindowService.ResizeGrab.response = ".google.protobuf.Empty"
 ---@return string | nil error An error string, if any
 function Client:pinnacle_window_v1_WindowService_ResizeGrab(data)
     return self:unary_request(pinnacle.window.v1.WindowService.ResizeGrab, data)
+end
+pinnacle.window.v1.WindowService.Swap = {}
+pinnacle.window.v1.WindowService.Swap.service = "pinnacle.window.v1.WindowService"
+pinnacle.window.v1.WindowService.Swap.method = "Swap"
+pinnacle.window.v1.WindowService.Swap.request = ".pinnacle.window.v1.SwapRequest"
+pinnacle.window.v1.WindowService.Swap.response = ".pinnacle.window.v1.SwapResponse"
+
+---Performs a unary request.
+---
+---@nodiscard
+---
+---@param data pinnacle.window.v1.SwapRequest
+---
+---@return pinnacle.window.v1.SwapResponse | nil response
+---@return string | nil error An error string, if any
+function Client:pinnacle_window_v1_WindowService_Swap(data)
+    return self:unary_request(pinnacle.window.v1.WindowService.Swap, data)
 end
 pinnacle.window.v1.WindowService.WindowRule = {}
 pinnacle.window.v1.WindowService.WindowRule.service = "pinnacle.window.v1.WindowService"

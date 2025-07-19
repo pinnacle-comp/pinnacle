@@ -165,6 +165,12 @@ message ResizeGrabRequest {
   uint32 button = 1;
 }
 
+message SwapRequest {
+  uint32 window_id = 1;
+  uint32 target_id = 2;
+}
+message SwapResponse {}
+
 message WindowRuleRequest {
   message Finished {
     uint32 request_id = 1;
@@ -213,6 +219,7 @@ service WindowService {
   rpc Raise(RaiseRequest) returns (google.protobuf.Empty);
   rpc MoveGrab(MoveGrabRequest) returns (google.protobuf.Empty);
   rpc ResizeGrab(ResizeGrabRequest) returns (google.protobuf.Empty);
+  rpc Swap(SwapRequest) returns (SwapResponse);
 
   rpc WindowRule(stream WindowRuleRequest) returns (stream WindowRuleResponse);
 }
