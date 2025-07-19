@@ -366,3 +366,42 @@ pub fn resize_grab(state: &mut State, button: u32) {
         state.schedule_render(&output);
     }
 }
+
+pub fn swap(state: &mut State, window: WindowElement, target: WindowElement) {
+    if state.pinnacle.layout_state.pending_swap {
+        return;
+    }
+
+    if window == target {
+        return;
+    }
+
+    // FIXME: This should not be restricted since it's requested through the API.
+    // However, I don't want to deal with this just yet.
+    // TODO: Swap window layout & geometry when dealing with non-tiled window, and trigger a layout
+    // refresh on window & target output.
+    if window.with_state(|state| !state.layout_mode.is_tiled())
+        || target.with_state(|state| !state.layout_mode.is_tiled())
+    {
+        return;
+    }
+
+    let output = window.output(&state.pinnacle);
+    let target_output = target.output(&state.pinnacle);
+
+    // FIXME: This should not be restricted since it's requested through the API.
+    // However, I don't want to deal with this just yet.
+    // TODO: swap window tags when doing cross output swap.
+    if output != target_output {
+        return;
+    }
+
+    tracing::debug!("Swapping window positions");
+    state.pinnacle.layout_state.pending_swap = true;
+
+    state.pinnacle.swap_window_positions(&window, &target);
+
+    if let Some(output) = output.as_ref() {
+        state.pinnacle.request_layout(output);
+    }
+}
