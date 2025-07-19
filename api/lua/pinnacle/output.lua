@@ -742,18 +742,49 @@ function OutputHandle:focused()
     return response and response.focused or false
 end
 
----Gets the tags this output has.
+---Internal implementation of the *tags method.
 ---
 ---@return pinnacle.tag.TagHandle[]
-function OutputHandle:tags()
-    local response, err =
-        client:pinnacle_output_v1_OutputService_GetTagIds({ output_name = self.name })
+local function tags_internal(output, filter)
+    filter = filter or require("pinnacle.grpc.defs").pinnacle.output.v1.TagFilter.ALL
+
+    local response, err = client:pinnacle_output_v1_OutputService_GetTagIds({
+        output_name = output.name,
+        filter = filter,
+    })
 
     local tag_ids = response and response.tag_ids or {}
 
     local handles = require("pinnacle.tag").handle.new_from_table(tag_ids)
 
     return handles
+end
+
+---Gets the tags this output has.
+---
+---@return pinnacle.tag.TagHandle[]
+function OutputHandle:tags()
+    local TagFilter = require("pinnacle.grpc.defs").pinnacle.output.v1.TagFilter
+
+    return tags_internal(self, TagFilter.ALL)
+end
+
+---Gets the currently active tags this output has.
+---
+---@return pinnacle.tag.TagHandle[]
+function OutputHandle:active_tags()
+    local TagFilter = require("pinnacle.grpc.defs").pinnacle.output.v1.TagFilter
+
+    return tags_internal(self, TagFilter.ACTIVE)
+end
+
+---Gets the currently inactive tags this output has.
+---
+---@return pinnacle.tag.TagHandle[]
+function OutputHandle:inactive_tags()
+    local TagFilter = require("pinnacle.grpc.defs").pinnacle.output.v1.TagFilter
+
+    return tags_internal(self, TagFilter.INACTIVE)
 end
 
 ---Get this output's scale.

@@ -130,8 +130,15 @@ message GetFocusedResponse {
   bool focused = 1;
 }
 
+enum TagFilter {
+  ALL = 0;
+  ACTIVE = 1;
+  INACTIVE = 2;
+}
+
 message GetTagIdsRequest {
   string output_name = 1;
+  TagFilter filter = 2;
 }
 message GetTagIdsResponse {
   repeated uint32 tag_ids = 1;
