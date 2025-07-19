@@ -1473,6 +1473,74 @@ fn window_handle_move_to_output() {
     });
 }
 
+#[test_log::test]
+fn window_handle_swap_simple() {
+    for_each_api(|lang| {
+        let (mut fixture, _output1) = set_up();
+
+        let client_id = fixture.add_client();
+
+        let surfaces = fixture.spawn_windows(4, client_id);
+
+        let window = fixture.pinnacle().windows[0].clone();
+        let target = fixture.pinnacle().windows[2].clone();
+
+        let window_id = window.with_state(|s| s.id.0);
+        let target_id = target.with_state(|s| s.id.0);
+
+        let window_geo = fixture.pinnacle().space.element_geometry(&window);
+        let target_geo = fixture.pinnacle().space.element_geometry(&target);
+
+        let serial = fixture
+            .client(client_id)
+            .window_for_surface(&surfaces[0])
+            .current_serial();
+
+        match lang {
+            Lang::Rust => fixture.spawn_blocking(move || {
+                let window_handle = pinnacle_api::window::WindowHandle::from_id(window_id);
+                let target_handle = pinnacle_api::window::WindowHandle::from_id(target_id);
+
+                window_handle.swap(&target_handle);
+            }),
+            Lang::Lua => spawn_lua_blocking! {
+                fixture,
+                local window_handle = Window.handle.new($window_id)
+                local target_handle = Window.handle.new($target_id)
+
+                window_handle:swap(target_handle)
+            },
+        };
+
+        // in case we leave the match block before client gets a configure
+        // FIXME: Add a timeout and bail if hit.
+        fixture.dispatch_until(|fixture| {
+            fixture
+                .client(client_id)
+                .window_for_surface(&surfaces[0])
+                .current_serial()
+                != serial
+        });
+
+        for surf in surfaces.iter() {
+            fixture
+                .client(client_id)
+                .window_for_surface(surf)
+                .ack_and_commit();
+        }
+        fixture.roundtrip(client_id);
+
+        assert_eq!(
+            window_geo,
+            fixture.pinnacle().space.element_geometry(&target)
+        );
+        assert_eq!(
+            target_geo,
+            fixture.pinnacle().space.element_geometry(&window)
+        );
+    })
+}
+
 // TODO: window_begin_move
 // TODO: window_begin_resize
 // TODO: window_connect_signal
