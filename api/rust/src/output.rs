@@ -19,7 +19,7 @@ use pinnacle_api_defs::pinnacle::{
             GetInfoRequest, GetLocRequest, GetLogicalSizeRequest, GetModesRequest,
             GetOutputsInDirRequest, GetPhysicalSizeRequest, GetPoweredRequest, GetRequest,
             GetScaleRequest, GetTagIdsRequest, GetTransformRequest, SetLocRequest, SetModeRequest,
-            SetModelineRequest, SetPoweredRequest, SetScaleRequest, SetTransformRequest,
+            SetModelineRequest, SetPoweredRequest, SetScaleRequest, SetTransformRequest, TagFilter,
         },
     },
     util::v1::{AbsOrRel, SetOrToggle},
@@ -837,16 +837,15 @@ impl OutputHandle {
             .focused
     }
 
-    /// Gets handles to all tags on this output.
-    pub fn tags(&self) -> impl Iterator<Item = TagHandle> + use<> {
-        self.tags_async().block_on_tokio()
-    }
-
-    /// Async impl for [`Self::tags`].
-    pub async fn tags_async(&self) -> impl Iterator<Item = TagHandle> + use<> {
+    /// Common implementation for [`Self::tags`], [`Self::active_tags`] and [`Self::inactive_tags`]
+    async fn tags_internal_async(
+        &self,
+        filter: TagFilter,
+    ) -> impl Iterator<Item = TagHandle> + use<> {
         Client::output()
             .get_tag_ids(GetTagIdsRequest {
                 output_name: self.name(),
+                filter: filter.into(),
             })
             .await
             .unwrap()
@@ -854,6 +853,36 @@ impl OutputHandle {
             .tag_ids
             .into_iter()
             .map(|id| TagHandle { id })
+    }
+
+    /// Gets handles to all tags on this output.
+    pub fn tags(&self) -> impl Iterator<Item = TagHandle> + use<> {
+        self.tags_async().block_on_tokio()
+    }
+
+    /// Async impl for [`Self::tags`].
+    pub async fn tags_async(&self) -> impl Iterator<Item = TagHandle> + use<> {
+        self.tags_internal_async(TagFilter::All).await
+    }
+
+    /// Gets handles to all active tags on this output.
+    pub fn active_tags(&self) -> impl Iterator<Item = TagHandle> + use<> {
+        self.active_tags_async().block_on_tokio()
+    }
+
+    /// Async impl for [`Self::active_tags`].
+    pub async fn active_tags_async(&self) -> impl Iterator<Item = TagHandle> + use<> {
+        self.tags_internal_async(TagFilter::Active).await
+    }
+
+    /// Gets handles to all inactive tags on this output.
+    pub fn inactive_tags(&self) -> impl Iterator<Item = TagHandle> + use<> {
+        self.inactive_tags_async().block_on_tokio()
+    }
+
+    /// Async impl for [`Self::inactive_tags`].
+    pub async fn inactive_tags_async(&self) -> impl Iterator<Item = TagHandle> + use<> {
+        self.tags_internal_async(TagFilter::Inactive).await
     }
 
     /// Gets this output's current scale.

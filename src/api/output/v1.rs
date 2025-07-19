@@ -10,7 +10,7 @@ use pinnacle_api_defs::pinnacle::{
             GetPhysicalSizeResponse, GetPoweredRequest, GetPoweredResponse, GetRequest,
             GetResponse, GetScaleRequest, GetScaleResponse, GetTagIdsRequest, GetTagIdsResponse,
             GetTransformRequest, GetTransformResponse, SetLocRequest, SetModeRequest,
-            SetModelineRequest, SetPoweredRequest, SetScaleRequest, SetTransformRequest,
+            SetModelineRequest, SetPoweredRequest, SetScaleRequest, SetTransformRequest, TagFilter,
         },
     },
     util::{
@@ -494,7 +494,9 @@ impl output::v1::output_service_server::OutputService for super::OutputService {
         &self,
         request: Request<GetTagIdsRequest>,
     ) -> TonicResult<GetTagIdsResponse> {
-        let output_name = OutputName(request.into_inner().output_name);
+        let inner = request.into_inner();
+        let filter = inner.filter();
+        let output_name = OutputName(inner.output_name);
 
         run_unary(&self.sender, move |state| {
             let output = output_name.output(&state.pinnacle);
@@ -505,6 +507,12 @@ impl output::v1::output_service_server::OutputService for super::OutputService {
                         state
                             .tags
                             .iter()
+                            .filter(|tag| match (filter, tag.active()) {
+                                (TagFilter::All, _) => true,
+                                (TagFilter::Active, true) => true,
+                                (TagFilter::Inactive, false) => true,
+                                (_, _) => false,
+                            })
                             .map(|tag| tag.id().to_inner())
                             .collect::<Vec<_>>()
                     })

@@ -513,6 +513,13 @@ local pinnacle_output_v1_Transform = {
     TRANSFORM_FLIPPED_270 = 8,
 }
 
+---@enum pinnacle.output.v1.TagFilter
+local pinnacle_output_v1_TagFilter = {
+    ALL = 0,
+    ACTIVE = 1,
+    INACTIVE = 2,
+}
+
 ---@enum pinnacle.render.v1.Filter
 local pinnacle_render_v1_Filter = {
     FILTER_UNSPECIFIED = 0,
@@ -868,6 +875,7 @@ local pinnacle_window_v1_DecorationMode = {
 
 ---@class pinnacle.output.v1.GetTagIdsRequest
 ---@field output_name string?
+---@field filter pinnacle.output.v1.TagFilter?
 
 ---@class pinnacle.output.v1.GetTagIdsResponse
 ---@field tag_ids integer[]?
@@ -1444,6 +1452,7 @@ pinnacle.input.v1.SendEventsMode = pinnacle_input_v1_SendEventsMode
 pinnacle.input.v1.DeviceType = pinnacle_input_v1_DeviceType
 pinnacle.layout.v1.FlexDir = pinnacle_layout_v1_FlexDir
 pinnacle.output.v1.Transform = pinnacle_output_v1_Transform
+pinnacle.output.v1.TagFilter = pinnacle_output_v1_TagFilter
 pinnacle.render.v1.Filter = pinnacle_render_v1_Filter
 pinnacle.signal.v1.StreamControl = pinnacle_signal_v1_StreamControl
 pinnacle.v1.Backend = pinnacle_v1_Backend
