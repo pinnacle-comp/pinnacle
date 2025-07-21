@@ -34,6 +34,7 @@ tonic = { workspace = true }
 tonic-reflection = { workspace = true }
 snowcap-api-defs = { workspace = true }
 xkbcommon = { workspace = true }
+snowcap-protocols = { workspace = true }
 
 [lints]
 workspace = true

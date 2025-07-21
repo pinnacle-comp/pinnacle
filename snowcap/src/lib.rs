@@ -1,6 +1,7 @@
 pub mod api;
 pub mod clipboard;
 pub mod compositor;
+pub mod decoration;
 pub mod handlers;
 pub mod input;
 pub mod layer;
@@ -93,6 +94,14 @@ pub fn start(stop_signal_sender: Option<tokio::sync::oneshot::Sender<SnowcapHand
                 }
 
                 layer.draw_if_scheduled(state.compositor.as_mut().unwrap());
+            }
+
+            for deco in state.decorations.iter_mut() {
+                if deco.widgets.has_events_queued() {
+                    deco.update(&state.queue_handle, &mut state.runtime);
+                }
+
+                deco.draw_if_scheduled(state.compositor.as_mut().unwrap());
             }
         })
         .unwrap();

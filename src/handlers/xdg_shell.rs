@@ -420,6 +420,35 @@ delegate_xdg_shell!(State);
 //
 // Yoinked from niri
 pub fn add_mapped_toplevel_pre_commit_hook(toplevel: &ToplevelSurface) -> HookId {
+    // TODO: move into separate thing
+    #[cfg(feature = "snowcap")]
+    compositor::add_post_commit_hook::<State, _>(toplevel.wl_surface(), |state, _dh, surface| {
+        let Some(window) = state.pinnacle.window_for_surface(surface) else {
+            error!("pre-commit hook for mapped surfaces must be removed upon unmapping");
+            return;
+        };
+
+        let geometry = compositor::with_states(surface, |states| {
+            let mut guard = states
+                .cached_state
+                .get::<smithay::wayland::shell::xdg::SurfaceCachedState>();
+            guard.current().geometry
+        });
+
+        if let Some(geometry) = geometry {
+            let size = geometry.size;
+
+            window.with_state(|state| {
+                if let Some(surface) = state.decoration_surface.as_ref() {
+                    surface.decoration_surface().with_pending_state(|state| {
+                        state.toplevel_size = Some(size);
+                    });
+                    surface.decoration_surface().send_pending_configure();
+                }
+            });
+        }
+    });
+
     add_pre_commit_hook::<State, _>(toplevel.wl_surface(), move |state, _dh, surface| {
         let _span = tracy_client::span!("mapped toplevel pre-commit");
         let span =

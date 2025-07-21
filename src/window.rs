@@ -183,11 +183,75 @@ struct OutputOverlapState {
 }
 
 impl SpaceElement for WindowElement {
+    fn geometry(&self) -> Rectangle<i32, Logical> {
+        #[cfg(feature = "snowcap")]
+        {
+            let mut geometry = self.0.geometry();
+            if let Some(bounds) = self.with_state(|state| {
+                state
+                    .decoration_surface
+                    .as_ref()
+                    .map(|deco| deco.cached_state().bounds)
+            }) {
+                geometry.size.w += (bounds.left + bounds.right) as i32;
+                geometry.size.h += (bounds.top + bounds.bottom) as i32;
+                geometry.loc.x -= bounds.left as i32;
+                geometry.loc.y -= bounds.top as i32;
+            }
+            geometry
+        }
+
+        #[cfg(not(feature = "snowcap"))]
+        self.0.geometry()
+    }
+
     fn bbox(&self) -> Rectangle<i32, Logical> {
+        #[cfg(feature = "snowcap")]
+        {
+            let mut bbox = self.0.bbox();
+            if let Some(deco_bbox) =
+                self.with_state(|state| state.decoration_surface.as_ref().map(|deco| deco.bbox()))
+            {
+                // FIXME: verify this
+                bbox = bbox.merge(deco_bbox);
+            }
+            bbox
+        }
+
+        #[cfg(not(feature = "snowcap"))]
         self.0.bbox()
     }
 
     fn is_in_input_region(&self, point: &Point<f64, Logical>) -> bool {
+        #[cfg(feature = "snowcap")]
+        {
+            if let Some(deco) = self.with_state(|state| state.decoration_surface.clone()) {
+                let above = deco.cached_state().z_index >= 0;
+                use smithay::desktop::WindowSurfaceType;
+                if above {
+                    deco.surface_under(*point, WindowSurfaceType::ALL).is_some()
+                        || self.0.is_in_input_region(
+                            &(*point
+                                - Point::new(
+                                    deco.cached_state().bounds.left as f64,
+                                    deco.cached_state().bounds.top as f64,
+                                )),
+                        )
+                } else {
+                    self.0.is_in_input_region(
+                        &(*point
+                            - Point::new(
+                                deco.cached_state().bounds.left as f64,
+                                deco.cached_state().bounds.top as f64,
+                            )),
+                    ) || deco.surface_under(*point, WindowSurfaceType::ALL).is_some()
+                }
+            } else {
+                self.0.is_in_input_region(point)
+            }
+        }
+
+        #[cfg(not(feature = "snowcap"))]
         self.0.is_in_input_region(point)
     }
 
@@ -219,10 +283,6 @@ impl SpaceElement for WindowElement {
         }
 
         self.0.output_leave(output)
-    }
-
-    fn geometry(&self) -> Rectangle<i32, Logical> {
-        self.0.geometry()
     }
 
     fn z_index(&self) -> u8 {

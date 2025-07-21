@@ -13,6 +13,8 @@ use smithay::{
 };
 use tracing::warn;
 
+#[cfg(feature = "snowcap")]
+use crate::decoration::DecorationSurface;
 use crate::{
     render::util::snapshot::WindowSnapshot,
     state::{Pinnacle, WithState},
@@ -392,6 +394,8 @@ pub struct WindowElementState {
     pub snapshot: Option<WindowSnapshot>,
     pub mapped_hook_id: Option<HookId>,
     pub foreign_toplevel_list_handle: Option<ForeignToplevelHandle>,
+    #[cfg(feature = "snowcap")]
+    pub decoration_surface: Option<DecorationSurface>,
 }
 
 impl WindowElement {
@@ -652,6 +656,8 @@ impl WindowElementState {
             pending_transactions: Default::default(),
             layout_node: None,
             foreign_toplevel_list_handle: None,
+            #[cfg(feature = "snowcap")]
+            decoration_surface: None,
         }
     }
 
