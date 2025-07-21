@@ -389,19 +389,23 @@ pub fn swap(state: &mut State, window: WindowElement, target: WindowElement) {
     let output = window.output(&state.pinnacle);
     let target_output = target.output(&state.pinnacle);
 
-    // FIXME: This should not be restricted since it's requested through the API.
-    // However, I don't want to deal with this just yet.
-    // TODO: swap window tags when doing cross output swap.
-    if output != target_output {
+    let Some((output, target_output)) = output.zip(target_output) else {
+        tracing::warn!("Can't swap windows without output");
         return;
-    }
+    };
 
     tracing::debug!("Swapping window positions");
     state.pinnacle.layout_state.pending_swap = true;
 
     state.pinnacle.swap_window_positions(&window, &target);
+    if output != target_output {
+        tracing::debug!("Swapping window outputs");
+        window.set_tags_to_output(&target_output);
+        target.set_tags_to_output(&output);
+    }
 
-    if let Some(output) = output.as_ref() {
-        state.pinnacle.request_layout(output);
+    state.pinnacle.request_layout(&output);
+    if output != target_output {
+        state.pinnacle.request_layout(&target_output);
     }
 }
