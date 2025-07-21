@@ -1601,7 +1601,6 @@ fn window_handle_swap_multi_output() {
         );
 
         assert_eq!(window_tags, target.with_state(|state| state.tags.clone()));
-
         assert_eq!(target_tags, window.with_state(|state| state.tags.clone()));
     })
 }
@@ -1675,6 +1674,95 @@ fn window_handle_swap_non_tiled() {
             target_geo,
             fixture.pinnacle().space.element_geometry(&window)
         );
+
+        assert!(window.with_state(|state| state.layout_mode.is_floating()));
+        assert!(target.with_state(|state| state.layout_mode.is_tiled()));
+    })
+}
+
+#[test_log::test]
+fn window_handle_swap_non_tiled_multi_output() {
+    for_each_api(|lang| {
+        let (mut fixture, _output1) = set_up();
+
+        let client_id = fixture.add_client();
+        let mut surfaces = fixture.spawn_windows(1, client_id);
+
+        let output2 = fixture.add_output(Rectangle::new((1920, 0).into(), (1920, 1080).into()));
+        output2.with_state_mut(|state| {
+            let tag = Tag::new("2".to_string());
+            tag.set_active(true);
+            state.add_tags([tag]);
+        });
+        fixture.pinnacle().focus_output(&output2);
+
+        surfaces.push(fixture.spawn_floating_window_with(client_id, (500, 500), |_| ()));
+
+        let window = fixture.pinnacle().windows[0].clone();
+        let target = fixture.pinnacle().windows[1].clone();
+
+        let window_id = window.with_state(|s| s.id.0);
+        let target_id = target.with_state(|s| s.id.0);
+
+        let window_geo = fixture.pinnacle().space.element_geometry(&window);
+        let target_geo = fixture.pinnacle().space.element_geometry(&target);
+
+        let window_tags = window.with_state(|state| state.tags.clone());
+        let target_tags = target.with_state(|state| state.tags.clone());
+
+        for surf in surfaces.iter() {
+            fixture
+                .client(client_id)
+                .window_for_surface(&surf)
+                .ack_and_commit();
+        }
+        fixture.roundtrip(client_id);
+
+        match lang {
+            Lang::Rust => fixture.spawn_blocking(move || {
+                let window_handle = pinnacle_api::window::WindowHandle::from_id(window_id);
+                let target_handle = pinnacle_api::window::WindowHandle::from_id(target_id);
+
+                window_handle.swap(&target_handle);
+            }),
+            Lang::Lua => spawn_lua_blocking! {
+                fixture,
+                local window_handle = Window.handle.new($window_id)
+                local target_handle = Window.handle.new($target_id)
+
+                window_handle:swap(target_handle)
+            },
+        };
+
+        fixture.dispatch_until(|fixture| {
+            fixture
+                .client(client_id)
+                .window_for_surface(&surfaces[0])
+                .current_serial()
+                .is_some()
+        });
+
+        for surf in surfaces {
+            fixture
+                .client(client_id)
+                .window_for_surface(&surf)
+                .ack_and_commit();
+        }
+        fixture.roundtrip(client_id);
+
+        fixture.dispatch_until(|fixture| !fixture.pinnacle().layout_state.pending_swap);
+
+        assert_eq!(
+            window_geo,
+            fixture.pinnacle().space.element_geometry(&target)
+        );
+        assert_eq!(
+            target_geo,
+            fixture.pinnacle().space.element_geometry(&window)
+        );
+
+        assert_eq!(window_tags, target.with_state(|state| state.tags.clone()));
+        assert_eq!(target_tags, window.with_state(|state| state.tags.clone()));
 
         assert!(window.with_state(|state| state.layout_mode.is_floating()));
         assert!(target.with_state(|state| state.layout_mode.is_tiled()));
