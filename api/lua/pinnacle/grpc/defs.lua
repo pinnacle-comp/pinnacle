@@ -1201,6 +1201,8 @@ local pinnacle_window_v1_DecorationMode = {
 ---@field window_id integer?
 ---@field output_name string?
 
+---@class pinnacle.window.v1.MoveToOutputResponse
+
 ---@class pinnacle.window.v1.RaiseRequest
 ---@field window_id integer?
 
@@ -1430,6 +1432,7 @@ pinnacle.window.v1.SetTagRequest = {}
 pinnacle.window.v1.SetTagsRequest = {}
 pinnacle.window.v1.SetTagsResponse = {}
 pinnacle.window.v1.MoveToOutputRequest = {}
+pinnacle.window.v1.MoveToOutputResponse = {}
 pinnacle.window.v1.RaiseRequest = {}
 pinnacle.window.v1.MoveGrabRequest = {}
 pinnacle.window.v1.ResizeGrabRequest = {}
@@ -3200,7 +3203,7 @@ pinnacle.window.v1.WindowService.MoveToOutput = {}
 pinnacle.window.v1.WindowService.MoveToOutput.service = "pinnacle.window.v1.WindowService"
 pinnacle.window.v1.WindowService.MoveToOutput.method = "MoveToOutput"
 pinnacle.window.v1.WindowService.MoveToOutput.request = ".pinnacle.window.v1.MoveToOutputRequest"
-pinnacle.window.v1.WindowService.MoveToOutput.response = ".google.protobuf.Empty"
+pinnacle.window.v1.WindowService.MoveToOutput.response = ".pinnacle.window.v1.MoveToOutputResponse"
 
 ---Performs a unary request.
 ---
@@ -3208,7 +3211,7 @@ pinnacle.window.v1.WindowService.MoveToOutput.response = ".google.protobuf.Empty
 ---
 ---@param data pinnacle.window.v1.MoveToOutputRequest
 ---
----@return google.protobuf.Empty | nil response
+---@return pinnacle.window.v1.MoveToOutputResponse | nil response
 ---@return string | nil error An error string, if any
 function Client:pinnacle_window_v1_WindowService_MoveToOutput(data)
     return self:unary_request(pinnacle.window.v1.WindowService.MoveToOutput, data)
