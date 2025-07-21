@@ -856,6 +856,30 @@ impl OutputHandle {
             .map(|id| TagHandle { id })
     }
 
+    /// Gets handles to all active tags on this output.
+    pub fn active_tags(&self) -> impl Iterator<Item = TagHandle> + use<> {
+        self.active_tags_async().block_on_tokio()
+    }
+
+    /// Async impl for [`Self::active_tags`].
+    pub async fn active_tags_async(&self) -> impl Iterator<Item = TagHandle> + use<> {
+        self.tags_async()
+            .await
+            .batch_filter(|tag| tag.active_async().boxed(), |is_active| is_active)
+    }
+
+    /// Gets handles to all inactive tags on this output.
+    pub fn inactive_tags(&self) -> impl Iterator<Item = TagHandle> + use<> {
+        self.inactive_tags_async().block_on_tokio()
+    }
+
+    /// Async impl for [`Self::active_tags`].
+    pub async fn inactive_tags_async(&self) -> impl Iterator<Item = TagHandle> + use<> {
+        self.tags_async()
+            .await
+            .batch_filter(|tag| tag.active_async().boxed(), |is_active| !is_active)
+    }
+
     /// Gets this output's current scale.
     pub fn scale(&self) -> f32 {
         self.scale_async().block_on_tokio()

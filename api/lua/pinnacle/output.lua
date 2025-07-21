@@ -756,6 +756,62 @@ function OutputHandle:tags()
     return handles
 end
 
+---Gets the active tags this output has.
+---
+---@return pinnacle.tag.TagHandle[]
+function OutputHandle:active_tags()
+    local tags = self:tags()
+
+    ---@type (fun(): boolean)[]
+    local batch = {}
+    for i, tag in ipairs(tags) do
+        batch[i] = function()
+            return tag:active()
+        end
+    end
+
+    local responses = require("pinnacle.util").batch(batch)
+
+    ---@type pinnacle.tag.TagHandle[]
+    local active_tags = {}
+
+    for i, is_active in ipairs(responses) do
+        if is_active then
+            table.insert(active_tags, tags[i])
+        end
+    end
+
+    return active_tags
+end
+
+---Gets the inactive tags this output has.
+---
+---@return pinnacle.tag.TagHandle[]
+function OutputHandle:inactive_tags()
+    local tags = self:tags()
+
+    ---@type (fun(): boolean)[]
+    local batch = {}
+    for i, tag in ipairs(tags) do
+        batch[i] = function()
+            return not tag:active()
+        end
+    end
+
+    local responses = require("pinnacle.util").batch(batch)
+
+    ---@type pinnacle.tag.TagHandle[]
+    local inactive_tags = {}
+
+    for i, is_active in ipairs(responses) do
+        if is_active then
+            table.insert(inactive_tags, tags[i])
+        end
+    end
+
+    return inactive_tags
+end
+
 ---Get this output's scale.
 ---
 ---@return number
