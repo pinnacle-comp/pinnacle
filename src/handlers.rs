@@ -5,6 +5,8 @@ mod foreign_toplevel;
 pub mod foreign_toplevel_list;
 pub mod idle;
 pub mod session_lock;
+#[cfg(feature = "snowcap")]
+pub mod snowcap_decoration;
 pub mod window;
 pub mod xdg_activation;
 mod xdg_shell;
@@ -411,6 +413,20 @@ impl CompositorHandler for State {
         {
             vec![output] // surface is a lock surface
         } else {
+            #[cfg(feature = "snowcap")]
+            if self.pinnacle.windows.iter().any(|win| {
+                win.with_state(|state| {
+                    state.decoration_surface.as_ref().is_some_and(|deco| {
+                        deco.wl_surface() == surface || deco.wl_surface() == &root
+                    })
+                })
+            }) {
+                self.pinnacle.space.outputs().cloned().collect()
+            } else {
+                return;
+            }
+
+            #[cfg(not(feature = "snowcap"))]
             return;
         };
 

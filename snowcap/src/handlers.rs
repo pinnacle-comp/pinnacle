@@ -1,3 +1,6 @@
+pub mod decoration;
+pub mod foreign_toplevel_list;
+pub mod foreign_toplevel_management;
 pub mod keyboard;
 pub mod pointer;
 
@@ -197,6 +200,16 @@ impl CompositorHandler for State {
 
         if let Some(layer) = layer {
             layer.schedule_redraw();
+            return;
+        }
+
+        let deco = self
+            .decorations
+            .iter_mut()
+            .find(|deco| &deco.wl_surface == surface);
+
+        if let Some(deco) = deco {
+            deco.schedule_redraw();
         }
     }
 
@@ -267,20 +280,30 @@ impl Dispatch<WpFractionalScaleV1, WlSurface> for State {
         _conn: &Connection,
         qhandle: &QueueHandle<Self>,
     ) {
-        let Some(layer) = state
+        if let Some(layer) = state
             .layers
             .iter_mut()
             .find(|layer| layer.layer.wl_surface() == surface)
-        else {
-            return;
-        };
-
-        match event {
-            wp_fractional_scale_v1::Event::PreferredScale { scale } => {
-                layer.pending_output_scale = Some(scale as f32 / 120.0);
-                layer.request_frame(qhandle);
+        {
+            match event {
+                wp_fractional_scale_v1::Event::PreferredScale { scale } => {
+                    layer.pending_output_scale = Some(scale as f32 / 120.0);
+                    layer.request_frame(qhandle);
+                }
+                _ => unreachable!(),
             }
-            _ => unreachable!(),
+        } else if let Some(deco) = state
+            .decorations
+            .iter_mut()
+            .find(|deco| &deco.wl_surface == surface)
+        {
+            match event {
+                wp_fractional_scale_v1::Event::PreferredScale { scale } => {
+                    deco.pending_output_scale = Some(scale as f32 / 120.0);
+                    deco.request_frame(qhandle);
+                }
+                _ => unreachable!(),
+            }
         }
     }
 }

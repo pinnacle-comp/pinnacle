@@ -150,20 +150,52 @@ impl WindowElement {
         let _span = tracy_client::span!("WindowElement::render_elements");
 
         let popup_location = location.to_physical_precise_round(scale);
+        #[cfg(feature = "snowcap")]
+        let location_pre_geo = location.to_physical_precise_round(scale);
         let location = (location - self.geometry().loc).to_physical_precise_round(scale);
+
+        let deco_elems = self.with_state(|state| {
+            #[cfg(feature = "snowcap")]
+            {
+                state
+                    .decoration_surface
+                    .as_ref()
+                    .map(|deco| {
+                        let surface_elements = render_elements_from_surface_tree(
+                            renderer,
+                            deco.wl_surface(),
+                            location_pre_geo,
+                            scale,
+                            alpha,
+                            element::Kind::Unspecified,
+                        );
+                        surface_elements
+                    })
+                    .unwrap_or_default()
+            }
+
+            #[cfg(not(feature = "snowcap"))]
+            {
+                let _ = state;
+                Vec::new()
+            }
+        });
 
         match self.underlying_surface() {
             WindowSurface::Wayland(toplevel) => {
                 let surface = toplevel.wl_surface();
 
-                let surface_elements = render_elements_from_surface_tree(
-                    renderer,
-                    surface,
-                    location,
-                    scale,
-                    alpha,
-                    element::Kind::Unspecified,
-                );
+                let surface_elements = deco_elems
+                    .into_iter()
+                    .chain(render_elements_from_surface_tree(
+                        renderer,
+                        surface,
+                        location,
+                        scale,
+                        alpha,
+                        element::Kind::Unspecified,
+                    ))
+                    .collect::<Vec<_>>();
 
                 let popup_elements =
                     popup_render_elements(surface, renderer, popup_location, scale, alpha);
@@ -174,8 +206,12 @@ impl WindowElement {
                 }
             }
             WindowSurface::X11(s) => {
-                let surface_elements =
-                    AsRenderElements::render_elements(s, renderer, location, scale, alpha);
+                let surface_elements = deco_elems
+                    .into_iter()
+                    .chain(AsRenderElements::render_elements(
+                        s, renderer, location, scale, alpha,
+                    ))
+                    .collect();
                 SplitRenderElements {
                     surface_elements,
                     popup_elements: Vec::new(),
