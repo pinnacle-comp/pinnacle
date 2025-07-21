@@ -14,10 +14,11 @@ use pinnacle_api_defs::pinnacle::{
             GetLocResponse, GetRequest, GetResponse, GetSizeRequest, GetSizeResponse,
             GetTagIdsRequest, GetTagIdsResponse, GetTitleRequest, GetTitleResponse,
             GetWindowsInDirRequest, GetWindowsInDirResponse, MoveGrabRequest, MoveToOutputRequest,
-            MoveToTagRequest, RaiseRequest, ResizeGrabRequest, ResizeTileRequest,
-            SetDecorationModeRequest, SetFloatingRequest, SetFocusedRequest, SetFullscreenRequest,
-            SetGeometryRequest, SetMaximizedRequest, SetTagRequest, SetTagsRequest,
-            SetTagsResponse, SwapRequest, SwapResponse, WindowRuleRequest, WindowRuleResponse,
+            MoveToOutputResponse, MoveToTagRequest, RaiseRequest, ResizeGrabRequest,
+            ResizeTileRequest, SetDecorationModeRequest, SetFloatingRequest, SetFocusedRequest,
+            SetFullscreenRequest, SetGeometryRequest, SetMaximizedRequest, SetTagRequest,
+            SetTagsRequest, SetTagsResponse, SwapRequest, SwapResponse, WindowRuleRequest,
+            WindowRuleResponse,
         },
     },
 };
@@ -671,12 +672,15 @@ impl v1::window_service_server::WindowService for super::WindowService {
         .await
     }
 
-    async fn move_to_output(&self, request: Request<MoveToOutputRequest>) -> TonicResult<()> {
+    async fn move_to_output(
+        &self,
+        request: Request<MoveToOutputRequest>,
+    ) -> TonicResult<MoveToOutputResponse> {
         let request = request.into_inner();
         let window_id = WindowId(request.window_id);
         let output_name = OutputName(request.output_name);
 
-        run_unary_no_response(&self.sender, move |state| {
+        run_unary(&self.sender, move |state| {
             if let Some(output) = output_name.output(&state.pinnacle) {
                 if let Some(window) = window_id.window(&state.pinnacle) {
                     state.move_window_to_output(&window, output);
@@ -688,6 +692,8 @@ impl v1::window_service_server::WindowService for super::WindowService {
                     }
                 }
             }
+
+            Ok(MoveToOutputResponse {})
         })
         .await
     }
