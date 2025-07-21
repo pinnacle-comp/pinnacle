@@ -17,7 +17,7 @@ use pinnacle_api_defs::pinnacle::{
             MoveToTagRequest, RaiseRequest, ResizeGrabRequest, ResizeTileRequest,
             SetDecorationModeRequest, SetFloatingRequest, SetFocusedRequest, SetFullscreenRequest,
             SetGeometryRequest, SetMaximizedRequest, SetTagRequest, SetTagsRequest,
-            SetTagsResponse, WindowRuleRequest, WindowRuleResponse,
+            SetTagsResponse, SwapRequest, SwapResponse, WindowRuleRequest, WindowRuleResponse,
         },
     },
 };
@@ -723,6 +723,25 @@ impl v1::window_service_server::WindowService for super::WindowService {
 
         run_unary_no_response(&self.sender, move |state| {
             crate::api::window::resize_grab(state, button);
+        })
+        .await
+    }
+
+    async fn swap(&self, request: Request<SwapRequest>) -> TonicResult<SwapResponse> {
+        let inner = request.into_inner();
+        let window_id = WindowId(inner.window_id);
+        let target_id = WindowId(inner.target_id);
+
+        run_unary(&self.sender, move |state| {
+            let window = window_id.window(&state.pinnacle);
+            let target = target_id.window(&state.pinnacle);
+
+            // Both window & target must be mapped
+            if let Some((window, target)) = window.zip(target) {
+                crate::api::window::swap(state, window, target);
+            };
+
+            Ok(SwapResponse {})
         })
         .await
     }

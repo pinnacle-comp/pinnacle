@@ -743,6 +743,23 @@ function WindowHandle:in_direction(direction)
     return response and window_handle.new_from_table(response.window_ids or {}) or {}
 end
 
+---Swap position with another window.
+---
+---@param target pinnacle.window.WindowHandle
+function WindowHandle:swap(target)
+    if target == nil or target.id == nil then
+        log.error("Invalid window handle")
+        return
+    end
+
+    local _, err =
+        client:pinnacle_window_v1_WindowService_Swap({ window_id = self.id, target_id = target.id })
+
+    if err then
+        log.error(err)
+    end
+end
+
 ---Creates a new `WindowHandle` from an id.
 ---@param window_id integer
 ---@return pinnacle.window.WindowHandle

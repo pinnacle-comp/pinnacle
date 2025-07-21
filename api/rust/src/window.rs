@@ -23,7 +23,7 @@ use pinnacle_api_defs::pinnacle::{
             MoveGrabRequest, MoveToOutputRequest, MoveToTagRequest, RaiseRequest,
             ResizeGrabRequest, ResizeTileRequest, SetDecorationModeRequest, SetFloatingRequest,
             SetFocusedRequest, SetFullscreenRequest, SetGeometryRequest, SetMaximizedRequest,
-            SetTagRequest, SetTagsRequest,
+            SetTagRequest, SetTagsRequest, SwapRequest,
         },
     },
 };
@@ -815,6 +815,21 @@ impl WindowHandle {
             .into_inner();
 
         response.window_ids.into_iter().map(WindowHandle::from_id)
+    }
+
+    /// Swap position with another window.
+    pub fn swap(&self, target: &WindowHandle) {
+        self.swap_async(target).block_on_tokio()
+    }
+
+    /// Async impl for [`Self::swap`].
+    pub async fn swap_async(&self, target: &WindowHandle) {
+        let request = SwapRequest {
+            window_id: self.id,
+            target_id: target.id,
+        };
+
+        Client::window().swap(request).await.unwrap();
     }
 
     /// Gets this window's raw compositor id.

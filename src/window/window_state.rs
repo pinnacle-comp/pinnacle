@@ -350,6 +350,23 @@ impl LayoutMode {
             }
         }
     }
+
+    /// Apply attributes from another LayoutMode.
+    ///
+    /// If other was Maximized or Fullscreen due to a client request, elevated_mode is use instead,
+    /// since the new value doesn't come from a client request.
+    pub fn apply_mode(&mut self, other: LayoutMode) {
+        self.elevated_mode = None;
+        self.client_requested_mode = None;
+
+        match other.current() {
+            LayoutModeKind::Tiled | LayoutModeKind::Floating | LayoutModeKind::Spilled => {
+                self.base_mode = other.base_mode;
+            }
+            LayoutModeKind::Maximized => self.set_maximized(true),
+            LayoutModeKind::Fullscreen => self.set_fullscreen(true),
+        }
+    }
 }
 
 /// State of a [`WindowElement`]
