@@ -376,16 +376,6 @@ pub fn swap(state: &mut State, window: WindowElement, target: WindowElement) {
         return;
     }
 
-    // FIXME: This should not be restricted since it's requested through the API.
-    // However, I don't want to deal with this just yet.
-    // TODO: Swap window layout & geometry when dealing with non-tiled window, and trigger a layout
-    // refresh on window & target output.
-    if window.with_state(|state| !state.layout_mode.is_tiled())
-        || target.with_state(|state| !state.layout_mode.is_tiled())
-    {
-        return;
-    }
-
     let output = window.output(&state.pinnacle);
     let target_output = target.output(&state.pinnacle);
 
@@ -404,8 +394,44 @@ pub fn swap(state: &mut State, window: WindowElement, target: WindowElement) {
         target.set_tags_to_output(&output);
     }
 
-    state.pinnacle.request_layout(&output);
-    if output != target_output {
-        state.pinnacle.request_layout(&target_output);
+    // Swap floating attribute. In case of cross-output swap, this prevent window jumping back.
+    let window_floating_x = window.with_state(|state| state.floating_x);
+    let window_floating_y = window.with_state(|state| state.floating_y);
+    let window_floating_size = window.with_state(|state| state.floating_size);
+
+    let target_floating_x = target.with_state(|state| state.floating_x);
+    let target_floating_y = target.with_state(|state| state.floating_y);
+    let target_floating_size = target.with_state(|state| state.floating_size);
+
+    target.with_state_mut(|state| {
+        state.floating_x = window_floating_x;
+        state.floating_y = window_floating_y;
+        state.floating_size = window_floating_size
+    });
+
+    window.with_state_mut(|state| {
+        state.floating_x = target_floating_x;
+        state.floating_y = target_floating_y;
+        state.floating_size = target_floating_size
+    });
+
+    if window.with_state(|state| !state.layout_mode.is_tiled())
+        || target.with_state(|state| !state.layout_mode.is_tiled())
+    {
+        tracing::debug!("Swapping non tiled window");
+        let window_layout_mode = window.with_state(|state| state.layout_mode);
+        let target_layout_mode = target.with_state(|state| state.layout_mode);
+
+        state.update_window_layout_mode_and_layout(&window, |layout| {
+            layout.apply_mode(target_layout_mode)
+        });
+        state.update_window_layout_mode_and_layout(&target, |layout| {
+            layout.apply_mode(window_layout_mode)
+        });
+    } else {
+        state.pinnacle.request_layout(&output);
+        if output != target_output {
+            state.pinnacle.request_layout(&target_output);
+        }
     }
 }

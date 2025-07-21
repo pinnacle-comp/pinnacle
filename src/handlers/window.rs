@@ -66,7 +66,11 @@ impl State {
                     .pending_transactions
                     .add_for_output(
                         output,
-                        transaction_builder.into_pending(Vec::new(), false, false),
+                        transaction_builder.into_pending(
+                            Vec::new(),
+                            self.pinnacle.layout_state.pending_swap,
+                            false,
+                        ),
                     );
             } else {
                 // No changes were needed, we can map immediately here
