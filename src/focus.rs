@@ -209,6 +209,23 @@ impl Pinnacle {
         self.update_xwayland_stacking_order();
     }
 
+    /// Lower a window to the bottom of the z-index stack.
+    pub fn lower_window(&mut self, window: WindowElement) {
+        let _span = tracy_client::span!("Pinnacle::lower_window");
+
+        self.z_index_stack
+            .retain(|win| !matches!(win, ZIndexElement::Window(win) if win == window));
+        self.z_index_stack.insert(0, ZIndexElement::Window(window));
+
+        for win in self.z_index_stack.iter() {
+            if let ZIndexElement::Window(win) = win {
+                self.space.raise_element(win, false);
+            }
+        }
+
+        self.update_xwayland_stacking_order();
+    }
+
     /// Get the currently focused output, or the first mapped output if there is none, or None.
     pub fn focused_output(&self) -> Option<&Output> {
         let _span = tracy_client::span!("Pinnacle::focused_output");

@@ -20,7 +20,7 @@ use pinnacle_api_defs::pinnacle::{
         v1::{
             GetAppIdRequest, GetFocusedRequest, GetLayoutModeRequest, GetLocRequest,
             GetSizeRequest, GetTagIdsRequest, GetTitleRequest, GetWindowsInDirRequest,
-            MoveGrabRequest, MoveToOutputRequest, MoveToTagRequest, RaiseRequest,
+            LowerRequest, MoveGrabRequest, MoveToOutputRequest, MoveToTagRequest, RaiseRequest,
             ResizeGrabRequest, ResizeTileRequest, SetDecorationModeRequest, SetFloatingRequest,
             SetFocusedRequest, SetFullscreenRequest, SetGeometryRequest, SetMaximizedRequest,
             SetTagRequest, SetTagsRequest, SwapRequest,
@@ -573,6 +573,15 @@ impl WindowHandle {
         let window_id = self.id;
         Client::window()
             .raise(RaiseRequest { window_id })
+            .block_on_tokio()
+            .unwrap();
+    }
+
+    /// Lowers this window to the back.
+    pub fn lower(&self) {
+        let window_id = self.id;
+        Client::window()
+            .lower(LowerRequest { window_id })
             .block_on_tokio()
             .unwrap();
     }

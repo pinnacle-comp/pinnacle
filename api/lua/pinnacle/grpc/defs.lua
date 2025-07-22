@@ -1206,6 +1206,11 @@ local pinnacle_window_v1_DecorationMode = {
 ---@class pinnacle.window.v1.RaiseRequest
 ---@field window_id integer?
 
+---@class pinnacle.window.v1.LowerRequest
+---@field window_id integer?
+
+---@class pinnacle.window.v1.LowerResponse
+
 ---@class pinnacle.window.v1.MoveGrabRequest
 ---@field button integer?
 
@@ -1434,6 +1439,8 @@ pinnacle.window.v1.SetTagsResponse = {}
 pinnacle.window.v1.MoveToOutputRequest = {}
 pinnacle.window.v1.MoveToOutputResponse = {}
 pinnacle.window.v1.RaiseRequest = {}
+pinnacle.window.v1.LowerRequest = {}
+pinnacle.window.v1.LowerResponse = {}
 pinnacle.window.v1.MoveGrabRequest = {}
 pinnacle.window.v1.ResizeGrabRequest = {}
 pinnacle.window.v1.SwapRequest = {}
@@ -3232,6 +3239,23 @@ pinnacle.window.v1.WindowService.Raise.response = ".google.protobuf.Empty"
 ---@return string | nil error An error string, if any
 function Client:pinnacle_window_v1_WindowService_Raise(data)
     return self:unary_request(pinnacle.window.v1.WindowService.Raise, data)
+end
+pinnacle.window.v1.WindowService.Lower = {}
+pinnacle.window.v1.WindowService.Lower.service = "pinnacle.window.v1.WindowService"
+pinnacle.window.v1.WindowService.Lower.method = "Lower"
+pinnacle.window.v1.WindowService.Lower.request = ".pinnacle.window.v1.LowerRequest"
+pinnacle.window.v1.WindowService.Lower.response = ".pinnacle.window.v1.LowerResponse"
+
+---Performs a unary request.
+---
+---@nodiscard
+---
+---@param data pinnacle.window.v1.LowerRequest
+---
+---@return pinnacle.window.v1.LowerResponse | nil response
+---@return string | nil error An error string, if any
+function Client:pinnacle_window_v1_WindowService_Lower(data)
+    return self:unary_request(pinnacle.window.v1.WindowService.Lower, data)
 end
 pinnacle.window.v1.WindowService.MoveGrab = {}
 pinnacle.window.v1.WindowService.MoveGrab.service = "pinnacle.window.v1.WindowService"

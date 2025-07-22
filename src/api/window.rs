@@ -231,6 +231,14 @@ pub fn raise(state: &mut State, window: WindowElement) {
     state.pinnacle.raise_window(window);
 }
 
+pub fn lower(state: &mut State, window: WindowElement) {
+    for output in state.pinnacle.space.outputs_for_element(&window) {
+        state.schedule_render(&output);
+    }
+
+    state.pinnacle.lower_window(window);
+}
+
 pub fn move_grab(state: &mut State, button: u32) {
     let Some((pointer_focus, _)) = state.pinnacle.pointer_contents.focus_under.as_ref() else {
         return;
