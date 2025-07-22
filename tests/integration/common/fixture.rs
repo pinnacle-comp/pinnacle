@@ -180,6 +180,8 @@ impl Fixture {
         debug!(client = ?id, "roundtripped");
     }
 
+    // TODO: Remove this oce the tests are confirmed to be stable
+    #[allow(dead_code)]
     pub fn double_roundtrip(&mut self, id: ClientId) {
         self.roundtrip(id);
         self.roundtrip(id);
@@ -269,6 +271,53 @@ impl Fixture {
 
     pub fn client(&mut self, id: ClientId) -> &mut Client {
         self.state.client(id)
+    }
+
+    /// Wait for all outstanding transaction and configure to be handled.
+    ///
+    /// If timeout is reached, stop with false.
+    pub fn flush(&mut self, timeout: Duration) -> bool {
+        let start = std::time::Instant::now();
+        let mut loop_again = true;
+
+        let client_ids = self
+            .state
+            .clients
+            .iter()
+            .map(|c| c.id())
+            .collect::<Vec<_>>();
+
+        while loop_again {
+            tracing::debug!("Flushing transaction and configure");
+            for id in client_ids.iter().cloned() {
+                loop_again |= self.client(id).ack_all_window();
+                self.roundtrip(id);
+            }
+            self.dispatch();
+
+            loop_again = !self.pinnacle().layout_state.pending_transactions.is_empty();
+
+            if start.elapsed() >= timeout {
+                return false;
+            }
+        }
+
+        true
+    }
+
+    /// Wait for a client to receive a configure, dispatching in the meantime.
+    pub fn wait_client_configure(&mut self, id: ClientId, timeout: Duration) -> bool {
+        let start = std::time::Instant::now();
+
+        while !self.client(id).has_pending_configure() {
+            if start.elapsed() >= timeout {
+                return false;
+            }
+
+            self.dispatch();
+        }
+
+        true
     }
 }
 
