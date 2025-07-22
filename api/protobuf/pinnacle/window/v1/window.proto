@@ -158,6 +158,11 @@ message RaiseRequest {
   uint32 window_id = 1;
 }
 
+message LowerRequest {
+  uint32 window_id = 1;
+}
+message LowerResponse {}
+
 message MoveGrabRequest {
   uint32 button = 1;
 }
@@ -218,6 +223,7 @@ service WindowService {
   rpc SetTags(SetTagsRequest) returns (SetTagsResponse);
   rpc MoveToOutput(MoveToOutputRequest) returns (MoveToOutputResponse);
   rpc Raise(RaiseRequest) returns (google.protobuf.Empty);
+  rpc Lower(LowerRequest) returns (LowerResponse);
   rpc MoveGrab(MoveGrabRequest) returns (google.protobuf.Empty);
   rpc ResizeGrab(ResizeGrabRequest) returns (google.protobuf.Empty);
   rpc Swap(SwapRequest) returns (SwapResponse);

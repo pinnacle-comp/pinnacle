@@ -562,6 +562,17 @@ function WindowHandle:raise()
     end
 end
 
+---Lowers a window.
+---
+---This will bring the window to the back.
+function WindowHandle:lower()
+    local _, err = client:pinnacle_window_v1_WindowService_Lower({ window_id = self.id })
+
+    if err then
+        log.error(err)
+    end
+end
+
 ---Returns whether or not this window is on an active tag.
 ---
 ---@return boolean

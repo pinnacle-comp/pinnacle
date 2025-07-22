@@ -13,12 +13,12 @@ use pinnacle_api_defs::pinnacle::{
             GetFocusedResponse, GetLayoutModeRequest, GetLayoutModeResponse, GetLocRequest,
             GetLocResponse, GetRequest, GetResponse, GetSizeRequest, GetSizeResponse,
             GetTagIdsRequest, GetTagIdsResponse, GetTitleRequest, GetTitleResponse,
-            GetWindowsInDirRequest, GetWindowsInDirResponse, MoveGrabRequest, MoveToOutputRequest,
-            MoveToOutputResponse, MoveToTagRequest, RaiseRequest, ResizeGrabRequest,
-            ResizeTileRequest, SetDecorationModeRequest, SetFloatingRequest, SetFocusedRequest,
-            SetFullscreenRequest, SetGeometryRequest, SetMaximizedRequest, SetTagRequest,
-            SetTagsRequest, SetTagsResponse, SwapRequest, SwapResponse, WindowRuleRequest,
-            WindowRuleResponse,
+            GetWindowsInDirRequest, GetWindowsInDirResponse, LowerRequest, LowerResponse,
+            MoveGrabRequest, MoveToOutputRequest, MoveToOutputResponse, MoveToTagRequest,
+            RaiseRequest, ResizeGrabRequest, ResizeTileRequest, SetDecorationModeRequest,
+            SetFloatingRequest, SetFocusedRequest, SetFullscreenRequest, SetGeometryRequest,
+            SetMaximizedRequest, SetTagRequest, SetTagsRequest, SetTagsResponse, SwapRequest,
+            SwapResponse, WindowRuleRequest, WindowRuleResponse,
         },
     },
 };
@@ -709,6 +709,20 @@ impl v1::window_service_server::WindowService for super::WindowService {
             };
 
             crate::api::window::raise(state, window);
+        })
+        .await
+    }
+
+    async fn lower(&self, request: Request<LowerRequest>) -> TonicResult<LowerResponse> {
+        let request = request.into_inner();
+        let window_id = WindowId(request.window_id);
+
+        run_unary(&self.sender, move |state| {
+            if let Some(window) = window_id.window(&state.pinnacle) {
+                crate::api::window::lower(state, window);
+            }
+
+            Ok(LowerResponse {})
         })
         .await
     }
