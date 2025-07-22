@@ -27,6 +27,7 @@ pub struct Fixture {
     event_loop: EventLoop<'static, State>,
     state: State,
     _test_guard: MutexGuard<'static, ()>,
+    timeout: Duration,
 }
 
 struct State {
@@ -35,6 +36,7 @@ struct State {
 }
 
 static OUTPUT_COUNTER: AtomicU32 = AtomicU32::new(0);
+static DEFAULT_TIMEOUT: u64 = 60;
 
 impl Fixture {
     pub fn new() -> Self {
@@ -78,7 +80,12 @@ impl Fixture {
             event_loop,
             state,
             _test_guard,
+            timeout: Duration::from_secs(DEFAULT_TIMEOUT),
         }
+    }
+
+    pub fn _set_timeout(&mut self, timeout: Duration) {
+        self.timeout = timeout;
     }
 
     pub fn runtime_handle(&self) -> tokio::runtime::Handle {
@@ -146,7 +153,21 @@ impl Fixture {
     where
         F: FnMut(&mut Self) -> bool,
     {
+        let start = std::time::Instant::now();
+
         while !until(self) {
+            self.dispatch();
+
+            if start.elapsed() > self.timeout {
+                panic!("Timeout reached");
+            }
+        }
+    }
+
+    pub fn dispatch_for(&mut self, duration: Duration) {
+        let start = std::time::Instant::now();
+
+        while start.elapsed() <= duration {
             self.dispatch();
         }
     }
