@@ -1041,6 +1041,53 @@ fn window_handle_raise() {
 }
 
 #[test_log::test]
+fn window_handle_lower() {
+    for_each_api(|lang| {
+        let (mut fixture, _) = set_up();
+
+        let client_id = fixture.add_client();
+
+        fixture.spawn_windows(2, client_id);
+
+        let top = fixture
+            .pinnacle()
+            .z_index_stack
+            .last()
+            .unwrap()
+            .window()
+            .unwrap()
+            .clone();
+        let second = fixture.pinnacle().windows[1].clone();
+        assert_eq!(top, second);
+
+        match lang {
+            Lang::Rust => fixture.spawn_blocking(|| {
+                pinnacle_api::window::get_all()
+                    .skip(1)
+                    .next()
+                    .unwrap()
+                    .lower();
+            }),
+            Lang::Lua => spawn_lua_blocking! {
+                fixture,
+                Window.get_all()[2]:lower()
+            },
+        }
+
+        let top = fixture
+            .pinnacle()
+            .z_index_stack
+            .last()
+            .unwrap()
+            .window()
+            .unwrap()
+            .clone();
+        let first = fixture.pinnacle().windows[0].clone();
+        assert_eq!(top, first);
+    });
+}
+
+#[test_log::test]
 fn window_handle_is_on_active_tag() {
     for_each_api(|lang| {
         let (mut fixture, output) = set_up();
