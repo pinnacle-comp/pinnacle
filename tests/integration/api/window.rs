@@ -260,8 +260,6 @@ fn window_handle_toggle_fullscreen() {
 
         let surface = fixture.spawn_windows(1, client_id).remove(0);
 
-        assert!(fixture.flush(Duration::from_secs(10)));
-
         match lang {
             Lang::Rust => fixture.spawn_blocking(|| {
                 pinnacle_api::window::get_focused()
@@ -322,7 +320,6 @@ fn window_handle_set_maximized() {
         let client_id = fixture.add_client();
 
         let surface = fixture.spawn_windows(1, client_id).remove(0);
-        assert!(fixture.flush(Duration::from_secs(10)));
 
         match lang {
             Lang::Rust => fixture.spawn_blocking(|| {
@@ -385,8 +382,6 @@ fn window_handle_toggle_maximized() {
 
         let surface = fixture.spawn_windows(1, client_id).remove(0);
 
-        assert!(fixture.flush(Duration::from_secs(10)));
-
         match lang {
             Lang::Rust => fixture.spawn_blocking(|| {
                 pinnacle_api::window::get_focused()
@@ -448,8 +443,6 @@ fn window_handle_set_floating() {
 
         let _surface = fixture.spawn_windows(1, client_id).remove(0);
 
-        assert!(fixture.flush(Duration::from_secs(10)));
-
         match lang {
             Lang::Rust => fixture.spawn_blocking(|| {
                 pinnacle_api::window::get_focused()
@@ -496,8 +489,6 @@ fn window_handle_toggle_floating() {
         let client_id = fixture.add_client();
 
         let _surface = fixture.spawn_windows(1, client_id).remove(0);
-
-        assert!(fixture.flush(Duration::from_secs(10)));
 
         match lang {
             Lang::Rust => fixture.spawn_blocking(|| {
@@ -1424,8 +1415,6 @@ fn window_handle_move_to_output() {
 
         let _surface = fixture.spawn_floating_window_with(client_id, (500, 500), |_| ());
 
-        assert!(fixture.flush(Duration::from_secs(10)));
-
         let output_name = output2.name();
 
         match lang {
@@ -1468,8 +1457,6 @@ fn window_handle_swap_simple() {
 
         let window_geo = fixture.pinnacle().space.element_geometry(&window);
         let target_geo = fixture.pinnacle().space.element_geometry(&target);
-
-        assert!(fixture.flush(Duration::from_secs(10)));
 
         match lang {
             Lang::Rust => fixture.spawn_blocking(move || {
@@ -1584,8 +1571,6 @@ fn window_handle_swap_non_tiled() {
         let window_geo = fixture.pinnacle().space.element_geometry(&window);
         let target_geo = fixture.pinnacle().space.element_geometry(&target);
 
-        assert!(fixture.flush(Duration::from_secs(10)));
-
         match lang {
             Lang::Rust => fixture.spawn_blocking(move || {
                 let window_handle = pinnacle_api::window::WindowHandle::from_id(window_id);
@@ -1650,8 +1635,6 @@ fn window_handle_swap_non_tiled_multi_output() {
 
         let window_tags = window.with_state(|state| state.tags.clone());
         let target_tags = target.with_state(|state| state.tags.clone());
-
-        assert!(fixture.flush(Duration::from_secs(10)));
 
         match lang {
             Lang::Rust => fixture.spawn_blocking(move || {

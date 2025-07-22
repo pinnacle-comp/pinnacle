@@ -212,6 +212,8 @@ impl Fixture {
     where
         F: FnMut(&mut Window),
     {
+        let old_trees = self.pinnacle().layout_state.layout_trees.clone();
+
         // Add a window
         let window = self.client(id).create_window();
         pre_initial_commit(window);
@@ -228,16 +230,22 @@ impl Fixture {
         assert!(window.current_serial().is_none());
         self.roundtrip(id);
 
-        let old_trees = self.pinnacle().layout_state.layout_trees.clone();
-
         // Let Pinnacle do a layout
         self.dispatch_until(|fixture| fixture.pinnacle().layout_state.layout_trees != old_trees);
         self.roundtrip(id);
 
         // Commit the layout
-        let window = self.client(id).window_for_surface(&surface);
-        window.ack_and_commit();
+        assert!(self.wait_client_configure(id, Duration::from_secs(10)));
+        self.client(id).ack_all_window();
         self.roundtrip(id);
+
+        // Waiting one last time because we're getting focused/activated at this point.
+        assert!(self.wait_client_configure(id, Duration::from_secs(10)));
+        self.client(id).ack_all_window();
+        self.roundtrip(id);
+
+        // Wait for pending_transactions, if any
+        assert!(self.flush(Duration::from_secs(10)));
 
         surface
     }
@@ -267,10 +275,18 @@ impl Fixture {
         window.commit();
         self.roundtrip(id);
 
-        self.client(id)
-            .window_for_surface(&surface)
-            .ack_and_commit();
+        // wait a bit for the size to be set
+        assert!(self.wait_client_configure(id, Duration::from_secs(10)));
+        self.client(id).ack_all_window();
         self.roundtrip(id);
+
+        // Waiting to be activated/focused.
+        assert!(self.wait_client_configure(id, Duration::from_secs(10)));
+        self.client(id).ack_all_window();
+        self.roundtrip(id);
+
+        // Wait for pending_transactions, if any
+        assert!(self.flush(Duration::from_secs(10)));
 
         surface
     }
@@ -279,13 +295,6 @@ impl Fixture {
         let surfaces = (0..amount)
             .map(|_| self.spawn_window_with(id, |_| ()))
             .collect::<Vec<_>>();
-
-        for surf in surfaces.iter() {
-            let window = self.client(id).window_for_surface(surf);
-            window.ack_and_commit();
-        }
-
-        self.roundtrip(id);
 
         surfaces
     }
