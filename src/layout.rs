@@ -305,6 +305,11 @@ impl PendingTransactions {
 
         None
     }
+
+    #[cfg(feature = "testing")]
+    pub fn is_empty(&self) -> bool {
+        self.pending.is_empty() || self.pending.iter().all(|(_, v)| v.is_empty())
+    }
 }
 
 /// Pending [`UnmappingWindow`][crate::window::UnmappingWindow]s from things like
