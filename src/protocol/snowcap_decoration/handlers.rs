@@ -36,7 +36,6 @@ where
         _global_data: &SnowcapDecorationGlobalData,
         data_init: &mut smithay::reexports::wayland_server::DataInit<'_, D>,
     ) {
-        tracing::info!("snowcap deco global bind");
         data_init.init(resource, ());
     }
 
@@ -155,7 +154,7 @@ where
         + SnowcapDecorationHandler,
 {
     fn request(
-        _state: &mut D,
+        state: &mut D,
         _client: &Client,
         resource: &SnowcapDecorationSurfaceV1,
         request: <SnowcapDecorationSurfaceV1 as Resource>::Request,
@@ -187,6 +186,19 @@ where
                     data.bounds.top = top;
                     data.bounds.bottom = bottom;
                 });
+
+                if let Some(deco) = {
+                    state
+                        .decoration_state()
+                        .known_decorations
+                        .lock()
+                        .unwrap()
+                        .iter()
+                        .find(|deco| deco.decoration_surface() == resource)
+                        .cloned()
+                } {
+                    state.bounds_changed(deco);
+                }
             }
             snowcap_decoration_surface_v1::Request::SetZIndex { z_index } => {
                 let _ = with_surface_pending_state(resource, |data| {

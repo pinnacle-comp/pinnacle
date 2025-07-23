@@ -123,7 +123,8 @@ impl v1::window_service_server::WindowService for super::WindowService {
         run_unary(&self.sender, move |state| {
             let size = window_id
                 .window(&state.pinnacle)
-                .map(|win| win.geometry().size);
+                .and_then(|win| state.pinnacle.space.element_geometry(&win))
+                .map(|geo| geo.size);
 
             Ok(GetSizeResponse {
                 size: size.map(|size| util::v1::Size {

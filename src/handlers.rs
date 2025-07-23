@@ -414,13 +414,34 @@ impl CompositorHandler for State {
             vec![output] // surface is a lock surface
         } else {
             #[cfg(feature = "snowcap")]
-            if self.pinnacle.windows.iter().any(|win| {
-                win.with_state(|state| {
-                    state.decoration_surface.as_ref().is_some_and(|deco| {
-                        deco.wl_surface() == surface || deco.wl_surface() == &root
+            if let Some((win, deco)) = self.pinnacle.windows.iter().find_map(|win| {
+                let deco = win
+                    .with_state(|state| {
+                        state
+                            .decoration_surface
+                            .as_ref()
+                            .filter(|deco| {
+                                deco.wl_surface() == surface || deco.wl_surface() == &root
+                            })
+                            .cloned()
                     })
-                })
+                    .map(|deco| (win.clone(), deco));
+                deco
             }) {
+                use std::sync::atomic::Ordering;
+
+                if deco.with_state(|state| state.bounds_changed.fetch_and(false, Ordering::Relaxed))
+                {
+                    if win.with_state(|state| state.layout_mode.is_tiled())
+                        && let Some(output) = win.output(&self.pinnacle)
+                    {
+                        self.pinnacle.request_layout(&output);
+                    } else {
+                        self.update_window_layout_mode_and_layout(&win, |_| ());
+                    }
+                }
+
+                // FIXME: granular
                 self.pinnacle.space.outputs().cloned().collect()
             } else {
                 return;

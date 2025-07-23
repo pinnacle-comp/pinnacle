@@ -15,7 +15,7 @@ use smithay::{
         },
         wayland_server::protocol::wl_surface::WlSurface,
     },
-    utils::{IsAlive, Logical, Point, Rectangle, Serial},
+    utils::{IsAlive, Logical, Point, Rectangle, Serial, Size},
     wayland::{
         compositor,
         seat::WaylandFocus,
@@ -174,16 +174,51 @@ impl WindowElement {
 
         ret
     }
-}
 
-#[derive(Default)]
-struct OutputOverlapState {
-    current_output: Option<WeakOutput>,
-    overlaps: HashMap<WeakOutput, Rectangle<i32, Logical>>,
-}
+    pub fn set_pending_geo(&self, size: Size<i32, Logical>, loc: Option<Point<i32, Logical>>) {
+        let (mut size, loc) = {
+            #[cfg(feature = "snowcap")]
+            {
+                let mut size = size;
+                let mut loc = loc;
+                self.with_state(|state| {
+                    if let Some(deco) = state.decoration_surface.as_ref() {
+                        let bounds = deco.bounds();
+                        if let Some(loc) = loc.as_mut() {
+                            loc.x += bounds.left as i32;
+                            loc.y += bounds.right as i32;
+                        }
+                        size.w = i32::max(1, size.w - bounds.left as i32 - bounds.right as i32);
+                        size.h = i32::max(1, size.h - bounds.top as i32 - bounds.bottom as i32);
+                    }
+                });
+                (size, loc)
+            }
 
-impl SpaceElement for WindowElement {
-    fn geometry(&self) -> Rectangle<i32, Logical> {
+            #[cfg(not(feature = "snowcap"))]
+            (size, loc)
+        };
+
+        size.w = size.w.max(1);
+        size.h = size.h.max(1);
+
+        match self.underlying_surface() {
+            WindowSurface::Wayland(toplevel) => {
+                toplevel.with_pending_state(|state| {
+                    state.size = Some(size);
+                });
+            }
+            WindowSurface::X11(surface) => {
+                let loc = loc.unwrap_or_else(|| surface.geometry().loc);
+                if let Err(err) = surface.configure(Some(Rectangle::new(loc, size))) {
+                    warn!("Failed to configure xwayland window: {err}");
+                }
+            }
+        }
+    }
+
+    /// Gets this window's geometry *taking into account bounds*.
+    pub fn geometry(&self) -> Rectangle<i32, Logical> {
         #[cfg(feature = "snowcap")]
         {
             let mut geometry = self.0.geometry();
@@ -203,6 +238,18 @@ impl SpaceElement for WindowElement {
 
         #[cfg(not(feature = "snowcap"))]
         self.0.geometry()
+    }
+}
+
+#[derive(Default)]
+struct OutputOverlapState {
+    current_output: Option<WeakOutput>,
+    overlaps: HashMap<WeakOutput, Rectangle<i32, Logical>>,
+}
+
+impl SpaceElement for WindowElement {
+    fn geometry(&self) -> Rectangle<i32, Logical> {
+        self.geometry()
     }
 
     fn bbox(&self) -> Rectangle<i32, Logical> {

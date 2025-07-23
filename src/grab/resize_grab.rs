@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use smithay::{
-    desktop::{WindowSurface, space::SpaceElement},
+    desktop::WindowSurface,
     input::{
         Seat, SeatHandler,
         pointer::{
@@ -227,24 +227,15 @@ impl PointerGrab<State> for ResizeSurfaceGrab {
         self.window
             .with_state_mut(|state| state.floating_size = self.last_window_size);
 
-        let serial = match self.window.underlying_surface() {
-            WindowSurface::Wayland(toplevel) => {
-                toplevel.with_pending_state(|state| {
-                    state.states.set(xdg_toplevel::State::Resizing);
-                    state.size = Some(self.last_window_size);
-                });
+        self.window.set_pending_geo(
+            self.last_window_size,
+            Some(self.initial_window_geo.loc + delta),
+        );
 
-                toplevel.send_pending_configure()
-            }
-            WindowSurface::X11(surface) => {
-                if !surface.is_override_redirect() {
-                    let loc = self.initial_window_geo.loc + delta;
-                    let _ = surface.configure(Rectangle::new(loc, self.last_window_size));
-                }
-
-                None
-            }
-        };
+        let serial = self
+            .window
+            .toplevel()
+            .and_then(|tl| tl.send_pending_configure());
 
         let mut transaction_builder = TransactionBuilder::new();
         transaction_builder.add(
@@ -406,10 +397,9 @@ impl State {
                 return;
             }
 
-            let Some(initial_window_loc) = self.pinnacle.space.element_location(&window) else {
+            let Some(initial_window_geo) = self.pinnacle.space.element_geometry(&window) else {
                 return;
             };
-            let initial_window_size = window.geometry().size;
 
             if let Some(window) = self.pinnacle.window_for_surface(surface)
                 && let Some(toplevel) = window.toplevel()
@@ -425,7 +415,7 @@ impl State {
                 start_data,
                 window,
                 edges,
-                Rectangle::new(initial_window_loc, initial_window_size),
+                initial_window_geo,
                 button_used,
             );
 
@@ -457,11 +447,10 @@ impl State {
             return;
         }
 
-        let Some(initial_window_loc) = self.pinnacle.space.element_location(&window) else {
+        let Some(initial_window_geo) = self.pinnacle.space.element_geometry(&window) else {
             warn!("Resize request on unmapped surface");
             return;
         };
-        let initial_window_size = window.geometry().size;
 
         if let Some(window) = self.pinnacle.window_for_surface(surface)
             && let Some(toplevel) = window.toplevel()
@@ -479,13 +468,8 @@ impl State {
             location: pointer.current_location(),
         };
 
-        let grab = ResizeSurfaceGrab::start(
-            start_data,
-            window,
-            edges,
-            Rectangle::new(initial_window_loc, initial_window_size),
-            button_used,
-        );
+        let grab =
+            ResizeSurfaceGrab::start(start_data, window, edges, initial_window_geo, button_used);
 
         if let Some(grab) = grab {
             pointer.set_grab(self, grab, serial, Focus::Clear);

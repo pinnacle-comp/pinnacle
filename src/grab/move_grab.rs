@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use smithay::{
-    desktop::space::SpaceElement,
     // NOTE: maybe alias this to PointerGrabStartData because there's another GrabStartData in
     // |     input::keyboard
     input::{
