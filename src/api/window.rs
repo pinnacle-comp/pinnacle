@@ -1,7 +1,6 @@
 mod v1;
 
 use smithay::{
-    desktop::space::SpaceElement,
     reexports::wayland_protocols::xdg::{
         decoration::zv1::server::zxdg_toplevel_decoration_v1, shell::server,
     },
@@ -283,16 +282,15 @@ pub fn resize_grab(state: &mut State, button: u32) {
 
     let pointer_loc: Point<i32, _> = pointer_loc.to_i32_round();
 
-    let window_geometry = window.geometry();
-    let window_sz = window_geometry.size;
-    let window_width = Size::new(window_sz.w, 0);
-    let window_height = Size::new(0, window_sz.h);
+    let window_size = window.geometry().size;
+    let window_width = Size::new(window_size.w, 0);
+    let window_height = Size::new(0, window_size.h);
 
-    let rel_x = (pointer_loc.x - window_loc.x).clamp(0, window_sz.w);
-    let rel_y = (pointer_loc.y - window_loc.y).clamp(0, window_sz.h);
+    let rel_x = (pointer_loc.x - window_loc.x).clamp(0, window_size.w);
+    let rel_y = (pointer_loc.y - window_loc.y).clamp(0, window_size.h);
 
-    let quadrant_x = (rel_x * 3 / window_sz.w).clamp(0, 2);
-    let quadrant_y = (rel_y * 3 / window_sz.h).clamp(0, 2);
+    let quadrant_x = (rel_x * 3 / window_size.w).clamp(0, 2);
+    let quadrant_y = (rel_y * 3 / window_size.h).clamp(0, 2);
 
     let edges = match (quadrant_x, quadrant_y) {
         (0, 0) => server::xdg_toplevel::ResizeEdge::TopLeft,
@@ -332,8 +330,8 @@ pub fn resize_grab(state: &mut State, button: u32) {
         let top_left = window_loc;
         let top_right = window_loc + window_width;
         let bottom_left = window_loc + window_height;
-        let bottom_right = window_loc + window_sz;
-        let window_center = window_loc + window_sz.downscale(2);
+        let bottom_right = window_loc + window_size;
+        let window_center = window_loc + window_size.downscale(2);
 
         let v_tl: (i32, i32) = (top_left - window_center).into();
         let v_tr: (i32, i32) = (top_right - window_center).into();

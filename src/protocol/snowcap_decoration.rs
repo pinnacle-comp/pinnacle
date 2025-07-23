@@ -181,6 +181,10 @@ pub trait SnowcapDecorationHandler {
     fn decoration_destroyed(&mut self, surface: DecorationSurface) {
         let _ = surface;
     }
+
+    fn bounds_changed(&mut self, surface: DecorationSurface) {
+        let _ = surface;
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]

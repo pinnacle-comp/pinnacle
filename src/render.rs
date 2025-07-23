@@ -17,7 +17,6 @@ use smithay::{
     },
     desktop::{
         PopupManager, Space, WindowSurface, layer_map_for_output,
-        space::SpaceElement,
         utils::{
             OutputPresentationFeedback, surface_presentation_feedback_flags_from_states,
             surface_primary_scanout_output,
