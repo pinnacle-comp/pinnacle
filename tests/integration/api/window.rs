@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use crate::{
     common::{Lang, fixture::Fixture, for_each_api},
     spawn_lua_blocking,
@@ -131,7 +133,7 @@ fn window_handle_set_geometry_floating() {
 
         let client_id = fixture.add_client();
 
-        let surface = fixture.spawn_floating_window_with(client_id, (500, 500), |_| ());
+        let _surface = fixture.spawn_floating_window_with(client_id, (500, 500), |_| ());
 
         match lang {
             Lang::Rust => fixture.spawn_blocking(|| {
@@ -145,11 +147,8 @@ fn window_handle_set_geometry_floating() {
             },
         }
 
-        fixture
-            .client(client_id)
-            .window_for_surface(&surface)
-            .ack_and_commit();
-        fixture.roundtrip(client_id);
+        assert!(fixture.wait_client_configure(client_id, Duration::from_secs(10)));
+        assert!(fixture.flush(Duration::from_secs(10)));
 
         let window = fixture.pinnacle().windows[0].clone();
         let geo = fixture.pinnacle().space.element_geometry(&window).unwrap();
@@ -165,7 +164,7 @@ fn window_handle_set_geometry_tiled_does_not_change_geometry() {
 
         let client_id = fixture.add_client();
 
-        let surface = fixture.spawn_windows(1, client_id).remove(0);
+        let _surface = fixture.spawn_windows(1, client_id).remove(0);
 
         let window = fixture.pinnacle().windows[0].clone();
 
@@ -183,11 +182,7 @@ fn window_handle_set_geometry_tiled_does_not_change_geometry() {
             },
         }
 
-        fixture
-            .client(client_id)
-            .window_for_surface(&surface)
-            .ack_and_commit();
-        fixture.roundtrip(client_id);
+        assert!(fixture.flush(Duration::from_secs(10)));
 
         let new_geo = fixture.pinnacle().space.element_geometry(&window).unwrap();
 
@@ -216,11 +211,8 @@ fn window_handle_set_fullscreen() {
             },
         }
 
-        fixture
-            .client(client_id)
-            .window_for_surface(&surface)
-            .ack_and_commit();
-        fixture.double_roundtrip(client_id);
+        assert!(fixture.wait_client_configure(client_id, Duration::from_secs(10)));
+        assert!(fixture.flush(Duration::from_secs(10)));
 
         assert!(
             fixture
@@ -244,11 +236,8 @@ fn window_handle_set_fullscreen() {
             },
         }
 
-        fixture
-            .client(client_id)
-            .window_for_surface(&surface)
-            .ack_and_commit();
-        fixture.double_roundtrip(client_id);
+        assert!(fixture.wait_client_configure(client_id, Duration::from_secs(10)));
+        assert!(fixture.flush(Duration::from_secs(10)));
 
         assert!(
             !fixture
@@ -283,11 +272,8 @@ fn window_handle_toggle_fullscreen() {
             },
         }
 
-        fixture
-            .client(client_id)
-            .window_for_surface(&surface)
-            .ack_and_commit();
-        fixture.double_roundtrip(client_id);
+        assert!(fixture.wait_client_configure(client_id, Duration::from_secs(10)));
+        assert!(fixture.flush(Duration::from_secs(10)));
 
         assert!(
             fixture
@@ -311,11 +297,8 @@ fn window_handle_toggle_fullscreen() {
             },
         }
 
-        fixture
-            .client(client_id)
-            .window_for_surface(&surface)
-            .ack_and_commit();
-        fixture.double_roundtrip(client_id);
+        assert!(fixture.wait_client_configure(client_id, Duration::from_secs(10)));
+        assert!(fixture.flush(Duration::from_secs(10)));
 
         assert!(
             !fixture
@@ -350,11 +333,8 @@ fn window_handle_set_maximized() {
             },
         }
 
-        fixture
-            .client(client_id)
-            .window_for_surface(&surface)
-            .ack_and_commit();
-        fixture.double_roundtrip(client_id);
+        assert!(fixture.wait_client_configure(client_id, Duration::from_secs(10)));
+        assert!(fixture.flush(Duration::from_secs(10)));
 
         assert!(
             fixture
@@ -378,11 +358,8 @@ fn window_handle_set_maximized() {
             },
         }
 
-        fixture
-            .client(client_id)
-            .window_for_surface(&surface)
-            .ack_and_commit();
-        fixture.double_roundtrip(client_id);
+        assert!(fixture.wait_client_configure(client_id, Duration::from_secs(10)));
+        assert!(fixture.flush(Duration::from_secs(10)));
 
         assert!(
             !fixture
@@ -417,11 +394,8 @@ fn window_handle_toggle_maximized() {
             },
         }
 
-        fixture
-            .client(client_id)
-            .window_for_surface(&surface)
-            .ack_and_commit();
-        fixture.double_roundtrip(client_id);
+        assert!(fixture.wait_client_configure(client_id, Duration::from_secs(10)));
+        assert!(fixture.flush(Duration::from_secs(10)));
 
         assert!(
             fixture
@@ -445,11 +419,8 @@ fn window_handle_toggle_maximized() {
             },
         }
 
-        fixture
-            .client(client_id)
-            .window_for_surface(&surface)
-            .ack_and_commit();
-        fixture.double_roundtrip(client_id);
+        assert!(fixture.wait_client_configure(client_id, Duration::from_secs(10)));
+        assert!(fixture.flush(Duration::from_secs(10)));
 
         assert!(
             !fixture
@@ -470,7 +441,7 @@ fn window_handle_set_floating() {
 
         let client_id = fixture.add_client();
 
-        let surface = fixture.spawn_windows(1, client_id).remove(0);
+        let _surface = fixture.spawn_windows(1, client_id).remove(0);
 
         match lang {
             Lang::Rust => fixture.spawn_blocking(|| {
@@ -484,11 +455,8 @@ fn window_handle_set_floating() {
             },
         }
 
-        fixture
-            .client(client_id)
-            .window_for_surface(&surface)
-            .ack_and_commit();
-        fixture.roundtrip(client_id);
+        assert!(fixture.wait_client_configure(client_id, Duration::from_secs(10)));
+        assert!(fixture.flush(Duration::from_secs(10)));
 
         let window = fixture.pinnacle().windows[0].clone();
         assert!(window.with_state(|state| state.layout_mode.is_floating()));
@@ -505,11 +473,8 @@ fn window_handle_set_floating() {
             },
         }
 
-        fixture
-            .client(client_id)
-            .window_for_surface(&surface)
-            .ack_and_commit();
-        fixture.roundtrip(client_id);
+        assert!(fixture.wait_client_configure(client_id, Duration::from_secs(10)));
+        assert!(fixture.flush(Duration::from_secs(10)));
 
         let window = fixture.pinnacle().windows[0].clone();
         assert!(window.with_state(|state| !state.layout_mode.is_floating()));
@@ -523,7 +488,7 @@ fn window_handle_toggle_floating() {
 
         let client_id = fixture.add_client();
 
-        let surface = fixture.spawn_windows(1, client_id).remove(0);
+        let _surface = fixture.spawn_windows(1, client_id).remove(0);
 
         match lang {
             Lang::Rust => fixture.spawn_blocking(|| {
@@ -537,11 +502,8 @@ fn window_handle_toggle_floating() {
             },
         }
 
-        fixture
-            .client(client_id)
-            .window_for_surface(&surface)
-            .ack_and_commit();
-        fixture.roundtrip(client_id);
+        assert!(fixture.wait_client_configure(client_id, Duration::from_secs(10)));
+        assert!(fixture.flush(Duration::from_secs(10)));
 
         let window = fixture.pinnacle().windows[0].clone();
         assert!(window.with_state(|state| state.layout_mode.is_floating()));
@@ -558,11 +520,8 @@ fn window_handle_toggle_floating() {
             },
         }
 
-        fixture
-            .client(client_id)
-            .window_for_surface(&surface)
-            .ack_and_commit();
-        fixture.roundtrip(client_id);
+        assert!(fixture.wait_client_configure(client_id, Duration::from_secs(10)));
+        assert!(fixture.flush(Duration::from_secs(10)));
 
         let window = fixture.pinnacle().windows[0].clone();
         assert!(window.with_state(|state| !state.layout_mode.is_floating()));
@@ -576,7 +535,7 @@ fn window_handle_set_focused() {
 
         let client_id = fixture.add_client();
 
-        let surfaces = fixture.spawn_windows(2, client_id);
+        let _surfaces = fixture.spawn_windows(2, client_id);
 
         let keyboard = fixture.pinnacle().seat.get_keyboard().unwrap();
 
@@ -592,13 +551,8 @@ fn window_handle_set_focused() {
             },
         }
 
-        for surface in surfaces.iter() {
-            fixture
-                .client(client_id)
-                .window_for_surface(surface)
-                .ack_and_commit();
-        }
-        fixture.roundtrip(client_id);
+        assert!(fixture.wait_client_configure(client_id, Duration::from_secs(10)));
+        assert!(fixture.flush(Duration::from_secs(10)));
 
         assert_eq!(keyboard.current_focus(), None);
 
@@ -615,13 +569,8 @@ fn window_handle_set_focused() {
             },
         }
 
-        for surface in surfaces.iter() {
-            fixture
-                .client(client_id)
-                .window_for_surface(surface)
-                .ack_and_commit();
-        }
-        fixture.roundtrip(client_id);
+        assert!(fixture.wait_client_configure(client_id, Duration::from_secs(10)));
+        assert!(fixture.flush(Duration::from_secs(10)));
 
         let first_window = fixture.pinnacle().windows[0].clone();
         assert_eq!(
@@ -642,13 +591,8 @@ fn window_handle_set_focused() {
             },
         }
 
-        for surface in surfaces.iter() {
-            fixture
-                .client(client_id)
-                .window_for_surface(surface)
-                .ack_and_commit();
-        }
-        fixture.roundtrip(client_id);
+        assert!(fixture.wait_client_configure(client_id, Duration::from_secs(10)));
+        assert!(fixture.flush(Duration::from_secs(10)));
 
         let second_window = fixture.pinnacle().windows[1].clone();
         assert_eq!(
@@ -665,7 +609,7 @@ fn window_handle_toggle_focused() {
 
         let client_id = fixture.add_client();
 
-        let surfaces = fixture.spawn_windows(2, client_id);
+        let _surfaces = fixture.spawn_windows(2, client_id);
 
         let keyboard = fixture.pinnacle().seat.get_keyboard().unwrap();
 
@@ -681,13 +625,8 @@ fn window_handle_toggle_focused() {
             },
         }
 
-        for surface in surfaces.iter() {
-            fixture
-                .client(client_id)
-                .window_for_surface(surface)
-                .ack_and_commit();
-        }
-        fixture.roundtrip(client_id);
+        assert!(fixture.wait_client_configure(client_id, Duration::from_secs(10)));
+        assert!(fixture.flush(Duration::from_secs(10)));
 
         assert_eq!(keyboard.current_focus(), None);
 
@@ -704,13 +643,8 @@ fn window_handle_toggle_focused() {
             },
         }
 
-        for surface in surfaces.iter() {
-            fixture
-                .client(client_id)
-                .window_for_surface(surface)
-                .ack_and_commit();
-        }
-        fixture.roundtrip(client_id);
+        assert!(fixture.wait_client_configure(client_id, Duration::from_secs(10)));
+        assert!(fixture.flush(Duration::from_secs(10)));
 
         let first_window = fixture.pinnacle().windows[0].clone();
         assert_eq!(
@@ -731,13 +665,8 @@ fn window_handle_toggle_focused() {
             },
         }
 
-        for surface in surfaces.iter() {
-            fixture
-                .client(client_id)
-                .window_for_surface(surface)
-                .ack_and_commit();
-        }
-        fixture.roundtrip(client_id);
+        assert!(fixture.wait_client_configure(client_id, Duration::from_secs(10)));
+        assert!(fixture.flush(Duration::from_secs(10)));
 
         let second_window = fixture.pinnacle().windows[1].clone();
         assert_eq!(
@@ -754,7 +683,7 @@ fn window_handle_set_decoration_mode() {
 
         let client_id = fixture.add_client();
 
-        let surface = fixture.spawn_windows(1, client_id).remove(0);
+        let _surface = fixture.spawn_windows(1, client_id).remove(0);
         let window = fixture.pinnacle().windows[0].clone();
 
         assert_eq!(window.with_state(|state| state.decoration_mode), None);
@@ -771,11 +700,8 @@ fn window_handle_set_decoration_mode() {
             },
         }
 
-        fixture
-            .client(client_id)
-            .window_for_surface(&surface)
-            .ack_and_commit();
-        fixture.roundtrip(client_id);
+        assert!(fixture.wait_client_configure(client_id, Duration::from_secs(10)));
+        assert!(fixture.flush(Duration::from_secs(10)));
 
         assert_eq!(
             window.with_state(|state| state.decoration_mode),
@@ -794,11 +720,8 @@ fn window_handle_set_decoration_mode() {
             },
         }
 
-        fixture
-            .client(client_id)
-            .window_for_surface(&surface)
-            .ack_and_commit();
-        fixture.roundtrip(client_id);
+        assert!(fixture.wait_client_configure(client_id, Duration::from_secs(10)));
+        assert!(fixture.flush(Duration::from_secs(10)));
 
         assert_eq!(
             window.with_state(|state| state.decoration_mode),
@@ -1490,7 +1413,7 @@ fn window_handle_move_to_output() {
 
         let client_id = fixture.add_client();
 
-        let surface = fixture.spawn_floating_window_with(client_id, (500, 500), |_| ());
+        let _surface = fixture.spawn_floating_window_with(client_id, (500, 500), |_| ());
 
         let output_name = output2.name();
 
@@ -1507,11 +1430,8 @@ fn window_handle_move_to_output() {
             },
         }
 
-        fixture
-            .client(client_id)
-            .window_for_surface(&surface)
-            .ack_and_commit();
-        fixture.roundtrip(client_id);
+        assert!(fixture.wait_client_configure(client_id, Duration::from_secs(10)));
+        assert!(fixture.flush(Duration::from_secs(10)));
 
         let window = fixture.pinnacle().windows[0].clone();
         let geo = fixture.pinnacle().space.element_geometry(&window).unwrap();
@@ -1527,7 +1447,7 @@ fn window_handle_swap_simple() {
 
         let client_id = fixture.add_client();
 
-        let surfaces = fixture.spawn_windows(4, client_id);
+        let _surfaces = fixture.spawn_windows(4, client_id);
 
         let window = fixture.pinnacle().windows[0].clone();
         let target = fixture.pinnacle().windows[2].clone();
@@ -1537,11 +1457,6 @@ fn window_handle_swap_simple() {
 
         let window_geo = fixture.pinnacle().space.element_geometry(&window);
         let target_geo = fixture.pinnacle().space.element_geometry(&target);
-
-        let serial = fixture
-            .client(client_id)
-            .window_for_surface(&surfaces[0])
-            .current_serial();
 
         match lang {
             Lang::Rust => fixture.spawn_blocking(move || {
@@ -1559,23 +1474,8 @@ fn window_handle_swap_simple() {
             },
         };
 
-        // in case we leave the match block before client gets a configure
-        // FIXME: Add a timeout and bail if hit.
-        fixture.dispatch_until(|fixture| {
-            fixture
-                .client(client_id)
-                .window_for_surface(&surfaces[0])
-                .current_serial()
-                != serial
-        });
-
-        for surf in surfaces.iter() {
-            fixture
-                .client(client_id)
-                .window_for_surface(surf)
-                .ack_and_commit();
-        }
-        fixture.roundtrip(client_id);
+        assert!(fixture.wait_client_configure(client_id, Duration::from_secs(10)));
+        assert!(fixture.flush(Duration::from_secs(10)));
 
         assert_eq!(
             window_geo,
@@ -1671,14 +1571,6 @@ fn window_handle_swap_non_tiled() {
         let window_geo = fixture.pinnacle().space.element_geometry(&window);
         let target_geo = fixture.pinnacle().space.element_geometry(&target);
 
-        for surf in surfaces.iter() {
-            fixture
-                .client(client_id)
-                .window_for_surface(&surf)
-                .ack_and_commit();
-        }
-        fixture.roundtrip(client_id);
-
         match lang {
             Lang::Rust => fixture.spawn_blocking(move || {
                 let window_handle = pinnacle_api::window::WindowHandle::from_id(window_id);
@@ -1695,21 +1587,8 @@ fn window_handle_swap_non_tiled() {
             },
         };
 
-        fixture.dispatch_until(|fixture| {
-            fixture
-                .client(client_id)
-                .window_for_surface(&surfaces[0])
-                .current_serial()
-                .is_some()
-        });
-
-        for surf in surfaces {
-            fixture
-                .client(client_id)
-                .window_for_surface(&surf)
-                .ack_and_commit();
-        }
-        fixture.roundtrip(client_id);
+        assert!(fixture.wait_client_configure(client_id, Duration::from_secs(10)));
+        assert!(fixture.flush(Duration::from_secs(10)));
 
         fixture.dispatch_until(|fixture| !fixture.pinnacle().layout_state.pending_swap);
 
@@ -1757,14 +1636,6 @@ fn window_handle_swap_non_tiled_multi_output() {
         let window_tags = window.with_state(|state| state.tags.clone());
         let target_tags = target.with_state(|state| state.tags.clone());
 
-        for surf in surfaces.iter() {
-            fixture
-                .client(client_id)
-                .window_for_surface(&surf)
-                .ack_and_commit();
-        }
-        fixture.roundtrip(client_id);
-
         match lang {
             Lang::Rust => fixture.spawn_blocking(move || {
                 let window_handle = pinnacle_api::window::WindowHandle::from_id(window_id);
@@ -1781,21 +1652,8 @@ fn window_handle_swap_non_tiled_multi_output() {
             },
         };
 
-        fixture.dispatch_until(|fixture| {
-            fixture
-                .client(client_id)
-                .window_for_surface(&surfaces[0])
-                .current_serial()
-                .is_some()
-        });
-
-        for surf in surfaces {
-            fixture
-                .client(client_id)
-                .window_for_surface(&surf)
-                .ack_and_commit();
-        }
-        fixture.roundtrip(client_id);
+        assert!(fixture.wait_client_configure(client_id, Duration::from_secs(10)));
+        assert!(fixture.flush(Duration::from_secs(10)));
 
         fixture.dispatch_until(|fixture| !fixture.pinnacle().layout_state.pending_swap);
 

@@ -1,7 +1,7 @@
 use std::{
     fs::File,
     io::{Read, Write},
-    time::{Duration, Instant},
+    time::Duration,
 };
 
 use pinnacle::{state::WithState, tag::Tag};
@@ -59,8 +59,7 @@ fn process_spawn() {
             },
         }
 
-        let then = Instant::now();
-        fixture.dispatch_until(|_| then.elapsed() > Duration::from_secs(1));
+        fixture.dispatch_for(Duration::from_secs(1));
 
         assert_eq!(fixture.pinnacle().windows.len(), 1);
         assert_eq!(
@@ -91,8 +90,7 @@ fn process_spawn_unique() {
             },
         }
 
-        let then = Instant::now();
-        fixture.dispatch_until(|_| then.elapsed() > Duration::from_secs(1));
+        fixture.dispatch_for(Duration::from_secs(1));
 
         match lang {
             Lang::Rust => fixture.spawn_blocking(|| {
@@ -110,8 +108,7 @@ fn process_spawn_unique() {
             },
         }
 
-        let then = Instant::now();
-        fixture.dispatch_until(|_| then.elapsed() > Duration::from_secs(1));
+        fixture.dispatch_for(Duration::from_secs(1));
 
         assert_eq!(fixture.pinnacle().windows.len(), 1);
         assert_eq!(
@@ -141,8 +138,7 @@ fn process_spawn_unique() {
             },
         }
 
-        let then = Instant::now();
-        fixture.dispatch_until(|_| then.elapsed() > Duration::from_secs(1));
+        fixture.dispatch_for(Duration::from_secs(1));
 
         assert_eq!(fixture.pinnacle().windows.len(), 1);
         assert_eq!(
@@ -173,8 +169,7 @@ fn process_spawn_once() {
             },
         }
 
-        let then = Instant::now();
-        fixture.dispatch_until(|_| then.elapsed() > Duration::from_secs(1));
+        fixture.dispatch_for(Duration::from_secs(1));
 
         assert_eq!(fixture.pinnacle().windows.len(), 1);
         assert_eq!(
@@ -192,8 +187,7 @@ fn process_spawn_once() {
             },
         }
 
-        let then = Instant::now();
-        fixture.dispatch_until(|_| then.elapsed() > Duration::from_secs(1));
+        fixture.dispatch_for(Duration::from_secs(1));
 
         assert_eq!(fixture.pinnacle().windows.len(), 0);
 
@@ -213,8 +207,7 @@ fn process_spawn_once() {
             },
         }
 
-        let then = Instant::now();
-        fixture.dispatch_until(|_| then.elapsed() > Duration::from_secs(1));
+        fixture.dispatch_for(Duration::from_secs(1));
 
         assert_eq!(fixture.pinnacle().windows.len(), 0);
     });

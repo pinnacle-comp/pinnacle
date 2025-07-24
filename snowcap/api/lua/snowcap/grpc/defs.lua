@@ -8,6 +8,7 @@ local socket = require("cqueues.socket")
 local headers = require("http.headers")
 local h2_connection = require("http.h2_connection")
 local pb = require("pb")
+local stream_ext = require("pinnacle.grpc.stream_extension")
 
 local grpc_client = {}
 
@@ -199,7 +200,7 @@ end
 ---@return table|nil response The response as a table in the structure of `request_specifier.response`, or `nil` if there is an error.
 ---@return string|nil error An error string, if any.
 function Client:unary_request(request_specifier, data)
-    local stream = self.conn:new_stream()
+    local stream = stream_ext.extend(self.conn:new_stream())
 
     local service = request_specifier.service
     local method = request_specifier.method
@@ -208,10 +209,22 @@ function Client:unary_request(request_specifier, data)
 
     local body = encode(request_type, data)
 
-    stream:write_headers(create_request_headers(service, method), false)
-    stream:write_chunk(body, true)
+    local _, err = stream:write_headers(create_request_headers(service, method), false, 1)
+    if err then
+        return nil, tostring(err)
+    end
 
-    local headers = stream:get_headers()
+    local _, err = stream:write_chunk(body, true, 1)
+    if err then
+        return nil, tostring(err)
+    end
+
+    local headers, err = stream:get_headers_with_retries(0.5, 5)
+
+    if err then
+        return nil, tostring(err)
+    end
+
     local grpc_status = headers:get("grpc-status")
     if grpc_status then
         local grpc_status = tonumber(grpc_status)
@@ -226,10 +239,14 @@ function Client:unary_request(request_specifier, data)
         end
     end
 
-    local response_body = stream:get_next_chunk()
+    local response_body, err = stream:get_next_chunk(1)
+    if err then
+        return nil, tostring(err)
+    end
 
-    local trailers = stream:get_headers()
-    if trailers then -- idk if im big dummy or not but there are never any trailers
+    -- Trailers are not handled properly by lua-http 0.4, but this code will work, eventually
+    local trailers, err = stream:get_headers_with_retries(0.5, 5)
+    if trailers then
         for name, value, never_index in trailers:each() do
             print(name, value, never_index)
         end
@@ -255,7 +272,7 @@ end
 ---
 ---@return string|nil error An error string, if any.
 function Client:server_streaming_request(request_specifier, data, callback)
-    local stream = self.conn:new_stream()
+    local stream = stream_ext.extend(self.conn:new_stream())
 
     local service = request_specifier.service
     local method = request_specifier.method
@@ -264,10 +281,21 @@ function Client:server_streaming_request(request_specifier, data, callback)
 
     local body = encode(request_type, data)
 
-    stream:write_headers(create_request_headers(service, method), false)
-    stream:write_chunk(body, true)
+    local _, err = stream:write_headers(create_request_headers(service, method), false, 1)
+    if err then
+        return tostring(err)
+    end
 
-    local headers = stream:get_headers()
+    local _, err = stream:write_chunk(body, true, 1)
+    if err then
+        return tostring(err)
+    end
+
+    local headers, err = stream:get_headers_with_retries(0.5, 5)
+    if err then
+        return tostring(err)
+    end
+
     local grpc_status = headers:get("grpc-status")
     if grpc_status then
         local grpc_status = tonumber(grpc_status)
@@ -300,7 +328,7 @@ function Client:server_streaming_request(request_specifier, data, callback)
             end
         end
 
-        local trailers = stream:get_headers()
+        local trailers = stream:get_headers_with_retries(0.5, 5)
         if trailers then
             for name, value, never_index in trailers:each() do
                 print(name, value, never_index)
@@ -325,15 +353,22 @@ end
 ---@return grpc_client.h2.Stream|nil
 ---@return string|nil error An error string, if any.
 function Client:bidirectional_streaming_request(request_specifier, callback)
-    local stream = self.conn:new_stream()
+    local stream = stream_ext.extend(self.conn:new_stream())
 
     local service = request_specifier.service
     local method = request_specifier.method
     local response_type = request_specifier.response
 
-    stream:write_headers(create_request_headers(service, method), false)
+    local _, err = stream:write_headers(create_request_headers(service, method), false, 1)
+    if err then
+        return tostring(err)
+    end
 
-    local headers = stream:get_headers()
+    local headers, err = stream:get_headers_with_retries(0.5, 5)
+    if err then
+        return tostring(err)
+    end
+
     local grpc_status = headers:get("grpc-status")
     if grpc_status then
         local grpc_status = tonumber(grpc_status)
@@ -366,7 +401,7 @@ function Client:bidirectional_streaming_request(request_specifier, callback)
             end
         end
 
-        local trailers = stream:get_headers()
+        local trailers = stream:get_headers_with_retries(0.5, 5)
         if trailers then
             for name, value, never_index in trailers:each() do
                 print(name, value, never_index)

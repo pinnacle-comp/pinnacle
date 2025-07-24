@@ -771,6 +771,14 @@ function WindowHandle:swap(target)
     end
 end
 
+---Convert a WindowHandle to a string
+---
+---@param win pinnacle.window.WindowHandle
+---@return string
+local function window_tostring(win)
+    return "window{id=" .. win.id .. "}"
+end
+
 ---Creates a new `WindowHandle` from an id.
 ---@param window_id integer
 ---@return pinnacle.window.WindowHandle
@@ -779,7 +787,7 @@ function window_handle.new(window_id)
     local self = {
         id = window_id,
     }
-    setmetatable(self, { __index = WindowHandle })
+    setmetatable(self, { __index = WindowHandle, __tostring = window_tostring })
     return self
 end
 

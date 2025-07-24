@@ -23,6 +23,7 @@ build = {
         ["pinnacle.grpc.client"] = "pinnacle/grpc/client.lua",
         ["pinnacle.grpc.protobuf"] = "pinnacle/grpc/protobuf.lua",
         ["pinnacle.grpc.defs"] = "pinnacle/grpc/defs.lua",
+        ["pinnacle.grpc.stream_extension"] = "pinnacle/grpc/stream_extension.lua",
         ["pinnacle.input"] = "pinnacle/input.lua",
         ["pinnacle.input.keys"] = "pinnacle/input/keys.lua",
         ["pinnacle.input.libinput"] = "pinnacle/input/libinput.lua",
