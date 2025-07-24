@@ -93,6 +93,7 @@ function tag.get(name, output)
     output = output or require("pinnacle.output").get_focused()
 
     if not output then
+        log.error("Cannot get tags without output")
         return
     end
 
@@ -334,6 +335,10 @@ end
 function TagHandle:name()
     local response, err = client:pinnacle_tag_v1_TagService_GetName({ tag_id = self.id })
 
+    if err then
+        log.error(err)
+    end
+
     return response and response.name or ""
 end
 
@@ -342,6 +347,10 @@ end
 ---@return pinnacle.output.OutputHandle
 function TagHandle:output()
     local response, err = client:pinnacle_tag_v1_TagService_GetOutputName({ tag_id = self.id })
+
+    if err then
+        log.error(err)
+    end
 
     local output_name = response and response.output_name or ""
     return require("pinnacle.output").handle.new(output_name)
