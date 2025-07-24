@@ -26,22 +26,50 @@ local function print_log(level, msg)
 end
 
 ---Prints an INFO message.
-function log.info(msg)
+function log.info(...)
+    local args = { ... }
+    local msg = tostring(table.remove(args, 1))
+
+    for _, v in ipairs(args) do
+        msg = msg .. " " .. tostring(v)
+    end
+
     print_log("INFO", msg)
 end
 
 ---Prints a DEBUG message.
-function log.debug(msg)
+function log.debug(...)
+    local args = { ... }
+    local msg = tostring(table.remove(args, 1))
+
+    for _, v in ipairs(args) do
+        msg = msg .. " " .. tostring(v)
+    end
+
     print_log("DEBUG", msg)
 end
 
 ---Prints a WARN message.
-function log.warn(msg)
+function log.warn(...)
+    local args = { ... }
+    local msg = tostring(table.remove(args, 1))
+
+    for _, v in ipairs(args) do
+        msg = msg .. " " .. tostring(v)
+    end
+
     print_log("WARN", msg)
 end
 
 ---Prints an ERROR message along with file, line, and column information.
-function log.error(msg)
+function log.error(...)
+    local args = { ... }
+    local msg = tostring(table.remove(args, 1))
+
+    for _, v in ipairs(args) do
+        msg = msg .. " " .. tostring(v)
+    end
+
     print_log("ERROR", msg)
 end
 

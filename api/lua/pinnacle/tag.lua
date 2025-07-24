@@ -375,6 +375,14 @@ function TagHandle:windows()
     return wins_on_tag
 end
 
+---Convert a TagHandle to string
+---
+---@param tag pinnacle.tag.TagHandle
+---@return string
+local function tag_tostring(tag)
+    return "tag{id=" .. tag.id .. "}"
+end
+
 ---Creates a new `TagHandle` from an id.
 ---@param tag_id integer
 ---@return pinnacle.tag.TagHandle
@@ -383,7 +391,7 @@ function tag_handle.new(tag_id)
     local self = {
         id = tag_id,
     }
-    setmetatable(self, { __index = TagHandle })
+    setmetatable(self, { __index = TagHandle, __tostring = tag_tostring })
     return self
 end
 
