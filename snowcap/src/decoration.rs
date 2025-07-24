@@ -289,6 +289,27 @@ impl SnowcapDecoration {
             None => iced::mouse::Cursor::Unavailable,
         };
 
+        if self.initial_configure_received {
+            self.widgets.draw(&mut self.renderer, cursor);
+        }
+
+        compositor
+            .present(
+                &mut self.renderer,
+                &mut self.surface,
+                &self.widgets.viewport(self.output_scale),
+                Color::TRANSPARENT,
+                || {},
+            )
+            .unwrap();
+    }
+
+    pub fn update(
+        &mut self,
+        queue_handle: &QueueHandle<State>,
+        runtime: &mut crate::runtime::Runtime,
+        compositor: &mut crate::compositor::Compositor,
+    ) {
         if self.pending_output_scale.is_some() || self.pending_geometry.is_some() {
             if let Some(scale) = self.pending_output_scale.take() {
                 self.output_scale = scale;
@@ -319,26 +340,6 @@ impl SnowcapDecoration {
             compositor.configure_surface(&mut self.surface, buffer_size.width, buffer_size.height);
         }
 
-        if self.initial_configure_received {
-            self.widgets.draw(&mut self.renderer, cursor);
-        }
-
-        compositor
-            .present(
-                &mut self.renderer,
-                &mut self.surface,
-                &self.widgets.viewport(self.output_scale),
-                Color::TRANSPARENT,
-                || {},
-            )
-            .unwrap();
-    }
-
-    pub fn update(
-        &mut self,
-        queue_handle: &QueueHandle<State>,
-        runtime: &mut crate::runtime::Runtime,
-    ) {
         let cursor = match self.pointer_location {
             Some((x, y)) => iced::mouse::Cursor::Available(iced::Point {
                 x: x as f32,
