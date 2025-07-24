@@ -24,13 +24,16 @@
         SOFTWARE.
     </copyright>
 
-    <description summary="delegate server-side decoration to client-provided surfaces">
-        TODO
+    <description summary="let clients draw server-side decorations">
+        This protocol enables clients to draw decorations that are used by the compositor
+        to decorate toplevels.
     </description>
 
     <interface name="snowcap_decoration_manager_v1" version="1">
         <description summary="create surfaces that can decorate toplevels">
-            TODO
+            Clients can use this interface to assign the snowcap_decoration_surface_v1 role
+            to wl_surfaces. Such surfaces are rendered attached to toplevels. Xwayland
+            windows are considered toplevels for this protocol.
         </description>
 
         <request name="get_decoration_surface">
@@ -56,18 +59,10 @@
 
         <request name="destroy" type="destructor">
             <description summary="destroy the decoration manager object">
-                TODO
+                This request indicates that the client will not use the decoration manager object
+                anymore. Objects that have been created through this instance are not affected.
             </description>
         </request>
-
-        <event name="already_bound">
-            <description summary="a client has already bound this protocol">
-                This event indicates that the compositor is already using
-                a client to draw server-side decorations.
-
-                The client should destroy this object.
-            </description>
-        </event>
 
         <enum name="error">
             <entry name="role" value="0" summary="wl_surface has another role"/>
@@ -79,6 +74,15 @@
         <description summary="decoration interface">
             An interface that may be implemented by a wl_surface
             for surfaces that are designed to decorate toplevels.
+
+            Attaching a null buffer to a decoration surface unmaps it.
+
+            Unmapping a decoration surface means that the surface cannot be
+            shown by the compositor until it is explicitly mapped again.
+            The decoration surface returns to the state it had right after
+            get_decoration_surface. The client can re-map the surface by
+            performing a commit without any buffer attached, waiting for a
+            configure event, and handling it as usual.
         </description>
 
         <request name="set_geometry">
@@ -90,8 +94,8 @@
 
                 Geometry is double-buffered; see wl_surface.commit.
             </description>
-            <arg name="x" type="int" />
-            <arg name="y" type="int" />
+            <arg name="x" type="int" summary="x-coordinate relative to the top-left corner not including bounds" />
+            <arg name="y" type="int" summary="y-coordinate relative to the top-left corner not including bounds" />
             <arg name="width" type="uint" />
             <arg name="height" type="uint" />
         </request>
@@ -109,8 +113,10 @@
 
                 The compositor should treat the toplevel as having a size
                 extended by the given amounts in each direction.
+                If multiple clients have set bounds, the bounds of the toplevel
+                are the maximum set for each edge.
 
-                The compositor must respond to this request with a configure event
+                On commit, the compositor must respond to this request with a configure event
                 with the new inner size of the toplevel.
 
                 Bounds are double-buffered; see wl_surface.commit.
@@ -175,7 +181,8 @@
                 received.
 
                 The width and height arguments specify the size of the
-                *toplevel being decorated* in surface-local coordinates.
+                *toplevel being decorated* in surface-local coordinates,
+                ignoring set bounds.
                 The client should update its decoration surface for a toplevel
                 of the received size.
 

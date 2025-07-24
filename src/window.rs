@@ -274,7 +274,9 @@ impl WindowElement {
                 let surf = under_from_surface_tree(
                     deco.wl_surface(),
                     point,
-                    deco.geometry().loc + self.geometry().loc,
+                    deco.geometry().loc
+                        + self.geometry().loc
+                        + Point::new(deco.bounds().left as i32, deco.bounds().top as i32),
                     surface_type,
                 );
                 if surf.is_some() {
@@ -298,7 +300,9 @@ impl WindowElement {
                 let surf = under_from_surface_tree(
                     deco.wl_surface(),
                     point,
-                    deco.geometry().loc + self.geometry().loc,
+                    deco.geometry().loc
+                        + self.geometry().loc
+                        + Point::new(deco.bounds().left as i32, deco.bounds().top as i32),
                     surface_type,
                 );
                 if surf.is_some() {
