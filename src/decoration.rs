@@ -1,8 +1,9 @@
 use std::{
     borrow::Cow,
+    cell::RefCell,
     sync::{
         Arc,
-        atomic::{AtomicU32, Ordering},
+        atomic::{AtomicBool, AtomicU32, Ordering},
     },
     time::Duration,
 };
@@ -21,7 +22,7 @@ use smithay::{
         wayland_protocols::wp::presentation_time::server::wp_presentation_feedback,
         wayland_server::protocol::wl_surface::WlSurface,
     },
-    utils::{IsAlive, Logical, Point, Rectangle, user_data::UserDataMap},
+    utils::{IsAlive, Logical, Point, Rectangle, Serial, user_data::UserDataMap},
     wayland::{
         compositor::{self, SurfaceData},
         dmabuf::DmabufFeedback,
@@ -29,7 +30,11 @@ use smithay::{
     },
 };
 
-use crate::protocol::snowcap_decoration::{self, Bounds, DecorationSurfaceCachedState};
+use crate::{
+    protocol::snowcap_decoration::{self, Bounds, DecorationSurfaceCachedState},
+    state::WithState,
+    util::transaction::Transaction,
+};
 
 static DECORATION_ID_COUNTER: AtomicU32 = AtomicU32::new(0);
 
@@ -189,10 +194,61 @@ impl DecorationSurface {
     pub fn user_data(&self) -> &UserDataMap {
         &self.0.userdata
     }
+
+    /// Takes and returns the most recent transaction that has been committed.
+    pub fn take_pending_transaction(&self, commit_serial: Serial) -> Option<Transaction> {
+        let mut txn = None;
+
+        while let Some(previous_txn_serial) =
+            self.with_state(|state| state.pending_transactions.first().map(|tx| tx.0))
+        {
+            // This drops all transactions older than the most recently committed to release them.
+            if previous_txn_serial <= commit_serial {
+                let (_, transaction) =
+                    self.with_state_mut(|state| state.pending_transactions.remove(0));
+
+                txn = Some(transaction);
+            } else {
+                break;
+            }
+        }
+
+        txn
+    }
 }
 
 impl WaylandFocus for DecorationSurface {
     fn wl_surface(&self) -> Option<Cow<'_, WlSurface>> {
         Some(Cow::Borrowed(self.0.surface.wl_surface()))
+    }
+}
+
+#[derive(Debug, Default)]
+pub struct DecorationSurfaceState {
+    pub bounds_changed: AtomicBool,
+    pub pending_transactions: Vec<(Serial, Transaction)>,
+}
+
+impl WithState for DecorationSurface {
+    type State = DecorationSurfaceState;
+
+    fn with_state<F, T>(&self, func: F) -> T
+    where
+        F: FnOnce(&Self::State) -> T,
+    {
+        let state = self
+            .user_data()
+            .get_or_insert(RefCell::<DecorationSurfaceState>::default);
+        func(&state.borrow())
+    }
+
+    fn with_state_mut<F, T>(&self, func: F) -> T
+    where
+        F: FnOnce(&mut Self::State) -> T,
+    {
+        let state = self
+            .user_data()
+            .get_or_insert(RefCell::<DecorationSurfaceState>::default);
+        func(&mut state.borrow_mut())
     }
 }

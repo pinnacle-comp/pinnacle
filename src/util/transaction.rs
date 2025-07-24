@@ -107,6 +107,15 @@ impl TransactionBuilder {
         }
     }
 
+    pub fn get_transaction(&self, loop_handle: &LoopHandle<'static, State>) -> Transaction {
+        let txn = Transaction {
+            inner: self.inner.clone(),
+            deadline: self.deadline.clone(),
+        };
+        txn.register_deadline_timer(loop_handle);
+        txn
+    }
+
     /// Adds a window to this transaction.
     pub fn add(
         &mut self,
@@ -151,7 +160,7 @@ impl TransactionBuilder {
 }
 
 /// A transaction for a window.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Transaction {
     inner: Arc<Inner>,
     deadline: Rc<RefCell<Deadline>>,

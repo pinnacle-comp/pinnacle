@@ -1,16 +1,14 @@
-use std::{
-    cell::RefCell,
-    sync::atomic::{AtomicBool, Ordering},
-};
+use std::sync::atomic::Ordering;
 
 use smithay::{
     reexports::wayland_protocols::ext::foreign_toplevel_list::v1::server::ext_foreign_toplevel_handle_v1::ExtForeignToplevelHandleV1,
-    wayland::foreign_toplevel_list::ForeignToplevelHandle,
+    wayland::{compositor, foreign_toplevel_list::ForeignToplevelHandle},
 };
 
 use crate::{
     decoration::DecorationSurface,
     delegate_snowcap_decoration,
+    hook::add_decoration_pre_commit_hook,
     protocol::snowcap_decoration::{SnowcapDecorationHandler, SnowcapDecorationState},
     state::{State, WithState},
 };
@@ -51,7 +49,13 @@ impl SnowcapDecorationHandler for State {
         });
         surface.send_configure();
 
+        if let Some(dmabuf_hook) = self.pinnacle.dmabuf_hooks.remove(surface.wl_surface()) {
+            compositor::remove_pre_commit_hook(surface.wl_surface(), dmabuf_hook);
+        }
+
         let decoration_surface = DecorationSurface::new(surface);
+
+        add_decoration_pre_commit_hook(&decoration_surface);
 
         window.with_state_mut(|state| {
             state.decoration_surface = Some(decoration_surface);
@@ -91,32 +95,3 @@ impl SnowcapDecorationHandler for State {
 }
 
 delegate_snowcap_decoration!(State);
-
-#[derive(Debug, Default)]
-pub struct DecorationSurfaceState {
-    pub bounds_changed: AtomicBool,
-}
-
-impl WithState for DecorationSurface {
-    type State = DecorationSurfaceState;
-
-    fn with_state<F, T>(&self, func: F) -> T
-    where
-        F: FnOnce(&Self::State) -> T,
-    {
-        let state = self
-            .user_data()
-            .get_or_insert(RefCell::<DecorationSurfaceState>::default);
-        func(&state.borrow())
-    }
-
-    fn with_state_mut<F, T>(&self, func: F) -> T
-    where
-        F: FnOnce(&mut Self::State) -> T,
-    {
-        let state = self
-            .user_data()
-            .get_or_insert(RefCell::<DecorationSurfaceState>::default);
-        func(&mut state.borrow_mut())
-    }
-}
