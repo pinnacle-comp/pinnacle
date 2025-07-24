@@ -102,6 +102,10 @@ impl DecorationSurface {
         self.cached_state().geometry
     }
 
+    pub fn z_index(&self) -> i32 {
+        self.cached_state().z_index
+    }
+
     pub fn bbox(&self) -> Rectangle<i32, Logical> {
         bbox_from_surface_tree(self.0.surface.wl_surface(), (0, 0))
     }
