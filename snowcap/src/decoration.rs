@@ -307,6 +307,13 @@ impl SnowcapDecoration {
                 self.widgets.size().height as i32,
             );
 
+            self.decoration.set_geometry(
+                self.geometry.x,
+                self.geometry.y,
+                self.geometry.w,
+                self.geometry.h,
+            );
+
             let buffer_size = self.widgets.viewport(self.output_scale).physical_size();
 
             compositor.configure_surface(&mut self.surface, buffer_size.width, buffer_size.height);
