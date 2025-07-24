@@ -7,7 +7,10 @@ use std::{cell::RefCell, collections::HashMap, ops::Deref, rc::Rc};
 use indexmap::IndexSet;
 use rules::{ClientRequests, WindowRules};
 use smithay::{
-    desktop::{Window, WindowSurface, space::SpaceElement},
+    desktop::{
+        PopupManager, Window, WindowSurface, WindowSurfaceType, space::SpaceElement,
+        utils::under_from_surface_tree,
+    },
     output::{Output, WeakOutput},
     reexports::{
         wayland_protocols::xdg::shell::server::xdg_positioner::{
@@ -238,6 +241,76 @@ impl WindowElement {
 
         #[cfg(not(feature = "snowcap"))]
         self.0.geometry()
+    }
+
+    pub fn surface_under<P: Into<Point<f64, Logical>>>(
+        &self,
+        point: P,
+        surface_type: WindowSurfaceType,
+    ) -> Option<(WlSurface, Point<i32, Logical>)> {
+        #[cfg(feature = "snowcap")]
+        {
+            let point = point.into();
+
+            if let Some(surface) = self.wl_surface()
+                && surface_type.contains(WindowSurfaceType::POPUP)
+            {
+                for (popup, location) in PopupManager::popups_for_surface(&surface) {
+                    let offset = self.geometry().loc + location - popup.geometry().loc;
+                    let surf =
+                        under_from_surface_tree(popup.wl_surface(), point, offset, surface_type);
+                    if surf.is_some() {
+                        return surf;
+                    }
+                }
+            }
+
+            let deco = self.with_state(|state| state.decoration_surface.clone());
+
+            if let Some(deco) = deco.as_ref()
+                && deco.z_index() >= 0
+                && surface_type.contains(WindowSurfaceType::TOPLEVEL)
+            {
+                let surf = under_from_surface_tree(
+                    deco.wl_surface(),
+                    point,
+                    deco.geometry().loc + self.geometry().loc,
+                    surface_type,
+                );
+                if surf.is_some() {
+                    return surf;
+                }
+            }
+
+            if let Some(surface) = self.wl_surface()
+                && surface_type.contains(WindowSurfaceType::TOPLEVEL)
+            {
+                let surf = under_from_surface_tree(&surface, point, (0, 0), surface_type);
+                if surf.is_some() {
+                    return surf;
+                }
+            }
+
+            if let Some(deco) = deco.as_ref()
+                && deco.z_index() < 0
+                && surface_type.contains(WindowSurfaceType::TOPLEVEL)
+            {
+                let surf = under_from_surface_tree(
+                    deco.wl_surface(),
+                    point,
+                    deco.geometry().loc + self.geometry().loc,
+                    surface_type,
+                );
+                if surf.is_some() {
+                    return surf;
+                }
+            }
+
+            None
+        }
+
+        #[cfg(not(feature = "snowcap"))]
+        self.0.surface_under(point, surface_type)
     }
 }
 
