@@ -149,9 +149,7 @@ impl WindowElement {
         let _span = tracy_client::span!("WindowElement::render_elements");
 
         let popup_location = location.to_physical_precise_round(scale);
-        #[cfg(feature = "snowcap")]
-        let location_pre_geo = location.to_physical_precise_round(scale);
-        let location = (location - self.geometry().loc).to_physical_precise_round(scale);
+        let window_location = (location - self.geometry().loc).to_physical_precise_round(scale);
 
         let deco_elems = self.with_state(|state| {
             #[cfg(feature = "snowcap")]
@@ -160,10 +158,15 @@ impl WindowElement {
                     .decoration_surface
                     .as_ref()
                     .map(|deco| {
+                        let deco_location = {
+                            let deco_loc = location + deco.geometry().loc;
+                            deco_loc.to_physical_precise_round(scale)
+                        };
+
                         let surface_elements = render_elements_from_surface_tree(
                             renderer,
                             deco.wl_surface(),
-                            location_pre_geo,
+                            deco_location,
                             scale,
                             alpha,
                             element::Kind::Unspecified,
@@ -189,7 +192,7 @@ impl WindowElement {
                     .chain(render_elements_from_surface_tree(
                         renderer,
                         surface,
-                        location,
+                        window_location,
                         scale,
                         alpha,
                         element::Kind::Unspecified,
@@ -208,7 +211,11 @@ impl WindowElement {
                 let surface_elements = deco_elems
                     .into_iter()
                     .chain(AsRenderElements::render_elements(
-                        s, renderer, location, scale, alpha,
+                        s,
+                        renderer,
+                        window_location,
+                        scale,
+                        alpha,
                     ))
                     .collect();
                 SplitRenderElements {
