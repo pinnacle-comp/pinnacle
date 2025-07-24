@@ -491,12 +491,20 @@ function libinput.for_each_device(for_each)
     })
 end
 
+---Convert a DeviceHandle to string
+---
+---@param device pinnacle.input.libinput.DeviceHandle
+---@return string
+local function device_tostring(device)
+    return "device{systname=" .. device.sysname .. "}"
+end
+
 ---@return pinnacle.input.libinput.DeviceHandle
 ---@private
 ---@lcat nodoc
 function libinput.new_device(sysname)
     local device = { sysname = sysname }
-    setmetatable(device, { __index = DeviceHandle })
+    setmetatable(device, { __index = DeviceHandle, __tostring = device_tostring })
     return device
 end
 
