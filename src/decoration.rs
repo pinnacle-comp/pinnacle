@@ -98,8 +98,8 @@ impl DecorationSurface {
         self.cached_state().bounds
     }
 
-    pub fn geometry(&self) -> Rectangle<i32, Logical> {
-        self.cached_state().geometry
+    pub fn location(&self) -> Point<i32, Logical> {
+        self.cached_state().location
     }
 
     pub fn z_index(&self) -> i32 {

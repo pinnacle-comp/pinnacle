@@ -159,9 +159,7 @@ impl WindowElement {
                     .as_ref()
                     .map(|deco| {
                         let deco_location = {
-                            let deco_loc = location
-                                + deco.geometry().loc
-                                + Point::new(deco.bounds().left as i32, deco.bounds().top as i32);
+                            let deco_loc = location + deco.location();
                             deco_loc.to_physical_precise_round(scale)
                         };
 

@@ -44,10 +44,7 @@ impl Dispatch<SnowcapDecorationSurfaceV1, ()> for State {
                     return;
                 };
 
-                let pending_geo = deco.pending_geometry.insert(deco.geometry);
-
-                pending_geo.w = width + deco.bounds.left + deco.bounds.right;
-                pending_geo.h = height + deco.bounds.top + deco.bounds.bottom;
+                deco.pending_toplevel_size = Some(iced::Size::new(width, height));
 
                 deco.initial_configure_received = true;
                 deco.schedule_redraw();

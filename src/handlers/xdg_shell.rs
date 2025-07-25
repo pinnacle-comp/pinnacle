@@ -35,6 +35,19 @@ impl XdgShellHandler for State {
 
         let window = WindowElement::new(Window::new_wayland_window(surface.clone()));
 
+        let handle = self
+            .pinnacle
+            .foreign_toplevel_list_state
+            .new_toplevel::<State>(
+                // These will most likely be empty at this point
+                window.title().unwrap_or_default(),
+                window.class().unwrap_or_default(),
+            );
+        window.with_state_mut(|state| {
+            assert!(state.foreign_toplevel_list_handle.is_none());
+            state.foreign_toplevel_list_handle = Some(handle);
+        });
+
         // Gets wleird-slow-ack-configure working
         // surface.with_pending_state(|state| {
         //     state.size = Some((600, 400).into());
