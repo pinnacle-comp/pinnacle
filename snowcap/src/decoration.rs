@@ -61,6 +61,7 @@ pub struct SnowcapDecoration {
     pub decoration: SnowcapDecorationSurfaceV1,
     pub wl_surface: WlSurface,
     pub loop_handle: LoopHandle<'static, State>,
+    pub foreign_toplevel_list_handle: ExtForeignToplevelHandleV1,
 
     pub renderer: iced_renderer::Renderer,
 
@@ -86,8 +87,10 @@ pub struct SnowcapDecoration {
 
     pub initial_configure_received: bool,
 
-    pub geometry: Geometry,
-    pub pending_geometry: Option<Geometry>,
+    pub extents: Bounds,
+    pub pending_toplevel_size: Option<iced::Size<u32>>,
+    pub toplevel_size: iced::Size<u32>,
+
     pub bounds: Bounds,
 }
 
@@ -148,12 +151,20 @@ pub struct Geometry {
 impl SnowcapDecoration {
     pub fn new(
         state: &mut State,
-        toplevel: &ExtForeignToplevelHandleV1,
+        toplevel_identifier: String,
         bounds: Bounds,
         z_index: i32,
-        geometry: Geometry,
+        extents: Bounds,
         widgets: ViewFn,
-    ) -> Self {
+    ) -> Option<Self> {
+        let foreign_toplevel_list_handle = state
+            .foreign_toplevel_list_handles
+            .iter()
+            .find_map(|(handle, ident)| {
+                (ident.identifier() == Some(&toplevel_identifier)).then_some(handle)
+            })
+            .cloned()?;
+
         let surface = state.compositor_state.create_surface(&state.queue_handle);
         let viewport = state
             .viewporter
@@ -166,14 +177,17 @@ impl SnowcapDecoration {
 
         let deco = state.snowcap_decoration_manager.get_decoration_surface(
             &surface,
-            toplevel,
+            &foreign_toplevel_list_handle,
             &state.queue_handle,
             (),
         );
 
         deco.set_bounds(bounds.left, bounds.right, bounds.top, bounds.bottom);
         deco.set_z_index(z_index);
-        deco.set_geometry(geometry.x, geometry.y, geometry.w, geometry.h);
+        deco.set_location(
+            bounds.left as i32 - extents.left as i32,
+            bounds.top as i32 - extents.top as i32,
+        );
 
         surface.commit();
 
@@ -204,24 +218,21 @@ impl SnowcapDecoration {
 
         let mut renderer = compositor.create_renderer();
 
-        let iced_surface = compositor.create_surface(deco_window_handle, geometry.w, geometry.h);
+        let iced_surface = compositor.create_surface(deco_window_handle, 1, 1);
 
         let clipboard =
             unsafe { WaylandClipboard::new(state.conn.backend().display_ptr() as *mut _) };
 
         let next_id = state.decoration_id_counter.next();
 
-        let widgets = SnowcapWidgetProgram::new(
-            widgets,
-            Size::new(geometry.w as f32, geometry.h as f32),
-            &mut renderer,
-        );
+        let widgets = SnowcapWidgetProgram::new(widgets, Size::new(1.0, 1.0), &mut renderer);
 
-        Self {
+        Some(Self {
             surface: iced_surface,
             loop_handle: state.loop_handle.clone(),
             decoration: deco,
             wl_surface: surface,
+            foreign_toplevel_list_handle,
             output_scale: 1.0,
             pending_output_scale: None,
             widgets,
@@ -237,10 +248,11 @@ impl SnowcapDecoration {
             widget_event_sender: None,
             initial_configure_received: false,
             redraw_requested: false,
-            geometry,
-            pending_geometry: None,
+            extents,
+            pending_toplevel_size: None,
+            toplevel_size: iced::Size::new(1, 1),
             bounds,
-        }
+        })
     }
 
     pub fn schedule_redraw(&mut self) {
@@ -264,12 +276,30 @@ impl SnowcapDecoration {
     pub fn update_properties(
         &mut self,
         widgets: Option<ViewFn>,
-
+        bounds: Option<Bounds>,
+        extents: Option<Bounds>,
+        z_index: Option<i32>,
         queue_handle: &QueueHandle<State>,
     ) {
         if let Some(widgets) = widgets {
             self.widgets
                 .update_view(widgets, self.widget_bounds(), &mut self.renderer);
+        }
+
+        // FIXME: make these pending, update on next draw + commit
+
+        if let Some(bounds) = bounds {
+            self.decoration
+                .set_bounds(bounds.left, bounds.right, bounds.top, bounds.bottom);
+            self.bounds = bounds;
+        }
+
+        if let Some(extents) = extents {
+            self.extents = extents;
+        }
+
+        if let Some(z_index) = z_index {
+            self.decoration.set_z_index(z_index);
         }
 
         self.request_frame(queue_handle);
@@ -310,29 +340,20 @@ impl SnowcapDecoration {
         runtime: &mut crate::runtime::Runtime,
         compositor: &mut crate::compositor::Compositor,
     ) {
-        if self.pending_output_scale.is_some() || self.pending_geometry.is_some() {
+        if self.pending_output_scale.is_some() || self.pending_toplevel_size.is_some() {
             if let Some(scale) = self.pending_output_scale.take() {
                 self.output_scale = scale;
             }
-            if let Some(geo) = self.pending_geometry.take() {
-                self.geometry = geo;
+            if let Some(size) = self.pending_toplevel_size.take() {
+                self.toplevel_size = size;
             }
 
             self.widgets
                 .rebuild_ui(self.widget_bounds(), &mut self.renderer);
 
-            // self.layer
-            //     .set_size(self.widgets.size().width, self.widgets.size().height);
             self.viewport.set_destination(
                 self.widgets.size().width as i32,
                 self.widgets.size().height as i32,
-            );
-
-            self.decoration.set_geometry(
-                self.geometry.x,
-                self.geometry.y,
-                self.geometry.w,
-                self.geometry.h,
             );
 
             let buffer_size = self.widgets.viewport(self.output_scale).physical_size();
@@ -416,7 +437,10 @@ impl SnowcapDecoration {
     }
 
     pub fn widget_bounds(&self) -> iced::Size<u32> {
-        iced::Size::new(self.geometry.w, self.geometry.h)
+        iced::Size::new(
+            self.toplevel_size.width + self.extents.left + self.extents.right,
+            self.toplevel_size.height + self.extents.top + self.extents.bottom,
+        )
     }
 
     pub fn request_frame(&self, queue_handle: &QueueHandle<State>) {

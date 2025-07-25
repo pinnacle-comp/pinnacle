@@ -47,6 +47,7 @@ build = {
         ["pinnacle.snowcap.snowcap.input.keys"] = "pinnacle/snowcap/snowcap/input/keys.lua",
         ["pinnacle.snowcap.snowcap.widget"] = "pinnacle/snowcap/snowcap/widget.lua",
         ["pinnacle.snowcap.snowcap.layer"] = "pinnacle/snowcap/snowcap/layer.lua",
+        ["pinnacle.snowcap.snowcap.decoration"] = "pinnacle/snowcap/snowcap/decoration.lua",
         ["pinnacle.snowcap.snowcap.util"] = "pinnacle/snowcap/snowcap/util.lua",
         ["pinnacle.snowcap.snowcap.log"] = "pinnacle/snowcap/snowcap/log.lua",
     },

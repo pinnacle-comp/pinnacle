@@ -85,19 +85,17 @@
             configure event, and handling it as usual.
         </description>
 
-        <request name="set_geometry">
-            <description summary="set the geometry of the decoration surface">
-                The geometry of a decoration surface is its location
+        <request name="set_location">
+            <description summary="set the location of the decoration surface">
+                The location of a decoration surface is its position
                 relative to the top-left corner of the decorated toplevel
-                (as set by xdg_toplevel.set_window_geometry) and its size
-                in surface-local coordinates.
+                (as set by xdg_toplevel.set_window_geometry and taking into
+                account set bounds).
 
                 Geometry is double-buffered; see wl_surface.commit.
             </description>
-            <arg name="x" type="int" summary="x-coordinate relative to the top-left corner not including bounds" />
-            <arg name="y" type="int" summary="y-coordinate relative to the top-left corner not including bounds" />
-            <arg name="width" type="uint" />
-            <arg name="height" type="uint" />
+            <arg name="x" type="int" summary="x-coordinate relative to the top-left corner including bounds" />
+            <arg name="y" type="int" summary="y-coordinate relative to the top-left corner including bounds" />
         </request>
 
         <request name="set_bounds">

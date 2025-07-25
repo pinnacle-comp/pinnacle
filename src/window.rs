@@ -274,9 +274,7 @@ impl WindowElement {
                 let surf = under_from_surface_tree(
                     deco.wl_surface(),
                     point,
-                    deco.geometry().loc
-                        + self.geometry().loc
-                        + Point::new(deco.bounds().left as i32, deco.bounds().top as i32),
+                    deco.location() + self.geometry().loc,
                     surface_type,
                 );
                 if surf.is_some() {
@@ -300,9 +298,7 @@ impl WindowElement {
                 let surf = under_from_surface_tree(
                     deco.wl_surface(),
                     point,
-                    deco.geometry().loc
-                        + self.geometry().loc
-                        + Point::new(deco.bounds().left as i32, deco.bounds().top as i32),
+                    deco.location() + self.geometry().loc,
                     surface_type,
                 );
                 if surf.is_some() {
@@ -755,18 +751,6 @@ impl State {
             };
             (window, attempt_float_on_map, focus)
         };
-
-        let handle = self
-            .pinnacle
-            .foreign_toplevel_list_state
-            .new_toplevel::<State>(
-                window.title().unwrap_or_default(),
-                window.class().unwrap_or_default(),
-            );
-        window.with_state_mut(|state| {
-            assert!(state.foreign_toplevel_list_handle.is_none());
-            state.foreign_toplevel_list_handle = Some(handle);
-        });
 
         self.pinnacle.windows.push(window.clone());
 

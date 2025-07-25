@@ -13,7 +13,10 @@ use smithay_client_toolkit::{
             protocol::{wl_keyboard::WlKeyboard, wl_pointer::WlPointer},
         },
         protocols::{
-            ext::foreign_toplevel_list::v1::client::ext_foreign_toplevel_list_v1::ExtForeignToplevelListV1,
+            ext::foreign_toplevel_list::v1::client::{
+                ext_foreign_toplevel_handle_v1::ExtForeignToplevelHandleV1,
+                ext_foreign_toplevel_list_v1::ExtForeignToplevelListV1,
+            },
             wp::{
                 fractional_scale::v1::client::wp_fractional_scale_manager_v1::WpFractionalScaleManagerV1,
                 viewporter::client::wp_viewporter::WpViewporter,
@@ -29,7 +32,7 @@ use xkbcommon::xkb::Keysym;
 
 use crate::{
     decoration::{DecorationIdCounter, SnowcapDecoration},
-    handlers::keyboard::KeyboardFocus,
+    handlers::{foreign_toplevel_list::ForeignToplevelListHandleData, keyboard::KeyboardFocus},
     layer::{LayerIdCounter, SnowcapLayer},
     runtime::{CalloopSenderSink, CurrentTokioExecutor},
     server::GrpcServerState,
@@ -70,6 +73,9 @@ pub struct State {
 
     pub layer_id_counter: LayerIdCounter,
     pub decoration_id_counter: DecorationIdCounter,
+
+    pub foreign_toplevel_list_handles:
+        Vec<(ExtForeignToplevelHandleV1, ForeignToplevelListHandleData)>,
 }
 
 impl State {
@@ -209,6 +215,7 @@ impl State {
             pointer: None,
             layer_id_counter: LayerIdCounter::default(),
             decoration_id_counter: DecorationIdCounter::default(),
+            foreign_toplevel_list_handles: Vec::new(),
         };
 
         Ok(state)

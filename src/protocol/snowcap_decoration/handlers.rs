@@ -9,7 +9,7 @@ use smithay::{
         backend::{ClientId, InvalidId},
         protocol::wl_surface::WlSurface,
     },
-    utils::{Rectangle, Serial},
+    utils::{Point, Serial},
     wayland::compositor,
 };
 use snowcap_protocols::snowcap_decoration_v1::server::{
@@ -163,15 +163,9 @@ where
         _data_init: &mut smithay::reexports::wayland_server::DataInit<'_, D>,
     ) {
         match request {
-            snowcap_decoration_surface_v1::Request::SetGeometry {
-                x,
-                y,
-                width,
-                height,
-            } => {
+            snowcap_decoration_surface_v1::Request::SetLocation { x, y } => {
                 let _ = with_surface_pending_state(resource, |data| {
-                    data.geometry =
-                        Rectangle::new((x, y).into(), (width as i32, height as i32).into());
+                    data.location = Point::new(x, y);
                 });
             }
             snowcap_decoration_surface_v1::Request::SetBounds {

@@ -8,7 +8,7 @@ use smithay::{
             protocol::wl_surface::WlSurface,
         },
     },
-    utils::{IsAlive, Logical, Rectangle, SERIAL_COUNTER, Serial, Size},
+    utils::{IsAlive, Logical, Point, SERIAL_COUNTER, Serial, Size},
     wayland::compositor::{self, Cacheable},
 };
 use snowcap_protocols::snowcap_decoration_v1::server::{
@@ -107,7 +107,7 @@ pub struct DecorationSurfaceState {
 
 #[derive(Clone, Copy, Default, Debug)]
 pub struct DecorationSurfaceCachedState {
-    pub geometry: Rectangle<i32, Logical>,
+    pub location: Point<i32, Logical>,
     pub bounds: Bounds,
     pub z_index: i32,
 }

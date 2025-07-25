@@ -484,6 +484,60 @@ end
 ---@field request string The fully-qualified request type
 ---@field response string The fully-qualified response type
 
+---@enum snowcap.widget.v1.Alignment
+local snowcap_widget_v1_Alignment = {
+    ALIGNMENT_UNSPECIFIED = 0,
+    ALIGNMENT_START = 1,
+    ALIGNMENT_CENTER = 2,
+    ALIGNMENT_END = 3,
+}
+
+---@enum snowcap.widget.v1.Font.Weight
+local snowcap_widget_v1_Font_Weight = {
+    WEIGHT_UNSPECIFIED = 0,
+    WEIGHT_THIN = 1,
+    WEIGHT_EXTRA_LIGHT = 2,
+    WEIGHT_LIGHT = 3,
+    WEIGHT_NORMAL = 4,
+    WEIGHT_MEDIUM = 5,
+    WEIGHT_SEMIBOLD = 6,
+    WEIGHT_BOLD = 7,
+    WEIGHT_EXTRA_BOLD = 8,
+    WEIGHT_BLACK = 9,
+}
+
+---@enum snowcap.widget.v1.Font.Stretch
+local snowcap_widget_v1_Font_Stretch = {
+    STRETCH_UNSPECIFIED = 0,
+    STRETCH_ULTRA_CONDENSED = 1,
+    STRETCH_EXTRA_CONDENSED = 2,
+    STRETCH_CONDENSED = 3,
+    STRETCH_SEMI_CONDENSED = 4,
+    STRETCH_NORMAL = 5,
+    STRETCH_SEMI_EXPANDED = 6,
+    STRETCH_EXPANDED = 7,
+    STRETCH_EXTRA_EXPANDED = 8,
+    STRETCH_ULTRA_EXPANDED = 9,
+}
+
+---@enum snowcap.widget.v1.Font.Style
+local snowcap_widget_v1_Font_Style = {
+    STYLE_UNSPECIFIED = 0,
+    STYLE_NORMAL = 1,
+    STYLE_ITALIC = 2,
+    STYLE_OBLIQUE = 3,
+}
+
+---@enum snowcap.widget.v1.Image.ContentFit
+local snowcap_widget_v1_Image_ContentFit = {
+    CONTENT_FIT_UNSPECIFIED = 0,
+    CONTENT_FIT_CONTAIN = 1,
+    CONTENT_FIT_COVER = 2,
+    CONTENT_FIT_FILL = 3,
+    CONTENT_FIT_NONE = 4,
+    CONTENT_FIT_SCALE_DOWN = 5,
+}
+
 ---@enum snowcap.widget.v0alpha1.Alignment
 local snowcap_widget_v0alpha1_Alignment = {
     ALIGNMENT_UNSPECIFIED = 0,
@@ -565,60 +619,6 @@ local snowcap_layer_v0alpha1_Layer = {
     LAYER_OVERLAY = 4,
 }
 
----@enum snowcap.widget.v1.Alignment
-local snowcap_widget_v1_Alignment = {
-    ALIGNMENT_UNSPECIFIED = 0,
-    ALIGNMENT_START = 1,
-    ALIGNMENT_CENTER = 2,
-    ALIGNMENT_END = 3,
-}
-
----@enum snowcap.widget.v1.Font.Weight
-local snowcap_widget_v1_Font_Weight = {
-    WEIGHT_UNSPECIFIED = 0,
-    WEIGHT_THIN = 1,
-    WEIGHT_EXTRA_LIGHT = 2,
-    WEIGHT_LIGHT = 3,
-    WEIGHT_NORMAL = 4,
-    WEIGHT_MEDIUM = 5,
-    WEIGHT_SEMIBOLD = 6,
-    WEIGHT_BOLD = 7,
-    WEIGHT_EXTRA_BOLD = 8,
-    WEIGHT_BLACK = 9,
-}
-
----@enum snowcap.widget.v1.Font.Stretch
-local snowcap_widget_v1_Font_Stretch = {
-    STRETCH_UNSPECIFIED = 0,
-    STRETCH_ULTRA_CONDENSED = 1,
-    STRETCH_EXTRA_CONDENSED = 2,
-    STRETCH_CONDENSED = 3,
-    STRETCH_SEMI_CONDENSED = 4,
-    STRETCH_NORMAL = 5,
-    STRETCH_SEMI_EXPANDED = 6,
-    STRETCH_EXPANDED = 7,
-    STRETCH_EXTRA_EXPANDED = 8,
-    STRETCH_ULTRA_EXPANDED = 9,
-}
-
----@enum snowcap.widget.v1.Font.Style
-local snowcap_widget_v1_Font_Style = {
-    STYLE_UNSPECIFIED = 0,
-    STYLE_NORMAL = 1,
-    STYLE_ITALIC = 2,
-    STYLE_OBLIQUE = 3,
-}
-
----@enum snowcap.widget.v1.Image.ContentFit
-local snowcap_widget_v1_Image_ContentFit = {
-    CONTENT_FIT_UNSPECIFIED = 0,
-    CONTENT_FIT_CONTAIN = 1,
-    CONTENT_FIT_COVER = 2,
-    CONTENT_FIT_FILL = 3,
-    CONTENT_FIT_NONE = 4,
-    CONTENT_FIT_SCALE_DOWN = 5,
-}
-
 ---@enum snowcap.layer.v1.Anchor
 local snowcap_layer_v1_Anchor = {
     ANCHOR_UNSPECIFIED = 0,
@@ -652,163 +652,6 @@ local snowcap_layer_v1_Layer = {
 
 
 ---@alias google.protobuf.Empty nil
-
----@class snowcap.input.v0alpha1.Modifiers
----@field shift boolean?
----@field ctrl boolean?
----@field alt boolean?
----@field super boolean?
-
----@class snowcap.input.v0alpha1.KeyboardKeyRequest
----@field id integer?
-
----@class snowcap.input.v0alpha1.KeyboardKeyResponse
----@field key integer?
----@field modifiers snowcap.input.v0alpha1.Modifiers?
----@field pressed boolean?
-
----@class snowcap.input.v0alpha1.PointerButtonRequest
----@field id integer?
-
----@class snowcap.input.v0alpha1.PointerButtonResponse
----@field button integer?
----@field pressed boolean?
-
----@class snowcap.input.v1.Modifiers
----@field shift boolean?
----@field ctrl boolean?
----@field alt boolean?
----@field super boolean?
-
----@class snowcap.input.v1.KeyboardKeyRequest
----@field id integer?
-
----@class snowcap.input.v1.KeyboardKeyResponse
----@field key integer?
----@field modifiers snowcap.input.v1.Modifiers?
----@field pressed boolean?
-
----@class snowcap.input.v1.PointerButtonRequest
----@field id integer?
-
----@class snowcap.input.v1.PointerButtonResponse
----@field button integer?
----@field pressed boolean?
-
----@class snowcap.widget.v0alpha1.Padding
----@field top number?
----@field right number?
----@field bottom number?
----@field left number?
-
----@class snowcap.widget.v0alpha1.Length
----@field fill google.protobuf.Empty?
----@field fill_portion integer?
----@field shrink google.protobuf.Empty?
----@field fixed number?
-
----@class snowcap.widget.v0alpha1.Color
----@field red number?
----@field green number?
----@field blue number?
----@field alpha number?
-
----@class snowcap.widget.v0alpha1.Font
----@field family snowcap.widget.v0alpha1.Font.Family?
----@field weight snowcap.widget.v0alpha1.Font.Weight?
----@field stretch snowcap.widget.v0alpha1.Font.Stretch?
----@field style snowcap.widget.v0alpha1.Font.Style?
-
----@class snowcap.widget.v0alpha1.Font.Family
----@field name string?
----@field serif google.protobuf.Empty?
----@field sans_serif google.protobuf.Empty?
----@field cursive google.protobuf.Empty?
----@field fantasy google.protobuf.Empty?
----@field monospace google.protobuf.Empty?
-
----@class snowcap.widget.v0alpha1.WidgetDef
----@field text snowcap.widget.v0alpha1.Text?
----@field column snowcap.widget.v0alpha1.Column?
----@field row snowcap.widget.v0alpha1.Row?
----@field scrollable snowcap.widget.v0alpha1.Scrollable?
----@field container snowcap.widget.v0alpha1.Container?
-
----@class snowcap.widget.v0alpha1.Text
----@field text string?
----@field pixels number?
----@field width snowcap.widget.v0alpha1.Length?
----@field height snowcap.widget.v0alpha1.Length?
----@field horizontal_alignment snowcap.widget.v0alpha1.Alignment?
----@field vertical_alignment snowcap.widget.v0alpha1.Alignment?
----@field color snowcap.widget.v0alpha1.Color?
----@field font snowcap.widget.v0alpha1.Font?
-
----@class snowcap.widget.v0alpha1.Column
----@field spacing number?
----@field padding snowcap.widget.v0alpha1.Padding?
----@field item_alignment snowcap.widget.v0alpha1.Alignment?
----@field width snowcap.widget.v0alpha1.Length?
----@field height snowcap.widget.v0alpha1.Length?
----@field max_width number?
----@field clip boolean?
----@field children snowcap.widget.v0alpha1.WidgetDef[]?
-
----@class snowcap.widget.v0alpha1.Row
----@field spacing number?
----@field padding snowcap.widget.v0alpha1.Padding?
----@field item_alignment snowcap.widget.v0alpha1.Alignment?
----@field width snowcap.widget.v0alpha1.Length?
----@field height snowcap.widget.v0alpha1.Length?
----@field clip boolean?
----@field children snowcap.widget.v0alpha1.WidgetDef[]?
-
----@class snowcap.widget.v0alpha1.ScrollableDirection
----@field vertical snowcap.widget.v0alpha1.ScrollableProperties?
----@field horizontal snowcap.widget.v0alpha1.ScrollableProperties?
-
----@class snowcap.widget.v0alpha1.ScrollableProperties
----@field width number?
----@field margin number?
----@field scroller_width number?
----@field alignment snowcap.widget.v0alpha1.ScrollableAlignment?
-
----@class snowcap.widget.v0alpha1.Scrollable
----@field width snowcap.widget.v0alpha1.Length?
----@field height snowcap.widget.v0alpha1.Length?
----@field direction snowcap.widget.v0alpha1.ScrollableDirection?
----@field child snowcap.widget.v0alpha1.WidgetDef?
-
----@class snowcap.widget.v0alpha1.Container
----@field padding snowcap.widget.v0alpha1.Padding?
----@field width snowcap.widget.v0alpha1.Length?
----@field height snowcap.widget.v0alpha1.Length?
----@field max_width number?
----@field max_height number?
----@field horizontal_alignment snowcap.widget.v0alpha1.Alignment?
----@field vertical_alignment snowcap.widget.v0alpha1.Alignment?
----@field clip boolean?
----@field child snowcap.widget.v0alpha1.WidgetDef?
----@field text_color snowcap.widget.v0alpha1.Color?
----@field background_color snowcap.widget.v0alpha1.Color?
----@field border_radius number?
----@field border_thickness number?
----@field border_color snowcap.widget.v0alpha1.Color?
-
----@class snowcap.layer.v0alpha1.NewLayerRequest
----@field widget_def snowcap.widget.v0alpha1.WidgetDef?
----@field width integer?
----@field height integer?
----@field anchor snowcap.layer.v0alpha1.Anchor?
----@field keyboard_interactivity snowcap.layer.v0alpha1.KeyboardInteractivity?
----@field exclusive_zone integer?
----@field layer snowcap.layer.v0alpha1.Layer?
-
----@class snowcap.layer.v0alpha1.NewLayerResponse
----@field layer_id integer?
-
----@class snowcap.layer.v0alpha1.CloseRequest
----@field layer_id integer?
 
 ---@class snowcap.widget.v1.Padding
 ---@field top number?
@@ -1003,6 +846,193 @@ local snowcap_layer_v1_Layer = {
 ---@field widget_id integer?
 ---@field button snowcap.widget.v1.Button.Event?
 
+---@class snowcap.decoration.v1.Bounds
+---@field left integer?
+---@field right integer?
+---@field top integer?
+---@field bottom integer?
+
+---@class snowcap.decoration.v1.NewDecorationRequest
+---@field widget_def snowcap.widget.v1.WidgetDef?
+---@field foreign_toplevel_handle_identifier string?
+---@field bounds snowcap.decoration.v1.Bounds?
+---@field extents snowcap.decoration.v1.Bounds?
+---@field z_index integer?
+
+---@class snowcap.decoration.v1.NewDecorationResponse
+---@field decoration_id integer?
+
+---@class snowcap.decoration.v1.CloseRequest
+---@field decoration_id integer?
+
+---@class snowcap.decoration.v1.CloseResponse
+
+---@class snowcap.decoration.v1.UpdateDecorationRequest
+---@field decoration_id integer?
+---@field widget_def snowcap.widget.v1.WidgetDef?
+---@field bounds snowcap.decoration.v1.Bounds?
+---@field extents snowcap.decoration.v1.Bounds?
+---@field z_index integer?
+
+---@class snowcap.decoration.v1.UpdateDecorationResponse
+
+---@class snowcap.input.v0alpha1.Modifiers
+---@field shift boolean?
+---@field ctrl boolean?
+---@field alt boolean?
+---@field super boolean?
+
+---@class snowcap.input.v0alpha1.KeyboardKeyRequest
+---@field id integer?
+
+---@class snowcap.input.v0alpha1.KeyboardKeyResponse
+---@field key integer?
+---@field modifiers snowcap.input.v0alpha1.Modifiers?
+---@field pressed boolean?
+
+---@class snowcap.input.v0alpha1.PointerButtonRequest
+---@field id integer?
+
+---@class snowcap.input.v0alpha1.PointerButtonResponse
+---@field button integer?
+---@field pressed boolean?
+
+---@class snowcap.input.v1.Modifiers
+---@field shift boolean?
+---@field ctrl boolean?
+---@field alt boolean?
+---@field super boolean?
+
+---@class snowcap.input.v1.KeyboardKeyRequest
+---@field id integer?
+
+---@class snowcap.input.v1.KeyboardKeyResponse
+---@field key integer?
+---@field modifiers snowcap.input.v1.Modifiers?
+---@field pressed boolean?
+
+---@class snowcap.input.v1.PointerButtonRequest
+---@field id integer?
+
+---@class snowcap.input.v1.PointerButtonResponse
+---@field button integer?
+---@field pressed boolean?
+
+---@class snowcap.widget.v0alpha1.Padding
+---@field top number?
+---@field right number?
+---@field bottom number?
+---@field left number?
+
+---@class snowcap.widget.v0alpha1.Length
+---@field fill google.protobuf.Empty?
+---@field fill_portion integer?
+---@field shrink google.protobuf.Empty?
+---@field fixed number?
+
+---@class snowcap.widget.v0alpha1.Color
+---@field red number?
+---@field green number?
+---@field blue number?
+---@field alpha number?
+
+---@class snowcap.widget.v0alpha1.Font
+---@field family snowcap.widget.v0alpha1.Font.Family?
+---@field weight snowcap.widget.v0alpha1.Font.Weight?
+---@field stretch snowcap.widget.v0alpha1.Font.Stretch?
+---@field style snowcap.widget.v0alpha1.Font.Style?
+
+---@class snowcap.widget.v0alpha1.Font.Family
+---@field name string?
+---@field serif google.protobuf.Empty?
+---@field sans_serif google.protobuf.Empty?
+---@field cursive google.protobuf.Empty?
+---@field fantasy google.protobuf.Empty?
+---@field monospace google.protobuf.Empty?
+
+---@class snowcap.widget.v0alpha1.WidgetDef
+---@field text snowcap.widget.v0alpha1.Text?
+---@field column snowcap.widget.v0alpha1.Column?
+---@field row snowcap.widget.v0alpha1.Row?
+---@field scrollable snowcap.widget.v0alpha1.Scrollable?
+---@field container snowcap.widget.v0alpha1.Container?
+
+---@class snowcap.widget.v0alpha1.Text
+---@field text string?
+---@field pixels number?
+---@field width snowcap.widget.v0alpha1.Length?
+---@field height snowcap.widget.v0alpha1.Length?
+---@field horizontal_alignment snowcap.widget.v0alpha1.Alignment?
+---@field vertical_alignment snowcap.widget.v0alpha1.Alignment?
+---@field color snowcap.widget.v0alpha1.Color?
+---@field font snowcap.widget.v0alpha1.Font?
+
+---@class snowcap.widget.v0alpha1.Column
+---@field spacing number?
+---@field padding snowcap.widget.v0alpha1.Padding?
+---@field item_alignment snowcap.widget.v0alpha1.Alignment?
+---@field width snowcap.widget.v0alpha1.Length?
+---@field height snowcap.widget.v0alpha1.Length?
+---@field max_width number?
+---@field clip boolean?
+---@field children snowcap.widget.v0alpha1.WidgetDef[]?
+
+---@class snowcap.widget.v0alpha1.Row
+---@field spacing number?
+---@field padding snowcap.widget.v0alpha1.Padding?
+---@field item_alignment snowcap.widget.v0alpha1.Alignment?
+---@field width snowcap.widget.v0alpha1.Length?
+---@field height snowcap.widget.v0alpha1.Length?
+---@field clip boolean?
+---@field children snowcap.widget.v0alpha1.WidgetDef[]?
+
+---@class snowcap.widget.v0alpha1.ScrollableDirection
+---@field vertical snowcap.widget.v0alpha1.ScrollableProperties?
+---@field horizontal snowcap.widget.v0alpha1.ScrollableProperties?
+
+---@class snowcap.widget.v0alpha1.ScrollableProperties
+---@field width number?
+---@field margin number?
+---@field scroller_width number?
+---@field alignment snowcap.widget.v0alpha1.ScrollableAlignment?
+
+---@class snowcap.widget.v0alpha1.Scrollable
+---@field width snowcap.widget.v0alpha1.Length?
+---@field height snowcap.widget.v0alpha1.Length?
+---@field direction snowcap.widget.v0alpha1.ScrollableDirection?
+---@field child snowcap.widget.v0alpha1.WidgetDef?
+
+---@class snowcap.widget.v0alpha1.Container
+---@field padding snowcap.widget.v0alpha1.Padding?
+---@field width snowcap.widget.v0alpha1.Length?
+---@field height snowcap.widget.v0alpha1.Length?
+---@field max_width number?
+---@field max_height number?
+---@field horizontal_alignment snowcap.widget.v0alpha1.Alignment?
+---@field vertical_alignment snowcap.widget.v0alpha1.Alignment?
+---@field clip boolean?
+---@field child snowcap.widget.v0alpha1.WidgetDef?
+---@field text_color snowcap.widget.v0alpha1.Color?
+---@field background_color snowcap.widget.v0alpha1.Color?
+---@field border_radius number?
+---@field border_thickness number?
+---@field border_color snowcap.widget.v0alpha1.Color?
+
+---@class snowcap.layer.v0alpha1.NewLayerRequest
+---@field widget_def snowcap.widget.v0alpha1.WidgetDef?
+---@field width integer?
+---@field height integer?
+---@field anchor snowcap.layer.v0alpha1.Anchor?
+---@field keyboard_interactivity snowcap.layer.v0alpha1.KeyboardInteractivity?
+---@field exclusive_zone integer?
+---@field layer snowcap.layer.v0alpha1.Layer?
+
+---@class snowcap.layer.v0alpha1.NewLayerResponse
+---@field layer_id integer?
+
+---@class snowcap.layer.v0alpha1.CloseRequest
+---@field layer_id integer?
+
 ---@class snowcap.layer.v1.NewLayerRequest
 ---@field widget_def snowcap.widget.v1.WidgetDef?
 ---@field anchor snowcap.layer.v1.Anchor?
@@ -1034,39 +1064,7 @@ local google = {}
 google.protobuf = {}
 google.protobuf.Empty = {}
 local snowcap = {}
-snowcap.input = {}
-snowcap.input.v0alpha1 = {}
-snowcap.input.v0alpha1.Modifiers = {}
-snowcap.input.v0alpha1.KeyboardKeyRequest = {}
-snowcap.input.v0alpha1.KeyboardKeyResponse = {}
-snowcap.input.v0alpha1.PointerButtonRequest = {}
-snowcap.input.v0alpha1.PointerButtonResponse = {}
-snowcap.input.v1 = {}
-snowcap.input.v1.Modifiers = {}
-snowcap.input.v1.KeyboardKeyRequest = {}
-snowcap.input.v1.KeyboardKeyResponse = {}
-snowcap.input.v1.PointerButtonRequest = {}
-snowcap.input.v1.PointerButtonResponse = {}
 snowcap.widget = {}
-snowcap.widget.v0alpha1 = {}
-snowcap.widget.v0alpha1.Padding = {}
-snowcap.widget.v0alpha1.Length = {}
-snowcap.widget.v0alpha1.Color = {}
-snowcap.widget.v0alpha1.Font = {}
-snowcap.widget.v0alpha1.Font.Family = {}
-snowcap.widget.v0alpha1.WidgetDef = {}
-snowcap.widget.v0alpha1.Text = {}
-snowcap.widget.v0alpha1.Column = {}
-snowcap.widget.v0alpha1.Row = {}
-snowcap.widget.v0alpha1.ScrollableDirection = {}
-snowcap.widget.v0alpha1.ScrollableProperties = {}
-snowcap.widget.v0alpha1.Scrollable = {}
-snowcap.widget.v0alpha1.Container = {}
-snowcap.layer = {}
-snowcap.layer.v0alpha1 = {}
-snowcap.layer.v0alpha1.NewLayerRequest = {}
-snowcap.layer.v0alpha1.NewLayerResponse = {}
-snowcap.layer.v0alpha1.CloseRequest = {}
 snowcap.widget.v1 = {}
 snowcap.widget.v1.Padding = {}
 snowcap.widget.v1.Length = {}
@@ -1097,6 +1095,47 @@ snowcap.widget.v1.Image = {}
 snowcap.widget.v1.Image.Rgba = {}
 snowcap.widget.v1.GetWidgetEventsRequest = {}
 snowcap.widget.v1.GetWidgetEventsResponse = {}
+snowcap.decoration = {}
+snowcap.decoration.v1 = {}
+snowcap.decoration.v1.Bounds = {}
+snowcap.decoration.v1.NewDecorationRequest = {}
+snowcap.decoration.v1.NewDecorationResponse = {}
+snowcap.decoration.v1.CloseRequest = {}
+snowcap.decoration.v1.CloseResponse = {}
+snowcap.decoration.v1.UpdateDecorationRequest = {}
+snowcap.decoration.v1.UpdateDecorationResponse = {}
+snowcap.input = {}
+snowcap.input.v0alpha1 = {}
+snowcap.input.v0alpha1.Modifiers = {}
+snowcap.input.v0alpha1.KeyboardKeyRequest = {}
+snowcap.input.v0alpha1.KeyboardKeyResponse = {}
+snowcap.input.v0alpha1.PointerButtonRequest = {}
+snowcap.input.v0alpha1.PointerButtonResponse = {}
+snowcap.input.v1 = {}
+snowcap.input.v1.Modifiers = {}
+snowcap.input.v1.KeyboardKeyRequest = {}
+snowcap.input.v1.KeyboardKeyResponse = {}
+snowcap.input.v1.PointerButtonRequest = {}
+snowcap.input.v1.PointerButtonResponse = {}
+snowcap.widget.v0alpha1 = {}
+snowcap.widget.v0alpha1.Padding = {}
+snowcap.widget.v0alpha1.Length = {}
+snowcap.widget.v0alpha1.Color = {}
+snowcap.widget.v0alpha1.Font = {}
+snowcap.widget.v0alpha1.Font.Family = {}
+snowcap.widget.v0alpha1.WidgetDef = {}
+snowcap.widget.v0alpha1.Text = {}
+snowcap.widget.v0alpha1.Column = {}
+snowcap.widget.v0alpha1.Row = {}
+snowcap.widget.v0alpha1.ScrollableDirection = {}
+snowcap.widget.v0alpha1.ScrollableProperties = {}
+snowcap.widget.v0alpha1.Scrollable = {}
+snowcap.widget.v0alpha1.Container = {}
+snowcap.layer = {}
+snowcap.layer.v0alpha1 = {}
+snowcap.layer.v0alpha1.NewLayerRequest = {}
+snowcap.layer.v0alpha1.NewLayerResponse = {}
+snowcap.layer.v0alpha1.CloseRequest = {}
 snowcap.layer.v1 = {}
 snowcap.layer.v1.NewLayerRequest = {}
 snowcap.layer.v1.NewLayerResponse = {}
@@ -1107,6 +1146,11 @@ snowcap.v0alpha1 = {}
 snowcap.v0alpha1.Nothing = {}
 snowcap.v1 = {}
 snowcap.v1.Nothing = {}
+snowcap.widget.v1.Alignment = snowcap_widget_v1_Alignment
+snowcap.widget.v1.Font.Weight = snowcap_widget_v1_Font_Weight
+snowcap.widget.v1.Font.Stretch = snowcap_widget_v1_Font_Stretch
+snowcap.widget.v1.Font.Style = snowcap_widget_v1_Font_Style
+snowcap.widget.v1.Image.ContentFit = snowcap_widget_v1_Image_ContentFit
 snowcap.widget.v0alpha1.Alignment = snowcap_widget_v0alpha1_Alignment
 snowcap.widget.v0alpha1.ScrollableAlignment = snowcap_widget_v0alpha1_ScrollableAlignment
 snowcap.widget.v0alpha1.Font.Weight = snowcap_widget_v0alpha1_Font_Weight
@@ -1115,15 +1159,82 @@ snowcap.widget.v0alpha1.Font.Style = snowcap_widget_v0alpha1_Font_Style
 snowcap.layer.v0alpha1.Anchor = snowcap_layer_v0alpha1_Anchor
 snowcap.layer.v0alpha1.KeyboardInteractivity = snowcap_layer_v0alpha1_KeyboardInteractivity
 snowcap.layer.v0alpha1.Layer = snowcap_layer_v0alpha1_Layer
-snowcap.widget.v1.Alignment = snowcap_widget_v1_Alignment
-snowcap.widget.v1.Font.Weight = snowcap_widget_v1_Font_Weight
-snowcap.widget.v1.Font.Stretch = snowcap_widget_v1_Font_Stretch
-snowcap.widget.v1.Font.Style = snowcap_widget_v1_Font_Style
-snowcap.widget.v1.Image.ContentFit = snowcap_widget_v1_Image_ContentFit
 snowcap.layer.v1.Anchor = snowcap_layer_v1_Anchor
 snowcap.layer.v1.KeyboardInteractivity = snowcap_layer_v1_KeyboardInteractivity
 snowcap.layer.v1.Layer = snowcap_layer_v1_Layer
 
+snowcap.widget.v1.WidgetService = {}
+snowcap.widget.v1.WidgetService.GetWidgetEvents = {}
+snowcap.widget.v1.WidgetService.GetWidgetEvents.service = "snowcap.widget.v1.WidgetService"
+snowcap.widget.v1.WidgetService.GetWidgetEvents.method = "GetWidgetEvents"
+snowcap.widget.v1.WidgetService.GetWidgetEvents.request = ".snowcap.widget.v1.GetWidgetEventsRequest"
+snowcap.widget.v1.WidgetService.GetWidgetEvents.response = ".snowcap.widget.v1.GetWidgetEventsResponse"
+
+---Performs a server-streaming request.
+---
+---`callback` will be called with every streamed response.
+---
+---@nodiscard
+---
+---@param data snowcap.widget.v1.GetWidgetEventsRequest
+---@param callback fun(response: snowcap.widget.v1.GetWidgetEventsResponse)
+---
+---@return string | nil An error string, if any
+function Client:snowcap_widget_v1_WidgetService_GetWidgetEvents(data, callback)
+    return self:server_streaming_request(snowcap.widget.v1.WidgetService.GetWidgetEvents, data, callback)
+end
+snowcap.decoration.v1.DecorationService = {}
+snowcap.decoration.v1.DecorationService.NewDecoration = {}
+snowcap.decoration.v1.DecorationService.NewDecoration.service = "snowcap.decoration.v1.DecorationService"
+snowcap.decoration.v1.DecorationService.NewDecoration.method = "NewDecoration"
+snowcap.decoration.v1.DecorationService.NewDecoration.request = ".snowcap.decoration.v1.NewDecorationRequest"
+snowcap.decoration.v1.DecorationService.NewDecoration.response = ".snowcap.decoration.v1.NewDecorationResponse"
+
+---Performs a unary request.
+---
+---@nodiscard
+---
+---@param data snowcap.decoration.v1.NewDecorationRequest
+---
+---@return snowcap.decoration.v1.NewDecorationResponse | nil response
+---@return string | nil error An error string, if any
+function Client:snowcap_decoration_v1_DecorationService_NewDecoration(data)
+    return self:unary_request(snowcap.decoration.v1.DecorationService.NewDecoration, data)
+end
+snowcap.decoration.v1.DecorationService.Close = {}
+snowcap.decoration.v1.DecorationService.Close.service = "snowcap.decoration.v1.DecorationService"
+snowcap.decoration.v1.DecorationService.Close.method = "Close"
+snowcap.decoration.v1.DecorationService.Close.request = ".snowcap.decoration.v1.CloseRequest"
+snowcap.decoration.v1.DecorationService.Close.response = ".snowcap.decoration.v1.CloseResponse"
+
+---Performs a unary request.
+---
+---@nodiscard
+---
+---@param data snowcap.decoration.v1.CloseRequest
+---
+---@return snowcap.decoration.v1.CloseResponse | nil response
+---@return string | nil error An error string, if any
+function Client:snowcap_decoration_v1_DecorationService_Close(data)
+    return self:unary_request(snowcap.decoration.v1.DecorationService.Close, data)
+end
+snowcap.decoration.v1.DecorationService.UpdateDecoration = {}
+snowcap.decoration.v1.DecorationService.UpdateDecoration.service = "snowcap.decoration.v1.DecorationService"
+snowcap.decoration.v1.DecorationService.UpdateDecoration.method = "UpdateDecoration"
+snowcap.decoration.v1.DecorationService.UpdateDecoration.request = ".snowcap.decoration.v1.UpdateDecorationRequest"
+snowcap.decoration.v1.DecorationService.UpdateDecoration.response = ".snowcap.decoration.v1.UpdateDecorationResponse"
+
+---Performs a unary request.
+---
+---@nodiscard
+---
+---@param data snowcap.decoration.v1.UpdateDecorationRequest
+---
+---@return snowcap.decoration.v1.UpdateDecorationResponse | nil response
+---@return string | nil error An error string, if any
+function Client:snowcap_decoration_v1_DecorationService_UpdateDecoration(data)
+    return self:unary_request(snowcap.decoration.v1.DecorationService.UpdateDecoration, data)
+end
 snowcap.input.v0alpha1.InputService = {}
 snowcap.input.v0alpha1.InputService.KeyboardKey = {}
 snowcap.input.v0alpha1.InputService.KeyboardKey.service = "snowcap.input.v0alpha1.InputService"
@@ -1236,26 +1347,6 @@ snowcap.layer.v0alpha1.LayerService.Close.response = ".google.protobuf.Empty"
 ---@return string | nil error An error string, if any
 function Client:snowcap_layer_v0alpha1_LayerService_Close(data)
     return self:unary_request(snowcap.layer.v0alpha1.LayerService.Close, data)
-end
-snowcap.widget.v1.WidgetService = {}
-snowcap.widget.v1.WidgetService.GetWidgetEvents = {}
-snowcap.widget.v1.WidgetService.GetWidgetEvents.service = "snowcap.widget.v1.WidgetService"
-snowcap.widget.v1.WidgetService.GetWidgetEvents.method = "GetWidgetEvents"
-snowcap.widget.v1.WidgetService.GetWidgetEvents.request = ".snowcap.widget.v1.GetWidgetEventsRequest"
-snowcap.widget.v1.WidgetService.GetWidgetEvents.response = ".snowcap.widget.v1.GetWidgetEventsResponse"
-
----Performs a server-streaming request.
----
----`callback` will be called with every streamed response.
----
----@nodiscard
----
----@param data snowcap.widget.v1.GetWidgetEventsRequest
----@param callback fun(response: snowcap.widget.v1.GetWidgetEventsResponse)
----
----@return string | nil An error string, if any
-function Client:snowcap_widget_v1_WidgetService_GetWidgetEvents(data, callback)
-    return self:server_streaming_request(snowcap.widget.v1.WidgetService.GetWidgetEvents, data, callback)
 end
 snowcap.layer.v1.LayerService = {}
 snowcap.layer.v1.LayerService.NewLayer = {}

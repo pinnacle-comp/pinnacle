@@ -1,0 +1,44 @@
+syntax = "proto3";
+
+package snowcap.decoration.v1;
+
+import "google/protobuf/empty.proto";
+import "snowcap/widget/v1/widget.proto";
+
+message Bounds {
+  uint32 left = 1;
+  uint32 right = 2;
+  uint32 top = 3;
+  uint32 bottom = 4;
+}
+
+message NewDecorationRequest {
+  snowcap.widget.v1.WidgetDef widget_def = 1;
+  string foreign_toplevel_handle_identifier = 2;
+  Bounds bounds = 3;
+  Bounds extents = 4;
+  int32 z_index = 5;
+}
+message NewDecorationResponse {
+  uint32 decoration_id = 1;
+}
+
+message CloseRequest {
+  uint32 decoration_id = 1;
+}
+message CloseResponse {}
+
+message UpdateDecorationRequest {
+  uint32 decoration_id = 1;
+  optional snowcap.widget.v1.WidgetDef widget_def = 2;
+  optional Bounds bounds = 3;
+  optional Bounds extents = 4;
+  optional int32 z_index = 5;
+}
+message UpdateDecorationResponse {}
+
+service DecorationService {
+  rpc NewDecoration(NewDecorationRequest) returns (NewDecorationResponse);
+  rpc Close(CloseRequest) returns (CloseResponse);
+  rpc UpdateDecoration(UpdateDecorationRequest) returns (UpdateDecorationResponse);
+}

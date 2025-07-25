@@ -78,6 +78,13 @@ message GetWindowsInDirResponse {
   repeated uint32 window_ids = 1;
 }
 
+message GetForeignToplevelListIdentifierRequest {
+  uint32 window_id = 1;
+}
+message GetForeignToplevelListIdentifierResponse {
+  optional string identifier = 1;
+}
+
 /////////
 
 message CloseRequest {
@@ -208,6 +215,7 @@ service WindowService {
   rpc GetLayoutMode(GetLayoutModeRequest) returns (GetLayoutModeResponse);
   rpc GetTagIds(GetTagIdsRequest) returns (GetTagIdsResponse);
   rpc GetWindowsInDir(GetWindowsInDirRequest) returns (GetWindowsInDirResponse);
+  rpc GetForeignToplevelListIdentifier(GetForeignToplevelListIdentifierRequest) returns (GetForeignToplevelListIdentifierResponse);
 
   rpc Close(CloseRequest) returns (google.protobuf.Empty);
   rpc SetGeometry(SetGeometryRequest) returns (google.protobuf.Empty);
