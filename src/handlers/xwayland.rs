@@ -216,6 +216,18 @@ impl XwmHandler for State {
             "XwmHandler::configure_notify"
         );
 
+        #[cfg(feature = "snowcap")]
+        if let Some(win) = self.pinnacle.window_for_x11_surface(&surface) {
+            win.with_state(|state| {
+                if let Some(deco) = state.decoration_surface.as_ref() {
+                    deco.decoration_surface().with_pending_state(|state| {
+                        state.toplevel_size = Some(geometry.size);
+                    });
+                    deco.decoration_surface().send_pending_configure();
+                }
+            })
+        }
+
         let Some(win) = self
             .pinnacle
             .space

@@ -1,4 +1,4 @@
-use std::{num::NonZeroU32, ptr::NonNull, time::Instant};
+use std::{ptr::NonNull, time::Instant};
 
 use iced::{Color, Size, window::RedrawRequest};
 use iced_graphics::Compositor;
@@ -7,21 +7,19 @@ use raw_window_handle::{
     HasDisplayHandle, HasWindowHandle, RawDisplayHandle, RawWindowHandle, WaylandDisplayHandle,
     WaylandWindowHandle,
 };
-use smithay_client_toolkit::{
-    reexports::{
-        calloop::{self, LoopHandle, timer::Timer},
-        client::{Proxy, QueueHandle, protocol::wl_output::WlOutput},
-        protocols::wp::{
+use smithay_client_toolkit::reexports::{
+    calloop::{self, LoopHandle, timer::Timer},
+    client::{Proxy, QueueHandle, protocol::wl_surface::WlSurface},
+    protocols::{
+        ext::foreign_toplevel_list::v1::client::ext_foreign_toplevel_handle_v1::ExtForeignToplevelHandleV1,
+        wp::{
             fractional_scale::v1::client::wp_fractional_scale_v1::WpFractionalScaleV1,
             viewporter::client::wp_viewport::WpViewport,
         },
     },
-    shell::{
-        WaylandSurface,
-        wlr_layer::{self, Anchor, LayerSurface},
-    },
 };
 use snowcap_api_defs::snowcap::input::v0alpha1::PointerButtonResponse;
+use snowcap_protocols::snowcap_decoration_v1::client::snowcap_decoration_surface_v1::SnowcapDecorationSurfaceV1;
 use tokio::sync::mpsc::UnboundedSender;
 use tonic::Status;
 
@@ -34,14 +32,14 @@ use crate::{
 };
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Default)]
-pub struct LayerId(pub u32);
+pub struct DecorationId(pub u32);
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Default)]
-pub struct LayerIdCounter(LayerId);
+pub struct DecorationIdCounter(DecorationId);
 
-impl LayerIdCounter {
+impl DecorationIdCounter {
     #[allow(clippy::should_implement_trait)]
-    pub fn next(&mut self) -> LayerId {
+    pub fn next(&mut self) -> DecorationId {
         let ret = self.0;
         self.0.0 += 1;
         ret
@@ -49,28 +47,27 @@ impl LayerIdCounter {
 }
 
 impl State {
-    pub fn layer_for_id(&mut self, id: LayerId) -> Option<&mut SnowcapLayer> {
-        self.layers.iter_mut().find(|layer| layer.layer_id == id)
+    pub fn decoration_for_id(&mut self, id: DecorationId) -> Option<&mut SnowcapDecoration> {
+        self.decorations
+            .iter_mut()
+            .find(|deco| deco.decoration_id == id)
     }
 }
 
-pub struct SnowcapLayer {
+pub struct SnowcapDecoration {
     // SAFETY: Drop order: surface needs to be dropped before the layer
     pub surface: <iced_renderer::Compositor as iced_graphics::Compositor>::Surface,
 
-    pub layer: LayerSurface,
+    pub decoration: SnowcapDecorationSurfaceV1,
+    pub wl_surface: WlSurface,
     pub loop_handle: LoopHandle<'static, State>,
+    pub foreign_toplevel_list_handle: ExtForeignToplevelHandleV1,
 
     pub renderer: iced_renderer::Renderer,
 
-    /// The logical size of the output this layer is on.
-    pub output_size: iced::Size<u32>,
     /// The scale of the output this layer is on.
     pub output_scale: f32,
-    pub pending_size: Option<iced::Size<u32>>,
     pub pending_output_scale: Option<f32>,
-    // COMPAT: 0.1
-    pub max_size: Option<iced::Size<u32>>,
 
     redraw_requested: bool,
     pub widgets: SnowcapWidgetProgram,
@@ -78,10 +75,9 @@ pub struct SnowcapLayer {
 
     pub pointer_location: Option<(f64, f64)>,
 
-    pub layer_id: LayerId,
+    pub decoration_id: DecorationId,
     pub window_id: iced::window::Id,
 
-    pub wl_output: Option<WlOutput>,
     pub viewport: WpViewport,
     fractional_scale: WpFractionalScaleV1,
 
@@ -89,43 +85,32 @@ pub struct SnowcapLayer {
     pub pointer_button_sender: Option<UnboundedSender<Result<PointerButtonResponse, Status>>>,
     pub widget_event_sender: Option<UnboundedSender<(WidgetId, WidgetEvent)>>,
 
-    pub initial_configure: InitialConfigureState,
+    pub initial_configure_received: bool,
+
+    pub extents: Bounds,
+    pub pending_toplevel_size: Option<iced::Size<u32>>,
+    pub toplevel_size: iced::Size<u32>,
+
+    pub bounds: Bounds,
 }
 
-impl Drop for SnowcapLayer {
+impl Drop for SnowcapDecoration {
     fn drop(&mut self) {
         self.fractional_scale.destroy();
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
-pub enum InitialConfigureState {
-    PreConfigure(Option<iced::Size<u32>>),
-    PostConfigure,
-    PostOutputSize,
-}
-
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
-pub enum ExclusiveZone {
-    /// This layer surface wants an exclusive zone of the given size.
-    Exclusive(NonZeroU32),
-    /// This layer surface does not have an exclusive zone but wants to be placed respecting any.
-    Respect,
-    /// This layer surface does not have an exclusive zone and wants to be placed ignoring any.
-    Ignore,
-}
-
 #[derive(Clone, Copy)]
-struct LayerWindowHandle {
+struct DecorationWindowHandle {
     display: RawDisplayHandle,
     window: RawWindowHandle,
 }
 
 // SAFETY: The objects that the pointers are derived from are Send and Sync
-unsafe impl Send for LayerWindowHandle {}
-unsafe impl Sync for LayerWindowHandle {}
+unsafe impl Send for DecorationWindowHandle {}
+unsafe impl Sync for DecorationWindowHandle {}
 
-impl HasDisplayHandle for LayerWindowHandle {
+impl HasDisplayHandle for DecorationWindowHandle {
     fn display_handle(
         &self,
     ) -> Result<raw_window_handle::DisplayHandle<'_>, raw_window_handle::HandleError> {
@@ -136,7 +121,7 @@ impl HasDisplayHandle for LayerWindowHandle {
     }
 }
 
-impl HasWindowHandle for LayerWindowHandle {
+impl HasWindowHandle for DecorationWindowHandle {
     fn window_handle(
         &self,
     ) -> Result<raw_window_handle::WindowHandle<'_>, raw_window_handle::HandleError> {
@@ -147,17 +132,39 @@ impl HasWindowHandle for LayerWindowHandle {
     }
 }
 
-impl SnowcapLayer {
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct Bounds {
+    pub left: u32,
+    pub right: u32,
+    pub top: u32,
+    pub bottom: u32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct Geometry {
+    pub x: i32,
+    pub y: i32,
+    pub w: u32,
+    pub h: u32,
+}
+
+impl SnowcapDecoration {
     pub fn new(
         state: &mut State,
-        // COMPAT: 0.1
-        max_size: Option<(u32, u32)>,
-        layer: wlr_layer::Layer,
-        anchor: Anchor,
-        exclusive_zone: ExclusiveZone,
-        keyboard_interactivity: wlr_layer::KeyboardInteractivity,
+        toplevel_identifier: String,
+        bounds: Bounds,
+        z_index: i32,
+        extents: Bounds,
         widgets: ViewFn,
-    ) -> Self {
+    ) -> Option<Self> {
+        let foreign_toplevel_list_handle = state
+            .foreign_toplevel_list_handles
+            .iter()
+            .find_map(|(handle, ident)| {
+                (ident.identifier() == Some(&toplevel_identifier)).then_some(handle)
+            })
+            .cloned()?;
+
         let surface = state.compositor_state.create_surface(&state.queue_handle);
         let viewport = state
             .viewporter
@@ -167,33 +174,31 @@ impl SnowcapLayer {
             &state.queue_handle,
             surface.clone(),
         );
-        let layer = state.layer_shell_state.create_layer_surface(
+
+        let deco = state.snowcap_decoration_manager.get_decoration_surface(
+            &surface,
+            &foreign_toplevel_list_handle,
             &state.queue_handle,
-            surface,
-            layer,
-            Some("snowcap"),
-            None,
+            (),
         );
 
-        layer.set_size(1, 1);
-        layer.set_anchor(anchor);
-        layer.set_keyboard_interactivity(keyboard_interactivity);
-        layer.set_exclusive_zone(match exclusive_zone {
-            ExclusiveZone::Exclusive(size) => size.get() as i32,
-            ExclusiveZone::Respect => 0,
-            ExclusiveZone::Ignore => -1,
-        });
+        deco.set_bounds(bounds.left, bounds.right, bounds.top, bounds.bottom);
+        deco.set_z_index(z_index);
+        deco.set_location(
+            bounds.left as i32 - extents.left as i32,
+            bounds.top as i32 - extents.top as i32,
+        );
 
-        layer.commit();
+        surface.commit();
 
         let raw_display_handle = RawDisplayHandle::Wayland(WaylandDisplayHandle::new(
             NonNull::new(state.conn.backend().display_ptr() as *mut _).unwrap(),
         ));
         let raw_window_handle = RawWindowHandle::Wayland(WaylandWindowHandle::new(
-            NonNull::new(layer.wl_surface().id().as_ptr() as *mut _).unwrap(),
+            NonNull::new(surface.id().as_ptr() as *mut _).unwrap(),
         ));
 
-        let layer_window_handle = LayerWindowHandle {
+        let deco_window_handle = DecorationWindowHandle {
             display: raw_display_handle,
             window: raw_window_handle,
         };
@@ -205,7 +210,7 @@ impl SnowcapLayer {
                     default_text_size: iced::Pixels(16.0),
                     antialiasing: None,
                 },
-                layer_window_handle,
+                deco_window_handle,
             )
             .block_on_tokio()
             .unwrap()
@@ -213,39 +218,41 @@ impl SnowcapLayer {
 
         let mut renderer = compositor.create_renderer();
 
-        let iced_surface = compositor.create_surface(layer_window_handle, 1, 1);
+        let iced_surface = compositor.create_surface(deco_window_handle, 1, 1);
 
         let clipboard =
             unsafe { WaylandClipboard::new(state.conn.backend().display_ptr() as *mut _) };
 
-        let next_id = state.layer_id_counter.next();
+        let next_id = state.decoration_id_counter.next();
 
         let widgets = SnowcapWidgetProgram::new(widgets, Size::new(1.0, 1.0), &mut renderer);
 
-        Self {
+        Some(Self {
             surface: iced_surface,
             loop_handle: state.loop_handle.clone(),
-            layer,
-            max_size: max_size.map(|(w, h)| iced::Size::new(w, h)),
-            output_size: iced::Size::new(1, 1),
-            pending_size: None,
+            decoration: deco,
+            wl_surface: surface,
+            foreign_toplevel_list_handle,
             output_scale: 1.0,
             pending_output_scale: None,
             widgets,
             renderer,
             clipboard,
             pointer_location: None,
-            wl_output: None,
             viewport,
             fractional_scale,
-            layer_id: next_id,
+            decoration_id: next_id,
             window_id: iced::window::Id::unique(),
             keyboard_key_sender: None,
             pointer_button_sender: None,
             widget_event_sender: None,
-            initial_configure: InitialConfigureState::PreConfigure(None),
+            initial_configure_received: false,
             redraw_requested: false,
-        }
+            extents,
+            pending_toplevel_size: None,
+            toplevel_size: iced::Size::new(1, 1),
+            bounds,
+        })
     }
 
     pub fn schedule_redraw(&mut self) {
@@ -260,11 +267,7 @@ impl SnowcapLayer {
             )));
     }
 
-    pub fn output_size_changed(&mut self, output_size: iced::Size<u32>, output_scale: f32) {
-        if output_size != self.output_size {
-            self.pending_size = Some(output_size);
-        }
-
+    pub fn output_scale_changed(&mut self, output_scale: f32) {
         if output_scale != self.output_scale {
             self.pending_output_scale = Some(output_scale);
         }
@@ -272,38 +275,31 @@ impl SnowcapLayer {
 
     pub fn update_properties(
         &mut self,
-        layer: Option<wlr_layer::Layer>,
-        anchor: Option<Anchor>,
-        exclusive_zone: Option<ExclusiveZone>,
-        keyboard_interactivity: Option<wlr_layer::KeyboardInteractivity>,
         widgets: Option<ViewFn>,
-
+        bounds: Option<Bounds>,
+        extents: Option<Bounds>,
+        z_index: Option<i32>,
         queue_handle: &QueueHandle<State>,
     ) {
-        if let Some(layer) = layer {
-            self.layer.set_layer(layer);
-        }
-
-        if let Some(anchor) = anchor {
-            self.layer.set_anchor(anchor);
-        }
-
-        if let Some(zone) = exclusive_zone {
-            self.layer.set_exclusive_zone(match zone {
-                ExclusiveZone::Exclusive(size) => size.get() as i32,
-                ExclusiveZone::Respect => 0,
-                ExclusiveZone::Ignore => -1,
-            });
-        }
-
-        if let Some(keyboard_interactivity) = keyboard_interactivity {
-            self.layer
-                .set_keyboard_interactivity(keyboard_interactivity);
-        }
-
         if let Some(widgets) = widgets {
             self.widgets
                 .update_view(widgets, self.widget_bounds(), &mut self.renderer);
+        }
+
+        // FIXME: make these pending, update on next draw + commit
+
+        if let Some(bounds) = bounds {
+            self.decoration
+                .set_bounds(bounds.left, bounds.right, bounds.top, bounds.bottom);
+            self.bounds = bounds;
+        }
+
+        if let Some(extents) = extents {
+            self.extents = extents;
+        }
+
+        if let Some(z_index) = z_index {
+            self.decoration.set_z_index(z_index);
         }
 
         self.request_frame(queue_handle);
@@ -323,7 +319,7 @@ impl SnowcapLayer {
             None => iced::mouse::Cursor::Unavailable,
         };
 
-        if self.initial_configure == InitialConfigureState::PostOutputSize {
+        if self.initial_configure_received {
             self.widgets.draw(&mut self.renderer, cursor);
         }
 
@@ -344,19 +340,17 @@ impl SnowcapLayer {
         runtime: &mut crate::runtime::Runtime,
         compositor: &mut crate::compositor::Compositor,
     ) {
-        if self.pending_output_scale.is_some() || self.pending_size.is_some() {
+        if self.pending_output_scale.is_some() || self.pending_toplevel_size.is_some() {
             if let Some(scale) = self.pending_output_scale.take() {
                 self.output_scale = scale;
             }
-            if let Some(size) = self.pending_size.take() {
-                self.output_size = size;
+            if let Some(size) = self.pending_toplevel_size.take() {
+                self.toplevel_size = size;
             }
 
             self.widgets
                 .rebuild_ui(self.widget_bounds(), &mut self.renderer);
 
-            self.layer
-                .set_size(self.widgets.size().width, self.widgets.size().height);
             self.viewport.set_destination(
                 self.widgets.size().width as i32,
                 self.widgets.size().height as i32,
@@ -400,7 +394,7 @@ impl SnowcapLayer {
                     request_frame = true;
                 }
                 RedrawRequest::At(instant) => {
-                    let surface = self.layer.wl_surface().clone();
+                    let surface = self.wl_surface.clone();
                     self.loop_handle
                         .insert_source(Timer::from_deadline(instant), move |_, _, state| {
                             surface.frame(&state.queue_handle, surface.clone());
@@ -443,20 +437,14 @@ impl SnowcapLayer {
     }
 
     pub fn widget_bounds(&self) -> iced::Size<u32> {
-        if let Some(max_size) = self.max_size {
-            iced::Size::new(
-                self.output_size.width.min(max_size.width),
-                self.output_size.height.min(max_size.height),
-            )
-        } else {
-            self.output_size
-        }
+        iced::Size::new(
+            self.toplevel_size.width + self.extents.left + self.extents.right,
+            self.toplevel_size.height + self.extents.top + self.extents.bottom,
+        )
     }
 
     pub fn request_frame(&self, queue_handle: &QueueHandle<State>) {
-        self.layer
-            .wl_surface()
-            .frame(queue_handle, self.layer.wl_surface().clone());
-        self.layer.wl_surface().commit();
+        self.wl_surface.frame(queue_handle, self.wl_surface.clone());
+        self.wl_surface.commit();
     }
 }

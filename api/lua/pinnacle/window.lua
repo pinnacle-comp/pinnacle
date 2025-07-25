@@ -754,6 +754,18 @@ function WindowHandle:in_direction(direction)
     return response and window_handle.new_from_table(response.window_ids or {}) or {}
 end
 
+---Gets this window's ext-foreign-toplevel-list handle identifier.
+---
+---@return string|nil identifier
+function WindowHandle:foreign_toplevel_list_identifier()
+    local identifier, error =
+        client:pinnacle_window_v1_WindowService_GetForeignToplevelListIdentifier({
+            window_id = self.id,
+        })
+
+    return identifier and identifier.identifier
+end
+
 ---Swap position with another window.
 ---
 ---@param target pinnacle.window.WindowHandle
