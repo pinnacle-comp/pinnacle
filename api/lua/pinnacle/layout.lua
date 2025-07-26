@@ -890,7 +890,14 @@ function layout.manage(on_layout)
             tags = require("pinnacle.tag").handle.new_from_table(response.tag_ids or {}),
         }
 
-        local ret = on_layout(args)
+        local success, ret = pcall(on_layout, args)
+        if not success then
+            log.error("In Layout:manage: " .. tostring(ret))
+            ret = {
+                root_node = {},
+                tree_id = 0,
+            }
+        end
 
         ---@type pinnacle.layout.LayoutNode
         local node
