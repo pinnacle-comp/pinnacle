@@ -2,6 +2,7 @@
 -- License, v. 2.0. If a copy of the MPL was not distributed with this
 -- file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
+local log = require("pinnacle.log")
 local client = require("pinnacle.grpc.client").client
 local signal_service = require("pinnacle.grpc.defs").pinnacle.signal.v1.SignalService
 
@@ -106,11 +107,41 @@ local signals = {
     },
 }
 
+---Call a signal callback in protected mode
+---
+---If the signal fails, the error is logged.
+---The handle parameter is expected to be the first parameter of the callback, and to be convertible
+---to a string via tostring(). If it's not the case, setting this parameter to nil will not pass it
+---to the callback, and will not uses in in the error string generation.
+---
+---@param signal_name string
+---@param callback function
+---@param handle T|nil Either a Handle object that'll be passed as callback first arg, or nil
+local function protected_callback(signal_name, callback, handle, ...)
+    local success, err
+
+    if handle then
+        success, err = pcall(callback, handle, ...)
+    else
+        success, err = pcall(callback, ...)
+    end
+
+    if not success then
+        local errstr = "While handling '" .. signal_name .. "'"
+        if handle then
+            errstr = errstr .. " for " .. tostring(handle)
+        end
+        errstr = errstr .. ": " .. tostring(err)
+
+        log.error(errstr)
+    end
+end
+
 signals.OutputConnect.on_response = function(response)
     ---@diagnostic disable-next-line: invisible
     local handle = require("pinnacle.output").handle.new(response.output_name)
     for _, callback in ipairs(signals.OutputConnect.callbacks) do
-        callback(handle)
+        protected_callback("OutputConnect", callback, handle)
     end
 end
 
@@ -118,7 +149,7 @@ signals.OutputDisconnect.on_response = function(response)
     ---@diagnostic disable-next-line: invisible
     local handle = require("pinnacle.output").handle.new(response.output_name)
     for _, callback in ipairs(signals.OutputDisconnect.callbacks) do
-        callback(handle)
+        protected_callback("OutputDisconnect", callback, handle)
     end
 end
 
@@ -126,7 +157,13 @@ signals.OutputResize.on_response = function(response)
     ---@diagnostic disable-next-line: invisible
     local handle = require("pinnacle.output").handle.new(response.output_name)
     for _, callback in ipairs(signals.OutputResize.callbacks) do
-        callback(handle, response.logical_width, response.logical_height)
+        protected_callback(
+            "OutputResize",
+            callback,
+            handle,
+            response.logical_width,
+            response.logical_height
+        )
     end
 end
 
@@ -134,7 +171,7 @@ signals.OutputMove.on_response = function(response)
     ---@diagnostic disable-next-line: invisible
     local handle = require("pinnacle.output").handle.new(response.output_name)
     for _, callback in ipairs(signals.OutputMove.callbacks) do
-        callback(handle, response.x, response.y)
+        protected_callback("OutputMove", callback, handle, response.x, response.y)
     end
 end
 
@@ -143,7 +180,7 @@ signals.OutputPointerEnter.on_response = function(response)
     local handle = require("pinnacle.output").handle.new(response.output_name)
 
     for _, callback in ipairs(signals.OutputPointerEnter.callbacks) do
-        callback(handle)
+        protected_callback("OutputPointerEnter", callback, handle)
     end
 end
 
@@ -152,7 +189,7 @@ signals.OutputPointerLeave.on_response = function(response)
     local handle = require("pinnacle.output").handle.new(response.output_name)
 
     for _, callback in ipairs(signals.OutputPointerLeave.callbacks) do
-        callback(handle)
+        protected_callback("OutputPointerLeave", callback, handle)
     end
 end
 
@@ -161,7 +198,7 @@ signals.OutputFocused.on_response = function(response)
     local handle = require("pinnacle.output").handle.new(response.output_name)
 
     for _, callback in ipairs(signals.OutputFocused.callbacks) do
-        callback(handle)
+        protected_callback("OutputFocused", callback, handle)
     end
 end
 
@@ -170,7 +207,7 @@ signals.WindowPointerEnter.on_response = function(response)
     local window_handle = require("pinnacle.window").handle.new(response.window_id)
 
     for _, callback in ipairs(signals.WindowPointerEnter.callbacks) do
-        callback(window_handle)
+        protected_callback("WindowPointerEnter", callback, window_handle)
     end
 end
 
@@ -179,7 +216,7 @@ signals.WindowPointerLeave.on_response = function(response)
     local window_handle = require("pinnacle.window").handle.new(response.window_id)
 
     for _, callback in ipairs(signals.WindowPointerLeave.callbacks) do
-        callback(window_handle)
+        protected_callback("WindowPointerLeave", callback, window_handle)
     end
 end
 
@@ -188,7 +225,7 @@ signals.WindowFocused.on_response = function(response)
     local window_handle = require("pinnacle.window").handle.new(response.window_id)
 
     for _, callback in ipairs(signals.WindowFocused.callbacks) do
-        callback(window_handle)
+        protected_callback("WindowFocused", callback, window_handle)
     end
 end
 
@@ -197,7 +234,7 @@ signals.TagActive.on_response = function(response)
     local tag_handle = require("pinnacle.tag").handle.new(response.tag_id)
 
     for _, callback in ipairs(signals.TagActive.callbacks) do
-        callback(tag_handle, response.active)
+        protected_callback("TagActive", callback, tag_handle, response.active)
     end
 end
 
@@ -206,7 +243,7 @@ signals.InputDeviceAdded.on_response = function(response)
     local device_handle = require("pinnacle.input.libinput").new_device(response.device_sysname)
 
     for _, callback in ipairs(signals.InputDeviceAdded.callbacks) do
-        callback(device_handle)
+        protected_callback("InputDeviceAdded", callback, device_handle)
     end
 end
 
