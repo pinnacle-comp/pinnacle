@@ -197,11 +197,17 @@ local function keybind_inner(kb)
     }, function(response)
         if response.edge == edge_values.press then
             if kb.on_press then
-                kb.on_press()
+                local success, error = pcall(kb.on_press)
+                if not success then
+                    log.error("While handling 'Keybind:on_press': " .. tostring(error))
+                end
             end
         elseif response.edge == edge_values.release then
             if kb.on_release then
-                kb.on_release()
+                local success, error = pcall(kb.on_release)
+                if not success then
+                    log.error("While handling 'Keybind:on_release': " .. tostring(error))
+                end
             end
         end
     end)
@@ -335,11 +341,17 @@ local function mousebind_inner(mb)
     }, function(response)
         if response.edge == edge_values.press then
             if mb.on_press then
-                mb.on_press()
+                local success, error = pcall(mb.on_press)
+                if not success then
+                    log.error("While handling `Mousebind:on_press`: " .. tostring(error))
+                end
             end
         elseif response.edge == edge_values.release then
             if mb.on_release then
-                mb.on_release()
+                local success, error = pcall(mb.on_release)
+                if not success then
+                    log.error("While handling `Mousebind:on_release`: " .. tostring(error))
+                end
             end
         end
     end)
