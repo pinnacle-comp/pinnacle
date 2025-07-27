@@ -8,7 +8,7 @@ use snowcap_api_defs::snowcap::{
         self,
         v1::{CloseRequest, NewLayerRequest, UpdateLayerRequest},
     },
-    widget::v1::{GetWidgetEventsRequest, get_widget_events_response},
+    widget::v1::{GetWidgetEventsRequest, get_widget_events_request, get_widget_events_response},
 };
 use tokio_stream::StreamExt;
 use tracing::error;
@@ -162,7 +162,9 @@ where
     let layer_id = response.into_inner().layer_id;
 
     let mut event_stream = Client::widget()
-        .get_widget_events(GetWidgetEventsRequest { layer_id })
+        .get_widget_events(GetWidgetEventsRequest {
+            id: Some(get_widget_events_request::Id::LayerId(layer_id)),
+        })
         .block_on_tokio()?
         .into_inner();
 
@@ -208,8 +210,8 @@ where
     })
 }
 
-/// A handle to a layer surface widget.
-#[derive(Debug, Clone, Copy)]
+/// A handle to a layer surface.
+#[derive(Debug, Clone)]
 pub struct LayerHandle {
     id: WidgetId,
 }
@@ -245,7 +247,7 @@ impl LayerHandle {
             }
         };
 
-        let handle = *self;
+        let handle = self.clone();
 
         tokio::spawn(async move {
             while let Some(Ok(response)) = stream.next().await {
@@ -256,7 +258,7 @@ impl LayerHandle {
                 let key = Keysym::new(response.key);
                 let mods = Modifiers::from(response.modifiers.unwrap_or_default());
 
-                on_press(handle, key, mods);
+                on_press(handle.clone(), key, mods);
             }
         });
     }

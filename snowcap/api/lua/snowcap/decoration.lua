@@ -101,29 +101,29 @@ function decoration.new_widget(args)
 
     local decoration_id = response.decoration_id
 
-    -- local err = client:snowcap_widget_v1_WidgetService_GetWidgetEvents({
-    --     layer_id = layer_id,
-    -- }, function(response)
-    --     local widget_id = response.widget_id or 0
-    --     if response.button then
-    --         if callbacks[widget_id] then
-    --             args.program:update(callbacks[widget_id])
-    --             local widget_def = args.program:view()
-    --             callbacks = {}
-    --
-    --             traverse_widget_tree(widget_def, callbacks, function(callbacks, widget)
-    --                 if widget.button and widget.button.on_press then
-    --                     callbacks[widget.button.widget_id] = widget.button.on_press
-    --                 end
-    --             end)
-    --
-    --             local _, err = client:snowcap_layer_v1_LayerService_UpdateLayer({
-    --                 layer_id = layer_id,
-    --                 widget_def = widget.widget_def_into_api(widget_def),
-    --             })
-    --         end
-    --     end
-    -- end)
+    local err = client:snowcap_widget_v1_WidgetService_GetWidgetEvents({
+        decoration_id = decoration_id,
+    }, function(response)
+        local widget_id = response.widget_id or 0
+        if response.button then
+            if callbacks[widget_id] then
+                args.program:update(callbacks[widget_id])
+                local widget_def = args.program:view()
+                callbacks = {}
+
+                traverse_widget_tree(widget_def, callbacks, function(callbacks, widget)
+                    if widget.button and widget.button.on_press then
+                        callbacks[widget.button.widget_id] = widget.button.on_press
+                    end
+                end)
+
+                local _, err = client:snowcap_decoration_v1_DecorationService_UpdateDecoration({
+                    decoration_id = decoration_id,
+                    widget_def = widget.widget_def_into_api(widget_def),
+                })
+            end
+        end
+    end)
 
     return decoration_handle.new(decoration_id)
 end

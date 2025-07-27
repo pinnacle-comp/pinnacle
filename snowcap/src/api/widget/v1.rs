@@ -4,14 +4,15 @@ use iced::widget::{
 use snowcap_api_defs::snowcap::widget::{
     self,
     v1::{
-        GetWidgetEventsRequest, GetWidgetEventsResponse, WidgetDef, widget_def,
-        widget_service_server,
+        GetWidgetEventsRequest, GetWidgetEventsResponse, WidgetDef, get_widget_events_request,
+        widget_def, widget_service_server,
     },
 };
 use tonic::{Request, Response, Status};
 
 use crate::{
     api::{ResponseStream, run_server_streaming_mapped},
+    decoration::DecorationId,
     layer::LayerId,
     util::convert::FromApi,
     widget::{ViewFn, WidgetEvent, WidgetId},
@@ -25,14 +26,22 @@ impl widget_service_server::WidgetService for super::WidgetService {
         &self,
         request: Request<GetWidgetEventsRequest>,
     ) -> Result<Response<Self::GetWidgetEventsStream>, Status> {
-        let layer_id = request.into_inner().layer_id;
-        let layer_id = LayerId(layer_id);
+        let Some(id) = request.into_inner().id else {
+            return Err(Status::invalid_argument("no id specified"));
+        };
 
         run_server_streaming_mapped(
             &self.sender,
-            move |state, sender| {
-                if let Some(layer) = state.layer_for_id(layer_id) {
-                    layer.widget_event_sender = Some(sender);
+            move |state, sender| match id {
+                get_widget_events_request::Id::LayerId(layer_id) => {
+                    if let Some(layer) = state.layer_for_id(LayerId(layer_id)) {
+                        layer.widget_event_sender = Some(sender);
+                    }
+                }
+                get_widget_events_request::Id::DecorationId(decoration_id) => {
+                    if let Some(deco) = state.decoration_for_id(DecorationId(decoration_id)) {
+                        deco.widget_event_sender = Some(sender);
+                    }
                 }
             },
             |(id, event)| {

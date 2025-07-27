@@ -283,7 +283,10 @@ message Image {
 }
 
 message GetWidgetEventsRequest {
-  uint32 layer_id = 1;
+  oneof id {
+    uint32 layer_id = 1;
+    uint32 decoration_id = 2;
+  }
 }
 
 message GetWidgetEventsResponse {
