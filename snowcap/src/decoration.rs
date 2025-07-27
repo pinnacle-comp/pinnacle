@@ -55,7 +55,7 @@ impl State {
 }
 
 pub struct SnowcapDecoration {
-    // SAFETY: Drop order: surface needs to be dropped before the layer
+    // SAFETY: Drop order: surface needs to be dropped before the wl surface
     pub surface: <iced_renderer::Compositor as iced_graphics::Compositor>::Surface,
 
     pub decoration: SnowcapDecorationSurfaceV1,

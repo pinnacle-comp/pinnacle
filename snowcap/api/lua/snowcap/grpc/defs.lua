@@ -841,6 +841,7 @@ local snowcap_layer_v1_Layer = {
 
 ---@class snowcap.widget.v1.GetWidgetEventsRequest
 ---@field layer_id integer?
+---@field decoration_id integer?
 
 ---@class snowcap.widget.v1.GetWidgetEventsResponse
 ---@field widget_id integer?

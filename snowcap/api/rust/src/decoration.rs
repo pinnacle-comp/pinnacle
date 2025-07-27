@@ -2,10 +2,14 @@
 
 use std::collections::HashMap;
 
-use snowcap_api_defs::snowcap::decoration::{
-    self,
-    v1::{CloseRequest, NewDecorationRequest},
+use snowcap_api_defs::snowcap::{
+    decoration::{
+        self,
+        v1::{CloseRequest, NewDecorationRequest, UpdateDecorationRequest},
+    },
+    widget::v1::{GetWidgetEventsRequest, get_widget_events_request, get_widget_events_response},
 };
+use tokio_stream::StreamExt;
 use tracing::error;
 
 use crate::{
@@ -48,7 +52,7 @@ pub enum NewDecorationError {
 
 /// Create a new widget.
 pub fn new_widget<Msg, P>(
-    program: P,
+    mut program: P,
     toplevel_identifier: String,
     bounds: Bounds,
     extents: Bounds,
@@ -79,56 +83,57 @@ where
         .block_on_tokio()?;
 
     let decoration_id = response.into_inner().decoration_id;
-    //
-    // let mut event_stream = Client::widget()
-    //     .get_widget_events(GetWidgetEventsRequest { layer_id })
-    //     .block_on_tokio()?
-    //     .into_inner();
-    //
-    // tokio::spawn(async move {
-    //     while let Some(Ok(event)) = event_stream.next().await {
-    //         let id = WidgetId(event.widget_id);
-    //         let Some(event) = event.event else {
-    //             continue;
-    //         };
-    //         match event {
-    //             get_widget_events_response::Event::Button(_event) => {
-    //                 if let Some(msg) = callbacks.get(&id) {
-    //                     program.update(msg.clone());
-    //                     let widget_def = program.view();
-    //
-    //                     callbacks.clear();
-    //
-    //                     widget_def.collect_messages(&mut callbacks, |def, cbs| {
-    //                         if let Widget::Button(button) = &def.widget {
-    //                             cbs.extend(button.on_press.clone());
-    //                         }
-    //                     });
-    //
-    //                     Client::layer()
-    //                         .update_layer(UpdateLayerRequest {
-    //                             layer_id,
-    //                             widget_def: Some(widget_def.into()),
-    //                             anchor: None,
-    //                             keyboard_interactivity: None,
-    //                             exclusive_zone: None,
-    //                             layer: None,
-    //                         })
-    //                         .await
-    //                         .unwrap();
-    //                 }
-    //             }
-    //         }
-    //     }
-    // });
+
+    let mut event_stream = Client::widget()
+        .get_widget_events(GetWidgetEventsRequest {
+            id: Some(get_widget_events_request::Id::DecorationId(decoration_id)),
+        })
+        .block_on_tokio()?
+        .into_inner();
+
+    tokio::spawn(async move {
+        while let Some(Ok(event)) = event_stream.next().await {
+            let id = WidgetId(event.widget_id);
+            let Some(event) = event.event else {
+                continue;
+            };
+            match event {
+                get_widget_events_response::Event::Button(_event) => {
+                    if let Some(msg) = callbacks.get(&id) {
+                        program.update(msg.clone());
+                        let widget_def = program.view();
+
+                        callbacks.clear();
+
+                        widget_def.collect_messages(&mut callbacks, |def, cbs| {
+                            if let Widget::Button(button) = &def.widget {
+                                cbs.extend(button.on_press.clone());
+                            }
+                        });
+
+                        Client::decoration()
+                            .update_decoration(UpdateDecorationRequest {
+                                decoration_id,
+                                widget_def: Some(widget_def.into()),
+                                bounds: None,
+                                extents: None,
+                                z_index: None,
+                            })
+                            .await
+                            .unwrap();
+                    }
+                }
+            }
+        }
+    });
 
     Ok(DecorationHandle {
         id: decoration_id.into(),
     })
 }
 
-/// A handle to a layer surface widget.
-#[derive(Debug, Clone, Copy)]
+/// A handle to a decoration surface.
+#[derive(Debug, Clone)]
 pub struct DecorationHandle {
     id: WidgetId,
 }
@@ -145,38 +150,4 @@ impl DecorationHandle {
             error!("Failed to close {self:?}: {status}");
         }
     }
-
-    // /// Do something on key press.
-    // pub fn on_key_press(
-    //     &self,
-    //     mut on_press: impl FnMut(LayerHandle, Keysym, Modifiers) + Send + 'static,
-    // ) {
-    //     let mut stream = match Client::input()
-    //         .keyboard_key(KeyboardKeyRequest {
-    //             id: self.id.to_inner(),
-    //         })
-    //         .block_on_tokio()
-    //     {
-    //         Ok(stream) => stream.into_inner(),
-    //         Err(status) => {
-    //             error!("Failed to set `on_key_press` handler: {status}");
-    //             return;
-    //         }
-    //     };
-    //
-    //     let handle = *self;
-    //
-    //     tokio::spawn(async move {
-    //         while let Some(Ok(response)) = stream.next().await {
-    //             if !response.pressed {
-    //                 continue;
-    //             }
-    //
-    //             let key = Keysym::new(response.key);
-    //             let mods = Modifiers::from(response.modifiers.unwrap_or_default());
-    //
-    //             on_press(handle, key, mods);
-    //         }
-    //     });
-    // }
 }
