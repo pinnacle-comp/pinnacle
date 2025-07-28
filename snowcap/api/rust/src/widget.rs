@@ -234,6 +234,17 @@ pub struct Padding {
     pub left: f32,
 }
 
+impl From<f32> for Padding {
+    fn from(value: f32) -> Self {
+        Self {
+            top: value,
+            right: value,
+            bottom: value,
+            left: value,
+        }
+    }
+}
+
 impl From<Padding> for widget::v1::Padding {
     fn from(value: Padding) -> Self {
         widget::v1::Padding {
@@ -306,10 +317,10 @@ impl From<Border> for widget::v1::Border {
 
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct Radius {
-    top_left: f32,
-    top_right: f32,
-    bottom_right: f32,
-    bottom_left: f32,
+    pub top_left: f32,
+    pub top_right: f32,
+    pub bottom_right: f32,
+    pub bottom_left: f32,
 }
 
 impl From<f32> for Radius {
