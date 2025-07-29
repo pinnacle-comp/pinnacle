@@ -27,6 +27,12 @@ impl SnowcapDecorationHandler for State {
             .pinnacle
             .windows
             .iter()
+            .chain(
+                self.pinnacle
+                    .unmapped_windows
+                    .iter()
+                    .map(|unmapped| &unmapped.window),
+            )
             .find(|win| {
                 win.with_state(|state| {
                     state
@@ -45,7 +51,7 @@ impl SnowcapDecorationHandler for State {
         };
 
         surface.with_pending_state(|state| {
-            state.toplevel_size = Some(window.geometry().size);
+            state.toplevel_size = Some((*window).geometry().size);
         });
         surface.send_configure();
 

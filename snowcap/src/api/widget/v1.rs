@@ -581,6 +581,37 @@ pub fn widget_def_to_fn(def: WidgetDef) -> Option<ViewFn> {
 
             Some(f)
         }
+        widget_def::Widget::InputRegion(input_region) => {
+            let widget::v1::InputRegion {
+                add,
+                width,
+                height,
+                child,
+            } = *input_region;
+
+            let child_widget_fn = child.and_then(|def| widget_def_to_fn(*def));
+
+            let f: ViewFn = Box::new(move || {
+                let mut input_region = crate::widget::input_region::InputRegion::new(
+                    add,
+                    child_widget_fn
+                        .as_ref()
+                        .map(|child| child())
+                        .unwrap_or_else(|| iced::widget::Text::new("NULL").into()),
+                );
+
+                if let Some(width) = width {
+                    input_region = input_region.width(iced::Length::from_api(width));
+                }
+                if let Some(height) = height {
+                    input_region = input_region.height(iced::Length::from_api(height));
+                }
+
+                input_region.into()
+            });
+
+            Some(f)
+        }
     }
 }
 

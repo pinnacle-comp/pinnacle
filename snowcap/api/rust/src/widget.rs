@@ -7,6 +7,7 @@ pub mod column;
 pub mod container;
 pub mod font;
 pub mod image;
+pub mod input_region;
 pub mod row;
 pub mod scrollable;
 pub mod text;
@@ -24,6 +25,8 @@ use row::Row;
 use scrollable::Scrollable;
 use snowcap_api_defs::snowcap::widget;
 use text::Text;
+
+use crate::widget::input_region::InputRegion;
 
 /// A unique identifier for a widget.
 #[derive(Copy, Clone, Default, Debug, PartialEq, Eq, Hash)]
@@ -129,6 +132,9 @@ impl<Msg> WidgetDef<Msg> {
                 button.child.collect_messages(callbacks, with_widget);
             }
             Widget::Image(_) => (),
+            Widget::InputRegion(input_region) => {
+                input_region.child.collect_messages(callbacks, with_widget);
+            }
         }
     }
 }
@@ -153,6 +159,7 @@ pub enum Widget<Msg> {
     Container(Box<Container<Msg>>),
     Button(Box<Button<Msg>>),
     Image(Image),
+    InputRegion(Box<InputRegion<Msg>>),
 }
 
 impl<Msg, T: Into<Widget<Msg>>> From<T> for WidgetDef<Msg> {
@@ -181,6 +188,9 @@ impl<Msg> From<Widget<Msg>> for widget::v1::widget_def::Widget {
                 widget::v1::widget_def::Widget::Button(Box::new((*button).into()))
             }
             Widget::Image(image) => widget::v1::widget_def::Widget::Image(image.into()),
+            Widget::InputRegion(input_region) => {
+                widget::v1::widget_def::Widget::InputRegion(Box::new((*input_region).into()))
+            }
         }
     }
 }
