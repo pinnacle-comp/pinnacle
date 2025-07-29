@@ -13,6 +13,7 @@ use smithay_client_toolkit::{
             Connection, Dispatch, QueueHandle, delegate_noop,
             protocol::{
                 wl_output::{self, WlOutput},
+                wl_region::WlRegion,
                 wl_seat::WlSeat,
                 wl_surface::WlSurface,
             },
@@ -270,6 +271,7 @@ delegate_compositor!(State);
 delegate_noop!(State: WpFractionalScaleManagerV1);
 delegate_noop!(State: WpViewporter);
 delegate_noop!(State: WpViewport);
+delegate_noop!(State: WlRegion);
 
 impl Dispatch<WpFractionalScaleV1, WlSurface> for State {
     fn event(

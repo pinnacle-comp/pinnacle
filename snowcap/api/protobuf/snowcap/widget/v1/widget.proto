@@ -127,6 +127,7 @@ message WidgetDef {
     Container container = 6;
     Button button = 7;
     Image image = 8;
+    InputRegion input_region = 9;
   }
 }
 
@@ -222,6 +223,13 @@ message Container {
     optional Border border = 3;
     // TODO: shadow
   }
+}
+
+message InputRegion {
+  bool add = 1;
+  optional Length width = 2;
+  optional Length height = 3;
+  WidgetDef child = 9;
 }
 
 message Button {

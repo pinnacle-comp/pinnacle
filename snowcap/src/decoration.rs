@@ -7,14 +7,17 @@ use raw_window_handle::{
     HasDisplayHandle, HasWindowHandle, RawDisplayHandle, RawWindowHandle, WaylandDisplayHandle,
     WaylandWindowHandle,
 };
-use smithay_client_toolkit::reexports::{
-    calloop::{self, LoopHandle, timer::Timer},
-    client::{Proxy, QueueHandle, protocol::wl_surface::WlSurface},
-    protocols::{
-        ext::foreign_toplevel_list::v1::client::ext_foreign_toplevel_handle_v1::ExtForeignToplevelHandleV1,
-        wp::{
-            fractional_scale::v1::client::wp_fractional_scale_v1::WpFractionalScaleV1,
-            viewporter::client::wp_viewport::WpViewport,
+use smithay_client_toolkit::{
+    compositor::CompositorState,
+    reexports::{
+        calloop::{self, LoopHandle, timer::Timer},
+        client::{Proxy, QueueHandle, protocol::wl_surface::WlSurface},
+        protocols::{
+            ext::foreign_toplevel_list::v1::client::ext_foreign_toplevel_handle_v1::ExtForeignToplevelHandleV1,
+            wp::{
+                fractional_scale::v1::client::wp_fractional_scale_v1::WpFractionalScaleV1,
+                viewporter::client::wp_viewport::WpViewport,
+            },
         },
     },
 };
@@ -275,18 +278,21 @@ impl SnowcapDecoration {
 
     pub fn update_properties(
         &mut self,
+        compositor_state: &CompositorState,
         widgets: Option<ViewFn>,
         bounds: Option<Bounds>,
         extents: Option<Bounds>,
         z_index: Option<i32>,
         queue_handle: &QueueHandle<State>,
     ) {
+        // FIXME: make these pending, update on next draw + commit
+
         if let Some(widgets) = widgets {
             self.widgets
                 .update_view(widgets, self.widget_bounds(), &mut self.renderer);
+            self.widgets
+                .update_input_region(queue_handle, compositor_state, &self.wl_surface);
         }
-
-        // FIXME: make these pending, update on next draw + commit
 
         if let Some(bounds) = bounds {
             self.decoration
@@ -336,6 +342,7 @@ impl SnowcapDecoration {
 
     pub fn update(
         &mut self,
+        compositor_state: &CompositorState,
         queue_handle: &QueueHandle<State>,
         runtime: &mut crate::runtime::Runtime,
         compositor: &mut crate::compositor::Compositor,
@@ -350,6 +357,9 @@ impl SnowcapDecoration {
 
             self.widgets
                 .rebuild_ui(self.widget_bounds(), &mut self.renderer);
+
+            self.widgets
+                .update_input_region(queue_handle, compositor_state, &self.wl_surface);
 
             self.viewport.set_destination(
                 self.widgets.size().width as i32,
@@ -429,6 +439,9 @@ impl SnowcapDecoration {
 
             self.widgets
                 .rebuild_ui(self.widget_bounds(), &mut self.renderer);
+
+            self.widgets
+                .update_input_region(queue_handle, compositor_state, &self.wl_surface);
         }
 
         if request_frame {

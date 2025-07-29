@@ -720,6 +720,7 @@ local snowcap_layer_v1_Layer = {
 ---@field container snowcap.widget.v1.Container?
 ---@field button snowcap.widget.v1.Button?
 ---@field image snowcap.widget.v1.Image?
+---@field input_region snowcap.widget.v1.InputRegion?
 
 ---@class snowcap.widget.v1.Text
 ---@field text string?
@@ -798,6 +799,12 @@ local snowcap_layer_v1_Layer = {
 ---@field text_color snowcap.widget.v1.Color?
 ---@field background_color snowcap.widget.v1.Color?
 ---@field border snowcap.widget.v1.Border?
+
+---@class snowcap.widget.v1.InputRegion
+---@field add boolean?
+---@field width snowcap.widget.v1.Length?
+---@field height snowcap.widget.v1.Length?
+---@field child snowcap.widget.v1.WidgetDef?
 
 ---@class snowcap.widget.v1.Button
 ---@field child snowcap.widget.v1.WidgetDef?
@@ -1088,6 +1095,7 @@ snowcap.widget.v1.Scrollable.Direction = {}
 snowcap.widget.v1.Scrollable.Scrollbar = {}
 snowcap.widget.v1.Container = {}
 snowcap.widget.v1.Container.Style = {}
+snowcap.widget.v1.InputRegion = {}
 snowcap.widget.v1.Button = {}
 snowcap.widget.v1.Button.Style = {}
 snowcap.widget.v1.Button.Style.Inner = {}

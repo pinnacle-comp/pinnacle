@@ -103,6 +103,7 @@ pub fn start(stop_signal_sender: Option<tokio::sync::oneshot::Sender<SnowcapHand
             for deco in state.decorations.iter_mut() {
                 if deco.widgets.has_events_queued() {
                     deco.update(
+                        &state.compositor_state,
                         &state.queue_handle,
                         &mut state.runtime,
                         state.compositor.as_mut().unwrap(),
