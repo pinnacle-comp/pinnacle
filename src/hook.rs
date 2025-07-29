@@ -158,7 +158,7 @@ pub fn add_mapped_toplevel_pre_commit_hook(toplevel: &ToplevelSurface) -> HookId
                 });
 
             #[cfg(feature = "snowcap")]
-            let mut deco_serial = None;
+            let mut deco_serials = Vec::new();
 
             #[cfg(feature = "snowcap")]
             if let Some(geometry) = compositor::with_states(surface, |states| {
@@ -170,11 +170,11 @@ pub fn add_mapped_toplevel_pre_commit_hook(toplevel: &ToplevelSurface) -> HookId
                 let size = geometry.size;
 
                 window.with_state(|state| {
-                    if let Some(surface) = state.decoration_surface.as_ref() {
-                        surface.decoration_surface().with_pending_state(|state| {
+                    for deco in state.decoration_surfaces.iter() {
+                        deco.decoration_surface().with_pending_state(|state| {
                             state.toplevel_size = Some(size);
                         });
-                        deco_serial = surface.decoration_surface().send_pending_configure();
+                        deco_serials.push(deco.decoration_surface().send_pending_configure());
                     }
                 });
             }
@@ -189,19 +189,23 @@ pub fn add_mapped_toplevel_pre_commit_hook(toplevel: &ToplevelSurface) -> HookId
                 let mut already_txned_deco = false;
 
                 #[cfg(feature = "snowcap")]
-                if window.with_state(|state| state.pending_transactions.is_empty())
-                    && let Some(deco_serial) = deco_serial
-                {
+                if window.with_state(|state| state.pending_transactions.is_empty()) {
                     use crate::util::transaction::TransactionBuilder;
                     use smithay::utils::Serial;
 
                     let txn_builder = TransactionBuilder::new();
                     let txn = txn_builder.get_transaction(&state.pinnacle.loop_handle);
                     window.with_state_mut(|state| {
-                        let deco = state.decoration_surface.as_ref().unwrap();
-                        deco.with_state_mut(|state| {
-                            state.pending_transactions.push((deco_serial, txn.clone()))
-                        });
+                        for (deco, serial) in
+                            state.decoration_surfaces.iter().zip(deco_serials.iter())
+                        {
+                            let Some(serial) = serial else {
+                                continue;
+                            };
+                            deco.with_state_mut(|state| {
+                                state.pending_transactions.push((*serial, txn.clone()))
+                            });
+                        }
 
                         state.pending_transactions.push((Serial::from(0), txn));
 
@@ -212,14 +216,19 @@ pub fn add_mapped_toplevel_pre_commit_hook(toplevel: &ToplevelSurface) -> HookId
                 trace!("taking pending transaction");
                 if let Some(transaction) = window.take_pending_transaction(serial) {
                     #[cfg(feature = "snowcap")]
-                    if !already_txned_deco && let Some(deco_serial) = deco_serial {
+                    if !already_txned_deco {
                         window.with_state(|state| {
-                            let deco = state.decoration_surface.as_ref().unwrap();
-                            deco.with_state_mut(|state| {
-                                state
-                                    .pending_transactions
-                                    .push((deco_serial, transaction.clone()))
-                            });
+                            for (deco, serial) in state.decoration_surfaces.iter().zip(deco_serials)
+                            {
+                                let Some(serial) = serial else {
+                                    continue;
+                                };
+                                deco.with_state_mut(|state| {
+                                    state
+                                        .pending_transactions
+                                        .push((serial, transaction.clone()))
+                                });
+                            }
                         });
                     }
 

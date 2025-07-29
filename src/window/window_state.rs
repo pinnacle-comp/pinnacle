@@ -14,7 +14,7 @@ use smithay::{
 use tracing::warn;
 
 #[cfg(feature = "snowcap")]
-use crate::decoration::DecorationSurface;
+use crate::{decoration::DecorationSurface, protocol::snowcap_decoration::Bounds};
 use crate::{
     render::util::snapshot::WindowSnapshot,
     state::{Pinnacle, WithState},
@@ -395,7 +395,7 @@ pub struct WindowElementState {
     pub mapped_hook_id: Option<HookId>,
     pub foreign_toplevel_list_handle: Option<ForeignToplevelHandle>,
     #[cfg(feature = "snowcap")]
-    pub decoration_surface: Option<DecorationSurface>,
+    pub decoration_surfaces: Vec<DecorationSurface>,
 }
 
 impl WindowElement {
@@ -614,7 +614,7 @@ impl WindowElementState {
             layout_node: None,
             foreign_toplevel_list_handle: None,
             #[cfg(feature = "snowcap")]
-            decoration_surface: None,
+            decoration_surfaces: Vec::new(),
         }
     }
 
@@ -630,6 +630,21 @@ impl WindowElementState {
         let loc: Option<Point<_, _>> = loc.into();
         self.floating_x = loc.map(|loc| loc.x);
         self.floating_y = loc.map(|loc| loc.y);
+    }
+
+    #[cfg(feature = "snowcap")]
+    pub fn max_decoration_bounds(&self) -> Bounds {
+        let mut max_bounds = Bounds::default();
+        for deco in self.decoration_surfaces.iter() {
+            let bounds = deco.bounds();
+            max_bounds = Bounds {
+                top: max_bounds.top.max(bounds.top),
+                bottom: max_bounds.bottom.max(bounds.bottom),
+                left: max_bounds.left.max(bounds.left),
+                right: max_bounds.right.max(bounds.right),
+            };
+        }
+        max_bounds
     }
 }
 

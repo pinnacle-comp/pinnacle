@@ -607,7 +607,7 @@ impl Pinnacle {
 
             #[cfg(feature = "snowcap")]
             window.with_state(|state| {
-                if let Some(deco) = state.decoration_surface.as_ref() {
+                for deco in state.decoration_surfaces.iter() {
                     deco.send_frame(output, now, FRAME_CALLBACK_THROTTLE, should_send);
                 }
             });
@@ -698,7 +698,7 @@ impl Pinnacle {
 
             #[cfg(feature = "snowcap")]
             window.with_state(|state| {
-                if let Some(deco) = state.decoration_surface.as_ref() {
+                for deco in state.decoration_surfaces.iter() {
                     deco.with_surfaces(|surface, states| {
                         let primary_scanout_output = update_surface_primary_scanout_output(
                             surface,
@@ -820,7 +820,7 @@ impl Pinnacle {
                 // FIXME: get the actual overlap
                 #[cfg(feature = "snowcap")]
                 window.with_state(|state| {
-                    if let Some(deco) = state.decoration_surface.as_ref() {
+                    for deco in state.decoration_surfaces.iter() {
                         deco.send_dmabuf_feedback(
                             output,
                             surface_primary_scanout_output,
