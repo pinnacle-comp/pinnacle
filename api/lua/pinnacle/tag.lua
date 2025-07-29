@@ -93,6 +93,7 @@ function tag.get(name, output)
     output = output or require("pinnacle.output").get_focused()
 
     if not output then
+        log.error("Cannot get tags without output")
         return
     end
 
@@ -334,6 +335,10 @@ end
 function TagHandle:name()
     local response, err = client:pinnacle_tag_v1_TagService_GetName({ tag_id = self.id })
 
+    if err then
+        log.error(err)
+    end
+
     return response and response.name or ""
 end
 
@@ -342,6 +347,10 @@ end
 ---@return pinnacle.output.OutputHandle
 function TagHandle:output()
     local response, err = client:pinnacle_tag_v1_TagService_GetOutputName({ tag_id = self.id })
+
+    if err then
+        log.error(err)
+    end
 
     local output_name = response and response.output_name or ""
     return require("pinnacle.output").handle.new(output_name)
@@ -375,6 +384,14 @@ function TagHandle:windows()
     return wins_on_tag
 end
 
+---Convert a TagHandle to string
+---
+---@param tag pinnacle.tag.TagHandle
+---@return string
+local function tag_tostring(tag)
+    return "tag{id=" .. tag.id .. "}"
+end
+
 ---Creates a new `TagHandle` from an id.
 ---@param tag_id integer
 ---@return pinnacle.tag.TagHandle
@@ -383,7 +400,7 @@ function tag_handle.new(tag_id)
     local self = {
         id = tag_id,
     }
-    setmetatable(self, { __index = TagHandle })
+    setmetatable(self, { __index = TagHandle, __tostring = tag_tostring })
     return self
 end
 

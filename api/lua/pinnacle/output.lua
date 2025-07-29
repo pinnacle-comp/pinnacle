@@ -943,6 +943,14 @@ function OutputHandle:in_direction(direction)
     return response and output_handle.new_from_table(response.output_names or {}) or {}
 end
 
+---Convert an OutputHandle to a string
+---
+---@param output pinnacle.output.OutputHandle
+---@return string
+local function output_tostring(output)
+    return "output{name=" .. output.name .. "}"
+end
+
 ---Creates a new `OutputHandle` from its raw name.
 ---@param output_name string
 function output_handle.new(output_name)
@@ -950,7 +958,7 @@ function output_handle.new(output_name)
     local self = {
         name = output_name,
     }
-    setmetatable(self, { __index = OutputHandle })
+    setmetatable(self, { __index = OutputHandle, __tostring = output_tostring })
     return self
 end
 

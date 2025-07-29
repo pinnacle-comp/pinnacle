@@ -144,6 +144,28 @@ impl Client {
             .unwrap()
     }
 
+    /// Iterate over all windows for this client, calling ack_and_commit on each.
+    ///
+    /// Returns true if at least one window had a pending_configure.
+    pub fn ack_all_window(&mut self) -> bool {
+        let mut has_acked = false;
+
+        for win in self.state.windows.iter_mut() {
+            has_acked |= win.current_serial().is_some();
+            win.ack_and_commit();
+        }
+
+        has_acked
+    }
+
+    /// Check if the client has pending configure that need to be ack-ed.
+    pub fn has_pending_configure(&self) -> bool {
+        self.state
+            .windows
+            .iter()
+            .any(|w| w.current_serial().is_some())
+    }
+
     pub fn event_loop_fd(&self) -> OwnedFd {
         self.event_loop.as_fd().try_clone_to_owned().unwrap()
     }

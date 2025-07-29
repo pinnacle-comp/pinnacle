@@ -27,6 +27,7 @@ pub struct Fixture {
     event_loop: EventLoop<'static, State>,
     state: State,
     _test_guard: MutexGuard<'static, ()>,
+    timeout: Duration,
 }
 
 struct State {
@@ -35,6 +36,7 @@ struct State {
 }
 
 static OUTPUT_COUNTER: AtomicU32 = AtomicU32::new(0);
+const DEFAULT_TIMEOUT: Duration = Duration::from_secs(60);
 
 impl Fixture {
     pub fn new() -> Self {
@@ -78,6 +80,7 @@ impl Fixture {
             event_loop,
             state,
             _test_guard,
+            timeout: DEFAULT_TIMEOUT,
         }
     }
 
@@ -146,7 +149,21 @@ impl Fixture {
     where
         F: FnMut(&mut Self) -> bool,
     {
+        let start = std::time::Instant::now();
+
         while !until(self) {
+            self.dispatch();
+
+            if start.elapsed() > self.timeout {
+                panic!("Timeout reached");
+            }
+        }
+    }
+
+    pub fn dispatch_for(&mut self, duration: Duration) {
+        let start = std::time::Instant::now();
+
+        while start.elapsed() <= duration {
             self.dispatch();
         }
     }
@@ -180,6 +197,8 @@ impl Fixture {
         debug!(client = ?id, "roundtripped");
     }
 
+    // TODO: Remove this once the tests are confirmed to be stable
+    #[allow(dead_code)]
     pub fn double_roundtrip(&mut self, id: ClientId) {
         self.roundtrip(id);
         self.roundtrip(id);
@@ -189,6 +208,8 @@ impl Fixture {
     where
         F: FnMut(&mut Window),
     {
+        let old_trees = self.pinnacle().layout_state.layout_trees.clone();
+
         // Add a window
         let window = self.client(id).create_window();
         pre_initial_commit(window);
@@ -205,16 +226,22 @@ impl Fixture {
         assert!(window.current_serial().is_none());
         self.roundtrip(id);
 
-        let old_trees = self.pinnacle().layout_state.layout_trees.clone();
-
         // Let Pinnacle do a layout
         self.dispatch_until(|fixture| fixture.pinnacle().layout_state.layout_trees != old_trees);
         self.roundtrip(id);
 
         // Commit the layout
-        let window = self.client(id).window_for_surface(&surface);
-        window.ack_and_commit();
+        self.wait_client_configure(id);
+        self.client(id).ack_all_window();
         self.roundtrip(id);
+
+        // Waiting one last time because we're getting focused/activated at this point.
+        self.wait_client_configure(id);
+        self.client(id).ack_all_window();
+        self.roundtrip(id);
+
+        // Wait for pending_transactions, if any
+        self.flush();
 
         surface
     }
@@ -244,10 +271,18 @@ impl Fixture {
         window.commit();
         self.roundtrip(id);
 
-        self.client(id)
-            .window_for_surface(&surface)
-            .ack_and_commit();
+        // wait a bit for the size to be set
+        self.wait_client_configure(id);
+        self.client(id).ack_all_window();
         self.roundtrip(id);
+
+        // Waiting to be activated/focused.
+        self.wait_client_configure(id);
+        self.client(id).ack_all_window();
+        self.roundtrip(id);
+
+        // Wait for pending_transactions, if any
+        self.flush();
 
         surface
     }
@@ -257,18 +292,54 @@ impl Fixture {
             .map(|_| self.spawn_window_with(id, |_| ()))
             .collect::<Vec<_>>();
 
-        for surf in surfaces.iter() {
-            let window = self.client(id).window_for_surface(surf);
-            window.ack_and_commit();
-        }
-
-        self.roundtrip(id);
-
         surfaces
     }
 
     pub fn client(&mut self, id: ClientId) -> &mut Client {
         self.state.client(id)
+    }
+
+    /// Wait for all outstanding transaction and configure to be handled.
+    ///
+    /// If timeout is reached, stop with false.
+    pub fn flush(&mut self) {
+        let start = std::time::Instant::now();
+        let mut loop_again = true;
+
+        let client_ids = self
+            .state
+            .clients
+            .iter()
+            .map(|c| c.id())
+            .collect::<Vec<_>>();
+
+        while loop_again {
+            tracing::debug!("Flushing transaction and configure");
+            for id in client_ids.iter().cloned() {
+                loop_again |= self.client(id).ack_all_window();
+                self.roundtrip(id);
+            }
+            self.dispatch();
+
+            loop_again = !self.pinnacle().layout_state.pending_transactions.is_empty();
+
+            if start.elapsed() >= self.timeout {
+                panic!("Timeout reached");
+            }
+        }
+    }
+
+    /// Wait for a client to receive a configure, dispatching in the meantime.
+    pub fn wait_client_configure(&mut self, id: ClientId) {
+        let start = std::time::Instant::now();
+
+        while !self.client(id).has_pending_configure() {
+            if start.elapsed() >= self.timeout {
+                panic!("Timeout reached");
+            }
+
+            self.dispatch();
+        }
     }
 }
 

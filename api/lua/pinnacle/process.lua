@@ -40,6 +40,14 @@ local Child = {}
 
 local child_module = {}
 
+---Convert a Child to a string
+---
+---@param child pinnacle.process.Child
+---@return string
+local function child_tostring(child)
+    return "Child{pid=" .. child.pid .. "}"
+end
+
 ---@param child pinnacle.process.Child
 ---
 ---@return pinnacle.process.Child
@@ -51,6 +59,7 @@ function child_module.new_child(child)
                 self:wait()
             end)
         end,
+        __tostring = child_tostring,
     })
     return child
 end
