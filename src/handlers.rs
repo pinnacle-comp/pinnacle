@@ -364,11 +364,9 @@ impl CompositorHandler for State {
                 let deco = win
                     .with_state(|state| {
                         state
-                            .decoration_surface
-                            .as_ref()
-                            .filter(|deco| {
-                                deco.wl_surface() == surface || deco.wl_surface() == &root
-                            })
+                            .decoration_surfaces
+                            .iter()
+                            .find(|deco| deco.wl_surface() == surface || deco.wl_surface() == &root)
                             .cloned()
                     })
                     .map(|deco| (win.clone(), deco));

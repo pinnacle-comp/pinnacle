@@ -50,10 +50,13 @@ impl SnowcapDecorationHandler for State {
             return;
         };
 
-        surface.with_pending_state(|state| {
-            state.toplevel_size = Some((*window).geometry().size);
-        });
-        surface.send_configure();
+        let size = (*window).geometry().size;
+        if !size.is_empty() {
+            surface.with_pending_state(|state| {
+                state.toplevel_size = Some(size);
+            });
+            surface.send_configure();
+        }
 
         if let Some(dmabuf_hook) = self.pinnacle.dmabuf_hooks.remove(surface.wl_surface()) {
             compositor::remove_pre_commit_hook(surface.wl_surface(), dmabuf_hook);
@@ -64,7 +67,7 @@ impl SnowcapDecorationHandler for State {
         add_decoration_pre_commit_hook(&decoration_surface);
 
         window.with_state_mut(|state| {
-            state.decoration_surface = Some(decoration_surface);
+            state.decoration_surfaces.push(decoration_surface);
         });
     }
 
@@ -72,15 +75,16 @@ impl SnowcapDecorationHandler for State {
         &mut self,
         surface: crate::protocol::snowcap_decoration::DecorationSurface,
     ) {
-        for win in self.pinnacle.windows.iter() {
+        for win in self.pinnacle.windows.iter().chain(
+            self.pinnacle
+                .unmapped_windows
+                .iter()
+                .map(|unmapped| &unmapped.window),
+        ) {
             win.with_state_mut(|state| {
-                if state
-                    .decoration_surface
-                    .as_ref()
-                    .is_some_and(|deco| deco.decoration_surface() == &surface)
-                {
-                    state.decoration_surface.take();
-                }
+                state
+                    .decoration_surfaces
+                    .retain(|deco| deco.decoration_surface() != &surface);
             });
         }
     }
@@ -88,8 +92,10 @@ impl SnowcapDecorationHandler for State {
     fn bounds_changed(&mut self, surface: crate::protocol::snowcap_decoration::DecorationSurface) {
         for win in self.pinnacle.windows.iter() {
             win.with_state_mut(|state| {
-                if let Some(deco) = state.decoration_surface.as_ref()
-                    && deco.decoration_surface() == &surface
+                if let Some(deco) = state
+                    .decoration_surfaces
+                    .iter()
+                    .find(|deco| deco.decoration_surface() == &surface)
                 {
                     deco.with_state(|state| {
                         state.bounds_changed.store(true, Ordering::Relaxed);

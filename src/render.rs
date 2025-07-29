@@ -151,19 +151,29 @@ impl WindowElement {
         let popup_location = location.to_physical_precise_round(scale);
         let window_location = (location - self.geometry().loc).to_physical_precise_round(scale);
 
-        let deco_elems = self.with_state(|state| {
+        let (deco_elems_under, deco_elems_over) = self.with_state(|state| {
             #[cfg(feature = "snowcap")]
             {
-                state
-                    .decoration_surface
-                    .as_ref()
-                    .map(|deco| {
-                        let deco_location = {
-                            let deco_loc = location + deco.location();
-                            deco_loc.to_physical_precise_round(scale)
-                        };
+                use itertools::Itertools;
 
-                        let surface_elements = render_elements_from_surface_tree(
+                use crate::decoration::DecorationSurface;
+
+                let max_bounds = self.with_state(|state| state.max_decoration_bounds());
+
+                let mut surfaces = state.decoration_surfaces.iter().collect::<Vec<_>>();
+                surfaces.sort_by_key(|deco| deco.z_index());
+                let mut surfaces = surfaces.into_iter().rev().peekable();
+
+                let mut deco_to_elems = |deco: &DecorationSurface| {
+                    let deco_location = {
+                        let mut deco_loc = location + deco.location();
+                        deco_loc.x += (max_bounds.left - deco.bounds().left) as i32;
+                        deco_loc.y += (max_bounds.top - deco.bounds().top) as i32;
+                        deco_loc.to_physical_precise_round(scale)
+                    };
+
+                    let surface_elements: Vec<WaylandSurfaceRenderElement<_>> =
+                        render_elements_from_surface_tree(
                             renderer,
                             deco.wl_surface(),
                             deco_location,
@@ -171,15 +181,23 @@ impl WindowElement {
                             alpha,
                             element::Kind::Unspecified,
                         );
-                        surface_elements
-                    })
-                    .unwrap_or_default()
+                    surface_elements
+                };
+
+                let deco_elems_over = surfaces
+                    .peeking_take_while(|deco| deco.z_index() >= 0)
+                    .flat_map(&mut deco_to_elems)
+                    .collect::<Vec<_>>();
+
+                let deco_elems_under = surfaces.flat_map(deco_to_elems).collect::<Vec<_>>();
+
+                (deco_elems_under, deco_elems_over)
             }
 
             #[cfg(not(feature = "snowcap"))]
             {
                 let _ = state;
-                Vec::new()
+                (Vec::new(), Vec::new())
             }
         });
 
@@ -187,7 +205,7 @@ impl WindowElement {
             WindowSurface::Wayland(toplevel) => {
                 let surface = toplevel.wl_surface();
 
-                let surface_elements = deco_elems
+                let surface_elements = deco_elems_over
                     .into_iter()
                     .chain(render_elements_from_surface_tree(
                         renderer,
@@ -197,6 +215,7 @@ impl WindowElement {
                         alpha,
                         element::Kind::Unspecified,
                     ))
+                    .chain(deco_elems_under)
                     .collect::<Vec<_>>();
 
                 let popup_elements =
@@ -208,7 +227,7 @@ impl WindowElement {
                 }
             }
             WindowSurface::X11(s) => {
-                let surface_elements = deco_elems
+                let surface_elements = deco_elems_over
                     .into_iter()
                     .chain(AsRenderElements::render_elements(
                         s,
@@ -217,6 +236,7 @@ impl WindowElement {
                         scale,
                         alpha,
                     ))
+                    .chain(deco_elems_under)
                     .collect();
                 SplitRenderElements {
                     surface_elements,

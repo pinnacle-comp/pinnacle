@@ -7,10 +7,7 @@ use std::{cell::RefCell, collections::HashMap, ops::Deref, rc::Rc};
 use indexmap::IndexSet;
 use rules::{ClientRequests, WindowRules};
 use smithay::{
-    desktop::{
-        PopupManager, Window, WindowSurface, WindowSurfaceType, space::SpaceElement,
-        utils::under_from_surface_tree,
-    },
+    desktop::{Window, WindowSurface, WindowSurfaceType, space::SpaceElement},
     output::{Output, WeakOutput},
     reexports::{
         wayland_protocols::xdg::shell::server::xdg_positioner::{
@@ -184,17 +181,13 @@ impl WindowElement {
             {
                 let mut size = size;
                 let mut loc = loc;
-                self.with_state(|state| {
-                    if let Some(deco) = state.decoration_surface.as_ref() {
-                        let bounds = deco.bounds();
-                        if let Some(loc) = loc.as_mut() {
-                            loc.x += bounds.left as i32;
-                            loc.y += bounds.right as i32;
-                        }
-                        size.w = i32::max(1, size.w - bounds.left as i32 - bounds.right as i32);
-                        size.h = i32::max(1, size.h - bounds.top as i32 - bounds.bottom as i32);
-                    }
-                });
+                let max_bounds = self.with_state(|state| state.max_decoration_bounds());
+                if let Some(loc) = loc.as_mut() {
+                    loc.x += max_bounds.left as i32;
+                    loc.y += max_bounds.right as i32;
+                }
+                size.w = i32::max(1, size.w - max_bounds.left as i32 - max_bounds.right as i32);
+                size.h = i32::max(1, size.h - max_bounds.top as i32 - max_bounds.bottom as i32);
                 (size, loc)
             }
 
@@ -225,17 +218,14 @@ impl WindowElement {
         #[cfg(feature = "snowcap")]
         {
             let mut geometry = self.0.geometry();
-            if let Some(bounds) = self.with_state(|state| {
-                state
-                    .decoration_surface
-                    .as_ref()
-                    .map(|deco| deco.cached_state().bounds)
-            }) {
-                geometry.size.w += (bounds.left + bounds.right) as i32;
-                geometry.size.h += (bounds.top + bounds.bottom) as i32;
-                geometry.loc.x -= bounds.left as i32;
-                geometry.loc.y -= bounds.top as i32;
-            }
+
+            let max_bounds = self.with_state(|state| state.max_decoration_bounds());
+
+            geometry.size.w += (max_bounds.left + max_bounds.right) as i32;
+            geometry.size.h += (max_bounds.top + max_bounds.bottom) as i32;
+            geometry.loc.x -= max_bounds.left as i32;
+            geometry.loc.y -= max_bounds.top as i32;
+
             geometry
         }
 
@@ -250,6 +240,10 @@ impl WindowElement {
     ) -> Option<(WlSurface, Point<i32, Logical>)> {
         #[cfg(feature = "snowcap")]
         {
+            use itertools::Itertools;
+            use smithay::desktop::PopupManager;
+            use smithay::desktop::utils::under_from_surface_tree;
+
             let point = point.into();
 
             if let Some(surface) = self.wl_surface()
@@ -265,20 +259,27 @@ impl WindowElement {
                 }
             }
 
-            let deco = self.with_state(|state| state.decoration_surface.clone());
+            let max_bounds = self.with_state(|state| state.max_decoration_bounds());
 
-            if let Some(deco) = deco.as_ref()
-                && deco.z_index() >= 0
-                && surface_type.contains(WindowSurfaceType::TOPLEVEL)
-            {
-                let surf = under_from_surface_tree(
-                    deco.wl_surface(),
-                    point,
-                    deco.location() + self.geometry().loc,
-                    surface_type,
-                );
-                if surf.is_some() {
-                    return surf;
+            let mut decos = self.with_state(|state| state.decoration_surfaces.clone());
+            decos.sort_by_key(|deco| deco.z_index());
+            let mut decos = decos.into_iter().rev().peekable();
+
+            if surface_type.contains(WindowSurfaceType::TOPLEVEL) {
+                for deco in decos.peeking_take_while(|deco| deco.z_index() >= 0) {
+                    let bounds_offset = Point::new(
+                        (max_bounds.left - deco.bounds().left) as i32,
+                        (max_bounds.top - deco.bounds().top) as i32,
+                    );
+                    let surf = under_from_surface_tree(
+                        deco.wl_surface(),
+                        point,
+                        deco.location() + self.geometry().loc + bounds_offset,
+                        surface_type,
+                    );
+                    if surf.is_some() {
+                        return surf;
+                    }
                 }
             }
 
@@ -291,18 +292,21 @@ impl WindowElement {
                 }
             }
 
-            if let Some(deco) = deco.as_ref()
-                && deco.z_index() < 0
-                && surface_type.contains(WindowSurfaceType::TOPLEVEL)
-            {
-                let surf = under_from_surface_tree(
-                    deco.wl_surface(),
-                    point,
-                    deco.location() + self.geometry().loc,
-                    surface_type,
-                );
-                if surf.is_some() {
-                    return surf;
+            if surface_type.contains(WindowSurfaceType::TOPLEVEL) {
+                for deco in decos {
+                    let bounds_offset = Point::new(
+                        (max_bounds.left - deco.bounds().left) as i32,
+                        (max_bounds.top - deco.bounds().top) as i32,
+                    );
+                    let surf = under_from_surface_tree(
+                        deco.wl_surface(),
+                        point,
+                        deco.location() + self.geometry().loc + bounds_offset,
+                        surface_type,
+                    );
+                    if surf.is_some() {
+                        return surf;
+                    }
                 }
             }
 
@@ -329,12 +333,12 @@ impl SpaceElement for WindowElement {
         #[cfg(feature = "snowcap")]
         {
             let mut bbox = self.0.bbox();
-            if let Some(deco_bbox) =
-                self.with_state(|state| state.decoration_surface.as_ref().map(|deco| deco.bbox()))
-            {
-                // FIXME: verify this
-                bbox = bbox.merge(deco_bbox);
-            }
+            self.with_state(|state| {
+                for deco in state.decoration_surfaces.iter() {
+                    // FIXME: verify this
+                    bbox = bbox.merge(deco.bbox());
+                }
+            });
             bbox
         }
 
@@ -345,30 +349,21 @@ impl SpaceElement for WindowElement {
     fn is_in_input_region(&self, point: &Point<f64, Logical>) -> bool {
         #[cfg(feature = "snowcap")]
         {
-            if let Some(deco) = self.with_state(|state| state.decoration_surface.clone()) {
-                let above = deco.cached_state().z_index >= 0;
-                use smithay::desktop::WindowSurfaceType;
-                if above {
-                    deco.surface_under(*point, WindowSurfaceType::ALL).is_some()
-                        || self.0.is_in_input_region(
-                            &(*point
-                                - Point::new(
-                                    deco.cached_state().bounds.left as f64,
-                                    deco.cached_state().bounds.top as f64,
-                                )),
-                        )
-                } else {
-                    self.0.is_in_input_region(
-                        &(*point
-                            - Point::new(
-                                deco.cached_state().bounds.left as f64,
-                                deco.cached_state().bounds.top as f64,
-                            )),
-                    ) || deco.surface_under(*point, WindowSurfaceType::ALL).is_some()
-                }
-            } else {
-                self.0.is_in_input_region(point)
-            }
+            use itertools::Itertools;
+
+            let mut decos = self.with_state(|state| state.decoration_surfaces.clone());
+            decos.sort_by_key(|deco| deco.z_index());
+            let mut decos = decos.into_iter().rev().peekable();
+
+            let max_bounds = self.with_state(|state| state.max_decoration_bounds());
+
+            decos
+                .peeking_take_while(|deco| deco.z_index() >= 0)
+                .any(|deco| deco.surface_under(*point, WindowSurfaceType::ALL).is_some())
+                || self.0.is_in_input_region(
+                    &(*point - Point::new(max_bounds.left as f64, max_bounds.top as f64)),
+                )
+                || decos.any(|deco| deco.surface_under(*point, WindowSurfaceType::ALL).is_some())
         }
 
         #[cfg(not(feature = "snowcap"))]
