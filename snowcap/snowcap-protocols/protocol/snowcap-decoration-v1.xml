@@ -75,14 +75,8 @@
             An interface that may be implemented by a wl_surface
             for surfaces that are designed to decorate toplevels.
 
-            Attaching a null buffer to a decoration surface unmaps it.
-
-            Unmapping a decoration surface means that the surface cannot be
-            shown by the compositor until it is explicitly mapped again.
-            The decoration surface returns to the state it had right after
-            get_decoration_surface. The client can re-map the surface by
-            performing a commit without any buffer attached, waiting for a
-            configure event, and handling it as usual.
+            Attaching a null buffer to a decoration surface does *not*
+            unmap it, unlike other shell protocols.
         </description>
 
         <request name="set_location">
@@ -110,7 +104,8 @@
                 geometry.
 
                 The compositor should treat the toplevel as having a size
-                extended by the given amounts in each direction.
+                extended by the given amounts in each direction, even if the
+                decoration surface has no buffer attached.
                 If multiple clients have set bounds, the bounds of the toplevel
                 are the maximum set for each edge.
 
@@ -178,7 +173,7 @@
                 The client is free to dismiss all but the last configure event it
                 received.
 
-                The width and height arguments specify the size of the
+                The width and height arguments specify the inner size of the
                 *toplevel being decorated* in surface-local coordinates,
                 ignoring set bounds.
                 The client should update its decoration surface for a toplevel

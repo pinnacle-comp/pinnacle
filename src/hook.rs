@@ -79,10 +79,7 @@ pub fn add_decoration_pre_commit_hook(deco: &crate::decoration::DecorationSurfac
                         transaction_for_dmabuf = Some(transaction);
                     }
                 }
-            } else {
-                // FIXME: only attach this hook once mapped
-                error!("commit on a decoration without a configured serial");
-            };
+            }
 
             if let Some((blocker, source)) =
                 dmabuf.and_then(|dmabuf| dmabuf.generate_blocker(Interest::READ).ok())
