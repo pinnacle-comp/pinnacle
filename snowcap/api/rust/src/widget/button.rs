@@ -87,9 +87,9 @@ impl<Msg> Button<Msg> {
         }
     }
 
-    pub fn style(self, clip: bool) -> Self {
+    pub fn style(self, styles: Styles) -> Self {
         Self {
-            clip: Some(clip),
+            style: Some(styles),
             ..self
         }
     }
@@ -121,6 +121,20 @@ pub struct Styles {
     pub hovered: Option<Style>,
     pub pressed: Option<Style>,
     pub disabled: Option<Style>,
+}
+
+impl Styles {
+    pub fn new() -> Self {
+        Default::default()
+    }
+
+    pub fn border(mut self, border: Border) -> Self {
+        self.active.get_or_insert_default().border = Some(border);
+        self.hovered.get_or_insert_default().border = Some(border);
+        self.pressed.get_or_insert_default().border = Some(border);
+        self.disabled.get_or_insert_default().border = Some(border);
+        self
+    }
 }
 
 impl From<Styles> for widget::v1::button::Style {

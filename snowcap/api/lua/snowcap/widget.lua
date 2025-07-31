@@ -29,6 +29,7 @@
 ---@field container snowcap.widget.Container?
 ---@field button snowcap.widget.Button?
 ---@field image snowcap.widget.Image?
+---@field input_region snowcap.widget.InputRegion?
 
 ---@class snowcap.widget.Border
 ---@field color snowcap.widget.Color?
@@ -164,6 +165,12 @@ local content_fit = {
 ---@field path string?
 ---@field bytes string?
 ---@field rgba { width: integer, height: integer, rgba: string }?
+
+---@class snowcap.widget.InputRegion
+---@field add boolean
+---@field width snowcap.widget.Length?
+---@field height snowcap.widget.Length?
+---@field child snowcap.widget.WidgetDef
 
 ---@class snowcap.widget.Length
 ---@field fill {}?
@@ -422,6 +429,18 @@ local function image_into_api(def)
     }
 end
 
+---@param def snowcap.widget.InputRegion
+---@return snowcap.widget.v1.InputRegion
+local function input_region_into_api(def)
+    ---@type snowcap.widget.v1.InputRegion
+    return {
+        add = def.add,
+        child = widget.widget_def_into_api(def.child),
+        width = def.width --[[@as snowcap.widget.v1.Length]],
+        height = def.height --[[@as snowcap.widget.v1.Length]],
+    }
+end
+
 ---@param def snowcap.widget.WidgetDef
 ---@return snowcap.widget.v1.WidgetDef
 function widget.widget_def_into_api(def)
@@ -445,6 +464,9 @@ function widget.widget_def_into_api(def)
     end
     if def.image then
         def.image = image_into_api(def.image)
+    end
+    if def.input_region then
+        def.input_region = input_region_into_api(def.input_region)
     end
 
     return def --[[@as snowcap.widget.v1.WidgetDef]]
@@ -517,6 +539,16 @@ function widget.Image(image)
     ---@type snowcap.widget.WidgetDef
     return {
         image = image,
+    }
+end
+
+---@param input_region snowcap.widget.InputRegion
+---
+---@return snowcap.widget.WidgetDef
+function widget.input_region(input_region)
+    ---@type snowcap.widget.WidgetDef
+    return {
+        input_region = input_region,
     }
 end
 
