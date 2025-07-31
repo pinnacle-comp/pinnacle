@@ -174,9 +174,9 @@ default = ["snowcap"]
 snowcap = ["pinnacle-api/snowcap", "dep:snowcap", "dep:snowcap-api"]
 testing = ["smithay/renderer_test"]
 wlcs = ["testing"]
-tracy = ["profiling/profile-with-tracy", "tracy-client/default"]
-tracy-ondemand = ["tracy", "tracy-client/ondemand", "tracy-client/manual-lifetime"]
-tracy-alloc = ["tracy"]
+tracy = ["profiling/profile-with-tracy", "tracy-client/default", "snowcap?/tracy"]
+tracy-ondemand = ["tracy", "tracy-client/ondemand", "tracy-client/manual-lifetime", "snowcap?/tracy-ondemand"]
+tracy-alloc = ["tracy", "snowcap?/tracy-alloc"]
 
 [profile.release]
 debug = "line-tables-only"

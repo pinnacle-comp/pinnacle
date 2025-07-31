@@ -312,6 +312,8 @@ impl SnowcapDecoration {
     }
 
     pub fn draw_if_scheduled(&mut self, compositor: &mut crate::compositor::Compositor) {
+        let _span = tracy_client::span!("SnowcapDecoration::draw_if_scheduled");
+
         if !self.redraw_requested {
             return;
         }
@@ -347,6 +349,8 @@ impl SnowcapDecoration {
         runtime: &mut crate::runtime::Runtime,
         compositor: &mut crate::compositor::Compositor,
     ) {
+        let _span = tracy_client::span!("SnowcapDecoration::update");
+
         if self.pending_output_scale.is_some() || self.pending_toplevel_size.is_some() {
             if let Some(scale) = self.pending_output_scale.take() {
                 self.output_scale = scale;

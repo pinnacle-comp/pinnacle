@@ -4349,6 +4349,7 @@ dependencies = [
  "tonic-reflection",
  "tracing",
  "tracing-subscriber",
+ "tracy-client",
  "xdg",
  "xkbcommon 0.8.0",
 ]
