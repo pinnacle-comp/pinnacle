@@ -256,20 +256,72 @@ impl WindowElement {
     ) -> SplitRenderElements<WlSurfaceTextureRenderElement> {
         let _span = tracy_client::span!("WindowElement::texture_render_elements");
 
-        let location = location - self.geometry().loc;
-        let location = location.to_physical_precise_round(scale);
+        let popup_location = location.to_physical_precise_round(scale);
+        let window_location = (location - self.geometry().loc).to_physical_precise_round(scale);
+
+        let (deco_elems_under, deco_elems_over) = self.with_state(|state| {
+            #[cfg(feature = "snowcap")]
+            {
+                use itertools::Itertools;
+
+                use crate::decoration::DecorationSurface;
+
+                let max_bounds = self.with_state(|state| state.max_decoration_bounds());
+
+                let mut surfaces = state.decoration_surfaces.iter().collect::<Vec<_>>();
+                surfaces.sort_by_key(|deco| deco.z_index());
+                let mut surfaces = surfaces.into_iter().rev().peekable();
+
+                let mut deco_to_elems = |deco: &DecorationSurface| {
+                    let deco_location = {
+                        let mut deco_loc = location + deco.location();
+                        deco_loc.x += (max_bounds.left - deco.bounds().left) as i32;
+                        deco_loc.y += (max_bounds.top - deco.bounds().top) as i32;
+                        deco_loc.to_physical_precise_round(scale)
+                    };
+
+                    let surface_elements = texture_render_elements_from_surface_tree(
+                        renderer.as_gles_renderer(),
+                        deco.wl_surface(),
+                        deco_location,
+                        scale,
+                        alpha,
+                    );
+                    surface_elements
+                };
+
+                let deco_elems_over = surfaces
+                    .peeking_take_while(|deco| deco.z_index() >= 0)
+                    .flat_map(&mut deco_to_elems)
+                    .collect::<Vec<_>>();
+
+                let deco_elems_under = surfaces.flat_map(deco_to_elems).collect::<Vec<_>>();
+
+                (deco_elems_under, deco_elems_over)
+            }
+
+            #[cfg(not(feature = "snowcap"))]
+            {
+                let _ = state;
+                (Vec::new(), Vec::new())
+            }
+        });
 
         match self.underlying_surface() {
             WindowSurface::Wayland(toplevel) => {
                 let surface = toplevel.wl_surface();
 
-                let surface_elements = texture_render_elements_from_surface_tree(
-                    renderer.as_gles_renderer(),
-                    surface,
-                    location,
-                    scale,
-                    alpha,
-                );
+                let surface_elements = deco_elems_over
+                    .into_iter()
+                    .chain(texture_render_elements_from_surface_tree(
+                        renderer.as_gles_renderer(),
+                        surface,
+                        window_location,
+                        scale,
+                        alpha,
+                    ))
+                    .chain(deco_elems_under)
+                    .collect::<Vec<_>>();
 
                 let popup_elements = PopupManager::popups_for_surface(surface)
                     .flat_map(|(popup, popup_offset)| {
@@ -279,7 +331,7 @@ impl WindowElement {
                         texture_render_elements_from_surface_tree(
                             renderer.as_gles_renderer(),
                             popup.wl_surface(),
-                            location + offset,
+                            popup_location + offset,
                             scale,
                             alpha,
                         )
@@ -291,22 +343,27 @@ impl WindowElement {
                     popup_elements,
                 }
             }
-            WindowSurface::X11(s) => {
-                if let Some(surface) = s.wl_surface() {
-                    let surface_elements = texture_render_elements_from_surface_tree(
+            WindowSurface::X11(surface) => {
+                let surface_elements = if let Some(surface) = surface.wl_surface() {
+                    texture_render_elements_from_surface_tree(
                         renderer.as_gles_renderer(),
                         &surface,
-                        location,
+                        window_location,
                         scale,
                         alpha,
-                    );
-
-                    SplitRenderElements {
-                        surface_elements,
-                        popup_elements: Vec::new(),
-                    }
+                    )
                 } else {
-                    Default::default()
+                    Vec::new()
+                };
+
+                let surface_elements = deco_elems_over
+                    .into_iter()
+                    .chain(surface_elements)
+                    .chain(deco_elems_under)
+                    .collect();
+                SplitRenderElements {
+                    surface_elements,
+                    popup_elements: Vec::new(),
                 }
             }
         }
