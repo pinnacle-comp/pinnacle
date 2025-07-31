@@ -148,21 +148,6 @@ impl PointerGrab<State> for MoveSurfaceGrab {
                 self.window.with_state_mut(|state| {
                     state.set_floating_loc(new_loc.to_i32_round());
                 });
-
-                if let Some(surface) = self.window.x11_surface()
-                    && !surface.is_override_redirect()
-                {
-                    let geo = surface.geometry();
-                    let new_geo = Rectangle::new(new_loc.to_i32_round(), geo.size);
-                    surface
-                        .configure(new_geo)
-                        .expect("failed to configure x11 win");
-                }
-
-                let outputs = state.pinnacle.space.outputs_for_element(&self.window);
-                for output in outputs {
-                    state.schedule_render(&output);
-                }
             }
             LayoutModeKind::Maximized | LayoutModeKind::Fullscreen => {
                 let tag_output = self.window.output(&state.pinnacle);

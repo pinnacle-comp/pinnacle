@@ -403,6 +403,8 @@ impl State {
     pub fn update_layout(&mut self) {
         let _span = tracy_client::span!("State::update_layout");
 
+        let mut outputs = HashSet::new();
+
         for output in self.pinnacle.outputs.clone() {
             let mut transactions = Vec::new();
 
@@ -423,7 +425,6 @@ impl State {
                 }
             }
 
-            let mut outputs = Vec::new();
             let mut locs = HashMap::new();
 
             for transaction in transactions {
@@ -466,12 +467,16 @@ impl State {
                     let _ = surface.configure(Rectangle::new(loc, surface.geometry().size));
                 }
 
-                self.pinnacle.space.map_element(window, loc, false);
-            }
+                // if the window moved out of an output, we want to get it first.
+                outputs.extend(self.pinnacle.space.outputs_for_element(&window));
 
-            for output in outputs {
-                self.schedule_render(&output);
+                self.pinnacle.space.map_element(window.clone(), loc, false);
+                outputs.extend(self.pinnacle.space.outputs_for_element(&window));
             }
+        }
+
+        for output in outputs {
+            self.schedule_render(&output);
         }
 
         let mut wins_to_update = Vec::new();

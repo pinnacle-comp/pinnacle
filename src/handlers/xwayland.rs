@@ -135,10 +135,6 @@ impl XwmHandler for State {
 
         self.pinnacle.map_window_to(&window, loc);
         self.pinnacle.raise_window(window.clone());
-
-        for output in self.pinnacle.space.outputs_for_element(&window) {
-            self.schedule_render(&output);
-        }
     }
 
     fn map_window_notify(&mut self, _xwm: XwmId, window: X11Surface) {
