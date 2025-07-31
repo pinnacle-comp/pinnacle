@@ -20,6 +20,13 @@ pub struct Compositor {
 
 impl Compositor {
     pub fn new() -> anyhow::Result<Self> {
+        if std::env::var("ICED_BACKEND")
+            .ok()
+            .is_some_and(|backend| backend != "wgpu")
+        {
+            anyhow::bail!("ICED_BACKEND was set to something other than \"wgpu\"");
+        }
+
         let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
             backends: wgpu::Backends::VULKAN,
             flags: wgpu::InstanceFlags::default().with_env(),
