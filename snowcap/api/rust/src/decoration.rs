@@ -9,6 +9,7 @@ use snowcap_api_defs::snowcap::{
     },
     widget::v1::{GetWidgetEventsRequest, get_widget_events_request, get_widget_events_response},
 };
+use tokio::sync::mpsc::UnboundedSender;
 use tokio_stream::StreamExt;
 use tracing::error;
 
@@ -57,7 +58,7 @@ pub fn new_widget<Msg, P>(
     bounds: Bounds,
     extents: Bounds,
     z_index: i32,
-) -> Result<DecorationHandle, NewDecorationError>
+) -> Result<DecorationHandle<Msg>, NewDecorationError>
 where
     Msg: Clone + Send + 'static,
     P: Program<Message = Msg> + Send + 'static,
@@ -91,55 +92,79 @@ where
         .block_on_tokio()?
         .into_inner();
 
+    let (msg_send, mut msg_recv) = tokio::sync::mpsc::unbounded_channel::<Msg>();
+
     tokio::spawn(async move {
-        while let Some(Ok(event)) = event_stream.next().await {
-            let id = WidgetId(event.widget_id);
-            let Some(event) = event.event else {
-                continue;
-            };
-            match event {
-                get_widget_events_response::Event::Button(_event) => {
-                    if let Some(msg) = callbacks.get(&id) {
-                        program.update(msg.clone());
-                        let widget_def = program.view();
-
-                        callbacks.clear();
-
-                        widget_def.collect_messages(&mut callbacks, |def, cbs| {
-                            if let Widget::Button(button) = &def.widget {
-                                cbs.extend(button.on_press.clone());
-                            }
-                        });
-
-                        Client::decoration()
-                            .update_decoration(UpdateDecorationRequest {
-                                decoration_id,
-                                widget_def: Some(widget_def.into()),
-                                bounds: None,
-                                extents: None,
-                                z_index: None,
-                            })
-                            .await
-                            .unwrap();
+        loop {
+            let msg = tokio::select! {
+                Some(Ok(event)) = event_stream.next() => {
+                    let id = WidgetId(event.widget_id);
+                    let Some(event) = event.event else {
+                        continue;
+                    };
+                    match event {
+                        get_widget_events_response::Event::Button(_event) => {
+                            callbacks.get(&id).cloned()
+                        }
                     }
                 }
-            }
+                Some(msg) = msg_recv.recv() => {
+                    Some(msg)
+                }
+                else => break,
+            };
+
+            let Some(msg) = msg else {
+                continue;
+            };
+
+            program.update(msg.clone());
+            let widget_def = program.view();
+
+            callbacks.clear();
+
+            widget_def.collect_messages(&mut callbacks, |def, cbs| {
+                if let Widget::Button(button) = &def.widget {
+                    cbs.extend(button.on_press.clone());
+                }
+            });
+
+            Client::decoration()
+                .update_decoration(UpdateDecorationRequest {
+                    decoration_id,
+                    widget_def: Some(widget_def.into()),
+                    bounds: None,
+                    extents: None,
+                    z_index: None,
+                })
+                .await
+                .unwrap();
         }
     });
 
     Ok(DecorationHandle {
         id: decoration_id.into(),
+        msg_sender: msg_send,
     })
 }
 
 /// A handle to a decoration surface.
-#[derive(Debug, Clone)]
-pub struct DecorationHandle {
+#[derive(Clone)]
+pub struct DecorationHandle<Msg> {
     id: WidgetId,
+    msg_sender: UnboundedSender<Msg>,
 }
 
-impl DecorationHandle {
-    /// Close this layer widget.
+impl<Msg> std::fmt::Debug for DecorationHandle<Msg> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("DecorationHandle")
+            .field("id", &self.id)
+            .finish()
+    }
+}
+
+impl<Msg> DecorationHandle<Msg> {
+    /// Closes this decoration.
     pub fn close(&self) {
         if let Err(status) = Client::decoration()
             .close(CloseRequest {
@@ -149,5 +174,10 @@ impl DecorationHandle {
         {
             error!("Failed to close {self:?}: {status}");
         }
+    }
+
+    /// Sends a message to this decoration's [`Program`].
+    pub fn send_message(&self, message: Msg) {
+        let _ = self.msg_sender.send(message);
     }
 }

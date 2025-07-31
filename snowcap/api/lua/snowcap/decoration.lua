@@ -14,12 +14,17 @@ local decoration_handle = {}
 
 ---@class snowcap.decoration.DecorationHandle
 ---@field id integer
+---@field private update fun(msg: any)
 local DecorationHandle = {}
 
-function decoration_handle.new(id)
+---@param id integer
+---@param update fun(msg: any)
+---@return snowcap.decoration.DecorationHandle
+function decoration_handle.new(id, update)
     ---@type snowcap.decoration.DecorationHandle
     local self = {
         id = id,
+        update = update,
     }
     setmetatable(self, { __index = DecorationHandle })
     return self
@@ -99,7 +104,7 @@ function decoration.new_widget(args)
         return nil
     end
 
-    local decoration_id = response.decoration_id
+    local decoration_id = response.decoration_id or 0
 
     local err = client:snowcap_widget_v1_WidgetService_GetWidgetEvents({
         decoration_id = decoration_id,
@@ -125,36 +130,23 @@ function decoration.new_widget(args)
         end
     end)
 
-    return decoration_handle.new(decoration_id)
-end
+    return decoration_handle.new(decoration_id, function(msg)
+        args.program:update(msg)
+        local widget_def = args.program:view()
+        callbacks = {}
 
----@param on_press fun(mods: snowcap.input.Modifiers, key: snowcap.Key)
--- function DecorationHandle:on_key_press(on_press)
---     local err = client:snowcap_input_v1_InputService_KeyboardKey(
---         { id = self.id },
---         function(response)
---             ---@cast response snowcap.input.v1.KeyboardKeyResponse
---
---             if not response.pressed then
---                 return
---             end
---
---             local mods = response.modifiers or {}
---             mods.shift = mods.shift or false
---             mods.ctrl = mods.ctrl or false
---             mods.alt = mods.alt or false
---             mods.super = mods.super or false
---
---             ---@cast mods snowcap.input.Modifiers
---
---             on_press(mods, response.key or 0)
---         end
---     )
---
---     if err then
---         log.error(err)
---     end
--- end
+        traverse_widget_tree(widget_def, callbacks, function(callbacks, widget)
+            if widget.button and widget.button.on_press then
+                callbacks[widget.button.widget_id] = widget.button.on_press
+            end
+        end)
+
+        local _, err = client:snowcap_decoration_v1_DecorationService_UpdateDecoration({
+            decoration_id = decoration_id,
+            widget_def = widget.widget_def_into_api(widget_def),
+        })
+    end)
+end
 
 function DecorationHandle:close()
     local _, err = client:snowcap_decoration_v1_DecorationService_Close({ decoration_id = self.id })
@@ -162,6 +154,13 @@ function DecorationHandle:close()
     if err then
         log.error(err)
     end
+end
+
+---Sends a message to this decoration's `Program`.
+---
+---@param message any
+function DecorationHandle:send_message(message)
+    self.update(message)
 end
 
 return decoration
