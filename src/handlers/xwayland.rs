@@ -121,7 +121,7 @@ impl XwmHandler for State {
             window.set_tags_to_output(output);
         }
 
-        self.pinnacle.space.map_element(window.clone(), loc, false);
+        self.pinnacle.map_window_to(&window, loc);
         self.pinnacle.raise_window(window.clone());
 
         for output in self.pinnacle.space.outputs_for_element(&window) {
@@ -229,7 +229,7 @@ impl XwmHandler for State {
             return;
         };
 
-        self.pinnacle.space.map_element(win, geometry.loc, false);
+        self.pinnacle.map_window_to(&win, geometry.loc);
     }
 
     fn maximize_request(&mut self, _xwm: XwmId, window: X11Surface) {

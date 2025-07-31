@@ -269,7 +269,7 @@ impl Pinnacle {
                     .or_else(|| new_output_geo.map(|geo| centered_loc(geo, win.geometry().size)));
 
                 if let Some(loc) = loc {
-                    self.space.map_element(win.clone(), loc, false);
+                    self.map_window_to(&win, loc);
                     win.with_state_mut(|state| state.set_floating_loc(loc));
                 }
             }

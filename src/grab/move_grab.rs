@@ -141,26 +141,18 @@ impl PointerGrab<State> for MoveSurfaceGrab {
             LayoutModeKind::Floating | LayoutModeKind::Spilled => {
                 let delta = event.location - self.start_data.location;
                 let new_loc = self.initial_window_loc.to_f64() + delta;
-                state.pinnacle.space.map_element(
-                    self.window.clone(),
-                    new_loc.to_i32_round(),
-                    false,
-                );
+
+                state
+                    .pinnacle
+                    .map_window_to(&self.window, new_loc.to_i32_round());
 
                 self.window.with_state_mut(|state| {
                     state.set_floating_loc(new_loc.to_i32_round());
                 });
 
-                if let Some(surface) = self.window.x11_surface() {
-                    if !surface.is_override_redirect() {
-                        let geo = surface.geometry();
-                        let new_geo = Rectangle::new(new_loc.to_i32_round(), geo.size);
-                        surface
-                            .configure(new_geo)
-                            .expect("failed to configure x11 win");
-                    }
-                }
-
+                // Is this really needed ? Afaik the x11 surface will eventually call the xwayland
+                // configure_notify which will create a transaction, which in term will schedule a
+                // render.
                 let outputs = state.pinnacle.space.outputs_for_element(&self.window);
                 for output in outputs {
                     state.schedule_render(&output);
