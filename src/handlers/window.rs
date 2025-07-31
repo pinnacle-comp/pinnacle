@@ -121,10 +121,6 @@ impl State {
         }
 
         self.update_window_geometry(window, &output, geo, layout_needs_update);
-
-        for output in self.pinnacle.space.outputs_for_element(window) {
-            self.schedule_render(&output);
-        }
     }
 
     pub fn move_window_to_output(&mut self, window: &WindowElement, target: Output) {
@@ -172,11 +168,5 @@ impl State {
         {
             self.pinnacle.request_layout(&output);
         }
-
-        for output in self.pinnacle.space.outputs_for_element(window) {
-            self.schedule_render(&output);
-        }
-
-        self.schedule_render(&target);
     }
 }
