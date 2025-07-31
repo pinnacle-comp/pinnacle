@@ -140,11 +140,10 @@ impl PointerGrab<State> for MoveSurfaceGrab {
             LayoutModeKind::Floating | LayoutModeKind::Spilled => {
                 let delta = event.location - self.start_data.location;
                 let new_loc = self.initial_window_loc.to_f64() + delta;
-                state.pinnacle.space.map_element(
-                    self.window.clone(),
-                    new_loc.to_i32_round(),
-                    false,
-                );
+
+                state
+                    .pinnacle
+                    .map_window_to(&self.window, new_loc.to_i32_round());
 
                 self.window.with_state_mut(|state| {
                     state.set_floating_loc(new_loc.to_i32_round());

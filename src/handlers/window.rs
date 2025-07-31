@@ -8,10 +8,44 @@ use smithay::{
 use tracing::error;
 
 use crate::{
-    state::{State, WithState},
+    state::{Pinnacle, State, WithState},
     util::transaction::{Location, TransactionBuilder},
     window::{WindowElement, window_state::LayoutMode},
 };
+
+impl Pinnacle {
+    /// Create a transaction to map the window.
+    pub fn map_window_to(&mut self, window: &WindowElement, loc: Point<i32, Logical>) {
+        if let Some(output) = window.output(self) {
+            let mut transaction_builder = TransactionBuilder::new();
+            let serial = window
+                .toplevel()
+                .and_then(|toplevel| toplevel.send_pending_configure());
+
+            if serial.is_some() {
+                window.send_frame(
+                    &output,
+                    self.clock.now(),
+                    Some(Duration::ZERO),
+                    surface_primary_scanout_output,
+                );
+            }
+
+            transaction_builder.add(window, Location::MapTo(loc), serial, &self.loop_handle);
+
+            self.layout_state.pending_transactions.add_for_output(
+                &output,
+                transaction_builder.into_pending(Vec::new(), self.layout_state.pending_swap, false),
+            );
+        }
+
+        // not sure if something should be done in case there's no output. Does it make sense to
+        // create an outputless transaction ?
+        // xwayland handlers did not check for the output before unconditionally mapping the
+        // window. Should that behavior be kept ?
+        // Other method had the output checked ahead of time, so no issue there.
+    }
+}
 
 impl State {
     pub fn update_window_geometry(
@@ -38,46 +72,8 @@ impl State {
             self.pinnacle.request_layout(output);
         } else if let Some(geo) = geo {
             self.pinnacle.configure_window_if_nontiled(window);
-            let mut transaction_builder = TransactionBuilder::new();
-            let serial = window
-                .toplevel()
-                .and_then(|toplevel| toplevel.send_pending_configure());
 
-            // if we have pending transactions, we don't want to map just yet.
-            let pending = window.with_state(|s| !s.pending_transactions.is_empty());
-
-            if serial.is_some() || pending {
-                // Send a frame to get unmapped windows to update
-                window.send_frame(
-                    output,
-                    self.pinnacle.clock.now(),
-                    Some(Duration::ZERO),
-                    surface_primary_scanout_output,
-                );
-
-                transaction_builder.add(
-                    window,
-                    Location::MapTo(geo.loc),
-                    serial,
-                    &self.pinnacle.loop_handle,
-                );
-                self.pinnacle
-                    .layout_state
-                    .pending_transactions
-                    .add_for_output(
-                        output,
-                        transaction_builder.into_pending(
-                            Vec::new(),
-                            self.pinnacle.layout_state.pending_swap,
-                            false,
-                        ),
-                    );
-            } else {
-                // No changes were needed, we can map immediately here
-                self.pinnacle
-                    .space
-                    .map_element(window.clone(), geo.loc, false);
-            }
+            self.pinnacle.map_window_to(window, geo.loc);
         }
     }
 
