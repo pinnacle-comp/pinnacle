@@ -149,14 +149,6 @@ impl PointerGrab<State> for MoveSurfaceGrab {
                 self.window.with_state_mut(|state| {
                     state.set_floating_loc(new_loc.to_i32_round());
                 });
-
-                // Is this really needed ? Afaik the x11 surface will eventually call the xwayland
-                // configure_notify which will create a transaction, which in term will schedule a
-                // render.
-                let outputs = state.pinnacle.space.outputs_for_element(&self.window);
-                for output in outputs {
-                    state.schedule_render(&output);
-                }
             }
             LayoutModeKind::Maximized | LayoutModeKind::Fullscreen => {
                 let tag_output = self.window.output(&state.pinnacle);
