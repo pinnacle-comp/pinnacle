@@ -155,6 +155,7 @@ fn handle_event(event: WlcsEvent, state: &mut State) {
                     // state.window_state.set_floating(true);
                 });
 
+                // I'm not sure about this one.
                 state
                     .pinnacle
                     .space
