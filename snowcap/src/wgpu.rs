@@ -120,6 +120,8 @@ impl iced_graphics::Compositor for Compositor {
     }
 
     fn configure_surface(&mut self, surface: &mut Self::Surface, width: u32, height: u32) {
+        let _span = tracy_client::span!("crate::wgpu::Compositor::configure_surface");
+
         let surface_config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             format: wgpu::TextureFormat::Rgba8UnormSrgb,

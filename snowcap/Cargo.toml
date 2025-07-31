@@ -35,6 +35,13 @@ tonic-reflection = { workspace = true }
 snowcap-api-defs = { workspace = true }
 xkbcommon = { workspace = true }
 snowcap-protocols = { workspace = true }
+tracy-client = { workspace = true }
+
+[features]
+default = []
+tracy = ["tracy-client/default"]
+tracy-ondemand = ["tracy", "tracy-client/ondemand", "tracy-client/manual-lifetime"]
+tracy-alloc = ["tracy"]
 
 [lints]
 workspace = true
