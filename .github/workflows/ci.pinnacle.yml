@@ -73,7 +73,7 @@ jobs:
         run: RUST_LOG=debug RUST_BACKTRACE=1 just install test -- --nocapture --skip process_spawn
       - name: Test Rust default config compilation
         if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
-        run: just install test -- --ignored
+        run: just install test default_config_compiles -- --ignored
   check-format:
     runs-on: ubuntu-24.04
     name: Check formatting
