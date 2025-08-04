@@ -36,7 +36,7 @@ struct State {
 }
 
 static OUTPUT_COUNTER: AtomicU32 = AtomicU32::new(0);
-const DEFAULT_TIMEOUT: Duration = Duration::from_secs(60);
+const DEFAULT_TIMEOUT: Duration = Duration::from_secs(10);
 
 impl Fixture {
     pub fn new() -> Self {

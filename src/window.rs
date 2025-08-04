@@ -543,9 +543,19 @@ impl State {
             let Unmapped {
                 window,
                 activation_token_data: _, // TODO:
-                state: _,
+                state,
             } = unmapped;
-            (window, true, true)
+
+            // if it *was* configured, we still want to respect that
+            if let UnmappedState::PostInitialConfigure {
+                attempt_float_on_map,
+                focus,
+            } = state
+            {
+                (window, attempt_float_on_map, focus)
+            } else {
+                (window, true, true)
+            }
         } else {
             let Unmapped {
                 window,

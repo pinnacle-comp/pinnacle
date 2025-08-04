@@ -36,6 +36,7 @@ use wayland_client::{
         wl_callback::{self, WlCallback},
         wl_compositor::WlCompositor,
         wl_display::WlDisplay,
+        wl_output::WlOutput,
         wl_registry::{self, WlRegistry},
         wl_surface::WlSurface,
     },
@@ -67,6 +68,7 @@ struct State {
     single_pixel_buffer: Option<WpSinglePixelBufferManagerV1>,
     viewporter: Option<WpViewporter>,
     windows: Vec<Window>,
+    outputs: Vec<WlOutput>,
 }
 
 pub struct Window {
@@ -127,6 +129,7 @@ impl Client {
             single_pixel_buffer: None,
             viewporter: None,
             windows: Vec::new(),
+            outputs: Vec::new(),
         };
 
         Self {
@@ -190,6 +193,10 @@ impl Client {
 
     pub fn close_window(&mut self, surface: &WlSurface) {
         self.state.windows.retain(|win| &win.surface() != surface);
+    }
+
+    pub fn wl_outputs(&self) -> &Vec<WlOutput> {
+        &self.state.outputs
     }
 }
 
@@ -287,6 +294,22 @@ impl Window {
     pub fn set_size(&self, width: i32, height: i32) {
         self.viewport.set_destination(width, height);
     }
+
+    pub fn set_fullscreen(&self, output: Option<&wayland_client::protocol::wl_output::WlOutput>) {
+        self.toplevel.set_fullscreen(output);
+    }
+
+    pub fn unset_fullscreen(&self) {
+        self.toplevel.unset_fullscreen();
+    }
+
+    pub fn set_maximized(&self) {
+        self.toplevel.set_maximized();
+    }
+
+    pub fn unset_maximized(&self) {
+        self.toplevel.unset_maximized();
+    }
 }
 
 impl Dispatch<WlRegistry, ()> for State {
@@ -317,6 +340,11 @@ impl Dispatch<WlRegistry, ()> for State {
                 } else if interface == WpViewporter::interface().name {
                     let version = u32::min(version, WpViewporter::interface().version);
                     state.viewporter = Some(registry.bind(name, version, qhandle, ()));
+                } else if interface == WlOutput::interface().name {
+                    let version = u32::min(version, WlOutput::interface().version);
+                    state
+                        .outputs
+                        .push(registry.bind(name, version, qhandle, ()));
                 }
             }
             wl_registry::Event::GlobalRemove { name: _ } => (),
@@ -476,3 +504,4 @@ delegate_noop!(State: WpSinglePixelBufferManagerV1);
 delegate_noop!(State: WpViewporter);
 delegate_noop!(State: WpViewport);
 delegate_noop!(State: ignore WlBuffer);
+delegate_noop!(State: ignore WlOutput);
