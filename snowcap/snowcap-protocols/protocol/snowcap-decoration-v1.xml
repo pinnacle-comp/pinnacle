@@ -38,9 +38,9 @@
 
         <request name="get_decoration_surface">
             <description summary="create a decoration surface from a wl_surface">
-                Create a decoration surface for an existing surface. This assigns the role of
-                decoration_surface, or raises a protocol error if another role is already
-                assigned.
+                Creates a decoration surface for an existing surface. This assigns the role of
+                snowcap_decoration_surface_v1, or raises a protocol error if another role is
+                already assigned.
 
                 Creating a decoration surface from a wl_surface which has a buffer attached
                 or committed is a client error, and any attempts by a client to attach
@@ -85,6 +85,10 @@
                 relative to the top-left corner of the decorated toplevel
                 (as set by xdg_toplevel.set_window_geometry and taking into
                 account set bounds).
+
+                If the toplevel has multiple decorations with differing bounds
+                set, each decoration surface is rendered relative to its own
+                set bounds.
 
                 Geometry is double-buffered; see wl_surface.commit.
             </description>
@@ -183,8 +187,8 @@
                 width, height, or both are 0.
             </description>
             <arg name="serial" type="uint" />
-            <arg name="width" type="uint" />
-            <arg name="height" type="uint" />
+            <arg name="width" type="uint" summary="the width of the toplevel being decorated, ignoring bounds" />
+            <arg name="height" type="uint" summary="the height of the toplevel being decorated, ignoring bounds" />
         </event>
     </interface>
 </protocol>
