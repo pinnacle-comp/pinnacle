@@ -384,6 +384,7 @@ pub struct WindowElementState {
     pub floating_x: Option<i32>,
     pub floating_y: Option<i32>,
     pub floating_size: Size<i32, Logical>,
+    pub need_configure: bool,
 
     pub pending_transactions: Vec<(Serial, Transaction)>,
 
@@ -509,6 +510,22 @@ impl WindowElement {
             }
         }
     }
+
+    /// Send a configure event to the window toplevel.
+    ///
+    /// This function respect WindowElementState::need_configure to determine whether to
+    /// unconditionally send the event.
+    pub(crate) fn configure(&self) -> Option<Serial> {
+        let force = self.with_state(|state| state.need_configure);
+        self.with_state_mut(|state| state.need_configure = false);
+
+        if force {
+            self.toplevel().map(|toplevel| toplevel.send_configure())
+        } else {
+            self.toplevel()
+                .and_then(|toplevel| toplevel.send_pending_configure())
+        }
+    }
 }
 
 impl Pinnacle {
@@ -631,6 +648,7 @@ impl WindowElementState {
             floating_x: Default::default(),
             floating_y: Default::default(),
             floating_size: Default::default(),
+            need_configure: false,
             minimized: false,
             snapshot: None,
             mapped_hook_id: None,
