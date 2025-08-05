@@ -180,4 +180,53 @@ impl<Msg> DecorationHandle<Msg> {
     pub fn send_message(&self, message: Msg) {
         let _ = self.msg_sender.send(message);
     }
+
+    /// Sets the z-index that this decoration will render at.
+    pub fn set_z_index(&self, z_index: i32) {
+        Client::decoration()
+            .update_decoration(UpdateDecorationRequest {
+                decoration_id: self.id.0,
+                widget_def: None,
+                bounds: None,
+                extents: None,
+                z_index: Some(z_index),
+            })
+            .block_on_tokio()
+            .unwrap();
+    }
+
+    /// Sets the extents of this decoration.
+    ///
+    /// The extents extend the drawable area of the decorated
+    /// toplevel by the specified amounts in each direction.
+    pub fn set_extents(&self, extents: Bounds) {
+        Client::decoration()
+            .update_decoration(UpdateDecorationRequest {
+                decoration_id: self.id.0,
+                widget_def: None,
+                bounds: None,
+                extents: Some(extents.into()),
+                z_index: None,
+            })
+            .block_on_tokio()
+            .unwrap();
+    }
+
+    /// Sets the bounds of this decoration.
+    ///
+    /// The bounds extend the geometry of the decorated
+    /// toplevel by the specified amounts in each direction,
+    /// causing parts or all of the decoration to be included.
+    pub fn set_bounds(&self, bounds: Bounds) {
+        Client::decoration()
+            .update_decoration(UpdateDecorationRequest {
+                decoration_id: self.id.0,
+                widget_def: None,
+                bounds: Some(bounds.into()),
+                extents: None,
+                z_index: None,
+            })
+            .block_on_tokio()
+            .unwrap();
+    }
 }

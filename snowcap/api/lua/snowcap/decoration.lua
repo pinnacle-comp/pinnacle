@@ -145,6 +145,10 @@ function decoration.new_widget(args)
             decoration_id = decoration_id,
             widget_def = widget.widget_def_into_api(widget_def),
         })
+
+        if err then
+            log.error(err)
+        end
     end)
 end
 
@@ -161,6 +165,55 @@ end
 ---@param message any
 function DecorationHandle:send_message(message)
     self.update(message)
+end
+
+---Sets the z-index at which this decoration will render.
+---
+---@param z_index integer
+function DecorationHandle:set_z_index(z_index)
+    local _, err = client:snowcap_decoration_v1_DecorationService_UpdateDecoration({
+        decoration_id = self.id,
+        z_index = z_index,
+    })
+
+    if err then
+        log.error(err)
+    end
+end
+
+---Sets this decoration's extents.
+---
+---The extents extend the drawable area of the decorated toplevel
+---by the specified amounts in each direction.
+---
+---@param extents snowcap.decoration.Bounds
+function DecorationHandle:set_extents(extents)
+    local _, err = client:snowcap_decoration_v1_DecorationService_UpdateDecoration({
+        decoration_id = self.id,
+        extents = extents --[[@as snowcap.decoration.v1.Bounds]],
+    })
+
+    if err then
+        log.error(err)
+    end
+end
+
+---Sets this decoration's bounds.
+---
+---The bounds extend the geometry of the decorated toplevel
+---by the specified amounts in each direction, causing parts or
+---all of the decoration to be included.
+---
+---@param bounds snowcap.decoration.Bounds
+function DecorationHandle:set_bounds(bounds)
+    local _, err = client:snowcap_decoration_v1_DecorationService_UpdateDecoration({
+        decoration_id = self.id,
+        bounds = bounds --[[@as snowcap.decoration.v1.Bounds]],
+    })
+
+    if err then
+        log.error(err)
+    end
 end
 
 return decoration
