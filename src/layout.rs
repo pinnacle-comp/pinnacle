@@ -5,12 +5,11 @@ pub mod tree;
 use std::{
     collections::{HashMap, HashSet, hash_map::Entry},
     rc::Rc,
-    time::Duration,
 };
 
 use indexmap::IndexSet;
 use smithay::{
-    desktop::{WindowSurface, layer_map_for_output, utils::surface_primary_scanout_output},
+    desktop::layer_map_for_output,
     output::{Output, WeakOutput},
     reexports::wayland_protocols::xdg::shell::server::xdg_toplevel,
     utils::{Logical, Rectangle, Size},
@@ -80,9 +79,7 @@ impl Pinnacle {
                 win.with_state_mut(|state| state.set_floating_loc(loc));
             }
 
-            if let Some(unmapping) =
-                crate::window::layout::unmap_window(self, backend, &win, output)
-            {
+            if let Some(unmapping) = self.unmap_window(backend, &win, output) {
                 snapshot_windows.push(unmapping);
             }
         }
@@ -146,32 +143,14 @@ impl Pinnacle {
             .chain(wins_and_geos_other)
             .collect::<Vec<_>>();
 
-        for (win, geo, is_tiled) in wins_and_geos.iter() {
-            if *is_tiled {
+        let mut transaction_builder = TransactionBuilder::new();
+
+        for (win, geo, is_tiled) in wins_and_geos {
+            if is_tiled {
                 win.with_state_mut(|s| s.layout_mode.set_spilled(false));
             }
 
-            win.configure_states();
-            win.set_pending_geo(geo.size, Some(geo.loc));
-        }
-
-        let mut transaction_builder = TransactionBuilder::new();
-
-        for (win, geo, _) in wins_and_geos {
-            if let WindowSurface::Wayland(toplevel) = win.underlying_surface() {
-                let serial = toplevel.send_pending_configure();
-                transaction_builder.add(&win, Location::MapTo(geo.loc), serial, &self.loop_handle);
-
-                // Send a frame to get unmapped windows to update
-                win.send_frame(
-                    output,
-                    self.clock.now(),
-                    Some(Duration::ZERO),
-                    surface_primary_scanout_output,
-                );
-            } else {
-                transaction_builder.add(&win, Location::MapTo(geo.loc), None, &self.loop_handle);
-            }
+            self.configure_window_and_add_map(&mut transaction_builder, &win, output, geo);
         }
 
         let mut unmapping = self
