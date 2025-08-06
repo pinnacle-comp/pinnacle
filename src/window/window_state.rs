@@ -482,6 +482,54 @@ impl WindowElement {
             }
         }
     }
+
+    /// Apply current mode layout mode to the window underlying surface
+    ///
+    /// Toplevel need a call to `send_configure` or `send_pending_configure` for these changes to
+    /// be effectives.
+    pub(crate) fn configure_states(&self) {
+        let _span = tracy_client::span!("Window::configure_states");
+
+        match self.with_state(|state| state.layout_mode.current()) {
+            LayoutModeKind::Tiled => {
+                self.set_tiled_states();
+            }
+            LayoutModeKind::Floating | LayoutModeKind::Spilled => {
+                self.set_floating_states();
+            }
+            LayoutModeKind::Maximized => {
+                self.set_maximized_states();
+            }
+            LayoutModeKind::Fullscreen => {
+                self.set_fullscreen_states();
+            }
+        }
+    }
+
+    /// Apply geometry to the window underlying surface
+    ///
+    /// Toplevel need a call to `send_configure` or `send_pending_configure` for these changes to
+    /// be effectives.
+    pub(crate) fn configure_geometry(&self, geo: Rectangle<i32, Logical>) {
+        let _span = tracy_client::span!("Window::configure_geometry");
+
+        match self.underlying_surface() {
+            WindowSurface::Wayland(toplevel) => {
+                toplevel.with_pending_state(|state| {
+                    state.size = Some(geo.size);
+                });
+            }
+            WindowSurface::X11(surface) => {
+                if geo.is_empty() {
+                    warn!("Tried to configure xwayland window with an empty geometry");
+                    return;
+                }
+                if let Err(err) = surface.configure(geo) {
+                    warn!("Failed to configure xwayland window: {err}");
+                }
+            }
+        }
+    }
 }
 
 impl Pinnacle {
@@ -508,74 +556,39 @@ impl Pinnacle {
             return;
         };
 
-        match layout_mode.current() {
-            LayoutModeKind::Tiled => (),
-            LayoutModeKind::Floating | LayoutModeKind::Spilled => {
-                window.set_floating_states();
+        if layout_mode.is_tiled() {
+            return;
+        }
 
+        window.configure_states();
+
+        let geo = match layout_mode.current() {
+            LayoutModeKind::Tiled => unreachable!(),
+            LayoutModeKind::Floating | LayoutModeKind::Spilled => {
                 let (size, loc) =
                     window.with_state(|state| (state.floating_size, state.floating_loc()));
 
-                match window.underlying_surface() {
-                    WindowSurface::Wayland(toplevel) => {
-                        toplevel.with_pending_state(|state| {
-                            state.size = Some(size);
-                        });
-                    }
-                    WindowSurface::X11(surface) => {
-                        if size.is_empty() {
-                            // https://www.x.org/releases/X11R7.6/doc/man/man3/XConfigureWindow.3.xhtml
-                            // Setting a zero size seems to be a nono
-                            return;
-                        }
-                        let loc = loc.unwrap_or_else(|| surface.geometry().loc);
-                        if let Err(err) = surface.configure(Some(Rectangle::new(loc, size))) {
-                            warn!("Failed to configure xwayland window: {err}");
-                        }
-                    }
-                }
+                let loc = match window.underlying_surface() {
+                    WindowSurface::Wayland(_) => loc.unwrap_or((0, 0).into()),
+                    WindowSurface::X11(surface) => loc.unwrap_or_else(|| surface.geometry().loc),
+                };
+
+                Rectangle::new(loc, size)
             }
             LayoutModeKind::Maximized => {
                 let non_exclusive_geo = {
                     let map = layer_map_for_output(&output);
                     map.non_exclusive_zone()
                 };
+
                 let loc = output_geo.loc + non_exclusive_geo.loc;
 
-                window.set_maximized_states();
-
-                match window.underlying_surface() {
-                    WindowSurface::Wayland(toplevel) => {
-                        toplevel.with_pending_state(|state| {
-                            state.size = Some(non_exclusive_geo.size);
-                        });
-                    }
-                    WindowSurface::X11(surface) => {
-                        if let Err(err) =
-                            surface.configure(Some(Rectangle::new(loc, non_exclusive_geo.size)))
-                        {
-                            warn!("Failed to configure xwayland window: {err}");
-                        }
-                    }
-                }
+                Rectangle::new(loc, non_exclusive_geo.size)
             }
-            LayoutModeKind::Fullscreen => {
-                window.set_fullscreen_states();
+            LayoutModeKind::Fullscreen => output_geo,
+        };
 
-                match window.underlying_surface() {
-                    WindowSurface::Wayland(toplevel) => {
-                        toplevel.with_pending_state(|state| {
-                            state.size = Some(output_geo.size);
-                        });
-                    }
-                    WindowSurface::X11(surface) => {
-                        if let Err(err) = surface.configure(Some(output_geo)) {
-                            warn!("Failed to configure xwayland window: {err}");
-                        }
-                    }
-                }
-            }
-        }
+        window.configure_geometry(geo);
     }
 }
 
