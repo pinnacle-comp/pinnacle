@@ -25,7 +25,7 @@ use crate::{
     state::{Pinnacle, State, WithState},
     tag::TagId,
     util::transaction::{Location, PendingTransaction, TransactionBuilder},
-    window::{UnmappingWindow, WindowElement, ZIndexElement},
+    window::{UnmappingWindow, WindowElement},
 };
 
 impl Pinnacle {
@@ -74,50 +74,17 @@ impl Pinnacle {
         let mut snapshot_windows = Vec::new();
 
         for win in to_unmap {
-            backend.with_renderer(|renderer| {
-                win.capture_snapshot_and_store(
-                    renderer,
-                    output.current_scale().fractional_scale().into(),
-                    1.0,
-                );
-            });
-
-            if let Some(snap) = win.with_state_mut(|state| state.snapshot.take()) {
-                let Some(loc) = self.space.element_location(&win) else {
-                    unreachable!();
-                };
-
-                let unmapping = Rc::new(UnmappingWindow {
-                    snapshot: snap,
-                    fullscreen: win.with_state(|state| state.layout_mode.is_fullscreen()),
-                    space_loc: loc,
-                });
-
-                let weak = Rc::downgrade(&unmapping);
-                snapshot_windows.push(unmapping);
-
-                let z_index = self
-                    .z_index_stack
-                    .iter()
-                    .position(|z| matches!(z, crate::window::ZIndexElement::Window(w) if w == win))
-                    .expect("window to be in the stack");
-
-                self.z_index_stack
-                    .insert(z_index, ZIndexElement::Unmapping(weak));
-            }
-
             if win.with_state(|state| state.layout_mode.is_floating())
                 && let Some(loc) = self.space.element_location(&win)
             {
                 win.with_state_mut(|state| state.set_floating_loc(loc));
             }
-            let to_schedule = self.space.outputs_for_element(&win);
-            self.space.unmap_elem(&win);
-            self.loop_handle.insert_idle(move |state| {
-                for output in to_schedule {
-                    state.schedule_render(&output);
-                }
-            });
+
+            if let Some(unmapping) =
+                crate::window::layout::unmap_window(self, backend, &win, output)
+            {
+                snapshot_windows.push(unmapping);
+            }
         }
 
         let tiled_windows = windows_on_foc_tags
