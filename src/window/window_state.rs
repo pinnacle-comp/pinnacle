@@ -4,7 +4,7 @@ use std::sync::atomic::{AtomicU32, Ordering};
 
 use indexmap::IndexSet;
 use smithay::{
-    desktop::{WindowSurface, layer_map_for_output},
+    desktop::{layer_map_for_output, WindowSurface},
     reexports::wayland_protocols::xdg::{
         decoration::zv1::server::zxdg_toplevel_decoration_v1, shell::server::xdg_toplevel,
     },
@@ -486,6 +486,29 @@ impl WindowElement {
             }
         }
     }
+
+    /// Apply current mode layout mode to the window underlying surface
+    ///
+    /// Toplevel need a call to `send_configure` or `send_pending_configure` for these changes to
+    /// be effectives.
+    pub(crate) fn configure_states(&self) {
+        let _span = tracy_client::span!("WindowElement::configure_states");
+
+        match self.with_state(|state| state.layout_mode.current()) {
+            LayoutModeKind::Tiled => {
+                self.set_tiled_states();
+            }
+            LayoutModeKind::Floating | LayoutModeKind::Spilled => {
+                self.set_floating_states();
+            }
+            LayoutModeKind::Maximized => {
+                self.set_maximized_states();
+            }
+            LayoutModeKind::Fullscreen => {
+                self.set_fullscreen_states();
+            }
+        }
+    }
 }
 
 impl Pinnacle {
@@ -512,11 +535,15 @@ impl Pinnacle {
             return;
         };
 
-        match layout_mode.current() {
-            LayoutModeKind::Tiled => (),
-            LayoutModeKind::Floating | LayoutModeKind::Spilled => {
-                window.set_floating_states();
+        if layout_mode.is_tiled() {
+            return;
+        }
 
+        window.configure_states();
+
+        match layout_mode.current() {
+            LayoutModeKind::Tiled => unreachable!(),
+            LayoutModeKind::Floating | LayoutModeKind::Spilled => {
                 let (size, loc) =
                     window.with_state(|state| (state.floating_size, state.floating_loc()));
 
@@ -529,11 +556,9 @@ impl Pinnacle {
                 };
                 non_exclusive_geo.loc += output_geo.loc;
 
-                window.set_maximized_states();
                 window.set_pending_geo(non_exclusive_geo.size, Some(non_exclusive_geo.loc));
             }
             LayoutModeKind::Fullscreen => {
-                window.set_fullscreen_states();
                 window.set_pending_geo(output_geo.size, Some(output_geo.loc));
             }
         }
