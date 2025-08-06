@@ -149,20 +149,10 @@ impl Pinnacle {
         for (win, geo, is_tiled) in wins_and_geos.iter() {
             if *is_tiled {
                 win.with_state_mut(|s| s.layout_mode.set_spilled(false));
-                win.set_tiled_states();
-            } else {
-                self.configure_window_if_nontiled(win);
             }
-            match win.underlying_surface() {
-                WindowSurface::Wayland(toplevel) => {
-                    toplevel.with_pending_state(|state| {
-                        state.size = Some(geo.size);
-                    });
-                }
-                WindowSurface::X11(surface) => {
-                    let _ = surface.configure(*geo);
-                }
-            }
+
+            win.configure_states();
+            win.configure_geometry(*geo);
         }
 
         let mut transaction_builder = TransactionBuilder::new();
