@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+pub mod layout;
 pub mod rules;
 
 use std::{cell::RefCell, collections::HashMap, ops::Deref, rc::Rc};
