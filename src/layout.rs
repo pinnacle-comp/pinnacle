@@ -149,11 +149,9 @@ impl Pinnacle {
         for (win, geo, is_tiled) in wins_and_geos.iter() {
             if *is_tiled {
                 win.with_state_mut(|s| s.layout_mode.set_spilled(false));
-                win.set_tiled_states();
-            } else {
-                self.configure_window_if_nontiled(win);
             }
 
+            win.configure_states();
             win.set_pending_geo(geo.size, Some(geo.loc));
         }
 
