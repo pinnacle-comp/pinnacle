@@ -35,12 +35,12 @@ impl widget_service_server::WidgetService for super::WidgetService {
             move |state, sender| match id {
                 get_widget_events_request::Id::LayerId(layer_id) => {
                     if let Some(layer) = state.layer_for_id(LayerId(layer_id)) {
-                        layer.widget_event_sender = Some(sender);
+                        layer.surface.widget_event_sender = Some(sender);
                     }
                 }
                 get_widget_events_request::Id::DecorationId(decoration_id) => {
                     if let Some(deco) = state.decoration_for_id(DecorationId(decoration_id)) {
-                        deco.widget_event_sender = Some(sender);
+                        deco.surface.widget_event_sender = Some(sender);
                     }
                 }
             },

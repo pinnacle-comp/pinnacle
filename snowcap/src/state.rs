@@ -118,7 +118,10 @@ impl State {
         loop_handle
             .insert_source(recv, move |event, _, state| match event {
                 calloop::channel::Event::Msg((id, msg)) => {
-                    let Some(layer) = state.layers.iter().find(|layer| layer.window_id == id)
+                    let Some(layer) = state
+                        .layers
+                        .iter()
+                        .find(|layer| layer.surface.window_id == id)
                     else {
                         return;
                     };

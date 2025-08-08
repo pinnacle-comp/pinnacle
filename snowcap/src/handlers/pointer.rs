@@ -27,30 +27,30 @@ impl PointerHandler for State {
             let mut deco = self
                 .decorations
                 .iter_mut()
-                .find(|deco| deco.wl_surface == event.surface);
+                .find(|deco| deco.surface.wl_surface == event.surface);
 
             let iced_event = match event.kind {
                 PointerEventKind::Enter { serial: _ } => {
                     if let Some(layer) = layer.as_mut() {
-                        layer.pointer_location = Some(event.position);
+                        layer.surface.pointer_location = Some(event.position);
                     } else if let Some(deco) = deco.as_mut() {
-                        deco.pointer_location = Some(event.position);
+                        deco.surface.pointer_location = Some(event.position);
                     }
                     iced::Event::Mouse(iced::mouse::Event::CursorEntered)
                 }
                 PointerEventKind::Leave { serial: _ } => {
                     if let Some(layer) = layer.as_mut() {
-                        layer.pointer_location = None;
+                        layer.surface.pointer_location = None;
                     } else if let Some(deco) = deco.as_mut() {
-                        deco.pointer_location = None;
+                        deco.surface.pointer_location = None;
                     }
                     iced::Event::Mouse(iced::mouse::Event::CursorLeft)
                 }
                 PointerEventKind::Motion { time: _ } => {
                     if let Some(layer) = layer.as_mut() {
-                        layer.pointer_location = Some(event.position);
+                        layer.surface.pointer_location = Some(event.position);
                     } else if let Some(deco) = deco.as_mut() {
-                        deco.pointer_location = Some(event.position);
+                        deco.surface.pointer_location = Some(event.position);
                     }
                     iced::Event::Mouse(iced::mouse::Event::CursorMoved {
                         position: iced::Point {
@@ -98,9 +98,9 @@ impl PointerHandler for State {
             };
 
             if let Some(layer) = layer.as_mut() {
-                layer.widgets.queue_event(iced_event);
+                layer.surface.widgets.queue_event(iced_event);
             } else if let Some(deco) = deco.as_mut() {
-                deco.widgets.queue_event(iced_event);
+                deco.surface.widgets.queue_event(iced_event);
             }
         }
     }

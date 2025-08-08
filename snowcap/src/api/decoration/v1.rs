@@ -105,7 +105,6 @@ impl decoration_service_server::DecorationService for super::DecorationService {
             };
 
             deco.update_properties(
-                &state.compositor_state,
                 widget_def.and_then(widget_def_to_fn),
                 bounds.map(|bounds| crate::decoration::Bounds {
                     left: bounds.left,
@@ -120,7 +119,6 @@ impl decoration_service_server::DecorationService for super::DecorationService {
                     bottom: extents.bottom,
                 }),
                 z_index,
-                &state.queue_handle,
             );
 
             Ok(UpdateDecorationResponse {})
