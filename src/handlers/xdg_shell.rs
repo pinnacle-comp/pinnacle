@@ -494,26 +494,25 @@ pub fn add_mapped_toplevel_pre_commit_hook(toplevel: &ToplevelSurface) -> HookId
 
         if let Some((blocker, source)) =
             dmabuf.and_then(|dmabuf| dmabuf.generate_blocker(Interest::READ).ok())
+            && let Some(client) = surface.client()
         {
-            if let Some(client) = surface.client() {
-                let res = state
-                    .pinnacle
-                    .loop_handle
-                    .insert_source(source, move |_, _, state| {
-                        // This surface is now ready for the transaction.
-                        drop(transaction_for_dmabuf.take());
+            let res = state
+                .pinnacle
+                .loop_handle
+                .insert_source(source, move |_, _, state| {
+                    // This surface is now ready for the transaction.
+                    drop(transaction_for_dmabuf.take());
 
-                        let display_handle = state.pinnacle.display_handle.clone();
-                        state
-                            .client_compositor_state(&client)
-                            .blocker_cleared(state, &display_handle);
+                    let display_handle = state.pinnacle.display_handle.clone();
+                    state
+                        .client_compositor_state(&client)
+                        .blocker_cleared(state, &display_handle);
 
-                        Ok(())
-                    });
-                if res.is_ok() {
-                    compositor::add_blocker(surface, blocker);
-                    trace!("added dmabuf blocker");
-                }
+                    Ok(())
+                });
+            if res.is_ok() {
+                compositor::add_blocker(surface, blocker);
+                trace!("added dmabuf blocker");
             }
         }
 

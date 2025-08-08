@@ -155,7 +155,7 @@ macro_rules! pinnacle_render_elements {
             fn underlying_storage(
                 &self,
                 renderer: &mut ::smithay::backend::renderer::gles::GlesRenderer
-            ) -> ::std::option::Option<::smithay::backend::renderer::element::UnderlyingStorage> {
+            ) -> ::std::option::Option<::smithay::backend::renderer::element::UnderlyingStorage<'_>> {
                 match self {
                     $($name::$variant(elem) => elem.underlying_storage(renderer)),+
                 }
@@ -174,7 +174,7 @@ macro_rules! pinnacle_render_elements {
                 opaque_regions: &[::smithay::utils::Rectangle<i32, ::smithay::utils::Physical>],
             ) -> ::std::result::Result<
                 (),
-                <$crate::backend::udev::UdevRenderer as ::smithay::backend::renderer::RendererSuper>::Error,
+                <$crate::backend::udev::UdevRenderer<'_> as ::smithay::backend::renderer::RendererSuper>::Error,
             > {
                 match self {
                     $($name::$variant(elem) => {
@@ -188,7 +188,7 @@ macro_rules! pinnacle_render_elements {
             fn underlying_storage(
                 &self,
                 renderer: &mut $crate::backend::udev::UdevRenderer<'a>,
-            ) -> ::std::option::Option<::smithay::backend::renderer::element::UnderlyingStorage> {
+            ) -> ::std::option::Option<::smithay::backend::renderer::element::UnderlyingStorage<'_>> {
                 match self {
                     $($name::$variant(elem) => elem.underlying_storage(renderer)),+
                 }
@@ -222,7 +222,7 @@ macro_rules! pinnacle_render_elements {
             fn underlying_storage(
                 &self,
                 renderer: &mut ::smithay::backend::renderer::test::DummyRenderer,
-            ) -> ::std::option::Option<::smithay::backend::renderer::element::UnderlyingStorage> {
+            ) -> ::std::option::Option<::smithay::backend::renderer::element::UnderlyingStorage<'_>> {
                 match self {
                     $($name::$variant(elem) => elem.underlying_storage(renderer)),+
                 }

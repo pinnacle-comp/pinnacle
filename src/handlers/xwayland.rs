@@ -88,11 +88,11 @@ impl XwmHandler for State {
             },
         };
 
-        if let Some(output) = self.pinnacle.focused_output() {
-            if output.with_state(|state| !state.tags.is_empty()) {
-                unmapped.window.set_tags_to_output(output);
-                self.pinnacle.request_window_rules(&mut unmapped);
-            }
+        if let Some(output) = self.pinnacle.focused_output()
+            && output.with_state(|state| !state.tags.is_empty())
+        {
+            unmapped.window.set_tags_to_output(output);
+            self.pinnacle.request_window_rules(&mut unmapped);
         }
 
         self.pinnacle.unmapped_windows.push(unmapped);
@@ -394,10 +394,10 @@ impl XwmHandler for State {
             .get_keyboard()
             .and_then(|kb| kb.current_focus())
             .is_some_and(|focus| {
-                if let KeyboardFocusTarget::Window(window) = focus {
-                    if let Some(surface) = window.x11_surface() {
-                        return surface.xwm_id().expect("x11surface had no xwm id") == xwm;
-                    }
+                if let KeyboardFocusTarget::Window(window) = focus
+                    && let Some(surface) = window.x11_surface()
+                {
+                    return surface.xwm_id().expect("x11surface had no xwm id") == xwm;
                 }
                 false
             })
@@ -504,10 +504,10 @@ impl State {
 
         self.pinnacle.remove_window(&win, false);
 
-        if let Some(output) = win.output(&self.pinnacle) {
-            if should_layout {
-                self.pinnacle.request_layout(&output);
-            }
+        if let Some(output) = win.output(&self.pinnacle)
+            && should_layout
+        {
+            self.pinnacle.request_layout(&output);
         }
 
         for output in outputs {

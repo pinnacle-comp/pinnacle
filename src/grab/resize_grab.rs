@@ -411,14 +411,14 @@ impl State {
             };
             let initial_window_size = window.geometry().size;
 
-            if let Some(window) = self.pinnacle.window_for_surface(surface) {
-                if let Some(toplevel) = window.toplevel() {
-                    toplevel.with_pending_state(|state| {
-                        state.states.set(xdg_toplevel::State::Resizing);
-                    });
+            if let Some(window) = self.pinnacle.window_for_surface(surface)
+                && let Some(toplevel) = window.toplevel()
+            {
+                toplevel.with_pending_state(|state| {
+                    state.states.set(xdg_toplevel::State::Resizing);
+                });
 
-                    toplevel.send_pending_configure();
-                }
+                toplevel.send_pending_configure();
             }
 
             let grab = ResizeSurfaceGrab::start(
@@ -463,14 +463,14 @@ impl State {
         };
         let initial_window_size = window.geometry().size;
 
-        if let Some(window) = self.pinnacle.window_for_surface(surface) {
-            if let Some(toplevel) = window.toplevel() {
-                toplevel.with_pending_state(|state| {
-                    state.states.set(xdg_toplevel::State::Resizing);
-                });
+        if let Some(window) = self.pinnacle.window_for_surface(surface)
+            && let Some(toplevel) = window.toplevel()
+        {
+            toplevel.with_pending_state(|state| {
+                state.states.set(xdg_toplevel::State::Resizing);
+            });
 
-                toplevel.send_pending_configure();
-            }
+            toplevel.send_pending_configure();
         }
 
         let start_data = smithay::input::pointer::GrabStartData {

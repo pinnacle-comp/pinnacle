@@ -559,10 +559,10 @@ impl input::v1::input_service_server::InputService for InputService {
                 layout: request.layout(),
                 options: request.options.clone(),
             };
-            if let Some(kb) = state.pinnacle.seat.get_keyboard() {
-                if let Err(err) = kb.set_xkb_config(state, new_config) {
-                    error!("Failed to set xkbconfig: {err}");
-                }
+            if let Some(kb) = state.pinnacle.seat.get_keyboard()
+                && let Err(err) = kb.set_xkb_config(state, new_config)
+            {
+                error!("Failed to set xkbconfig: {err}");
             }
         })
         .await

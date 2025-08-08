@@ -288,11 +288,11 @@ impl LayoutTree {
                 None => (None, None),
             };
 
-            if let Some(override_index) = traversal_index {
-                if children.get(override_index as usize).is_some() {
-                    let child = children.remove(override_index as usize);
-                    children.insert(0, child);
-                }
+            if let Some(override_index) = traversal_index
+                && children.get(override_index as usize).is_some()
+            {
+                let child = children.remove(override_index as usize);
+                children.insert(0, child);
             }
 
             for child in children.into_iter() {

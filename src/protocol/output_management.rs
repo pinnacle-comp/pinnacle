@@ -296,36 +296,36 @@ impl OutputManagementManagerState {
                     // enabled handled in `set_head_enabled`
 
                     if output_data.enabled {
-                        if output.current_mode() != output_data.current_mode {
-                            if let Some(new_cur_mode) = output.current_mode() {
-                                let new_cur_wlr_mode = wlr_modes.iter().find(|wlr_mode| {
-                                    wlr_mode.data::<Mode>() == Some(&new_cur_mode)
-                                });
+                        if output.current_mode() != output_data.current_mode
+                            && let Some(new_cur_mode) = output.current_mode()
+                        {
+                            let new_cur_wlr_mode = wlr_modes
+                                .iter()
+                                .find(|wlr_mode| wlr_mode.data::<Mode>() == Some(&new_cur_mode));
 
-                                match new_cur_wlr_mode {
-                                    Some(new_cur_wlr_mode) => {
-                                        head.current_mode(new_cur_wlr_mode);
-                                    }
-                                    None => {
-                                        let new_wlr_current_mode = create_mode_for_head::<D>(
-                                            head,
-                                            &self.display_handle,
-                                            new_cur_mode,
-                                            output.preferred_mode() == Some(new_cur_mode),
-                                        );
+                            match new_cur_wlr_mode {
+                                Some(new_cur_wlr_mode) => {
+                                    head.current_mode(new_cur_wlr_mode);
+                                }
+                                None => {
+                                    let new_wlr_current_mode = create_mode_for_head::<D>(
+                                        head,
+                                        &self.display_handle,
+                                        new_cur_mode,
+                                        output.preferred_mode() == Some(new_cur_mode),
+                                    );
 
-                                        match new_wlr_current_mode {
-                                            Ok(new_wlr_current_mode) => {
-                                                head.current_mode(&new_wlr_current_mode);
-                                                wlr_modes.push(new_wlr_current_mode);
-                                            }
-                                            Err(err) => error!("Failed to create wlr mode: {err}"),
+                                    match new_wlr_current_mode {
+                                        Ok(new_wlr_current_mode) => {
+                                            head.current_mode(&new_wlr_current_mode);
+                                            wlr_modes.push(new_wlr_current_mode);
                                         }
+                                        Err(err) => error!("Failed to create wlr mode: {err}"),
                                     }
                                 }
-
-                                output_data.current_mode = Some(new_cur_mode);
                             }
+
+                            output_data.current_mode = Some(new_cur_mode);
                         }
 
                         if output.current_location() != output_data.position {

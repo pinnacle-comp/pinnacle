@@ -134,23 +134,22 @@ impl Pinnacle {
                             _ => None,
                         })
                 });
-                if let Some(dmabuf) = maybe_dmabuf {
-                    if let Ok((blocker, source)) = dmabuf.generate_blocker(Interest::READ) {
-                        if let Some(client) = surface.client() {
-                            let res = state.pinnacle.loop_handle.insert_source(
-                                source,
-                                move |_, _, state| {
-                                    state.client_compositor_state(&client).blocker_cleared(
-                                        state,
-                                        &state.pinnacle.display_handle.clone(),
-                                    );
-                                    Ok(())
-                                },
-                            );
-                            if res.is_ok() {
-                                compositor::add_blocker(surface, blocker);
-                            }
-                        }
+                if let Some(dmabuf) = maybe_dmabuf
+                    && let Ok((blocker, source)) = dmabuf.generate_blocker(Interest::READ)
+                    && let Some(client) = surface.client()
+                {
+                    let res =
+                        state
+                            .pinnacle
+                            .loop_handle
+                            .insert_source(source, move |_, _, state| {
+                                state
+                                    .client_compositor_state(&client)
+                                    .blocker_cleared(state, &state.pinnacle.display_handle.clone());
+                                Ok(())
+                            });
+                    if res.is_ok() {
+                        compositor::add_blocker(surface, blocker);
                     }
                 }
             },
@@ -262,37 +261,37 @@ impl CompositorHandler for State {
             }
 
             // Window surface commit
-            if let Some(window) = self.pinnacle.window_for_surface(surface).cloned() {
-                if window.is_wayland() {
-                    let Some(is_mapped) =
-                        with_renderer_surface_state(surface, |state| state.buffer().is_some())
-                    else {
-                        unreachable!("on_commit_buffer_handler was called previously");
-                    };
+            if let Some(window) = self.pinnacle.window_for_surface(surface).cloned()
+                && window.is_wayland()
+            {
+                let Some(is_mapped) =
+                    with_renderer_surface_state(surface, |state| state.buffer().is_some())
+                else {
+                    unreachable!("on_commit_buffer_handler was called previously");
+                };
 
-                    window.on_commit();
+                window.on_commit();
 
-                    // Toplevel has become unmapped,
-                    // see https://wayland.app/protocols/xdg-shell#xdg_toplevel
-                    if !is_mapped {
-                        self.pinnacle.remove_window(&window, true);
+                // Toplevel has become unmapped,
+                // see https://wayland.app/protocols/xdg-shell#xdg_toplevel
+                if !is_mapped {
+                    self.pinnacle.remove_window(&window, true);
 
-                        let output = window.output(&self.pinnacle);
+                    let output = window.output(&self.pinnacle);
 
-                        if let Some(output) = output {
-                            self.pinnacle.request_layout(&output);
-                        }
+                    if let Some(output) = output {
+                        self.pinnacle.request_layout(&output);
                     }
+                }
 
-                    // Update reactive popups
-                    for (popup, _) in PopupManager::popups_for_surface(surface) {
-                        if let PopupKind::Xdg(popup) = popup {
-                            if popup.with_pending_state(|state| state.positioner.reactive) {
-                                self.pinnacle.position_popup(&popup);
-                                if let Err(err) = popup.send_pending_configure() {
-                                    warn!("Failed to configure reactive popup: {err}");
-                                }
-                            }
+                // Update reactive popups
+                for (popup, _) in PopupManager::popups_for_surface(surface) {
+                    if let PopupKind::Xdg(popup) = popup
+                        && popup.with_pending_state(|state| state.positioner.reactive)
+                    {
+                        self.pinnacle.position_popup(&popup);
+                        if let Err(err) = popup.send_pending_configure() {
+                            warn!("Failed to configure reactive popup: {err}");
                         }
                     }
                 }
@@ -507,10 +506,9 @@ impl SelectionHandler for State {
             .xwayland_state
             .as_mut()
             .map(|xwayland| &mut xwayland.xwm)
+            && let Err(err) = xwm.new_selection(ty, source.map(|source| source.mime_types()))
         {
-            if let Err(err) = xwm.new_selection(ty, source.map(|source| source.mime_types())) {
-                warn!(?err, ?ty, "Failed to set Xwayland selection");
-            }
+            warn!(?err, ?ty, "Failed to set Xwayland selection");
         }
     }
 
@@ -529,12 +527,10 @@ impl SelectionHandler for State {
             .xwayland_state
             .as_mut()
             .map(|xwayland| &mut xwayland.xwm)
-        {
-            if let Err(err) =
+            && let Err(err) =
                 xwm.send_selection(ty, mime_type, fd, self.pinnacle.loop_handle.clone())
-            {
-                warn!(?err, "Failed to send selection (X11 -> Wayland)");
-            }
+        {
+            warn!(?err, "Failed to send selection (X11 -> Wayland)");
         }
     }
 }

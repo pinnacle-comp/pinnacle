@@ -46,10 +46,10 @@ impl KeyboardHandler for State {
         surface: &WlSurface,
         _serial: u32,
     ) {
-        if let Some(KeyboardFocus::Layer(layer)) = self.keyboard_focus.as_ref() {
-            if layer.wl_surface() == surface {
-                self.keyboard_focus = None;
-            }
+        if let Some(KeyboardFocus::Layer(layer)) = self.keyboard_focus.as_ref()
+            && layer.wl_surface() == surface
+        {
+            self.keyboard_focus = None;
         }
     }
 

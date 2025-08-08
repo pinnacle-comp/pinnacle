@@ -318,10 +318,10 @@ async fn config() {
         // `mod_key + shift + 1-9` moves the focused window to tag "1" to "9"
         input::keybind(mod_key | Mod::SHIFT, tag_name)
             .on_press(move || {
-                if let Some(tag) = tag::get(tag_name) {
-                    if let Some(win) = window::get_focused() {
-                        win.move_to_tag(&tag);
-                    }
+                if let Some(tag) = tag::get(tag_name)
+                    && let Some(win) = window::get_focused()
+                {
+                    win.move_to_tag(&tag);
                 }
             })
             .group("Tag")
@@ -330,10 +330,10 @@ async fn config() {
         // `mod_key + ctrl + shift + 1-9` toggles tag "1" to "9" on the focused window
         input::keybind(mod_key | Mod::CTRL | Mod::SHIFT, tag_name)
             .on_press(move || {
-                if let Some(tg) = tag::get(tag_name) {
-                    if let Some(win) = window::get_focused() {
-                        win.toggle_tag(&tg);
-                    }
+                if let Some(tg) = tag::get(tag_name)
+                    && let Some(win) = window::get_focused()
+                {
+                    win.toggle_tag(&tg);
                 }
             })
             .group("Tag")

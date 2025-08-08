@@ -106,10 +106,10 @@ impl Pinnacle {
                     .insert(z_index, ZIndexElement::Unmapping(weak));
             }
 
-            if win.with_state(|state| state.layout_mode.is_floating()) {
-                if let Some(loc) = self.space.element_location(&win) {
-                    win.with_state_mut(|state| state.set_floating_loc(loc));
-                }
+            if win.with_state(|state| state.layout_mode.is_floating())
+                && let Some(loc) = self.space.element_location(&win)
+            {
+                win.with_state_mut(|state| state.set_floating_loc(loc));
             }
             let to_schedule = self.space.outputs_for_element(&win);
             self.space.unmap_elem(&win);

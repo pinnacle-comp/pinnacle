@@ -293,22 +293,21 @@ delegate_kde_decoration!(State);
 pub fn update_kde_decoration_mode(surface: &WlSurface, mode: zxdg_toplevel_decoration_v1::Mode) {
     compositor::with_states(surface, |states| {
         let kde_decoration = states.data_map.get::<KdeDecorationObject>();
-        if let Some(kde_decoration) = kde_decoration {
-            if let Some(decoration) = kde_decoration
+        if let Some(kde_decoration) = kde_decoration
+            && let Some(decoration) = kde_decoration
                 .borrow()
                 .as_ref()
                 .and_then(|obj| obj.upgrade().ok())
-            {
-                let mode = match mode {
-                    zxdg_toplevel_decoration_v1::Mode::ServerSide => {
-                        org_kde_kwin_server_decoration::Mode::Server
-                    }
-                    zxdg_toplevel_decoration_v1::Mode::ClientSide | _ => {
-                        org_kde_kwin_server_decoration::Mode::Client
-                    }
-                };
-                decoration.mode(mode);
-            }
+        {
+            let mode = match mode {
+                zxdg_toplevel_decoration_v1::Mode::ServerSide => {
+                    org_kde_kwin_server_decoration::Mode::Server
+                }
+                zxdg_toplevel_decoration_v1::Mode::ClientSide | _ => {
+                    org_kde_kwin_server_decoration::Mode::Client
+                }
+            };
+            decoration.mode(mode);
         }
     });
 }

@@ -531,13 +531,12 @@ impl Udev {
                 warn!("Failed to clear compositor state on crtc {crtc:?}: {err}");
             }
 
-            if let Some(surface) = render_surface_for_output(output, &mut self.backends) {
-                if let RenderState::WaitingForEstimatedVblankAndScheduled(token)
+            if let Some(surface) = render_surface_for_output(output, &mut self.backends)
+                && let RenderState::WaitingForEstimatedVblankAndScheduled(token)
                 | RenderState::WaitingForEstimatedVblank(token) =
                     mem::take(&mut surface.render_state)
-                {
-                    loop_handle.remove(token);
-                }
+            {
+                loop_handle.remove(token);
             }
         }
     }
@@ -565,12 +564,11 @@ impl BackendData for Udev {
     fn reset_buffers(&mut self, output: &Output) {
         let _span = tracy_client::span!("Udev: BackendData::reset_buffers");
 
-        if let Some(id) = output.user_data().get::<UdevOutputData>() {
-            if let Some(gpu) = self.backends.get_mut(&id.device_id) {
-                if let Some(surface) = gpu.surfaces.get_mut(&id.crtc) {
-                    surface.drm_output.reset_buffers();
-                }
-            }
+        if let Some(id) = output.user_data().get::<UdevOutputData>()
+            && let Some(gpu) = self.backends.get_mut(&id.device_id)
+            && let Some(surface) = gpu.surfaces.get_mut(&id.crtc)
+        {
+            surface.drm_output.reset_buffers();
         }
     }
 
@@ -615,32 +613,32 @@ impl BackendData for Udev {
                 }
             });
 
-        if let Some(render_surface) = render_surface_for_output(output, &mut self.backends) {
-            if let Ok(mut renderer) = self.gpu_manager.single_renderer(&self.primary_gpu) {
-                match render_surface.drm_output.use_mode(
-                    drm_mode,
-                    &mut renderer,
-                    &DrmOutputRenderElements::<_, OutputRenderElement<_>>::default(),
-                ) {
-                    Ok(()) => {
-                        let mode = smithay::output::Mode::from(mode);
-                        info!(
-                            "Set {}'s mode to {}x{}@{:.3}Hz",
-                            output.name(),
-                            mode.size.w,
-                            mode.size.h,
-                            mode.refresh as f64 / 1000.0
-                        );
-                        output.change_current_state(Some(mode), None, None, None);
-                        output.with_state_mut(|state| {
-                            // TODO: push or no?
-                            if !state.modes.contains(&mode) {
-                                state.modes.push(mode);
-                            }
-                        });
-                    }
-                    Err(err) => warn!("Failed to set output mode for {}: {err}", output.name()),
+        if let Some(render_surface) = render_surface_for_output(output, &mut self.backends)
+            && let Ok(mut renderer) = self.gpu_manager.single_renderer(&self.primary_gpu)
+        {
+            match render_surface.drm_output.use_mode(
+                drm_mode,
+                &mut renderer,
+                &DrmOutputRenderElements::<_, OutputRenderElement<_>>::default(),
+            ) {
+                Ok(()) => {
+                    let mode = smithay::output::Mode::from(mode);
+                    info!(
+                        "Set {}'s mode to {}x{}@{:.3}Hz",
+                        output.name(),
+                        mode.size.w,
+                        mode.size.h,
+                        mode.refresh as f64 / 1000.0
+                    );
+                    output.change_current_state(Some(mode), None, None, None);
+                    output.with_state_mut(|state| {
+                        // TODO: push or no?
+                        if !state.modes.contains(&mode) {
+                            state.modes.push(mode);
+                        }
+                    });
                 }
+                Err(err) => warn!("Failed to set output mode for {}: {err}", output.name()),
             }
         }
     }
@@ -1481,12 +1479,11 @@ impl Udev {
 
         let failed = match render_frame_result {
             Ok(res) => {
-                if res.needs_sync() {
-                    if let PrimaryPlaneElement::Swapchain(element) = &res.primary_element {
-                        if let Err(err) = element.sync.wait() {
-                            warn!("Failed to wait for sync point: {err}");
-                        }
-                    }
+                if res.needs_sync()
+                    && let PrimaryPlaneElement::Swapchain(element) = &res.primary_element
+                    && let Err(err) = element.sync.wait()
+                {
+                    warn!("Failed to wait for sync point: {err}");
                 }
 
                 if pinnacle.lock_state.is_unlocked() {
@@ -1751,13 +1748,14 @@ fn handle_pending_screencopy<'a>(
             // so it must be the cursor moving.
             //
             // We currently have overlay planes disabled, so we don't have to worry about that.
-            if damage.is_empty() && !render_frame_result.is_empty {
-                if let Some(cursor_elem) = render_frame_result.cursor_element {
-                    damage = damage
-                        .into_iter()
-                        .chain([cursor_elem.geometry(scale)])
-                        .collect();
-                }
+            if damage.is_empty()
+                && !render_frame_result.is_empty
+                && let Some(cursor_elem) = render_frame_result.cursor_element
+            {
+                damage = damage
+                    .into_iter()
+                    .chain([cursor_elem.geometry(scale)])
+                    .collect();
             }
 
             // INFO: Protocol states that `copy_with_damage` should wait until there is

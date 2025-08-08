@@ -27,13 +27,13 @@ impl State {
             // Defer updating this window's state until the next incoming layout,
             // but ignore spilled window since they could become tiled then have
             // their geometry update.
-            if !mode.is_spilled() {
-                if let Some(geo) = geo {
-                    self.pinnacle
-                        .layout_state
-                        .pending_window_updates
-                        .add_for_output(output, vec![(window.clone(), geo)]);
-                }
+            if !mode.is_spilled()
+                && let Some(geo) = geo
+            {
+                self.pinnacle
+                    .layout_state
+                    .pending_window_updates
+                    .add_for_output(output, vec![(window.clone(), geo)]);
             }
             self.pinnacle.request_layout(output);
         } else if let Some(geo) = geo {
@@ -171,10 +171,10 @@ impl State {
 
         self.update_window_geometry(window, &target, geo, layout_needs_update);
 
-        if let Some(output) = current_output {
-            if layout_mode.is_tiled() {
-                self.pinnacle.request_layout(&output);
-            }
+        if let Some(output) = current_output
+            && layout_mode.is_tiled()
+        {
+            self.pinnacle.request_layout(&output);
         }
 
         for output in self.pinnacle.space.outputs_for_element(window) {

@@ -302,15 +302,14 @@ impl v1::window_service_server::WindowService for super::WindowService {
         run_unary_no_response(&self.sender, move |state| {
             if let Some(window) = window_id.window(&state.pinnacle) {
                 crate::api::window::set_geometry(state, &window, x, y, w, h);
-            } else if let Some(unmapped) = window_id.unmapped_window_mut(&mut state.pinnacle) {
-                if let UnmappedState::WaitingForRules { rules, .. } = &mut unmapped.state {
-                    rules.floating_x = x;
-                    rules.floating_y = y;
+            } else if let Some(unmapped) = window_id.unmapped_window_mut(&mut state.pinnacle)
+                && let UnmappedState::WaitingForRules { rules, .. } = &mut unmapped.state
+            {
+                rules.floating_x = x;
+                rules.floating_y = y;
 
-                    let size =
-                        Size::from((w.unwrap_or_default() as i32, h.unwrap_or_default() as i32));
-                    rules.floating_size = Some(size);
-                }
+                let size = Size::from((w.unwrap_or_default() as i32, h.unwrap_or_default() as i32));
+                rules.floating_size = Some(size);
             }
         })
         .await
@@ -370,26 +369,26 @@ impl v1::window_service_server::WindowService for super::WindowService {
                         None => layout_mode.toggle_fullscreen(),
                     },
                 );
-            } else if let Some(unmapped) = window_id.unmapped_window_mut(&mut state.pinnacle) {
-                if let UnmappedState::WaitingForRules { rules, .. } = &mut unmapped.state {
-                    match fullscreen {
-                        Some(true) => {
-                            rules
-                                .layout_mode
-                                .get_or_insert(LayoutMode::new_fullscreen())
-                                .set_fullscreen(true);
+            } else if let Some(unmapped) = window_id.unmapped_window_mut(&mut state.pinnacle)
+                && let UnmappedState::WaitingForRules { rules, .. } = &mut unmapped.state
+            {
+                match fullscreen {
+                    Some(true) => {
+                        rules
+                            .layout_mode
+                            .get_or_insert(LayoutMode::new_fullscreen())
+                            .set_fullscreen(true);
+                    }
+                    Some(false) => {
+                        if let Some(layout_mode) = rules.layout_mode.as_mut() {
+                            layout_mode.set_fullscreen(false);
                         }
-                        Some(false) => {
-                            if let Some(layout_mode) = rules.layout_mode.as_mut() {
-                                layout_mode.set_fullscreen(false);
-                            }
-                        }
-                        None => {
-                            rules
-                                .layout_mode
-                                .get_or_insert(LayoutMode::new_tiled())
-                                .toggle_fullscreen();
-                        }
+                    }
+                    None => {
+                        rules
+                            .layout_mode
+                            .get_or_insert(LayoutMode::new_tiled())
+                            .toggle_fullscreen();
                     }
                 }
             }
@@ -424,26 +423,26 @@ impl v1::window_service_server::WindowService for super::WindowService {
                         None => layout_mode.toggle_maximized(),
                     },
                 );
-            } else if let Some(unmapped) = window_id.unmapped_window_mut(&mut state.pinnacle) {
-                if let UnmappedState::WaitingForRules { rules, .. } = &mut unmapped.state {
-                    match maximized {
-                        Some(true) => {
-                            rules
-                                .layout_mode
-                                .get_or_insert(LayoutMode::new_maximized())
-                                .set_maximized(true);
+            } else if let Some(unmapped) = window_id.unmapped_window_mut(&mut state.pinnacle)
+                && let UnmappedState::WaitingForRules { rules, .. } = &mut unmapped.state
+            {
+                match maximized {
+                    Some(true) => {
+                        rules
+                            .layout_mode
+                            .get_or_insert(LayoutMode::new_maximized())
+                            .set_maximized(true);
+                    }
+                    Some(false) => {
+                        if let Some(layout_mode) = rules.layout_mode.as_mut() {
+                            layout_mode.set_maximized(false);
                         }
-                        Some(false) => {
-                            if let Some(layout_mode) = rules.layout_mode.as_mut() {
-                                layout_mode.set_maximized(false);
-                            }
-                        }
-                        None => {
-                            rules
-                                .layout_mode
-                                .get_or_insert(LayoutMode::new_tiled())
-                                .toggle_maximized();
-                        }
+                    }
+                    None => {
+                        rules
+                            .layout_mode
+                            .get_or_insert(LayoutMode::new_tiled())
+                            .toggle_maximized();
                     }
                 }
             }
@@ -475,27 +474,27 @@ impl v1::window_service_server::WindowService for super::WindowService {
                     Some(set) => layout_mode.set_floating(set),
                     None => layout_mode.toggle_floating(),
                 });
-            } else if let Some(unmapped) = window_id.unmapped_window_mut(&mut state.pinnacle) {
-                if let UnmappedState::WaitingForRules { rules, .. } = &mut unmapped.state {
-                    match floating {
-                        Some(true) => {
-                            rules
-                                .layout_mode
-                                .get_or_insert(LayoutMode::new_floating())
-                                .set_floating(true);
-                        }
-                        Some(false) => {
-                            rules
-                                .layout_mode
-                                .get_or_insert(LayoutMode::new_floating())
-                                .set_floating(false);
-                        }
-                        None => {
-                            rules
-                                .layout_mode
-                                .get_or_insert(LayoutMode::new_tiled())
-                                .toggle_floating();
-                        }
+            } else if let Some(unmapped) = window_id.unmapped_window_mut(&mut state.pinnacle)
+                && let UnmappedState::WaitingForRules { rules, .. } = &mut unmapped.state
+            {
+                match floating {
+                    Some(true) => {
+                        rules
+                            .layout_mode
+                            .get_or_insert(LayoutMode::new_floating())
+                            .set_floating(true);
+                    }
+                    Some(false) => {
+                        rules
+                            .layout_mode
+                            .get_or_insert(LayoutMode::new_floating())
+                            .set_floating(false);
+                    }
+                    None => {
+                        rules
+                            .layout_mode
+                            .get_or_insert(LayoutMode::new_tiled())
+                            .toggle_floating();
                     }
                 }
             }
@@ -524,14 +523,14 @@ impl v1::window_service_server::WindowService for super::WindowService {
         run_unary_no_response(&self.sender, move |state| {
             if let Some(window) = window_id.window(&state.pinnacle) {
                 crate::api::window::set_focused(state, &window, set);
-            } else if let Some(unmapped) = window_id.unmapped_window_mut(&mut state.pinnacle) {
-                if let UnmappedState::WaitingForRules { rules, .. } = &mut unmapped.state {
-                    match set {
-                        Some(set) => rules.focused = Some(set),
-                        None => {
-                            let focused = rules.focused.get_or_insert(true);
-                            *focused = !*focused;
-                        }
+            } else if let Some(unmapped) = window_id.unmapped_window_mut(&mut state.pinnacle)
+                && let UnmappedState::WaitingForRules { rules, .. } = &mut unmapped.state
+            {
+                match set {
+                    Some(set) => rules.focused = Some(set),
+                    None => {
+                        let focused = rules.focused.get_or_insert(true);
+                        *focused = !*focused;
                     }
                 }
             }
@@ -558,10 +557,10 @@ impl v1::window_service_server::WindowService for super::WindowService {
         run_unary_no_response(&self.sender, move |state| {
             if let Some(window) = window_id.window(&state.pinnacle) {
                 crate::api::window::set_decoration_mode(state, &window, mode);
-            } else if let Some(unmapped) = window_id.unmapped_window_mut(&mut state.pinnacle) {
-                if let UnmappedState::WaitingForRules { rules, .. } = &mut unmapped.state {
-                    rules.decoration_mode = Some(mode);
-                }
+            } else if let Some(unmapped) = window_id.unmapped_window_mut(&mut state.pinnacle)
+                && let UnmappedState::WaitingForRules { rules, .. } = &mut unmapped.state
+            {
+                rules.decoration_mode = Some(mode);
             }
         })
         .await
@@ -578,10 +577,10 @@ impl v1::window_service_server::WindowService for super::WindowService {
 
             if let Some(window) = window_id.window(&state.pinnacle) {
                 crate::api::window::move_to_tag(state, &window, &tag);
-            } else if let Some(unmapped) = window_id.unmapped_window_mut(&mut state.pinnacle) {
-                if let UnmappedState::WaitingForRules { rules, .. } = &mut unmapped.state {
-                    rules.tags = Some([tag].into_iter().collect());
-                }
+            } else if let Some(unmapped) = window_id.unmapped_window_mut(&mut state.pinnacle)
+                && let UnmappedState::WaitingForRules { rules, .. } = &mut unmapped.state
+            {
+                rules.tags = Some([tag].into_iter().collect());
             }
         })
         .await
@@ -611,25 +610,25 @@ impl v1::window_service_server::WindowService for super::WindowService {
 
             if let Some(window) = window_id.window(&state.pinnacle) {
                 crate::api::window::set_tag(state, &window, &tag, set);
-            } else if let Some(unmapped) = window_id.unmapped_window_mut(&mut state.pinnacle) {
-                if let UnmappedState::WaitingForRules { rules, .. } = &mut unmapped.state {
-                    let tags = rules.tags.get_or_insert(Default::default());
-                    match set {
-                        Some(true) => {
-                            tags.insert(tag.clone());
-                        }
-                        Some(false) => {
-                            tags.shift_remove(&tag);
-                        }
-                        None => {
-                            if tags.contains(&tag) {
-                                // Prevent toggling that would leave a window tagless
-                                if tags.len() > 1 {
-                                    tags.shift_remove(&tag);
-                                }
-                            } else {
-                                tags.insert(tag.clone());
+            } else if let Some(unmapped) = window_id.unmapped_window_mut(&mut state.pinnacle)
+                && let UnmappedState::WaitingForRules { rules, .. } = &mut unmapped.state
+            {
+                let tags = rules.tags.get_or_insert(Default::default());
+                match set {
+                    Some(true) => {
+                        tags.insert(tag.clone());
+                    }
+                    Some(false) => {
+                        tags.shift_remove(&tag);
+                    }
+                    None => {
+                        if tags.contains(&tag) {
+                            // Prevent toggling that would leave a window tagless
+                            if tags.len() > 1 {
+                                tags.shift_remove(&tag);
                             }
+                        } else {
+                            tags.insert(tag.clone());
                         }
                     }
                 }
@@ -661,10 +660,10 @@ impl v1::window_service_server::WindowService for super::WindowService {
 
             if let Some(window) = window_id.window(&state.pinnacle) {
                 window.with_state_mut(|state| state.tags = tags);
-            } else if let Some(unmapped) = window_id.unmapped_window_mut(&mut state.pinnacle) {
-                if let UnmappedState::WaitingForRules { rules, .. } = &mut unmapped.state {
-                    rules.tags = Some(tags);
-                }
+            } else if let Some(unmapped) = window_id.unmapped_window_mut(&mut state.pinnacle)
+                && let UnmappedState::WaitingForRules { rules, .. } = &mut unmapped.state
+            {
+                rules.tags = Some(tags);
             }
 
             Ok(SetTagsResponse {})
@@ -684,12 +683,11 @@ impl v1::window_service_server::WindowService for super::WindowService {
             if let Some(output) = output_name.output(&state.pinnacle) {
                 if let Some(window) = window_id.window(&state.pinnacle) {
                     state.move_window_to_output(&window, output);
-                } else if let Some(unmapped) = window_id.unmapped_window_mut(&mut state.pinnacle) {
-                    if let UnmappedState::WaitingForRules { rules, .. } = &mut unmapped.state {
-                        rules.tags = output.with_state(|s| {
-                            Some(s.focused_tags().cloned().collect::<IndexSet<_>>())
-                        });
-                    }
+                } else if let Some(unmapped) = window_id.unmapped_window_mut(&mut state.pinnacle)
+                    && let UnmappedState::WaitingForRules { rules, .. } = &mut unmapped.state
+                {
+                    rules.tags = output
+                        .with_state(|s| Some(s.focused_tags().cloned().collect::<IndexSet<_>>()));
                 }
             }
 

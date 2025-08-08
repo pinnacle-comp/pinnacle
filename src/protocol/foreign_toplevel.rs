@@ -121,11 +121,11 @@ pub fn refresh(state: &mut State) {
         .iter()
         .filter(|win| !win.is_x11_override_redirect())
     {
-        if let Some(win) = focused_win.as_ref() {
-            if win == window {
-                focused = Some(window.clone());
-                continue;
-            }
+        if let Some(win) = focused_win.as_ref()
+            && win == window
+        {
+            focused = Some(window.clone());
+            continue;
         }
 
         if let Some(pending_data) = pending_toplevel_data_for(&state.pinnacle, window) {
@@ -142,17 +142,17 @@ pub fn refresh(state: &mut State) {
 
     // Refresh the focused window last so it gets the focused event after the previoous focused
     // window gets the unfocused event.
-    if let Some(window) = focused {
-        if let Some(pending_data) = pending_toplevel_data_for(&state.pinnacle, &window) {
-            let Some(surface) = window.wl_surface() else {
-                return;
-            };
-            refresh_toplevel(
-                &mut state.pinnacle.foreign_toplevel_manager_state,
-                &surface,
-                pending_data,
-            );
-        }
+    if let Some(window) = focused
+        && let Some(pending_data) = pending_toplevel_data_for(&state.pinnacle, &window)
+    {
+        let Some(surface) = window.wl_surface() else {
+            return;
+        };
+        refresh_toplevel(
+            &mut state.pinnacle.foreign_toplevel_manager_state,
+            &surface,
+            pending_data,
+        );
     }
 }
 
@@ -314,12 +314,12 @@ fn refresh_toplevel(
                         for wl_output in outputs.drain(..) {
                             instance.output_leave(&wl_output);
                         }
-                        if let Some(output) = data.output.as_ref().and_then(|op| op.upgrade()) {
-                            if let Some(client) = instance.client() {
-                                for wl_output in output.client_outputs(&client) {
-                                    instance.output_enter(&wl_output);
-                                    outputs.push(wl_output);
-                                }
+                        if let Some(output) = data.output.as_ref().and_then(|op| op.upgrade())
+                            && let Some(client) = instance.client()
+                        {
+                            for wl_output in output.client_outputs(&client) {
+                                instance.output_enter(&wl_output);
+                                outputs.push(wl_output);
                             }
                         }
                     }

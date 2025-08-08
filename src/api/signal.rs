@@ -366,11 +366,11 @@ impl<T> SignalData<T> {
     fn signal(&mut self, mut with_buffer: impl FnMut(&mut VecDeque<T>)) {
         self.instances.retain(|_, instance| {
             with_buffer(&mut instance.buffer);
-            if instance.ready {
-                if let Some(data) = instance.buffer.pop_front() {
-                    instance.ready = false;
-                    return instance.sender.send(Ok(data)).is_ok();
-                }
+            if instance.ready
+                && let Some(data) = instance.buffer.pop_front()
+            {
+                instance.ready = false;
+                return instance.sender.send(Ok(data)).is_ok();
             }
 
             true

@@ -167,10 +167,10 @@ impl CursorState {
     pub fn cleanup(&mut self) {
         let _span = tracy_client::span!("CursorState::cleanup");
 
-        if let CursorImageStatus::Surface(surface) = &self.current_cursor_image {
-            if !surface.alive() {
-                self.current_cursor_image = CursorImageStatus::default_named();
-            }
+        if let CursorImageStatus::Surface(surface) = &self.current_cursor_image
+            && !surface.alive()
+        {
+            self.current_cursor_image = CursorImageStatus::default_named();
         }
     }
 }

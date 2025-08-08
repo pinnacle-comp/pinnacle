@@ -541,10 +541,10 @@ impl Pinnacle {
         if let Some(join_handle) = self.config.config_join_handle.take() {
             join_handle.abort();
         }
-        if let Some(shutdown_sender) = self.config.keepalive_sender.take() {
-            if shutdown_sender.send(()).is_err() {
-                warn!("failed to send shutdown signal to config");
-            }
+        if let Some(shutdown_sender) = self.config.keepalive_sender.take()
+            && shutdown_sender.send(()).is_err()
+        {
+            warn!("failed to send shutdown signal to config");
         }
 
         #[cfg(feature = "snowcap")]
@@ -580,10 +580,11 @@ impl Pinnacle {
 
             // If we already sent a frame callback to this surface this output refresh
             // cycle, don't send one again to prevent empty-damage commit busy loops.
-            if let Some((last_output, last_sequence)) = &*last_sent_at {
-                if last_output == output && *last_sequence == sequence {
-                    send = false;
-                }
+            if let Some((last_output, last_sequence)) = &*last_sent_at
+                && last_output == output
+                && *last_sequence == sequence
+            {
+                send = false;
             }
 
             if send {

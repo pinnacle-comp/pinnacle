@@ -386,13 +386,12 @@ impl State {
             serial,
             time,
             |state, modifiers, keysym| {
-                if press_state == KeyState::Pressed {
-                    if let mut vt @ keysyms::KEY_XF86Switch_VT_1..=keysyms::KEY_XF86Switch_VT_12 =
+                if press_state == KeyState::Pressed
+                    && let mut vt @ keysyms::KEY_XF86Switch_VT_1..=keysyms::KEY_XF86Switch_VT_12 =
                         keysym.modified_sym().raw()
-                    {
-                        vt = vt - keysyms::KEY_XF86Switch_VT_1 + 1;
-                        return FilterResult::Intercept(KeyAction::SwitchVt(vt as i32));
-                    }
+                {
+                    vt = vt - keysyms::KEY_XF86Switch_VT_1 + 1;
+                    return FilterResult::Intercept(KeyAction::SwitchVt(vt as i32));
                 }
 
                 let Some(raw_sym) = keysym.raw_latin_sym_or_raw_current_sym() else {
@@ -694,10 +693,10 @@ impl State {
                     let pointer_loc_relative_to_surf = pointer_loc - surface_loc;
 
                     // Constraint does not apply if not within region.
-                    if let Some(region) = constraint.region() {
-                        if !region.contains(pointer_loc_relative_to_surf.to_i32_round()) {
-                            return;
-                        }
+                    if let Some(region) = constraint.region()
+                        && !region.contains(pointer_loc_relative_to_surf.to_i32_round())
+                    {
+                        return;
                     }
 
                     match &*constraint {

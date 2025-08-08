@@ -271,10 +271,10 @@ impl Config {
         if let Some(join_handle) = self.config_join_handle.take() {
             join_handle.abort();
         }
-        if let Some(shutdown_sender) = self.keepalive_sender.take() {
-            if shutdown_sender.send(()).is_err() {
-                warn!("Failed to send shutdown signal to config");
-            }
+        if let Some(shutdown_sender) = self.keepalive_sender.take()
+            && shutdown_sender.send(()).is_err()
+        {
+            warn!("Failed to send shutdown signal to config");
         }
         if let Some(token) = self.config_reload_on_crash_token.take() {
             loop_handle.remove(token);
