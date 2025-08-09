@@ -436,7 +436,7 @@ impl State {
         }
 
         for win in wins_to_update {
-            self.update_window_layout_mode_and_layout(&win, |_| ());
+            self.pinnacle.update_window_geometry(&win, false);
         }
     }
 }

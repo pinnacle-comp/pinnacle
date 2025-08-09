@@ -4,7 +4,7 @@ use std::sync::atomic::{AtomicU32, Ordering};
 
 use indexmap::IndexSet;
 use smithay::{
-    desktop::{layer_map_for_output, WindowSurface},
+    desktop::{WindowSurface, layer_map_for_output},
     reexports::wayland_protocols::xdg::{
         decoration::zv1::server::zxdg_toplevel_decoration_v1, shell::server::xdg_toplevel,
     },
@@ -287,7 +287,9 @@ impl LayoutMode {
     pub fn set_client_maximized(&mut self, maximized: bool) {
         match maximized {
             true => {
-                if !self.is_maximized() {
+                if !self.is_maximized()
+                    && self.client_requested_mode != Some(FullscreenOrMaximized::Fullscreen)
+                {
                     self.client_requested_mode = Some(FullscreenOrMaximized::Maximized);
                 }
             }
