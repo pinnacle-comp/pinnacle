@@ -285,7 +285,9 @@ impl LayoutMode {
     pub fn set_client_maximized(&mut self, maximized: bool) {
         match maximized {
             true => {
-                if !self.is_maximized() {
+                if !self.is_maximized()
+                    && self.client_requested_mode != Some(FullscreenOrMaximized::Fullscreen)
+                {
                     self.client_requested_mode = Some(FullscreenOrMaximized::Maximized);
                 }
             }
