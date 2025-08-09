@@ -123,9 +123,6 @@ fn unmapped_fullscreen() {
     );
 }
 
-// FIXME: Current behavior is not up to spec.
-// Keep ignored until maximize request is reworked to always send a configure.
-#[ignore]
 #[test_log::test]
 fn mapped_fullscreen_twice() {
     let (mut fixture, output, _) = set_up();
@@ -254,9 +251,6 @@ fn unmapped_set_maximize() {
     );
 }
 
-// FIXME: Current behavior is not up to spec.
-// Keep ignored until maximize request is reworked to always send a configure.
-#[ignore]
 #[test_log::test]
 fn mapped_set_maximized_twice() {
     let (mut fixture, output, _) = set_up();
@@ -295,8 +289,6 @@ fn mapped_set_maximized_twice() {
     fixture.flush();
 }
 
-// FIXME: Current behavior is not up to spec.
-#[ignore]
 #[test_log::test]
 fn mapped_set_maximized_after_fullscreen() {
     let (mut fixture, _, _) = set_up();

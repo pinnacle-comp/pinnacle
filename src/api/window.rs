@@ -59,7 +59,10 @@ pub fn set_geometry(
         state.floating_size = window_size;
     });
 
-    state.update_window_layout_mode_and_layout(window, |_| ());
+    state.pinnacle.update_window_geometry(
+        window,
+        window.with_state(|state| state.layout_mode.is_tiled()),
+    );
 }
 
 // TODO: minimized

@@ -154,7 +154,9 @@ impl PointerGrab<State> for MoveSurfaceGrab {
                 if let Some(output_under_pointer) = output_under_pointer
                     && Some(&output_under_pointer) != tag_output.as_ref()
                 {
-                    state.move_window_to_output(&self.window, output_under_pointer.clone());
+                    state
+                        .pinnacle
+                        .move_window_to_output(&self.window, output_under_pointer.clone());
                 }
             }
         }

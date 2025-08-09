@@ -256,9 +256,10 @@ impl XwmHandler for State {
         trace!(class = window.class(), "XwmHandler::maximize_request");
 
         if let Some(window) = self.pinnacle.window_for_x11_surface(&window).cloned() {
-            self.update_window_layout_mode_and_layout(&window, |layout_mode| {
-                layout_mode.set_client_maximized(true);
-            });
+            self.pinnacle
+                .update_window_layout_mode(&window, |layout_mode| {
+                    layout_mode.set_client_maximized(true);
+                });
         } else if let Some(unmapped) = self.pinnacle.unmapped_window_for_x11_surface_mut(&window) {
             match &mut unmapped.state {
                 UnmappedState::WaitingForTags { client_requests } => {
@@ -287,9 +288,10 @@ impl XwmHandler for State {
         trace!(class = window.class(), "XwmHandler::unmaximize_request");
 
         if let Some(window) = self.pinnacle.window_for_x11_surface(&window).cloned() {
-            self.update_window_layout_mode_and_layout(&window, |layout_mode| {
-                layout_mode.set_client_maximized(false);
-            });
+            self.pinnacle
+                .update_window_layout_mode(&window, |layout_mode| {
+                    layout_mode.set_client_maximized(false);
+                });
         } else if let Some(unmapped) = self.pinnacle.unmapped_window_for_x11_surface_mut(&window) {
             match &mut unmapped.state {
                 UnmappedState::WaitingForTags { client_requests } => {
@@ -318,9 +320,10 @@ impl XwmHandler for State {
         trace!(class = window.class(), "XwmHandler::fullscreen_request");
 
         if let Some(window) = self.pinnacle.window_for_x11_surface(&window).cloned() {
-            self.update_window_layout_mode_and_layout(&window, |layout_mode| {
-                layout_mode.set_client_fullscreen(true);
-            });
+            self.pinnacle
+                .update_window_layout_mode(&window, |layout_mode| {
+                    layout_mode.set_client_fullscreen(true);
+                });
         } else if let Some(unmapped) = self.pinnacle.unmapped_window_for_x11_surface_mut(&window) {
             match &mut unmapped.state {
                 UnmappedState::WaitingForTags { client_requests } => {
@@ -349,9 +352,10 @@ impl XwmHandler for State {
         trace!(class = window.class(), "XwmHandler::unfullscreen_request");
 
         if let Some(window) = self.pinnacle.window_for_x11_surface(&window).cloned() {
-            self.update_window_layout_mode_and_layout(&window, |layout_mode| {
-                layout_mode.set_client_fullscreen(false);
-            });
+            self.pinnacle
+                .update_window_layout_mode(&window, |layout_mode| {
+                    layout_mode.set_client_fullscreen(false);
+                });
         } else if let Some(unmapped) = self.pinnacle.unmapped_window_for_x11_surface_mut(&window) {
             match &mut unmapped.state {
                 UnmappedState::WaitingForTags { client_requests } => {
