@@ -10,8 +10,9 @@ use smithay::{
     desktop::{Window, WindowSurface, WindowSurfaceType, space::SpaceElement},
     output::{Output, WeakOutput},
     reexports::{
-        wayland_protocols::xdg::shell::server::xdg_positioner::{
-            Anchor, ConstraintAdjustment, Gravity,
+        wayland_protocols::xdg::shell::server::{
+            xdg_positioner::{Anchor, ConstraintAdjustment, Gravity},
+            xdg_toplevel,
         },
         wayland_server::protocol::wl_surface::WlSurface,
     },
@@ -179,16 +180,21 @@ impl WindowElement {
         let (mut size, loc) = {
             #[cfg(feature = "snowcap")]
             {
-                let mut size = size;
-                let mut loc = loc;
-                let max_bounds = self.with_state(|state| state.max_decoration_bounds());
-                if let Some(loc) = loc.as_mut() {
-                    loc.x += max_bounds.left as i32;
-                    loc.y += max_bounds.right as i32;
+                // Not `has_fullscreen_state`, we need the calculation done beforehand
+                if self.with_state(|state| state.layout_mode.is_fullscreen()) {
+                    (size, loc)
+                } else {
+                    let mut size = size;
+                    let mut loc = loc;
+                    let max_bounds = self.with_state(|state| state.max_decoration_bounds());
+                    if let Some(loc) = loc.as_mut() {
+                        loc.x += max_bounds.left as i32;
+                        loc.y += max_bounds.right as i32;
+                    }
+                    size.w = i32::max(1, size.w - max_bounds.left as i32 - max_bounds.right as i32);
+                    size.h = i32::max(1, size.h - max_bounds.top as i32 - max_bounds.bottom as i32);
+                    (size, loc)
                 }
-                size.w = i32::max(1, size.w - max_bounds.left as i32 - max_bounds.right as i32);
-                size.h = i32::max(1, size.h - max_bounds.top as i32 - max_bounds.bottom as i32);
-                (size, loc)
             }
 
             #[cfg(not(feature = "snowcap"))]
@@ -219,6 +225,10 @@ impl WindowElement {
         {
             let mut geometry = self.0.geometry();
 
+            if self.has_fullscreen_state() {
+                return geometry;
+            }
+
             let max_bounds = self.with_state(|state| state.max_decoration_bounds());
 
             geometry.size.w += (max_bounds.left + max_bounds.right) as i32;
@@ -243,6 +253,10 @@ impl WindowElement {
             use itertools::Itertools;
             use smithay::desktop::PopupManager;
             use smithay::desktop::utils::under_from_surface_tree;
+
+            if self.has_fullscreen_state() {
+                return self.0.surface_under(point, surface_type);
+            }
 
             let point = point.into();
 
@@ -316,6 +330,25 @@ impl WindowElement {
         #[cfg(not(feature = "snowcap"))]
         self.0.surface_under(point, surface_type)
     }
+
+    pub fn has_fullscreen_state(&self) -> bool {
+        match self.underlying_surface() {
+            WindowSurface::Wayland(toplevel) => {
+                compositor::with_states(toplevel.wl_surface(), |states| {
+                    states
+                        .data_map
+                        .get::<XdgToplevelSurfaceData>()
+                        .unwrap()
+                        .lock()
+                        .unwrap()
+                        .current
+                        .states
+                        .contains(xdg_toplevel::State::Fullscreen)
+                })
+            }
+            WindowSurface::X11(x11_surface) => x11_surface.is_fullscreen(),
+        }
+    }
 }
 
 #[derive(Default)]
@@ -332,6 +365,10 @@ impl SpaceElement for WindowElement {
     fn bbox(&self) -> Rectangle<i32, Logical> {
         #[cfg(feature = "snowcap")]
         {
+            if self.has_fullscreen_state() {
+                return self.0.bbox();
+            }
+
             let mut bbox = self.0.bbox();
             self.with_state(|state| {
                 for deco in state.decoration_surfaces.iter() {
@@ -350,6 +387,10 @@ impl SpaceElement for WindowElement {
         #[cfg(feature = "snowcap")]
         {
             use itertools::Itertools;
+
+            if self.has_fullscreen_state() {
+                return self.0.is_in_input_region(point);
+            }
 
             let mut decos = self.with_state(|state| state.decoration_surfaces.clone());
             decos.sort_by_key(|deco| deco.z_index());

@@ -82,7 +82,7 @@ impl Pinnacle {
     where
         P: Into<Point<f64, Logical>>,
     {
-        let _span = tracy_client::span!("Pinnacle::pointer_focus_target_under");
+        let _span = tracy_client::span!("Pinnacle::pointer_contents_under");
 
         let point: Point<f64, Logical> = point.into();
 

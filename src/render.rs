@@ -158,40 +158,44 @@ impl WindowElement {
 
                 use crate::decoration::DecorationSurface;
 
-                let max_bounds = self.with_state(|state| state.max_decoration_bounds());
+                if self.has_fullscreen_state() {
+                    (Vec::new(), Vec::new())
+                } else {
+                    let max_bounds = state.max_decoration_bounds();
 
-                let mut surfaces = state.decoration_surfaces.iter().collect::<Vec<_>>();
-                surfaces.sort_by_key(|deco| deco.z_index());
-                let mut surfaces = surfaces.into_iter().rev().peekable();
+                    let mut surfaces = state.decoration_surfaces.iter().collect::<Vec<_>>();
+                    surfaces.sort_by_key(|deco| deco.z_index());
+                    let mut surfaces = surfaces.into_iter().rev().peekable();
 
-                let mut deco_to_elems = |deco: &DecorationSurface| {
-                    let deco_location = {
-                        let mut deco_loc = location + deco.location();
-                        deco_loc.x += (max_bounds.left - deco.bounds().left) as i32;
-                        deco_loc.y += (max_bounds.top - deco.bounds().top) as i32;
-                        deco_loc.to_physical_precise_round(scale)
+                    let mut deco_to_elems = |deco: &DecorationSurface| {
+                        let deco_location = {
+                            let mut deco_loc = location + deco.location();
+                            deco_loc.x += (max_bounds.left - deco.bounds().left) as i32;
+                            deco_loc.y += (max_bounds.top - deco.bounds().top) as i32;
+                            deco_loc.to_physical_precise_round(scale)
+                        };
+
+                        let surface_elements: Vec<WaylandSurfaceRenderElement<_>> =
+                            render_elements_from_surface_tree(
+                                renderer,
+                                deco.wl_surface(),
+                                deco_location,
+                                scale,
+                                alpha,
+                                element::Kind::Unspecified,
+                            );
+                        surface_elements
                     };
 
-                    let surface_elements: Vec<WaylandSurfaceRenderElement<_>> =
-                        render_elements_from_surface_tree(
-                            renderer,
-                            deco.wl_surface(),
-                            deco_location,
-                            scale,
-                            alpha,
-                            element::Kind::Unspecified,
-                        );
-                    surface_elements
-                };
+                    let deco_elems_over = surfaces
+                        .peeking_take_while(|deco| deco.z_index() >= 0)
+                        .flat_map(&mut deco_to_elems)
+                        .collect::<Vec<_>>();
 
-                let deco_elems_over = surfaces
-                    .peeking_take_while(|deco| deco.z_index() >= 0)
-                    .flat_map(&mut deco_to_elems)
-                    .collect::<Vec<_>>();
+                    let deco_elems_under = surfaces.flat_map(deco_to_elems).collect::<Vec<_>>();
 
-                let deco_elems_under = surfaces.flat_map(deco_to_elems).collect::<Vec<_>>();
-
-                (deco_elems_under, deco_elems_over)
+                    (deco_elems_under, deco_elems_over)
+                }
             }
 
             #[cfg(not(feature = "snowcap"))]
