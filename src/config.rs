@@ -349,8 +349,16 @@ impl Pinnacle {
         self.signal_state.clear();
 
         #[cfg(feature = "snowcap")]
-        if let Some(snowcap) = self.snowcap_handle.as_ref() {
-            snowcap.close_all_widgets();
+        {
+            // FIXME: add some mechanism to detect if the client dies to do cleanup
+
+            if let Some(snowcap) = self.snowcap_handle.as_ref() {
+                snowcap.close_all_widgets();
+            }
+
+            for win in self.windows.iter() {
+                win.with_state_mut(|state| state.decoration_surfaces.clear());
+            }
         }
 
         let load_default_config = |pinnacle: &mut Pinnacle, reason: &str| {
