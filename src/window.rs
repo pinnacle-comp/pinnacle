@@ -10,9 +10,12 @@ use smithay::{
     desktop::{Window, WindowSurface, WindowSurfaceType, space::SpaceElement},
     output::{Output, WeakOutput},
     reexports::{
-        wayland_protocols::xdg::shell::server::{
-            xdg_positioner::{Anchor, ConstraintAdjustment, Gravity},
-            xdg_toplevel,
+        wayland_protocols::xdg::{
+            decoration::zv1::server::zxdg_toplevel_decoration_v1,
+            shell::server::{
+                xdg_positioner::{Anchor, ConstraintAdjustment, Gravity},
+                xdg_toplevel,
+            },
         },
         wayland_server::protocol::wl_surface::WlSurface,
     },
@@ -181,7 +184,11 @@ impl WindowElement {
             #[cfg(feature = "snowcap")]
             {
                 // Not `has_fullscreen_state`, we need the calculation done beforehand
-                if self.with_state(|state| state.layout_mode.is_fullscreen()) {
+                if self.with_state(|state| {
+                    state.layout_mode.is_fullscreen()
+                        || state.decoration_mode
+                            == Some(zxdg_toplevel_decoration_v1::Mode::ClientSide)
+                }) {
                     (size, loc)
                 } else {
                     let mut size = size;
@@ -225,7 +232,7 @@ impl WindowElement {
         {
             let mut geometry = self.0.geometry();
 
-            if self.has_fullscreen_state() {
+            if self.should_not_have_ssd() {
                 return geometry;
             }
 
@@ -254,7 +261,7 @@ impl WindowElement {
             use smithay::desktop::PopupManager;
             use smithay::desktop::utils::under_from_surface_tree;
 
-            if self.has_fullscreen_state() {
+            if self.should_not_have_ssd() {
                 return self.0.surface_under(point, surface_type);
             }
 
@@ -331,22 +338,26 @@ impl WindowElement {
         self.0.surface_under(point, surface_type)
     }
 
-    pub fn has_fullscreen_state(&self) -> bool {
+    pub fn should_not_have_ssd(&self) -> bool {
         match self.underlying_surface() {
             WindowSurface::Wayland(toplevel) => {
                 compositor::with_states(toplevel.wl_surface(), |states| {
-                    states
+                    let guard = states
                         .data_map
                         .get::<XdgToplevelSurfaceData>()
                         .unwrap()
                         .lock()
-                        .unwrap()
-                        .current
-                        .states
-                        .contains(xdg_toplevel::State::Fullscreen)
+                        .unwrap();
+                    let state = &guard.current;
+
+                    state.states.contains(xdg_toplevel::State::Fullscreen)
+                        || state.decoration_mode
+                            == Some(zxdg_toplevel_decoration_v1::Mode::ClientSide)
                 })
             }
-            WindowSurface::X11(x11_surface) => x11_surface.is_fullscreen(),
+            WindowSurface::X11(x11_surface) => {
+                x11_surface.is_fullscreen() || x11_surface.is_decorated()
+            }
         }
     }
 }
@@ -365,7 +376,7 @@ impl SpaceElement for WindowElement {
     fn bbox(&self) -> Rectangle<i32, Logical> {
         #[cfg(feature = "snowcap")]
         {
-            if self.has_fullscreen_state() {
+            if self.should_not_have_ssd() {
                 return self.0.bbox();
             }
 
@@ -388,7 +399,7 @@ impl SpaceElement for WindowElement {
         {
             use itertools::Itertools;
 
-            if self.has_fullscreen_state() {
+            if self.should_not_have_ssd() {
                 return self.0.is_in_input_region(point);
             }
 
