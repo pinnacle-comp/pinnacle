@@ -5,7 +5,6 @@ mod foreign_toplevel;
 pub mod foreign_toplevel_list;
 pub mod idle;
 pub mod session_lock;
-pub mod window;
 pub mod xdg_activation;
 mod xdg_shell;
 pub mod xwayland;

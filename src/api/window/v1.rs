@@ -362,13 +362,12 @@ impl v1::window_service_server::WindowService for super::WindowService {
 
         run_unary_no_response(&self.sender, move |state| {
             if let Some(window) = window_id.window(&state.pinnacle) {
-                state.update_window_layout_mode_and_layout(
-                    &window,
-                    |layout_mode| match fullscreen {
+                state
+                    .pinnacle
+                    .update_window_layout_mode(&window, |layout_mode| match fullscreen {
                         Some(set) => layout_mode.set_fullscreen(set),
                         None => layout_mode.toggle_fullscreen(),
-                    },
-                );
+                    });
             } else if let Some(unmapped) = window_id.unmapped_window_mut(&mut state.pinnacle)
                 && let UnmappedState::WaitingForRules { rules, .. } = &mut unmapped.state
             {
@@ -416,13 +415,12 @@ impl v1::window_service_server::WindowService for super::WindowService {
 
         run_unary_no_response(&self.sender, move |state| {
             if let Some(window) = window_id.window(&state.pinnacle) {
-                state.update_window_layout_mode_and_layout(
-                    &window,
-                    |layout_mode| match maximized {
+                state
+                    .pinnacle
+                    .update_window_layout_mode(&window, |layout_mode| match maximized {
                         Some(set) => layout_mode.set_maximized(set),
                         None => layout_mode.toggle_maximized(),
-                    },
-                );
+                    });
             } else if let Some(unmapped) = window_id.unmapped_window_mut(&mut state.pinnacle)
                 && let UnmappedState::WaitingForRules { rules, .. } = &mut unmapped.state
             {
@@ -470,10 +468,12 @@ impl v1::window_service_server::WindowService for super::WindowService {
 
         run_unary_no_response(&self.sender, move |state| {
             if let Some(window) = window_id.window(&state.pinnacle) {
-                state.update_window_layout_mode_and_layout(&window, |layout_mode| match floating {
-                    Some(set) => layout_mode.set_floating(set),
-                    None => layout_mode.toggle_floating(),
-                });
+                state
+                    .pinnacle
+                    .update_window_layout_mode(&window, |layout_mode| match floating {
+                        Some(set) => layout_mode.set_floating(set),
+                        None => layout_mode.toggle_floating(),
+                    });
             } else if let Some(unmapped) = window_id.unmapped_window_mut(&mut state.pinnacle)
                 && let UnmappedState::WaitingForRules { rules, .. } = &mut unmapped.state
             {
@@ -682,7 +682,7 @@ impl v1::window_service_server::WindowService for super::WindowService {
         run_unary(&self.sender, move |state| {
             if let Some(output) = output_name.output(&state.pinnacle) {
                 if let Some(window) = window_id.window(&state.pinnacle) {
-                    state.move_window_to_output(&window, output);
+                    state.pinnacle.move_window_to_output(&window, output);
                 } else if let Some(unmapped) = window_id.unmapped_window_mut(&mut state.pinnacle)
                     && let UnmappedState::WaitingForRules { rules, .. } = &mut unmapped.state
                 {
