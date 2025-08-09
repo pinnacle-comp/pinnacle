@@ -28,7 +28,7 @@ use smithay::{
     },
     xwayland::{
         X11Surface, X11Wm, XWayland, XWaylandClientData, XWaylandEvent, XwmHandler,
-        xwm::{Reorder, XwmId},
+        xwm::{Reorder, WmWindowProperty, XwmId},
     },
 };
 use tracing::{debug, error, info, trace, warn};
@@ -87,6 +87,18 @@ impl XwmHandler for State {
                 client_requests: ClientRequests::default(),
             },
         };
+
+        let handle = self
+            .pinnacle
+            .foreign_toplevel_list_state
+            .new_toplevel::<State>(
+                unmapped.window.title().unwrap_or_default(),
+                unmapped.window.class().unwrap_or_default(),
+            );
+        unmapped.window.with_state_mut(|state| {
+            assert!(state.foreign_toplevel_list_handle.is_none());
+            state.foreign_toplevel_list_handle = Some(handle);
+        });
 
         if let Some(output) = self.pinnacle.focused_output()
             && output.with_state(|state| !state.tags.is_empty())
@@ -215,6 +227,18 @@ impl XwmHandler for State {
             ?geometry,
             "XwmHandler::configure_notify"
         );
+
+        #[cfg(feature = "snowcap")]
+        if let Some(win) = self.pinnacle.window_for_x11_surface(&surface) {
+            win.with_state(|state| {
+                for deco in state.decoration_surfaces.iter() {
+                    deco.decoration_surface().with_pending_state(|state| {
+                        state.toplevel_size = Some(geometry.size);
+                    });
+                    deco.decoration_surface().send_pending_configure();
+                }
+            })
+        }
 
         let Some(win) = self
             .pinnacle
@@ -473,6 +497,33 @@ impl XwmHandler for State {
                     clear_primary_selection(&self.pinnacle.display_handle, &self.pinnacle.seat);
                 }
             }
+        }
+    }
+
+    fn property_notify(&mut self, _xwm: XwmId, window: X11Surface, property: WmWindowProperty) {
+        let Some(window) = self.pinnacle.window_for_x11_surface(&window) else {
+            return;
+        };
+        match property {
+            WmWindowProperty::Title => {
+                let title = window.title().unwrap_or_default();
+                window.with_state(|state| {
+                    if let Some(handle) = state.foreign_toplevel_list_handle.as_ref() {
+                        handle.send_title(&title);
+                        handle.send_done();
+                    }
+                });
+            }
+            WmWindowProperty::Class => {
+                let app_id = window.class().unwrap_or_default();
+                window.with_state(|state| {
+                    if let Some(handle) = state.foreign_toplevel_list_handle.as_ref() {
+                        handle.send_app_id(&app_id);
+                        handle.send_done();
+                    }
+                });
+            }
+            _ => (),
         }
     }
 }

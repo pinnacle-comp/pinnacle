@@ -186,16 +186,8 @@ impl Pinnacle {
             } else {
                 self.configure_window_if_nontiled(win);
             }
-            match win.underlying_surface() {
-                WindowSurface::Wayland(toplevel) => {
-                    toplevel.with_pending_state(|state| {
-                        state.size = Some(geo.size);
-                    });
-                }
-                WindowSurface::X11(surface) => {
-                    let _ = surface.configure(*geo);
-                }
-            }
+
+            win.set_pending_geo(geo.size, Some(geo.loc));
         }
 
         let mut transaction_builder = TransactionBuilder::new();

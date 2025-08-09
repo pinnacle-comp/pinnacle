@@ -12,6 +12,7 @@
 //! implements the `wlr-layer-shell` protocol.
 
 mod client;
+pub mod decoration;
 pub mod input;
 pub mod layer;
 pub mod widget;

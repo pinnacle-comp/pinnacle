@@ -203,7 +203,7 @@ impl Pinnacle {
 
         if let WindowSurface::Wayland(toplevel) = unmapped.window.underlying_surface() {
             toplevel.with_pending_state(|state| {
-                state.decoration_mode = *decoration_mode;
+                state.decoration_mode = (*decoration_mode).or(*client_decoration_mode);
             });
             crate::handlers::decoration::update_kde_decoration_mode(
                 toplevel.wl_surface(),

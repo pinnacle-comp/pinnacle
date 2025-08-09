@@ -6,6 +6,9 @@
 - Work on `ConnectorSavedState`
 - Keyboard focus in Idea Xwayland is weird when creating a new Java file
 
+Snowcap
+- Add `send_message` for layers
+
 Testing
 - Test layout mode changing and how it interacts with client fullscreen/maximized requests
     - Gonna need a test client for that

@@ -85,16 +85,17 @@ impl KeyboardHandler for State {
             modifiers |= iced::keyboard::Modifiers::LOGO;
         }
 
-        snowcap_layer.widgets.queue_event(iced::Event::Keyboard(
-            iced::keyboard::Event::KeyPressed {
+        snowcap_layer
+            .surface
+            .widgets
+            .queue_event(iced::Event::Keyboard(iced::keyboard::Event::KeyPressed {
                 key: key.clone(),
                 location,
                 modifiers,
                 text: None,
                 modified_key: key, // TODO:
                 physical_key: Physical::Unidentified(NativeCode::Xkb(event.keysym.raw())),
-            },
-        ));
+            }));
     }
 
     fn release_key(
@@ -129,16 +130,17 @@ impl KeyboardHandler for State {
             modifiers |= iced::keyboard::Modifiers::LOGO;
         }
 
-        snowcap_layer.widgets.queue_event(iced::Event::Keyboard(
-            iced::keyboard::Event::KeyReleased {
+        snowcap_layer
+            .surface
+            .widgets
+            .queue_event(iced::Event::Keyboard(iced::keyboard::Event::KeyReleased {
                 key: key.clone(),
                 location,
                 modifiers,
                 // TODO:
                 modified_key: key,
                 physical_key: Physical::Unidentified(NativeCode::Xkb(event.keysym.raw())),
-            },
-        ));
+            }));
     }
 
     fn update_modifiers(

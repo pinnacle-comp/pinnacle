@@ -983,11 +983,7 @@ fn window_handle_lower() {
 
         match lang {
             Lang::Rust => fixture.spawn_blocking(|| {
-                pinnacle_api::window::get_all()
-                    .skip(1)
-                    .next()
-                    .unwrap()
-                    .lower();
+                pinnacle_api::window::get_all().nth(1).unwrap().lower();
             }),
             Lang::Lua => spawn_lua_blocking! {
                 fixture,

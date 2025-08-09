@@ -10,15 +10,16 @@ use pinnacle_api_defs::pinnacle::{
         self,
         v1::{
             self, CloseRequest, GetAppIdRequest, GetAppIdResponse, GetFocusedRequest,
-            GetFocusedResponse, GetLayoutModeRequest, GetLayoutModeResponse, GetLocRequest,
-            GetLocResponse, GetRequest, GetResponse, GetSizeRequest, GetSizeResponse,
-            GetTagIdsRequest, GetTagIdsResponse, GetTitleRequest, GetTitleResponse,
-            GetWindowsInDirRequest, GetWindowsInDirResponse, LowerRequest, LowerResponse,
-            MoveGrabRequest, MoveToOutputRequest, MoveToOutputResponse, MoveToTagRequest,
-            RaiseRequest, ResizeGrabRequest, ResizeTileRequest, SetDecorationModeRequest,
-            SetFloatingRequest, SetFocusedRequest, SetFullscreenRequest, SetGeometryRequest,
-            SetMaximizedRequest, SetTagRequest, SetTagsRequest, SetTagsResponse, SwapRequest,
-            SwapResponse, WindowRuleRequest, WindowRuleResponse,
+            GetFocusedResponse, GetForeignToplevelListIdentifierRequest,
+            GetForeignToplevelListIdentifierResponse, GetLayoutModeRequest, GetLayoutModeResponse,
+            GetLocRequest, GetLocResponse, GetRequest, GetResponse, GetSizeRequest,
+            GetSizeResponse, GetTagIdsRequest, GetTagIdsResponse, GetTitleRequest,
+            GetTitleResponse, GetWindowsInDirRequest, GetWindowsInDirResponse, LowerRequest,
+            LowerResponse, MoveGrabRequest, MoveToOutputRequest, MoveToOutputResponse,
+            MoveToTagRequest, RaiseRequest, ResizeGrabRequest, ResizeTileRequest,
+            SetDecorationModeRequest, SetFloatingRequest, SetFocusedRequest, SetFullscreenRequest,
+            SetGeometryRequest, SetMaximizedRequest, SetTagRequest, SetTagsRequest,
+            SetTagsResponse, SwapRequest, SwapResponse, WindowRuleRequest, WindowRuleResponse,
         },
     },
 };
@@ -123,7 +124,8 @@ impl v1::window_service_server::WindowService for super::WindowService {
         run_unary(&self.sender, move |state| {
             let size = window_id
                 .window(&state.pinnacle)
-                .map(|win| win.geometry().size);
+                .and_then(|win| state.pinnacle.space.element_geometry(&win))
+                .map(|geo| geo.size);
 
             Ok(GetSizeResponse {
                 size: size.map(|size| util::v1::Size {
@@ -270,6 +272,34 @@ impl v1::window_service_server::WindowService for super::WindowService {
                 .collect();
 
             Ok(GetWindowsInDirResponse { window_ids })
+        })
+        .await
+    }
+
+    async fn get_foreign_toplevel_list_identifier(
+        &self,
+        request: Request<GetForeignToplevelListIdentifierRequest>,
+    ) -> TonicResult<GetForeignToplevelListIdentifierResponse> {
+        let window_id = WindowId(request.into_inner().window_id);
+
+        run_unary(&self.sender, move |state| {
+            let identifier = window_id
+                .window(&state.pinnacle)
+                .or_else(|| {
+                    window_id
+                        .unmapped_window(&state.pinnacle)
+                        .map(|unmapped| unmapped.window.clone())
+                })
+                .and_then(|win| {
+                    win.with_state(|state| {
+                        state
+                            .foreign_toplevel_list_handle
+                            .as_ref()
+                            .map(|handle| handle.identifier())
+                    })
+                });
+
+            Ok(GetForeignToplevelListIdentifierResponse { identifier })
         })
         .await
     }
