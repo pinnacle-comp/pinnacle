@@ -22,6 +22,7 @@ use tokio::sync::mpsc::UnboundedSender;
 
 use crate::{
     clipboard::WaylandClipboard,
+    compositor::{Renderer, Surface},
     state::State,
     util::BlockOnTokio,
     widget::{SnowcapMessage, SnowcapWidgetProgram, ViewFn, WidgetEvent, WidgetId},
@@ -42,7 +43,7 @@ pub struct SnowcapSurface {
     pub bounds: iced::Size<u32>,
     pending_bounds: Option<iced::Size<u32>>,
 
-    renderer: crate::compositor::Renderer,
+    renderer: Renderer,
 
     redraw_scheduled: bool,
     pending_view: Option<ViewFn>,
@@ -66,7 +67,7 @@ impl Drop for SnowcapSurface {
 }
 
 impl SnowcapSurface {
-    pub fn new(state: &mut State, widgets: ViewFn) -> Self {
+    pub fn new(state: &mut State, widgets: ViewFn, force_tiny_skia: bool) -> Self {
         let wl_surface = state.compositor_state.create_surface(&state.queue_handle);
         let viewport = state
             .viewporter
@@ -80,18 +81,34 @@ impl SnowcapSurface {
 
         let window_handle = WindowHandle::new(&wl_surface);
 
-        let compositor = state.compositor.get_or_insert_with(|| {
-            crate::compositor::Compositor::new(
-                iced_graphics::Settings {
-                    default_font: Default::default(),
-                    default_text_size: iced::Pixels(16.0),
-                    antialiasing: None,
-                },
-                window_handle,
-            )
-            .block_on_tokio()
-            .unwrap()
-        });
+        let compositor = if force_tiny_skia {
+            state.tiny_skia.get_or_insert_with(|| {
+                let tiny_skia = iced_tiny_skia::window::compositor::new(
+                    iced_graphics::Settings {
+                        default_font: Default::default(),
+                        default_text_size: iced::Pixels(16.0),
+                        antialiasing: None,
+                    }
+                    .into(),
+                    window_handle,
+                );
+
+                crate::compositor::Compositor::Secondary(tiny_skia)
+            })
+        } else {
+            state.compositor.get_or_insert_with(|| {
+                crate::compositor::Compositor::new(
+                    iced_graphics::Settings {
+                        default_font: Default::default(),
+                        default_text_size: iced::Pixels(16.0),
+                        antialiasing: None,
+                    },
+                    window_handle,
+                )
+                .block_on_tokio()
+                .unwrap()
+            })
+        };
 
         let renderer = compositor.create_renderer();
 
@@ -150,7 +167,7 @@ impl SnowcapSurface {
             )));
     }
 
-    pub fn draw_if_scheduled(&mut self, compositor: &mut crate::compositor::Compositor) {
+    pub fn draw_if_scheduled(&mut self) {
         let _span = tracy_client::span!("SnowcapSurface::draw_if_scheduled");
 
         if !self.redraw_scheduled {
@@ -168,15 +185,29 @@ impl SnowcapSurface {
 
         self.widgets.draw(&mut self.renderer, cursor);
 
-        compositor
-            .present(
-                &mut self.renderer,
-                &mut self.surface,
-                &self.widgets.viewport(self.output_scale),
-                iced::Color::TRANSPARENT,
-                || {},
-            )
-            .unwrap();
+        match (&mut self.renderer, &mut self.surface) {
+            (Renderer::Primary(renderer), Surface::Primary(surface)) => {
+                iced_wgpu::window::compositor::present(
+                    renderer,
+                    surface,
+                    &self.widgets.viewport(self.output_scale),
+                    iced::Color::TRANSPARENT,
+                    || {},
+                )
+                .unwrap()
+            }
+            (Renderer::Secondary(renderer), Surface::Secondary(surface)) => {
+                iced_tiny_skia::window::compositor::present(
+                    renderer,
+                    surface,
+                    &self.widgets.viewport(self.output_scale),
+                    iced::Color::TRANSPARENT,
+                    || {},
+                )
+                .unwrap();
+            }
+            _ => unreachable!(),
+        }
     }
 
     /// Updates this surface.

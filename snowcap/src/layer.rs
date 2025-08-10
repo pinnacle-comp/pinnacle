@@ -86,7 +86,7 @@ impl SnowcapLayer {
         keyboard_interactivity: wlr_layer::KeyboardInteractivity,
         widgets: ViewFn,
     ) -> Self {
-        let surface = SnowcapSurface::new(state, widgets);
+        let surface = SnowcapSurface::new(state, widgets, false);
 
         let layer = state.layer_shell_state.create_layer_surface(
             &state.queue_handle,
@@ -164,8 +164,8 @@ impl SnowcapLayer {
         self.surface.request_frame();
     }
 
-    pub fn draw_if_scheduled(&mut self, compositor: &mut crate::compositor::Compositor) {
-        self.surface.draw_if_scheduled(compositor);
+    pub fn draw_if_scheduled(&mut self) {
+        self.surface.draw_if_scheduled();
     }
 
     pub fn update(

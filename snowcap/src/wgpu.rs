@@ -48,7 +48,7 @@ impl Compositor {
                 required_features: wgpu::Features::empty(),
                 required_limits: wgpu::Limits::downlevel_defaults()
                     .using_resolution(adapter.limits()),
-                memory_hints: wgpu::MemoryHints::default(),
+                memory_hints: wgpu::MemoryHints::MemoryUsage,
                 trace: wgpu::Trace::Off,
             })
             .block_on_tokio()?;

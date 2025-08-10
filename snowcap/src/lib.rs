@@ -91,12 +91,14 @@ pub fn start(stop_signal_sender: Option<tokio::sync::oneshot::Sender<SnowcapHand
 
             for layer in state.layers.iter_mut() {
                 layer.update(&mut state.runtime, state.compositor.as_mut().unwrap());
-                layer.draw_if_scheduled(state.compositor.as_mut().unwrap());
+                layer.draw_if_scheduled();
             }
 
             for deco in state.decorations.iter_mut() {
-                deco.update(&mut state.runtime, state.compositor.as_mut().unwrap());
-                deco.draw_if_scheduled(state.compositor.as_mut().unwrap());
+                // INFO: Currently forcing tiny-skia on decorations because vulkan
+                // uses a lot of vram
+                deco.update(&mut state.runtime, state.tiny_skia.as_mut().unwrap());
+                deco.draw_if_scheduled();
             }
         })
         .unwrap();

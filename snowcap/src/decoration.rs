@@ -82,7 +82,7 @@ impl SnowcapDecoration {
             })
             .cloned()?;
 
-        let surface = SnowcapSurface::new(state, widgets);
+        let surface = SnowcapSurface::new(state, widgets, true);
 
         let deco = state.snowcap_decoration_manager.get_decoration_surface(
             &surface.wl_surface,
@@ -149,9 +149,9 @@ impl SnowcapDecoration {
         self.surface.request_frame();
     }
 
-    pub fn draw_if_scheduled(&mut self, compositor: &mut crate::compositor::Compositor) {
+    pub fn draw_if_scheduled(&mut self) {
         let _span = tracy_client::span!("SnowcapDecoration::draw_if_scheduled");
-        self.surface.draw_if_scheduled(compositor);
+        self.surface.draw_if_scheduled();
     }
 
     pub fn update(

@@ -182,6 +182,13 @@ tracy-alloc = ["tracy", "snowcap?/tracy-alloc"]
 debug = "line-tables-only"
 lto = "thin"
 
+# These are quite slow in debug mode
+[profile.dev.package."tiny-skia"]
+opt-level = 3
+
+[profile.dev.package."cosmic-text"]
+opt-level = 3
+
 [lints]
 workspace = true
 

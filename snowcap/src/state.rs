@@ -60,6 +60,7 @@ pub struct State {
     pub queue_handle: QueueHandle<State>,
 
     pub compositor: Option<crate::compositor::Compositor>,
+    pub tiny_skia: Option<crate::compositor::Compositor>,
 
     pub layers: Vec<SnowcapLayer>,
     pub decorations: Vec<SnowcapDecoration>,
@@ -210,6 +211,7 @@ impl State {
             grpc_server_state: None,
             queue_handle,
             compositor,
+            tiny_skia: None,
             layers: Vec::new(),
             decorations: Vec::new(),
             keyboard_focus: None,
