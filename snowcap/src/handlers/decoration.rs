@@ -44,8 +44,7 @@ impl Dispatch<SnowcapDecorationSurfaceV1, ()> for State {
                     return;
                 };
 
-                deco.pending_toplevel_size = Some(iced::Size::new(width, height));
-
+                deco.toplevel_size_changed(iced::Size::new(width, height));
                 deco.initial_configure_received = true;
                 deco.schedule_redraw();
             }

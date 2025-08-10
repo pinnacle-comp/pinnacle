@@ -1,7 +1,7 @@
 use std::num::NonZeroU32;
 
 use smithay_client_toolkit::{
-    reexports::{calloop::LoopHandle, client::protocol::wl_output::WlOutput},
+    reexports::client::protocol::wl_output::WlOutput,
     shell::{
         WaylandSurface,
         wlr_layer::{self, Anchor, LayerSurface},
@@ -40,13 +40,12 @@ pub struct SnowcapLayer {
     pub surface: SnowcapSurface,
 
     pub layer: LayerSurface,
-    pub loop_handle: LoopHandle<'static, State>,
 
     /// The logical size of the output this layer is on.
-    pub output_size: iced::Size<u32>,
-    pub pending_size: Option<iced::Size<u32>>,
+    output_size: iced::Size<u32>,
+    pending_output_size: Option<iced::Size<u32>>,
     // COMPAT: 0.1
-    pub max_size: Option<iced::Size<u32>>,
+    max_size: Option<iced::Size<u32>>,
 
     pub layer_id: LayerId,
 
@@ -111,11 +110,10 @@ impl SnowcapLayer {
 
         Self {
             surface,
-            loop_handle: state.loop_handle.clone(),
             layer,
             max_size: max_size.map(|(w, h)| iced::Size::new(w, h)),
             output_size: iced::Size::new(1, 1),
-            pending_size: None,
+            pending_output_size: None,
             wl_output: None,
             layer_id: next_id,
             keyboard_key_sender: None,
@@ -173,7 +171,7 @@ impl SnowcapLayer {
         runtime: &mut crate::runtime::Runtime,
         compositor: &mut crate::compositor::Compositor,
     ) {
-        if let Some(pending_size) = self.pending_size.take() {
+        if let Some(pending_size) = self.pending_output_size.take() {
             self.output_size = pending_size;
         }
 
@@ -198,5 +196,9 @@ impl SnowcapLayer {
         } else {
             self.output_size
         }
+    }
+
+    pub fn output_size_changed(&mut self, new_size: iced::Size<u32>) {
+        self.pending_output_size = Some(new_size);
     }
 }

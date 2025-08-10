@@ -1,5 +1,4 @@
 use smithay_client_toolkit::reexports::{
-    calloop::LoopHandle,
     protocols::ext::foreign_toplevel_list::v1::client::ext_foreign_toplevel_handle_v1::ExtForeignToplevelHandleV1,
 };
 use snowcap_protocols::snowcap_decoration_v1::client::snowcap_decoration_surface_v1::SnowcapDecorationSurfaceV1;
@@ -33,20 +32,19 @@ pub struct SnowcapDecoration {
     pub surface: SnowcapSurface,
 
     pub decoration: SnowcapDecorationSurfaceV1,
-    pub loop_handle: LoopHandle<'static, State>,
     pub foreign_toplevel_list_handle: ExtForeignToplevelHandleV1,
 
     pub decoration_id: DecorationId,
 
     pub initial_configure_received: bool,
 
-    pub extents: Bounds,
-    pub pending_extents: Option<Bounds>,
-    pub toplevel_size: iced::Size<u32>,
-    pub pending_toplevel_size: Option<iced::Size<u32>>,
-    pub bounds: Bounds,
-    pub pending_bounds: Option<Bounds>,
-    pub pending_z_index: Option<i32>,
+    extents: Bounds,
+    pending_extents: Option<Bounds>,
+    toplevel_size: iced::Size<u32>,
+    pending_toplevel_size: Option<iced::Size<u32>>,
+    bounds: Bounds,
+    pending_bounds: Option<Bounds>,
+    pending_z_index: Option<i32>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -104,7 +102,6 @@ impl SnowcapDecoration {
 
         Some(Self {
             surface,
-            loop_handle: state.loop_handle.clone(),
             decoration: deco,
             foreign_toplevel_list_handle,
             decoration_id: next_id,
@@ -190,5 +187,9 @@ impl SnowcapDecoration {
             self.toplevel_size.width + self.extents.left + self.extents.right,
             self.toplevel_size.height + self.extents.top + self.extents.bottom,
         )
+    }
+
+    pub fn toplevel_size_changed(&mut self, new_size: iced::Size<u32>) {
+        self.pending_toplevel_size = Some(new_size);
     }
 }

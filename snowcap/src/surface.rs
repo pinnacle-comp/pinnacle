@@ -30,17 +30,17 @@ use crate::{
 
 pub struct SnowcapSurface {
     // SAFETY: Drop order: surface needs to be dropped before the wl surface
-    pub surface: <crate::compositor::Compositor as iced_graphics::Compositor>::Surface,
+    surface: <crate::compositor::Compositor as iced_graphics::Compositor>::Surface,
     pub wl_surface: WlSurface,
-    pub compositor_state: CompositorState,
-    pub queue_handle: QueueHandle<State>,
+    compositor_state: CompositorState,
+    queue_handle: QueueHandle<State>,
 
-    pub loop_handle: LoopHandle<'static, State>,
+    loop_handle: LoopHandle<'static, State>,
 
     /// The scale of the output this layer is on.
-    pub output_scale: f32,
+    output_scale: f32,
     pending_output_scale: Option<f32>,
-    pub bounds: iced::Size<u32>,
+    bounds: iced::Size<u32>,
     pending_bounds: Option<iced::Size<u32>>,
 
     renderer: Renderer,
@@ -54,7 +54,7 @@ pub struct SnowcapSurface {
 
     pub window_id: iced::window::Id,
 
-    pub viewport: WpViewport,
+    viewport: WpViewport,
     fractional_scale: WpFractionalScaleV1,
 
     pub widget_event_sender: Option<UnboundedSender<(WidgetId, WidgetEvent)>>,
@@ -218,7 +218,7 @@ impl SnowcapSurface {
         runtime: &mut crate::runtime::Runtime,
         compositor: &mut crate::compositor::Compositor,
     ) -> bool {
-        let _span = tracy_client::span!("SnowcapDecoration::update");
+        let _span = tracy_client::span!("SnowcapSurface::update");
 
         let mut needs_rebuild = false;
         if let Some(scale) = self.pending_output_scale.take()

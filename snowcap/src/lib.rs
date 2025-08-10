@@ -76,6 +76,8 @@ pub fn start(stop_signal_sender: Option<tokio::sync::oneshot::Sender<SnowcapHand
 
     event_loop
         .run(None, &mut state, |state| {
+            let _span = tracy_client::span!("snowcap event loop idle callback");
+
             let keyboard_focus_is_dead =
                 state
                     .keyboard_focus

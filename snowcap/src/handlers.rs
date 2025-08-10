@@ -120,7 +120,7 @@ impl OutputHandler for State {
             .iter_mut()
             .filter(|layer| layer.wl_output.as_ref() == Some(&output))
         {
-            layer.pending_size = Some(iced::Size::new(size.0 as u32, size.1 as u32));
+            layer.output_size_changed(iced::Size::new(size.0 as u32, size.1 as u32));
             layer.surface.request_frame();
         }
     }
@@ -154,7 +154,7 @@ impl LayerShellHandler for State {
         };
 
         if let Some(size) = size {
-            layer.pending_size = Some(size);
+            layer.output_size_changed(size);
             layer.initial_configure = InitialConfigureState::PostOutputSize;
         } else {
             layer.initial_configure = InitialConfigureState::PostConfigure;
@@ -249,7 +249,7 @@ impl CompositorHandler for State {
 
         layer.initial_configure = InitialConfigureState::PostOutputSize;
 
-        layer.pending_size = Some(size);
+        layer.output_size_changed(size);
         layer.surface.request_frame();
     }
 
