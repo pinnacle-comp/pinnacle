@@ -1,3 +1,4 @@
+pub mod decoration;
 pub mod input;
 pub mod layer;
 pub mod widget;

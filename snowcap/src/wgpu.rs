@@ -20,6 +20,13 @@ pub struct Compositor {
 
 impl Compositor {
     pub fn new() -> anyhow::Result<Self> {
+        if std::env::var("ICED_BACKEND")
+            .ok()
+            .is_some_and(|backend| backend != "wgpu")
+        {
+            anyhow::bail!("ICED_BACKEND was set to something other than \"wgpu\"");
+        }
+
         let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
             backends: wgpu::Backends::VULKAN,
             flags: wgpu::InstanceFlags::default().with_env(),
@@ -36,16 +43,14 @@ impl Compositor {
             .context("no adapter")?;
 
         let (device, queue) = adapter
-            .request_device(
-                &wgpu::DeviceDescriptor {
-                    label: None,
-                    required_features: wgpu::Features::empty(),
-                    required_limits: wgpu::Limits::downlevel_defaults()
-                        .using_resolution(adapter.limits()),
-                    memory_hints: wgpu::MemoryHints::default(),
-                },
-                None,
-            )
+            .request_device(&wgpu::DeviceDescriptor {
+                label: None,
+                required_features: wgpu::Features::empty(),
+                required_limits: wgpu::Limits::downlevel_defaults()
+                    .using_resolution(adapter.limits()),
+                memory_hints: wgpu::MemoryHints::MemoryUsage,
+                trace: wgpu::Trace::Off,
+            })
             .block_on_tokio()?;
 
         let engine = iced_wgpu::Engine::new(
@@ -120,6 +125,8 @@ impl iced_graphics::Compositor for Compositor {
     }
 
     fn configure_surface(&mut self, surface: &mut Self::Surface, width: u32, height: u32) {
+        let _span = tracy_client::span!("crate::wgpu::Compositor::configure_surface");
+
         let surface_config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             format: wgpu::TextureFormat::Rgba8UnormSrgb,

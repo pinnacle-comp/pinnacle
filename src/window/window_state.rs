@@ -8,11 +8,13 @@ use smithay::{
     reexports::wayland_protocols::xdg::{
         decoration::zv1::server::zxdg_toplevel_decoration_v1, shell::server::xdg_toplevel,
     },
-    utils::{Logical, Point, Rectangle, Serial, Size},
+    utils::{Logical, Point, Serial, Size},
     wayland::{compositor::HookId, foreign_toplevel_list::ForeignToplevelHandle},
 };
 use tracing::warn;
 
+#[cfg(feature = "snowcap")]
+use crate::{decoration::DecorationSurface, protocol::snowcap_decoration::Bounds};
 use crate::{
     render::util::snapshot::WindowSnapshot,
     state::{Pinnacle, WithState},
@@ -392,6 +394,8 @@ pub struct WindowElementState {
     pub snapshot: Option<WindowSnapshot>,
     pub mapped_hook_id: Option<HookId>,
     pub foreign_toplevel_list_handle: Option<ForeignToplevelHandle>,
+    #[cfg(feature = "snowcap")]
+    pub decoration_surfaces: Vec<DecorationSurface>,
 }
 
 impl WindowElement {
@@ -516,64 +520,21 @@ impl Pinnacle {
                 let (size, loc) =
                     window.with_state(|state| (state.floating_size, state.floating_loc()));
 
-                match window.underlying_surface() {
-                    WindowSurface::Wayland(toplevel) => {
-                        toplevel.with_pending_state(|state| {
-                            state.size = Some(size);
-                        });
-                    }
-                    WindowSurface::X11(surface) => {
-                        if size.is_empty() {
-                            // https://www.x.org/releases/X11R7.6/doc/man/man3/XConfigureWindow.3.xhtml
-                            // Setting a zero size seems to be a nono
-                            return;
-                        }
-                        let loc = loc.unwrap_or_else(|| surface.geometry().loc);
-                        if let Err(err) = surface.configure(Some(Rectangle::new(loc, size))) {
-                            warn!("Failed to configure xwayland window: {err}");
-                        }
-                    }
-                }
+                window.set_pending_geo(size, loc);
             }
             LayoutModeKind::Maximized => {
-                let non_exclusive_geo = {
+                let mut non_exclusive_geo = {
                     let map = layer_map_for_output(&output);
                     map.non_exclusive_zone()
                 };
-                let loc = output_geo.loc + non_exclusive_geo.loc;
+                non_exclusive_geo.loc += output_geo.loc;
 
                 window.set_maximized_states();
-
-                match window.underlying_surface() {
-                    WindowSurface::Wayland(toplevel) => {
-                        toplevel.with_pending_state(|state| {
-                            state.size = Some(non_exclusive_geo.size);
-                        });
-                    }
-                    WindowSurface::X11(surface) => {
-                        if let Err(err) =
-                            surface.configure(Some(Rectangle::new(loc, non_exclusive_geo.size)))
-                        {
-                            warn!("Failed to configure xwayland window: {err}");
-                        }
-                    }
-                }
+                window.set_pending_geo(non_exclusive_geo.size, Some(non_exclusive_geo.loc));
             }
             LayoutModeKind::Fullscreen => {
                 window.set_fullscreen_states();
-
-                match window.underlying_surface() {
-                    WindowSurface::Wayland(toplevel) => {
-                        toplevel.with_pending_state(|state| {
-                            state.size = Some(output_geo.size);
-                        });
-                    }
-                    WindowSurface::X11(surface) => {
-                        if let Err(err) = surface.configure(Some(output_geo)) {
-                            warn!("Failed to configure xwayland window: {err}");
-                        }
-                    }
-                }
+                window.set_pending_geo(output_geo.size, Some(output_geo.loc));
             }
         }
     }
@@ -652,6 +613,8 @@ impl WindowElementState {
             pending_transactions: Default::default(),
             layout_node: None,
             foreign_toplevel_list_handle: None,
+            #[cfg(feature = "snowcap")]
+            decoration_surfaces: Vec::new(),
         }
     }
 
@@ -667,6 +630,21 @@ impl WindowElementState {
         let loc: Option<Point<_, _>> = loc.into();
         self.floating_x = loc.map(|loc| loc.x);
         self.floating_y = loc.map(|loc| loc.y);
+    }
+
+    #[cfg(feature = "snowcap")]
+    pub fn max_decoration_bounds(&self) -> Bounds {
+        let mut max_bounds = Bounds::default();
+        for deco in self.decoration_surfaces.iter() {
+            let bounds = deco.bounds();
+            max_bounds = Bounds {
+                top: max_bounds.top.max(bounds.top),
+                bottom: max_bounds.bottom.max(bounds.bottom),
+                left: max_bounds.left.max(bounds.left),
+                right: max_bounds.right.max(bounds.right),
+            };
+        }
+        max_bounds
     }
 }
 

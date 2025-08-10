@@ -1,12 +1,14 @@
 pub mod api;
 pub mod clipboard;
 pub mod compositor;
+pub mod decoration;
 pub mod handlers;
 pub mod input;
 pub mod layer;
 pub mod runtime;
 pub mod server;
 pub mod state;
+pub mod surface;
 pub mod util;
 pub mod wgpu;
 pub mod widget;
@@ -74,6 +76,8 @@ pub fn start(stop_signal_sender: Option<tokio::sync::oneshot::Sender<SnowcapHand
 
     event_loop
         .run(None, &mut state, |state| {
+            let _span = tracy_client::span!("snowcap event loop idle callback");
+
             let keyboard_focus_is_dead =
                 state
                     .keyboard_focus
@@ -88,11 +92,15 @@ pub fn start(stop_signal_sender: Option<tokio::sync::oneshot::Sender<SnowcapHand
             }
 
             for layer in state.layers.iter_mut() {
-                if layer.widgets.has_events_queued() {
-                    layer.update(&state.queue_handle, &mut state.runtime);
-                }
+                layer.update(&mut state.runtime, state.compositor.as_mut().unwrap());
+                layer.draw_if_scheduled();
+            }
 
-                layer.draw_if_scheduled(state.compositor.as_mut().unwrap());
+            for deco in state.decorations.iter_mut() {
+                // INFO: Currently forcing tiny-skia on decorations because vulkan
+                // uses a lot of vram
+                deco.update(&mut state.runtime, state.tiny_skia.as_mut().unwrap());
+                deco.draw_if_scheduled();
             }
         })
         .unwrap();

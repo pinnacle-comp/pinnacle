@@ -12,19 +12,27 @@ use smithay_client_toolkit::{
             globals::registry_queue_init,
             protocol::{wl_keyboard::WlKeyboard, wl_pointer::WlPointer},
         },
-        protocols::wp::{
-            fractional_scale::v1::client::wp_fractional_scale_manager_v1::WpFractionalScaleManagerV1,
-            viewporter::client::wp_viewporter::WpViewporter,
+        protocols::{
+            ext::foreign_toplevel_list::v1::client::{
+                ext_foreign_toplevel_handle_v1::ExtForeignToplevelHandleV1,
+                ext_foreign_toplevel_list_v1::ExtForeignToplevelListV1,
+            },
+            wp::{
+                fractional_scale::v1::client::wp_fractional_scale_manager_v1::WpFractionalScaleManagerV1,
+                viewporter::client::wp_viewporter::WpViewporter,
+            },
         },
     },
     registry::RegistryState,
     seat::{SeatState, keyboard::Modifiers},
     shell::wlr_layer::LayerShell,
 };
+use snowcap_protocols::snowcap_decoration_v1::client::snowcap_decoration_manager_v1::SnowcapDecorationManagerV1;
 use xkbcommon::xkb::Keysym;
 
 use crate::{
-    handlers::keyboard::KeyboardFocus,
+    decoration::{DecorationIdCounter, SnowcapDecoration},
+    handlers::{foreign_toplevel_list::ForeignToplevelListHandleData, keyboard::KeyboardFocus},
     layer::{LayerIdCounter, SnowcapLayer},
     runtime::{CalloopSenderSink, CurrentTokioExecutor},
     server::GrpcServerState,
@@ -44,14 +52,18 @@ pub struct State {
     pub layer_shell_state: LayerShell,
     pub fractional_scale_manager: WpFractionalScaleManagerV1,
     pub viewporter: WpViewporter,
+    pub snowcap_decoration_manager: SnowcapDecorationManagerV1,
+    pub foreign_toplevel_list: ExtForeignToplevelListV1,
 
     pub grpc_server_state: Option<GrpcServerState>,
 
     pub queue_handle: QueueHandle<State>,
 
     pub compositor: Option<crate::compositor::Compositor>,
+    pub tiny_skia: Option<crate::compositor::Compositor>,
 
     pub layers: Vec<SnowcapLayer>,
+    pub decorations: Vec<SnowcapDecoration>,
 
     // TODO: per wl_keyboard
     pub keyboard_focus: Option<KeyboardFocus>,
@@ -61,6 +73,10 @@ pub struct State {
     pub pointer: Option<WlPointer>, // TODO: multiple
 
     pub layer_id_counter: LayerIdCounter,
+    pub decoration_id_counter: DecorationIdCounter,
+
+    pub foreign_toplevel_list_handles:
+        Vec<(ExtForeignToplevelHandleV1, ForeignToplevelListHandleData)>,
 }
 
 impl State {
@@ -83,6 +99,10 @@ impl State {
         let fractional_scale_manager: WpFractionalScaleManagerV1 =
             globals.bind(&queue_handle, 1..=1, ()).unwrap();
         let viewporter: WpViewporter = globals.bind(&queue_handle, 1..=1, ()).unwrap();
+        let snowcap_decoration_manager: SnowcapDecorationManagerV1 =
+            globals.bind(&queue_handle, 1..=1, ()).unwrap();
+        let foreign_toplevel_list: ExtForeignToplevelListV1 =
+            globals.bind(&queue_handle, 1..=1, ()).unwrap();
 
         WaylandSource::new(conn.clone(), event_queue)
             .insert(loop_handle.clone())
@@ -99,7 +119,10 @@ impl State {
         loop_handle
             .insert_source(recv, move |event, _, state| match event {
                 calloop::channel::Event::Msg((id, msg)) => {
-                    let Some(layer) = state.layers.iter().find(|layer| layer.window_id == id)
+                    let Some(layer) = state
+                        .layers
+                        .iter()
+                        .find(|layer| layer.surface.window_id == id)
                     else {
                         return;
                     };
@@ -182,16 +205,22 @@ impl State {
             layer_shell_state,
             fractional_scale_manager,
             viewporter,
+            snowcap_decoration_manager,
+            foreign_toplevel_list,
 
             grpc_server_state: None,
             queue_handle,
             compositor,
+            tiny_skia: None,
             layers: Vec::new(),
+            decorations: Vec::new(),
             keyboard_focus: None,
             keyboard_modifiers: smithay_client_toolkit::seat::keyboard::Modifiers::default(),
             keyboard: None,
             pointer: None,
             layer_id_counter: LayerIdCounter::default(),
+            decoration_id_counter: DecorationIdCounter::default(),
+            foreign_toplevel_list_handles: Vec::new(),
         };
 
         Ok(state)

@@ -39,15 +39,33 @@ impl PointerFocusTarget {
                 .windows
                 .iter()
                 .find(|win| {
-                    let Some(surface) = win.wl_surface() else {
-                        return false;
-                    };
                     let mut found = false;
-                    with_surfaces_surface_tree(&surface, |surface, _| {
-                        if surface == surf {
-                            found = true;
-                        }
-                    });
+
+                    if let Some(surface) = win.wl_surface() {
+                        with_surfaces_surface_tree(&surface, |surface, _| {
+                            if surface == surf {
+                                found = true;
+                            }
+                        });
+                    }
+
+                    #[cfg(feature = "snowcap")]
+                    if !found {
+                        win.with_state(|state| {
+                            for deco in state.decoration_surfaces.iter() {
+                                with_surfaces_surface_tree(deco.wl_surface(), |surface, _| {
+                                    if surface == surf {
+                                        found = true;
+                                    }
+                                });
+
+                                if found {
+                                    break;
+                                }
+                            }
+                        });
+                    }
+
                     found
                 })
                 .cloned(),

@@ -78,29 +78,6 @@ end
 ---@field exclusive_zone snowcap.layer.ExclusiveZone
 ---@field layer snowcap.layer.ZLayer
 
----comment
----@param widget snowcap.widget.WidgetDef
----@param callbacks table<integer, any>
----@param with_widget fun(callbacks: table<integer, any>, widget: snowcap.widget.WidgetDef)
-local function traverse_widget_tree(widget, callbacks, with_widget)
-    with_widget(callbacks, widget)
-    if widget.column then
-        for _, w in ipairs(widget.column.children or {}) do
-            traverse_widget_tree(w, callbacks, with_widget)
-        end
-    elseif widget.row then
-        for _, w in ipairs(widget.row.children or {}) do
-            traverse_widget_tree(w, callbacks, with_widget)
-        end
-    elseif widget.scrollable then
-        traverse_widget_tree(widget.scrollable.child, callbacks, with_widget)
-    elseif widget.container then
-        traverse_widget_tree(widget.container.child, callbacks, with_widget)
-    elseif widget.button then
-        traverse_widget_tree(widget.button.child, callbacks, with_widget)
-    end
-end
-
 ---@param args snowcap.layer.LayerArgs
 ---@return snowcap.layer.LayerHandle|nil handle A handle to the layer surface, or nil if an error occurred.
 function layer.new_widget(args)
@@ -109,11 +86,15 @@ function layer.new_widget(args)
 
     local widget_def = args.program:view()
 
-    traverse_widget_tree(widget_def, callbacks, function(callbacks, widget)
-        if widget.button and widget.button.on_press then
-            callbacks[widget.button.widget_id] = widget.button.on_press
+    require("snowcap.widget")._traverse_widget_tree(
+        widget_def,
+        callbacks,
+        function(callbacks, widget)
+            if widget.button and widget.button.on_press then
+                callbacks[widget.button.widget_id] = widget.button.on_press
+            end
         end
-    end)
+    )
 
     ---@type snowcap.layer.v1.NewLayerRequest
     local request = {
@@ -150,11 +131,15 @@ function layer.new_widget(args)
                 local widget_def = args.program:view()
                 callbacks = {}
 
-                traverse_widget_tree(widget_def, callbacks, function(callbacks, widget)
-                    if widget.button and widget.button.on_press then
-                        callbacks[widget.button.widget_id] = widget.button.on_press
+                require("snowcap.widget")._traverse_widget_tree(
+                    widget_def,
+                    callbacks,
+                    function(callbacks, widget)
+                        if widget.button and widget.button.on_press then
+                            callbacks[widget.button.widget_id] = widget.button.on_press
+                        end
                     end
-                end)
+                )
 
                 local _, err = client:snowcap_layer_v1_LayerService_UpdateLayer({
                     layer_id = layer_id,

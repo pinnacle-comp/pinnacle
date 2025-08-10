@@ -1,0 +1,11 @@
+[package]
+name = "snowcap-protocols"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+wayland-scanner = "0.31.6"
+wayland-protocols = "0.32.8"
+wayland-backend = "0.3.10"
+wayland-client = "0.31.10"
+wayland-server = "0.31.9"

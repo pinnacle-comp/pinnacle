@@ -139,8 +139,8 @@ impl WindowElement {
         scale: Scale<f64>,
         alpha: f32,
     ) -> Option<WindowSnapshot> {
+        let elements = self.texture_render_elements(renderer, (0, 0).into(), scale, alpha);
         self.with_state_mut(|state| {
-            let elements = self.texture_render_elements(renderer, (0, 0).into(), scale, alpha);
             if !elements.surface_elements.is_empty() {
                 state.snapshot = Some(RenderSnapshot::new(elements.surface_elements, scale));
             }

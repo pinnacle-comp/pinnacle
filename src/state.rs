@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+#[cfg(feature = "snowcap")]
+use crate::protocol::snowcap_decoration::SnowcapDecorationState;
 use crate::{
     api::signal::SignalState,
     backend::{
@@ -167,6 +169,8 @@ pub struct Pinnacle {
     pub pointer_gestures_state: PointerGesturesState,
     pub single_pixel_buffer_state: SinglePixelBufferState,
     pub foreign_toplevel_list_state: ForeignToplevelListState,
+    #[cfg(feature = "snowcap")]
+    pub snowcap_decoration_state: SnowcapDecorationState,
 
     pub lock_state: LockState,
 
@@ -454,6 +458,8 @@ impl Pinnacle {
             pointer_gestures_state: PointerGesturesState::new::<State>(&display_handle),
             single_pixel_buffer_state: SinglePixelBufferState::new::<State>(&display_handle),
             foreign_toplevel_list_state: ForeignToplevelListState::new::<State>(&display_handle),
+            #[cfg(feature = "snowcap")]
+            snowcap_decoration_state: SnowcapDecorationState::new::<State>(&display_handle),
 
             lock_state: LockState::default(),
 
@@ -599,6 +605,13 @@ impl Pinnacle {
 
         for window in self.space.elements_for_output(output) {
             window.send_frame(output, now, FRAME_CALLBACK_THROTTLE, should_send);
+
+            #[cfg(feature = "snowcap")]
+            window.with_state(|state| {
+                for deco in state.decoration_surfaces.iter() {
+                    deco.send_frame(output, now, FRAME_CALLBACK_THROTTLE, should_send);
+                }
+            });
         }
 
         for layer in layer_map_for_output(output).layers() {
@@ -680,6 +693,28 @@ impl Pinnacle {
                     with_fractional_scale(states, |fraction_scale| {
                         fraction_scale
                             .set_preferred_scale(output.current_scale().fractional_scale());
+                    });
+                }
+            });
+
+            #[cfg(feature = "snowcap")]
+            window.with_state(|state| {
+                for deco in state.decoration_surfaces.iter() {
+                    deco.with_surfaces(|surface, states| {
+                        let primary_scanout_output = update_surface_primary_scanout_output(
+                            surface,
+                            output,
+                            states,
+                            render_element_states,
+                            self.primary_scanout_output_compare(),
+                        );
+
+                        if let Some(output) = primary_scanout_output {
+                            with_fractional_scale(states, |fraction_scale| {
+                                fraction_scale
+                                    .set_preferred_scale(output.current_scale().fractional_scale());
+                            });
+                        }
                     });
                 }
             });
@@ -782,6 +817,25 @@ impl Pinnacle {
                         )
                     },
                 );
+
+                // FIXME: get the actual overlap
+                #[cfg(feature = "snowcap")]
+                window.with_state(|state| {
+                    for deco in state.decoration_surfaces.iter() {
+                        deco.send_dmabuf_feedback(
+                            output,
+                            surface_primary_scanout_output,
+                            |surface, _| {
+                                select_dmabuf_feedback(
+                                    surface,
+                                    render_element_states,
+                                    &feedback.render_feedback,
+                                    &feedback.scanout_feedback,
+                                )
+                            },
+                        );
+                    }
+                });
             }
         }
 

@@ -1,9 +1,11 @@
+pub mod input_region;
+
 use iced::{Color, Theme, event::Status};
 use iced_graphics::Viewport;
-use iced_runtime::user_interface;
 use iced_wgpu::core::{Clipboard, layout::Limits};
+use smithay_client_toolkit::reexports::client::{QueueHandle, protocol::wl_surface::WlSurface};
 
-use crate::handlers::keyboard::KeyboardKey;
+use crate::{handlers::keyboard::KeyboardKey, state::State, widget::input_region::Collect};
 
 pub type Element = iced::Element<'static, SnowcapMessage, iced::Theme, crate::compositor::Renderer>;
 pub type UserInterface =
@@ -43,25 +45,13 @@ pub struct SnowcapWidgetProgram {
 }
 
 impl SnowcapWidgetProgram {
-    pub fn new(view: ViewFn, bounds: iced::Size, renderer: &mut iced_renderer::Renderer) -> Self {
-        let element = view();
-        let mut tree = iced_wgpu::core::widget::Tree::empty();
-        tree.diff(&element);
-        let node =
-            element
-                .as_widget()
-                .layout(&mut tree, renderer, &Limits::new(iced::Size::ZERO, bounds));
-        let user_interface =
-            UserInterface::build(view(), bounds, user_interface::Cache::default(), renderer);
-
+    /// Creates a new, unbuilt widget program.
+    pub fn new(view: ViewFn) -> Self {
         Self {
             view,
-            user_interface: Some(user_interface),
+            user_interface: None,
             queued_events: Vec::new(),
-            size: iced::Size {
-                width: node.size().width.ceil() as u32,
-                height: node.size().height.ceil() as u32,
-            },
+            size: iced::Size::default(),
         }
     }
 
@@ -69,8 +59,22 @@ impl SnowcapWidgetProgram {
         self.size
     }
 
-    pub fn rebuild_ui(&mut self, bounds: iced::Size<u32>, renderer: &mut iced_renderer::Renderer) {
-        let cache = self.user_interface.take().unwrap().into_cache();
+    #[must_use]
+    pub fn rebuild_ui(
+        &mut self,
+        bounds: iced::Size<u32>,
+        renderer: &mut iced_renderer::Renderer,
+        new_view: Option<ViewFn>,
+    ) -> InputRegion {
+        if let Some(view) = new_view {
+            self.view = view;
+        }
+
+        let cache = self
+            .user_interface
+            .take()
+            .map(|ui| ui.into_cache())
+            .unwrap_or_default();
         let view = (self.view)();
         let mut tree = iced_wgpu::core::widget::Tree::empty();
         tree.diff(&view);
@@ -80,11 +84,33 @@ impl SnowcapWidgetProgram {
         let node =
             view.as_widget()
                 .layout(&mut tree, renderer, &Limits::new(iced::Size::ZERO, bounds));
-        self.user_interface = Some(UserInterface::build(view, bounds, cache, renderer));
+
+        let mut ui = UserInterface::build(view, bounds, cache, renderer);
+
+        let mut collect = Collect::new();
+        ui.operate(renderer, &mut collect);
+
+        self.user_interface = Some(ui);
         self.size = iced::Size {
             width: node.size().width.ceil() as u32,
             height: node.size().height.ceil() as u32,
         };
+        collect.regions.insert(
+            0,
+            (
+                true,
+                iced::Rectangle {
+                    x: 0,
+                    y: 0,
+                    width: self.size.width as i32,
+                    height: self.size.height as i32,
+                },
+            ),
+        );
+
+        InputRegion {
+            region: collect.regions,
+        }
     }
 
     pub fn draw(&mut self, renderer: &mut iced_renderer::Renderer, cursor: iced::mouse::Cursor) {
@@ -104,24 +130,18 @@ impl SnowcapWidgetProgram {
         renderer: &mut iced_renderer::Renderer,
         clipboard: &mut dyn Clipboard,
         messages: &mut Vec<SnowcapMessage>,
-    ) -> (iced_runtime::user_interface::State, Vec<Status>) {
-        self.user_interface.as_mut().unwrap().update(
+    ) -> Option<(iced_runtime::user_interface::State, Vec<Status>)> {
+        if self.queued_events.is_empty() {
+            return None;
+        }
+
+        Some(self.user_interface.as_mut().unwrap().update(
             &self.queued_events,
             cursor,
             renderer,
             clipboard,
             messages,
-        )
-    }
-
-    pub fn update_view(
-        &mut self,
-        new_view: ViewFn,
-        bounds: iced::Size<u32>,
-        renderer: &mut iced_renderer::Renderer,
-    ) {
-        self.view = new_view;
-        self.rebuild_ui(bounds, renderer);
+        ))
     }
 
     pub fn queue_event(&mut self, event: iced::Event) {
@@ -140,6 +160,33 @@ impl SnowcapWidgetProgram {
         let buffer_width = (self.size.width as f32 * scale).ceil() as u32;
         let buffer_height = (self.size.height as f32 * scale).ceil() as u32;
         Viewport::with_physical_size(iced::Size::new(buffer_width, buffer_height), scale as f64)
+    }
+}
+
+pub struct InputRegion {
+    region: Vec<(bool, iced::Rectangle<i32>)>,
+}
+
+impl InputRegion {
+    pub fn update(
+        self,
+        queue_handle: &QueueHandle<State>,
+        compositor: &smithay_client_toolkit::compositor::CompositorState,
+        surface: &WlSurface,
+    ) {
+        let region = compositor.wl_compositor().create_region(queue_handle, ());
+
+        for (add, rect) in self.region.into_iter() {
+            if add {
+                region.add(rect.x, rect.y, rect.width, rect.height);
+            } else {
+                region.subtract(rect.x, rect.y, rect.width, rect.height);
+            }
+        }
+
+        surface.set_input_region(Some(&region));
+
+        region.destroy();
     }
 }
 

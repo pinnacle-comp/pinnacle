@@ -1,3 +1,6 @@
+pub mod decoration;
+pub mod foreign_toplevel_list;
+pub mod foreign_toplevel_management;
 pub mod keyboard;
 pub mod pointer;
 
@@ -10,6 +13,7 @@ use smithay_client_toolkit::{
             Connection, Dispatch, QueueHandle, delegate_noop,
             protocol::{
                 wl_output::{self, WlOutput},
+                wl_region::WlRegion,
                 wl_seat::WlSeat,
                 wl_surface::WlSurface,
             },
@@ -102,7 +106,7 @@ impl OutputHandler for State {
 
     fn new_output(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _output: WlOutput) {}
 
-    fn update_output(&mut self, _conn: &Connection, qh: &QueueHandle<Self>, output: WlOutput) {
+    fn update_output(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, output: WlOutput) {
         let Some(output_info) = self.output_state.info(&output) else {
             return;
         };
@@ -116,11 +120,8 @@ impl OutputHandler for State {
             .iter_mut()
             .filter(|layer| layer.wl_output.as_ref() == Some(&output))
         {
-            layer.output_size_changed(
-                iced::Size::new(size.0 as u32, size.1 as u32),
-                layer.output_scale,
-            );
-            layer.request_frame(qh);
+            layer.output_size_changed(iced::Size::new(size.0 as u32, size.1 as u32));
+            layer.surface.request_frame();
         }
     }
 
@@ -153,7 +154,7 @@ impl LayerShellHandler for State {
         };
 
         if let Some(size) = size {
-            layer.pending_size = Some(size);
+            layer.output_size_changed(size);
             layer.initial_configure = InitialConfigureState::PostOutputSize;
         } else {
             layer.initial_configure = InitialConfigureState::PostConfigure;
@@ -197,13 +198,23 @@ impl CompositorHandler for State {
 
         if let Some(layer) = layer {
             layer.schedule_redraw();
+            return;
+        }
+
+        let deco = self
+            .decorations
+            .iter_mut()
+            .find(|deco| &deco.surface.wl_surface == surface);
+
+        if let Some(deco) = deco {
+            deco.schedule_redraw();
         }
     }
 
     fn surface_enter(
         &mut self,
         _conn: &Connection,
-        qh: &QueueHandle<Self>,
+        _qh: &QueueHandle<Self>,
         surface: &WlSurface,
         output: &wl_output::WlOutput,
     ) {
@@ -238,9 +249,8 @@ impl CompositorHandler for State {
 
         layer.initial_configure = InitialConfigureState::PostOutputSize;
 
-        layer.output_size_changed(size, layer.output_scale);
-
-        layer.request_frame(qh);
+        layer.output_size_changed(size);
+        layer.surface.request_frame();
     }
 
     fn surface_leave(
@@ -257,6 +267,7 @@ delegate_compositor!(State);
 delegate_noop!(State: WpFractionalScaleManagerV1);
 delegate_noop!(State: WpViewporter);
 delegate_noop!(State: WpViewport);
+delegate_noop!(State: WlRegion);
 
 impl Dispatch<WpFractionalScaleV1, WlSurface> for State {
     fn event(
@@ -265,22 +276,32 @@ impl Dispatch<WpFractionalScaleV1, WlSurface> for State {
         event: <WpFractionalScaleV1 as smithay_client_toolkit::reexports::client::Proxy>::Event,
         surface: &WlSurface,
         _conn: &Connection,
-        qhandle: &QueueHandle<Self>,
+        _qhandle: &QueueHandle<Self>,
     ) {
-        let Some(layer) = state
+        if let Some(layer) = state
             .layers
             .iter_mut()
             .find(|layer| layer.layer.wl_surface() == surface)
-        else {
-            return;
-        };
-
-        match event {
-            wp_fractional_scale_v1::Event::PreferredScale { scale } => {
-                layer.pending_output_scale = Some(scale as f32 / 120.0);
-                layer.request_frame(qhandle);
+        {
+            match event {
+                wp_fractional_scale_v1::Event::PreferredScale { scale } => {
+                    layer.surface.scale_changed(scale as f32 / 120.0);
+                    layer.surface.request_frame();
+                }
+                _ => unreachable!(),
             }
-            _ => unreachable!(),
+        } else if let Some(deco) = state
+            .decorations
+            .iter_mut()
+            .find(|deco| &deco.surface.wl_surface == surface)
+        {
+            match event {
+                wp_fractional_scale_v1::Event::PreferredScale { scale } => {
+                    deco.surface.scale_changed(scale as f32 / 120.0);
+                    deco.surface.request_frame();
+                }
+                _ => unreachable!(),
+            }
         }
     }
 }

@@ -4,14 +4,15 @@ use iced::widget::{
 use snowcap_api_defs::snowcap::widget::{
     self,
     v1::{
-        GetWidgetEventsRequest, GetWidgetEventsResponse, WidgetDef, widget_def,
-        widget_service_server,
+        GetWidgetEventsRequest, GetWidgetEventsResponse, WidgetDef, get_widget_events_request,
+        widget_def, widget_service_server,
     },
 };
 use tonic::{Request, Response, Status};
 
 use crate::{
     api::{ResponseStream, run_server_streaming_mapped},
+    decoration::DecorationId,
     layer::LayerId,
     util::convert::FromApi,
     widget::{ViewFn, WidgetEvent, WidgetId},
@@ -25,14 +26,22 @@ impl widget_service_server::WidgetService for super::WidgetService {
         &self,
         request: Request<GetWidgetEventsRequest>,
     ) -> Result<Response<Self::GetWidgetEventsStream>, Status> {
-        let layer_id = request.into_inner().layer_id;
-        let layer_id = LayerId(layer_id);
+        let Some(id) = request.into_inner().id else {
+            return Err(Status::invalid_argument("no id specified"));
+        };
 
         run_server_streaming_mapped(
             &self.sender,
-            move |state, sender| {
-                if let Some(layer) = state.layer_for_id(layer_id) {
-                    layer.widget_event_sender = Some(sender);
+            move |state, sender| match id {
+                get_widget_events_request::Id::LayerId(layer_id) => {
+                    if let Some(layer) = state.layer_for_id(LayerId(layer_id)) {
+                        layer.surface.widget_event_sender = Some(sender);
+                    }
+                }
+                get_widget_events_request::Id::DecorationId(decoration_id) => {
+                    if let Some(deco) = state.decoration_for_id(DecorationId(decoration_id)) {
+                        deco.surface.widget_event_sender = Some(sender);
+                    }
                 }
             },
             |(id, event)| {
@@ -568,6 +577,37 @@ pub fn widget_def_to_fn(def: WidgetDef) -> Option<ViewFn> {
                 }
 
                 image.into()
+            });
+
+            Some(f)
+        }
+        widget_def::Widget::InputRegion(input_region) => {
+            let widget::v1::InputRegion {
+                add,
+                width,
+                height,
+                child,
+            } = *input_region;
+
+            let child_widget_fn = child.and_then(|def| widget_def_to_fn(*def));
+
+            let f: ViewFn = Box::new(move || {
+                let mut input_region = crate::widget::input_region::InputRegion::new(
+                    add,
+                    child_widget_fn
+                        .as_ref()
+                        .map(|child| child())
+                        .unwrap_or_else(|| iced::widget::Text::new("NULL").into()),
+                );
+
+                if let Some(width) = width {
+                    input_region = input_region.width(iced::Length::from_api(width));
+                }
+                if let Some(height) = height {
+                    input_region = input_region.height(iced::Length::from_api(height));
+                }
+
+                input_region.into()
             });
 
             Some(f)

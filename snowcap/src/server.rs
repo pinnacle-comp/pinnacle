@@ -2,12 +2,15 @@ use std::path::{Path, PathBuf};
 
 use anyhow::Context;
 use smithay_client_toolkit::reexports::calloop;
-use snowcap_api_defs::snowcap::{input, layer, widget};
+use snowcap_api_defs::snowcap::{decoration, input, layer, widget};
 use tokio::task::JoinHandle;
 use tracing::{error, info};
 
 use crate::{
-    api::{input::InputService, layer::LayerService, widget::WidgetService},
+    api::{
+        decoration::DecorationService, input::InputService, layer::LayerService,
+        widget::WidgetService,
+    },
     state::State,
 };
 
@@ -60,6 +63,7 @@ impl State {
         let layer_service = LayerService::new(grpc_sender.clone());
         let input_service = InputService::new(grpc_sender.clone());
         let widget_service = WidgetService::new(grpc_sender.clone());
+        let decoration_service = DecorationService::new(grpc_sender.clone());
 
         let refl_service = tonic_reflection::server::Builder::configure()
             .register_encoded_file_descriptor_set(snowcap_api_defs::FILE_DESCRIPTOR_SET)
@@ -88,7 +92,12 @@ impl State {
             ))
             .add_service(widget::v1::widget_service_server::WidgetServiceServer::new(
                 widget_service,
-            ));
+            ))
+            .add_service(
+                decoration::v1::decoration_service_server::DecorationServiceServer::new(
+                    decoration_service,
+                ),
+            );
 
         let join_handle = tokio::spawn(async move {
             if let Err(err) = grpc_server.serve_with_incoming(uds_stream).await {

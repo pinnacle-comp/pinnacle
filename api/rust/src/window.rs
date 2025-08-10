@@ -18,12 +18,12 @@ use pinnacle_api_defs::pinnacle::{
     window::{
         self,
         v1::{
-            GetAppIdRequest, GetFocusedRequest, GetLayoutModeRequest, GetLocRequest,
-            GetSizeRequest, GetTagIdsRequest, GetTitleRequest, GetWindowsInDirRequest,
-            LowerRequest, MoveGrabRequest, MoveToOutputRequest, MoveToTagRequest, RaiseRequest,
-            ResizeGrabRequest, ResizeTileRequest, SetDecorationModeRequest, SetFloatingRequest,
-            SetFocusedRequest, SetFullscreenRequest, SetGeometryRequest, SetMaximizedRequest,
-            SetTagRequest, SetTagsRequest, SwapRequest,
+            GetAppIdRequest, GetFocusedRequest, GetForeignToplevelListIdentifierRequest,
+            GetLayoutModeRequest, GetLocRequest, GetSizeRequest, GetTagIdsRequest, GetTitleRequest,
+            GetWindowsInDirRequest, LowerRequest, MoveGrabRequest, MoveToOutputRequest,
+            MoveToTagRequest, RaiseRequest, ResizeGrabRequest, ResizeTileRequest,
+            SetDecorationModeRequest, SetFloatingRequest, SetFocusedRequest, SetFullscreenRequest,
+            SetGeometryRequest, SetMaximizedRequest, SetTagRequest, SetTagsRequest, SwapRequest,
         },
     },
 };
@@ -824,6 +824,26 @@ impl WindowHandle {
             .into_inner();
 
         response.window_ids.into_iter().map(WindowHandle::from_id)
+    }
+
+    /// Gets this window's ext-foreign-toplevel-list handle identifier.
+    pub fn foreign_toplevel_list_identifier(&self) -> Option<String> {
+        self.foreign_toplevel_list_identifier_async()
+            .block_on_tokio()
+    }
+
+    /// Async impl for [`Self::foreign_toplevel_list_identifier`].
+    pub async fn foreign_toplevel_list_identifier_async(&self) -> Option<String> {
+        let window_id = self.id;
+
+        Client::window()
+            .get_foreign_toplevel_list_identifier(GetForeignToplevelListIdentifierRequest {
+                window_id,
+            })
+            .await
+            .unwrap()
+            .into_inner()
+            .identifier
     }
 
     /// Swap position with another window.

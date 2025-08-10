@@ -171,7 +171,6 @@ impl layer_service_server::LayerService for super::LayerService {
                 exclusive_zone,
                 keyboard_interactivity,
                 widget_def.and_then(widget_def_to_fn),
-                &state.queue_handle,
             );
 
             Ok(UpdateLayerResponse {})

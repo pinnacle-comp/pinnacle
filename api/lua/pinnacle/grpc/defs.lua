@@ -1228,6 +1228,12 @@ local pinnacle_window_v1_DecorationMode = {
 ---@class pinnacle.window.v1.GetWindowsInDirResponse
 ---@field window_ids integer[]?
 
+---@class pinnacle.window.v1.GetForeignToplevelListIdentifierRequest
+---@field window_id integer?
+
+---@class pinnacle.window.v1.GetForeignToplevelListIdentifierResponse
+---@field identifier string?
+
 ---@class pinnacle.window.v1.CloseRequest
 ---@field window_id integer?
 
@@ -1507,6 +1513,8 @@ pinnacle.window.v1.GetTagIdsRequest = {}
 pinnacle.window.v1.GetTagIdsResponse = {}
 pinnacle.window.v1.GetWindowsInDirRequest = {}
 pinnacle.window.v1.GetWindowsInDirResponse = {}
+pinnacle.window.v1.GetForeignToplevelListIdentifierRequest = {}
+pinnacle.window.v1.GetForeignToplevelListIdentifierResponse = {}
 pinnacle.window.v1.CloseRequest = {}
 pinnacle.window.v1.SetGeometryRequest = {}
 pinnacle.window.v1.ResizeTileRequest = {}
@@ -3101,6 +3109,23 @@ pinnacle.window.v1.WindowService.GetWindowsInDir.response = ".pinnacle.window.v1
 ---@return string | nil error An error string, if any
 function Client:pinnacle_window_v1_WindowService_GetWindowsInDir(data)
     return self:unary_request(pinnacle.window.v1.WindowService.GetWindowsInDir, data)
+end
+pinnacle.window.v1.WindowService.GetForeignToplevelListIdentifier = {}
+pinnacle.window.v1.WindowService.GetForeignToplevelListIdentifier.service = "pinnacle.window.v1.WindowService"
+pinnacle.window.v1.WindowService.GetForeignToplevelListIdentifier.method = "GetForeignToplevelListIdentifier"
+pinnacle.window.v1.WindowService.GetForeignToplevelListIdentifier.request = ".pinnacle.window.v1.GetForeignToplevelListIdentifierRequest"
+pinnacle.window.v1.WindowService.GetForeignToplevelListIdentifier.response = ".pinnacle.window.v1.GetForeignToplevelListIdentifierResponse"
+
+---Performs a unary request.
+---
+---@nodiscard
+---
+---@param data pinnacle.window.v1.GetForeignToplevelListIdentifierRequest
+---
+---@return pinnacle.window.v1.GetForeignToplevelListIdentifierResponse | nil response
+---@return string | nil error An error string, if any
+function Client:pinnacle_window_v1_WindowService_GetForeignToplevelListIdentifier(data)
+    return self:unary_request(pinnacle.window.v1.WindowService.GetForeignToplevelListIdentifier, data)
 end
 pinnacle.window.v1.WindowService.Close = {}
 pinnacle.window.v1.WindowService.Close.service = "pinnacle.window.v1.WindowService"

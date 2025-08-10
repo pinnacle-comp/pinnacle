@@ -1,0 +1,210 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<protocol name="snowcap_decoration_v1">
+    <copyright>
+        Copyright © 2025 Ottatop
+
+        Permission is hereby granted, free of charge, to any person
+        obtaining a copy of this software and associated documentation
+        files (the “Software”), to deal in the Software without
+        restriction, including without limitation the rights to use, copy,
+        modify, merge, publish, distribute, sublicense, and/or sell copies
+        of the Software, and to permit persons to whom the Software is
+        furnished to do so, subject to the following conditions:
+
+        The above copyright notice and this permission notice shall be
+        included in all copies or substantial portions of the Software.
+
+        THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND,
+        EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+        MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+        NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS
+        BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
+        ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+        CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+        SOFTWARE.
+    </copyright>
+
+    <description summary="let clients draw server-side decorations">
+        This protocol enables clients to draw decorations that are used by the compositor
+        to decorate toplevels.
+    </description>
+
+    <interface name="snowcap_decoration_manager_v1" version="1">
+        <description summary="create surfaces that can decorate toplevels">
+            Clients can use this interface to assign the snowcap_decoration_surface_v1 role
+            to wl_surfaces. Such surfaces are rendered attached to toplevels. Xwayland
+            windows are considered toplevels for this protocol.
+        </description>
+
+        <request name="get_decoration_surface">
+            <description summary="create a decoration surface from a wl_surface">
+                Creates a decoration surface for an existing surface. This assigns the role of
+                snowcap_decoration_surface_v1, or raises a protocol error if another role is
+                already assigned.
+
+                Creating a decoration surface from a wl_surface which has a buffer attached
+                or committed is a client error, and any attempts by a client to attach
+                or manipulate a buffer prior to the first decoration_surface.configure call
+                must also be treated as errors.
+
+                After creating a decoration_surface object and setting it up, the client must
+                perform an initial commit without any buffer attached. The compositor
+                will reply with a decoration_surface.configure event. The client must
+                acknowledge it and is then allowed to attach a buffer to map the surface.
+            </description>
+            <arg name="id" type="new_id" interface="snowcap_decoration_surface_v1"/>
+            <arg name="surface" type="object" interface="wl_surface"/>
+            <arg name="toplevel" type="object" interface="ext_foreign_toplevel_handle_v1"/>
+        </request>
+
+        <request name="destroy" type="destructor">
+            <description summary="destroy the decoration manager object">
+                This request indicates that the client will not use the decoration manager object
+                anymore. Objects that have been created through this instance are not affected.
+            </description>
+        </request>
+
+        <enum name="error">
+            <entry name="role" value="0" summary="wl_surface has another role"/>
+            <entry name="already_constructed" value="1" summary="wl_surface has a buffer attached or committed"/>
+        </enum>
+    </interface>
+
+    <interface name="snowcap_decoration_surface_v1" version="1">
+        <description summary="decoration interface">
+            An interface that may be implemented by a wl_surface
+            for surfaces that are designed to decorate toplevels.
+
+            Attaching a null buffer to a decoration surface does *not*
+            unmap it, unlike other shell protocols.
+        </description>
+
+        <request name="set_location">
+            <description summary="set the location of the decoration surface">
+                The location of a decoration surface is its position
+                relative to the top-left corner of the decorated toplevel
+                (as set by xdg_toplevel.set_window_geometry and taking into
+                account set bounds).
+
+                If the toplevel has multiple decorations with differing bounds
+                set, each decoration surface is rendered relative to its own
+                set bounds.
+
+                Geometry is double-buffered; see wl_surface.commit.
+            </description>
+            <arg name="x" type="int" summary="x-coordinate relative to the top-left corner including bounds" />
+            <arg name="y" type="int" summary="y-coordinate relative to the top-left corner including bounds" />
+        </request>
+
+        <request name="set_bounds">
+            <description summary="set the bounds of the toplevel the decoration surface is decorating">
+                Extends the bounds of the toplevel this surface is decorating.
+
+                This request can be used to extend the toplevel's effective
+                geometry to encompass parts or all of the decoration
+                surface. For example, a titlebar surface with
+                a height of 16 logical pixels may issue this request
+                with top equal to 16 to include it in the toplevel's
+                geometry.
+
+                The compositor should treat the toplevel as having a size
+                extended by the given amounts in each direction, even if the
+                decoration surface has no buffer attached.
+                If multiple clients have set bounds, the bounds of the toplevel
+                are the maximum set for each edge.
+
+                On commit, the compositor must respond to this request with a configure event
+                with the new inner size of the toplevel.
+
+                Bounds are double-buffered; see wl_surface.commit.
+            </description>
+            <arg name="left" type="uint" summary="amount to extend the left edge leftward" />
+            <arg name="right" type="uint" summary="amount to extend the right edge rightward" />
+            <arg name="top" type="uint" summary="amount to extend the top edge upward" />
+            <arg name="bottom" type="uint" summary="amount to extend the bottom edge downward" />
+        </request>
+
+        <request name="set_z_index">
+            <description summary="set the z-index the decoration surface">
+                Sets the z-index at which the decoration surface will
+                render and receive pointer input.
+
+                Negative indices place the surface below the decorated toplevel.
+                All other indices place it above.
+
+                Decoration surfaces with a higher set index render above
+                those with a lower one.
+
+                Decoration surfaces with the same index are rendered
+                in a compositor-defined manner.
+
+                If unset, the index is 0.
+
+                Z-index is double-buffered; see wl_surface.commit.
+            </description>
+            <arg name="z_index" type="int" summary="index to render the surface at" />
+        </request>
+
+        <request name="ack_configure">
+            <description summary="acknowledge a configure request">
+                When a configure event is received, if a client commits the
+                surface in response to the configure event, then the client
+                must make an ack_configure request sometime before the commit
+                request, passing along the serial of the configure event.
+
+                If the client receives multiple configure events before it
+                can respond to one, it only has to ack the last configure event.
+
+                A client is not required to commit immediately after sending
+                an ack_configure request - it may even ack_configure several times
+                before its next surface commit.
+
+                A client may send multiple ack_configure requests before committing, but
+                only the last request sent before a commit indicates which configure
+                event the client really is responding to.
+            </description>
+            <arg name="serial" type="uint" summary="the serial from the configure event" />
+        </request>
+
+        <request name="destroy" type="destructor">
+            <description summary="destroy the decoration surface object">
+                This request destroys the decoration surface.
+            </description>
+        </request>
+
+        <event name="configure">
+            <description summary="suggest a surface change">
+                The configure event asks the client to resize its decoration surface.
+
+                Clients should arrange their surface for the new states, and then send
+                an ack_configure request with the serial sent in this configure event at
+                some point before committing the new surface.
+
+                The client is free to dismiss all but the last configure event it
+                received.
+
+                The width and height arguments specify the inner size of the
+                *toplevel being decorated* in surface-local coordinates,
+                ignoring set bounds.
+                The client should update its decoration surface for a toplevel
+                of the received size.
+
+                The compositor must not send a configure event where either the
+                width, height, or both are 0.
+            </description>
+            <arg name="serial" type="uint" />
+            <arg name="width" type="uint" summary="the width of the toplevel being decorated, ignoring bounds" />
+            <arg name="height" type="uint" summary="the height of the toplevel being decorated, ignoring bounds" />
+        </event>
+
+        <event name="closed">
+            <description summary="surface should be closed">
+                The closed event is sent by the compositor when the surface will
+                no longer be shown. The output may have been destroyed or the
+                user may have asked for it to be removed. Further changes to the
+                surface will be ignored. The client should destroy the resource
+                after receiving this event, and create a new surface if they so choose.
+            </description>
+        </event>
+    </interface>
+</protocol>

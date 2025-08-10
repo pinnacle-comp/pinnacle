@@ -5,6 +5,8 @@ mod foreign_toplevel;
 pub mod foreign_toplevel_list;
 pub mod idle;
 pub mod session_lock;
+#[cfg(feature = "snowcap")]
+pub mod snowcap_decoration;
 pub mod window;
 pub mod xdg_activation;
 mod xdg_shell;
@@ -34,7 +36,6 @@ use smithay::{
     },
     output::{Mode, Output, Scale},
     reexports::{
-        calloop::Interest,
         wayland_protocols::xdg::shell::server::xdg_positioner::ConstraintAdjustment,
         wayland_server::{
             Client, Resource,
@@ -48,10 +49,8 @@ use smithay::{
     wayland::{
         buffer::BufferHandler,
         compositor::{
-            self, BufferAssignment, CompositorClientState, CompositorHandler, CompositorState,
-            SurfaceAttributes,
+            self, CompositorClientState, CompositorHandler, CompositorState, SurfaceAttributes,
         },
-        dmabuf,
         fractional_scale::{self, FractionalScaleHandler},
         keyboard_shortcuts_inhibit::{
             KeyboardShortcutsInhibitHandler, KeyboardShortcutsInhibitState,
@@ -87,13 +86,13 @@ use smithay::{
     xwayland::XWaylandClientData,
 };
 use tracing::{debug, error, trace, warn};
-use xdg_shell::add_mapped_toplevel_pre_commit_hook;
 
 use crate::{
     backend::Backend,
     delegate_gamma_control, delegate_output_management, delegate_output_power_management,
     delegate_screencopy,
     focus::{keyboard::KeyboardFocusTarget, pointer::PointerFocusTarget},
+    hook::add_mapped_toplevel_pre_commit_hook,
     output::OutputMode,
     protocol::{
         gamma_control::{GammaControlHandler, GammaControlManagerState},
@@ -109,57 +108,6 @@ use crate::{
 
 impl BufferHandler for State {
     fn buffer_destroyed(&mut self, _buffer: &WlBuffer) {}
-}
-
-impl Pinnacle {
-    /// Adds the default dmabuf pre-commit hook to a surface.
-    ///
-    /// If the surface belongs to a mapped window, this hook needs to be removed and
-    /// the mapped hook added using [`add_mapped_toplevel_pre_commit_hook`].
-    pub fn add_default_dmabuf_pre_commit_hook(&mut self, surface: &WlSurface) {
-        let hook = compositor::add_pre_commit_hook::<State, _>(
-            surface,
-            |state, _display_handle, surface| {
-                let maybe_dmabuf = compositor::with_states(surface, |surface_data| {
-                    surface_data
-                        .cached_state
-                        .get::<SurfaceAttributes>()
-                        .pending()
-                        .buffer
-                        .as_ref()
-                        .and_then(|assignment| match assignment {
-                            BufferAssignment::NewBuffer(buffer) => {
-                                dmabuf::get_dmabuf(buffer).cloned().ok()
-                            }
-                            _ => None,
-                        })
-                });
-                if let Some(dmabuf) = maybe_dmabuf
-                    && let Ok((blocker, source)) = dmabuf.generate_blocker(Interest::READ)
-                    && let Some(client) = surface.client()
-                {
-                    let res =
-                        state
-                            .pinnacle
-                            .loop_handle
-                            .insert_source(source, move |_, _, state| {
-                                state
-                                    .client_compositor_state(&client)
-                                    .blocker_cleared(state, &state.pinnacle.display_handle.clone());
-                                Ok(())
-                            });
-                    if res.is_ok() {
-                        compositor::add_blocker(surface, blocker);
-                    }
-                }
-            },
-        );
-
-        if let Some(prev_hook) = self.dmabuf_hooks.insert(surface.clone(), hook) {
-            error!("tried to add dmabuf pre-commit hook when there already was one");
-            compositor::remove_pre_commit_hook(surface, prev_hook);
-        }
-    }
 }
 
 impl CompositorHandler for State {
@@ -411,6 +359,39 @@ impl CompositorHandler for State {
         {
             vec![output] // surface is a lock surface
         } else {
+            #[cfg(feature = "snowcap")]
+            if let Some((win, deco)) = self.pinnacle.windows.iter().find_map(|win| {
+                let deco = win
+                    .with_state(|state| {
+                        state
+                            .decoration_surfaces
+                            .iter()
+                            .find(|deco| deco.wl_surface() == surface || deco.wl_surface() == &root)
+                            .cloned()
+                    })
+                    .map(|deco| (win.clone(), deco));
+                deco
+            }) {
+                use std::sync::atomic::Ordering;
+
+                if deco.with_state(|state| state.bounds_changed.fetch_and(false, Ordering::Relaxed))
+                {
+                    if win.with_state(|state| state.layout_mode.is_tiled())
+                        && let Some(output) = win.output(&self.pinnacle)
+                    {
+                        self.pinnacle.request_layout(&output);
+                    } else {
+                        self.update_window_layout_mode_and_layout(&win, |_| ());
+                    }
+                }
+
+                // FIXME: granular
+                self.pinnacle.space.outputs().cloned().collect()
+            } else {
+                return;
+            }
+
+            #[cfg(not(feature = "snowcap"))]
             return;
         };
 
