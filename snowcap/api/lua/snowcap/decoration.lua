@@ -30,6 +30,7 @@ function decoration_handle.new(id, update)
     return self
 end
 
+---The bounds extending a rectangle.
 ---@class snowcap.decoration.Bounds
 ---@field left integer
 ---@field right integer
@@ -43,30 +44,6 @@ end
 ---@field extents snowcap.decoration.Bounds
 ---@field z_index integer
 
--- FIXME: duplicate from layer
----comment
----@param widget snowcap.widget.WidgetDef
----@param callbacks table<integer, any>
----@param with_widget fun(callbacks: table<integer, any>, widget: snowcap.widget.WidgetDef)
-local function traverse_widget_tree(widget, callbacks, with_widget)
-    with_widget(callbacks, widget)
-    if widget.column then
-        for _, w in ipairs(widget.column.children or {}) do
-            traverse_widget_tree(w, callbacks, with_widget)
-        end
-    elseif widget.row then
-        for _, w in ipairs(widget.row.children or {}) do
-            traverse_widget_tree(w, callbacks, with_widget)
-        end
-    elseif widget.scrollable then
-        traverse_widget_tree(widget.scrollable.child, callbacks, with_widget)
-    elseif widget.container then
-        traverse_widget_tree(widget.container.child, callbacks, with_widget)
-    elseif widget.button then
-        traverse_widget_tree(widget.button.child, callbacks, with_widget)
-    end
-end
-
 ---@param args snowcap.decoration.DecorationArgs
 ---@return snowcap.decoration.DecorationHandle|nil handle A handle to the decoration surface, or nil if an error occurred.
 function decoration.new_widget(args)
@@ -75,17 +52,21 @@ function decoration.new_widget(args)
 
     local widget_def = args.program:view()
 
-    traverse_widget_tree(widget_def, callbacks, function(callbacks, widget)
-        if widget.button and widget.button.on_press then
-            callbacks[widget.button.widget_id] = widget.button.on_press
+    require("snowcap.widget")._traverse_widget_tree(
+        widget_def,
+        callbacks,
+        function(callbacks, widget)
+            if widget.button and widget.button.on_press then
+                callbacks[widget.button.widget_id] = widget.button.on_press
+            end
         end
-    end)
+    )
 
     ---@type snowcap.decoration.v1.NewDecorationRequest
     local request = {
         widget_def = widget.widget_def_into_api(widget_def),
-        bounds = args.bounds,
-        extents = args.extents,
+        bounds = args.bounds --[[@as snowcap.decoration.v1.Bounds]],
+        extents = args.extents --[[@as snowcap.decoration.v1.Bounds]],
         z_index = args.z_index,
         foreign_toplevel_handle_identifier = args.toplevel_identifier,
     }
@@ -116,11 +97,15 @@ function decoration.new_widget(args)
                 local widget_def = args.program:view()
                 callbacks = {}
 
-                traverse_widget_tree(widget_def, callbacks, function(callbacks, widget)
-                    if widget.button and widget.button.on_press then
-                        callbacks[widget.button.widget_id] = widget.button.on_press
+                require("snowcap.widget")._traverse_widget_tree(
+                    widget_def,
+                    callbacks,
+                    function(callbacks, widget)
+                        if widget.button and widget.button.on_press then
+                            callbacks[widget.button.widget_id] = widget.button.on_press
+                        end
                     end
-                end)
+                )
 
                 local _, err = client:snowcap_decoration_v1_DecorationService_UpdateDecoration({
                     decoration_id = decoration_id,
@@ -135,11 +120,15 @@ function decoration.new_widget(args)
         local widget_def = args.program:view()
         callbacks = {}
 
-        traverse_widget_tree(widget_def, callbacks, function(callbacks, widget)
-            if widget.button and widget.button.on_press then
-                callbacks[widget.button.widget_id] = widget.button.on_press
+        require("snowcap.widget")._traverse_widget_tree(
+            widget_def,
+            callbacks,
+            function(callbacks, widget)
+                if widget.button and widget.button.on_press then
+                    callbacks[widget.button.widget_id] = widget.button.on_press
+                end
             end
-        end)
+        )
 
         local _, err = client:snowcap_decoration_v1_DecorationService_UpdateDecoration({
             decoration_id = decoration_id,

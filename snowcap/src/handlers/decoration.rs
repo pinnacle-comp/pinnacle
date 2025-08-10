@@ -15,14 +15,13 @@ impl Dispatch<SnowcapDecorationManagerV1, ()> for State {
         _conn: &smithay_client_toolkit::reexports::client::Connection,
         _qhandle: &smithay_client_toolkit::reexports::client::QueueHandle<Self>,
     ) {
-        // TODO:
     }
 }
 
 impl Dispatch<SnowcapDecorationSurfaceV1, ()> for State {
     fn event(
         state: &mut Self,
-        proxy: &SnowcapDecorationSurfaceV1,
+        surface: &SnowcapDecorationSurfaceV1,
         event: <SnowcapDecorationSurfaceV1 as smithay_client_toolkit::reexports::client::Proxy>::Event,
         _data: &(),
         _conn: &smithay_client_toolkit::reexports::client::Connection,
@@ -34,12 +33,12 @@ impl Dispatch<SnowcapDecorationSurfaceV1, ()> for State {
                 width,
                 height,
             } => {
-                proxy.ack_configure(serial);
+                surface.ack_configure(serial);
 
                 let Some(deco) = state
                     .decorations
                     .iter_mut()
-                    .find(|deco| &deco.decoration == proxy)
+                    .find(|deco| &deco.decoration == surface)
                 else {
                     return;
                 };
@@ -48,7 +47,10 @@ impl Dispatch<SnowcapDecorationSurfaceV1, ()> for State {
                 deco.initial_configure_received = true;
                 deco.schedule_redraw();
             }
-            _ => unreachable!(),
+            snowcap_decoration_surface_v1::Event::Closed => {
+                state.decorations.retain(|deco| &deco.decoration != surface);
+            }
+            _ => todo!(),
         }
     }
 }

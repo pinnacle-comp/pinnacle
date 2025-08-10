@@ -166,6 +166,12 @@
             <arg name="serial" type="uint" summary="the serial from the configure event" />
         </request>
 
+        <request name="destroy" type="destructor">
+            <description summary="destroy the decoration surface object">
+                This request destroys the decoration surface.
+            </description>
+        </request>
+
         <event name="configure">
             <description summary="suggest a surface change">
                 The configure event asks the client to resize its decoration surface.
@@ -189,6 +195,16 @@
             <arg name="serial" type="uint" />
             <arg name="width" type="uint" summary="the width of the toplevel being decorated, ignoring bounds" />
             <arg name="height" type="uint" summary="the height of the toplevel being decorated, ignoring bounds" />
+        </event>
+
+        <event name="closed">
+            <description summary="surface should be closed">
+                The closed event is sent by the compositor when the surface will
+                no longer be shown. The output may have been destroyed or the
+                user may have asked for it to be removed. Further changes to the
+                surface will be ignored. The client should destroy the resource
+                after receiving this event, and create a new surface if they so choose.
+            </description>
         </event>
     </interface>
 </protocol>

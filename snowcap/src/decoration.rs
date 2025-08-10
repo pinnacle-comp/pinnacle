@@ -47,6 +47,12 @@ pub struct SnowcapDecoration {
     pending_z_index: Option<i32>,
 }
 
+impl Drop for SnowcapDecoration {
+    fn drop(&mut self) {
+        self.decoration.destroy();
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Bounds {
     pub left: u32,

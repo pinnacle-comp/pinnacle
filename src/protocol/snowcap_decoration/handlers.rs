@@ -226,7 +226,8 @@ where
 
                 // TODO: Handler::ack_configure
             }
-            _ => todo!(),
+            snowcap_decoration_surface_v1::Request::Destroy => (),
+            _ => panic!(),
         }
     }
 

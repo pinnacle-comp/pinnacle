@@ -2,7 +2,7 @@ use std::{
     borrow::Cow,
     cell::RefCell,
     sync::{
-        Arc,
+        Arc, Weak,
         atomic::{AtomicBool, AtomicU32, Ordering},
     },
     time::Duration,
@@ -41,6 +41,9 @@ static DECORATION_ID_COUNTER: AtomicU32 = AtomicU32::new(0);
 #[derive(Debug, Clone)]
 pub struct DecorationSurface(Arc<DecorationSurfaceInner>);
 
+#[derive(Debug, Clone)]
+pub struct WeakDecorationSurface(Weak<DecorationSurfaceInner>);
+
 impl PartialEq for DecorationSurface {
     fn eq(&self, other: &Self) -> bool {
         self.0.id == other.0.id
@@ -62,6 +65,12 @@ struct DecorationSurfaceInner {
     userdata: UserDataMap,
 }
 
+impl Drop for DecorationSurfaceInner {
+    fn drop(&mut self) {
+        self.surface.decoration_surface().closed();
+    }
+}
+
 impl IsAlive for DecorationSurface {
     fn alive(&self) -> bool {
         self.0.surface.alive()
@@ -75,6 +84,10 @@ impl DecorationSurface {
             surface,
             userdata: UserDataMap::new(),
         }))
+    }
+
+    pub fn downgrade(&self) -> WeakDecorationSurface {
+        WeakDecorationSurface(Arc::downgrade(&self.0))
     }
 
     pub fn decoration_surface(&self) -> &snowcap_decoration::DecorationSurface {
@@ -218,6 +231,12 @@ impl DecorationSurface {
         }
 
         txn
+    }
+}
+
+impl WeakDecorationSurface {
+    pub fn upgrade(&self) -> Option<DecorationSurface> {
+        self.0.upgrade().map(DecorationSurface)
     }
 }
 

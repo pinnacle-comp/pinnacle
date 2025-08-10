@@ -16,96 +16,96 @@ use crate::state::{Pinnacle, State, WithState};
 
 #[cfg(feature = "snowcap")]
 pub fn add_decoration_pre_commit_hook(deco: &crate::decoration::DecorationSurface) -> HookId {
-    let deco = deco.clone();
+    let wl_surface = deco.wl_surface();
+    let deco = deco.downgrade();
 
-    // FIXME: probably leaking the arc here
-    compositor::add_pre_commit_hook::<State, _>(
-        &deco.wl_surface().clone(),
-        move |state, _dh, surface| {
-            let _span = tracy_client::span!("mapped decoration pre-commit");
-            let span =
-                trace_span!("deco pre-commit", surface = %surface.id(), serial = Empty).entered();
+    compositor::add_pre_commit_hook::<State, _>(wl_surface, move |state, _dh, surface| {
+        let _span = tracy_client::span!("mapped decoration pre-commit");
+        let span =
+            trace_span!("deco pre-commit", surface = %surface.id(), serial = Empty).entered();
 
-            let (commit_serial, dmabuf) = compositor::with_states(surface, |states| {
-                let dmabuf = {
-                    let mut guard = states.cached_state.get::<SurfaceAttributes>();
-                    match guard.pending().buffer.as_ref() {
-                        Some(BufferAssignment::NewBuffer(buffer)) => {
-                            let dmabuf = smithay::wayland::dmabuf::get_dmabuf(buffer).cloned().ok();
-                            dmabuf
-                        }
-                        _ => None,
+        let (commit_serial, dmabuf) = compositor::with_states(surface, |states| {
+            let dmabuf = {
+                let mut guard = states.cached_state.get::<SurfaceAttributes>();
+                match guard.pending().buffer.as_ref() {
+                    Some(BufferAssignment::NewBuffer(buffer)) => {
+                        let dmabuf = smithay::wayland::dmabuf::get_dmabuf(buffer).cloned().ok();
+                        dmabuf
                     }
-                };
-
-                let role = states
-                    .data_map
-                    .get::<crate::protocol::snowcap_decoration::DecorationSurfaceData>()
-                    .unwrap()
-                    .lock()
-                    .unwrap();
-
-                (role.configure_serial, dmabuf)
-            });
-
-            let mut transaction_for_dmabuf = None;
-            if let Some(serial) = commit_serial {
-                if !span.is_disabled() {
-                    span.record("serial", format!("{serial:?}"));
+                    _ => None,
                 }
+            };
 
-                if let Some(transaction) = deco.take_pending_transaction(serial) {
-                    // Transaction can be already completed if it ran past the deadline.
-                    if !transaction.is_completed() {
-                        let is_last = transaction.is_last();
+            let role = states
+                .data_map
+                .get::<crate::protocol::snowcap_decoration::DecorationSurfaceData>()
+                .unwrap()
+                .lock()
+                .unwrap();
 
-                        // If this is the last transaction, we don't need to add a separate
-                        // notification, because the transaction will complete in our dmabuf blocker
-                        // callback, which already calls blocker_cleared(), or by the end of this
-                        // function, in which case there would be no blocker in the first place.
-                        if !is_last {
-                            // Waiting for some other surface; register a notification and add a
-                            // transaction blocker.
+            (role.configure_serial, dmabuf)
+        });
 
-                            if let Some(client) = surface.client() {
-                                transaction.add_notification(
-                                    state.pinnacle.blocker_cleared_tx.clone(),
-                                    client.clone(),
-                                );
-                                compositor::add_blocker(surface, transaction.blocker());
-                            }
-                        }
-
-                        transaction_for_dmabuf = Some(transaction);
-                    }
-                }
+        let mut transaction_for_dmabuf = None;
+        if let Some(serial) = commit_serial {
+            if !span.is_disabled() {
+                span.record("serial", format!("{serial:?}"));
             }
 
-            if let Some((blocker, source)) =
-                dmabuf.and_then(|dmabuf| dmabuf.generate_blocker(Interest::READ).ok())
-                && let Some(client) = surface.client()
+            if let Some(transaction) = deco
+                .upgrade()
+                .and_then(|deco| deco.take_pending_transaction(serial))
             {
-                let res = state
-                    .pinnacle
-                    .loop_handle
-                    .insert_source(source, move |_, _, state| {
-                        // This surface is now ready for the transaction.
-                        drop(transaction_for_dmabuf.take());
+                // Transaction can be already completed if it ran past the deadline.
+                if !transaction.is_completed() {
+                    let is_last = transaction.is_last();
 
-                        let display_handle = state.pinnacle.display_handle.clone();
-                        state
-                            .client_compositor_state(&client)
-                            .blocker_cleared(state, &display_handle);
+                    // If this is the last transaction, we don't need to add a separate
+                    // notification, because the transaction will complete in our dmabuf blocker
+                    // callback, which already calls blocker_cleared(), or by the end of this
+                    // function, in which case there would be no blocker in the first place.
+                    if !is_last {
+                        // Waiting for some other surface; register a notification and add a
+                        // transaction blocker.
 
-                        Ok(())
-                    });
-                if res.is_ok() {
-                    compositor::add_blocker(surface, blocker);
-                    trace!("added dmabuf blocker");
+                        if let Some(client) = surface.client() {
+                            transaction.add_notification(
+                                state.pinnacle.blocker_cleared_tx.clone(),
+                                client.clone(),
+                            );
+                            compositor::add_blocker(surface, transaction.blocker());
+                        }
+                    }
+
+                    transaction_for_dmabuf = Some(transaction);
                 }
             }
-        },
-    )
+        }
+
+        if let Some((blocker, source)) =
+            dmabuf.and_then(|dmabuf| dmabuf.generate_blocker(Interest::READ).ok())
+            && let Some(client) = surface.client()
+        {
+            let res = state
+                .pinnacle
+                .loop_handle
+                .insert_source(source, move |_, _, state| {
+                    // This surface is now ready for the transaction.
+                    drop(transaction_for_dmabuf.take());
+
+                    let display_handle = state.pinnacle.display_handle.clone();
+                    state
+                        .client_compositor_state(&client)
+                        .blocker_cleared(state, &display_handle);
+
+                    Ok(())
+                });
+            if res.is_ok() {
+                compositor::add_blocker(surface, blocker);
+                trace!("added dmabuf blocker");
+            }
+        }
+    })
 }
 
 /// Adds a pre-commit hook for mapped toplevels that blocks windows when transactions are pending.

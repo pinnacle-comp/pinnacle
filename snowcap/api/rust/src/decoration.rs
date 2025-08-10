@@ -43,7 +43,7 @@ impl From<Bounds> for decoration::v1::Bounds {
     }
 }
 
-/// The error type for [`Layer::new_widget`].
+/// The error type for [`new_widget`].
 #[derive(thiserror::Error, Debug)]
 pub enum NewDecorationError {
     /// Snowcap returned a gRPC error status.

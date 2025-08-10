@@ -552,4 +552,30 @@ function widget.input_region(input_region)
     }
 end
 
+---@private
+---@lcat nodoc
+---@param wgt snowcap.widget.WidgetDef
+---@param callbacks table<integer, any>
+---@param with_widget fun(callbacks: table<integer, any>, widget: snowcap.widget.WidgetDef)
+function widget._traverse_widget_tree(wgt, callbacks, with_widget)
+    with_widget(callbacks, wgt)
+    if wgt.column then
+        for _, w in ipairs(wgt.column.children or {}) do
+            widget._traverse_widget_tree(w, callbacks, with_widget)
+        end
+    elseif wgt.row then
+        for _, w in ipairs(wgt.row.children or {}) do
+            widget._traverse_widget_tree(w, callbacks, with_widget)
+        end
+    elseif wgt.scrollable then
+        widget._traverse_widget_tree(wgt.scrollable.child, callbacks, with_widget)
+    elseif wgt.container then
+        widget._traverse_widget_tree(wgt.container.child, callbacks, with_widget)
+    elseif wgt.button then
+        widget._traverse_widget_tree(wgt.button.child, callbacks, with_widget)
+    elseif wgt.input_region then
+        widget._traverse_widget_tree(wgt.input_region.child, callbacks, with_widget)
+    end
+end
+
 return widget
