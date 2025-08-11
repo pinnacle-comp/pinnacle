@@ -34,6 +34,7 @@ use smithay::{
 use tracing::{debug, error, info, trace, warn};
 
 use crate::{
+    api::signal::Signal,
     focus::keyboard::KeyboardFocusTarget,
     state::{Pinnacle, State, WithState},
     window::{
@@ -503,11 +504,16 @@ impl XwmHandler for State {
     }
 
     fn property_notify(&mut self, _xwm: XwmId, window: X11Surface, property: WmWindowProperty) {
-        let Some(window) = self.pinnacle.window_for_x11_surface(&window) else {
+        let Some(window) = self.pinnacle.window_for_x11_surface(&window).cloned() else {
             return;
         };
         match property {
             WmWindowProperty::Title => {
+                self.pinnacle
+                    .signal_state
+                    .window_title_changed
+                    .signal(&window);
+
                 let title = window.title().unwrap_or_default();
                 window.with_state(|state| {
                     if let Some(handle) = state.foreign_toplevel_list_handle.as_ref() {

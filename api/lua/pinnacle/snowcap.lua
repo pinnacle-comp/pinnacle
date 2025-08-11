@@ -80,6 +80,8 @@ local BindOverlay = {}
 ---@field focused boolean
 ---Whether to draw a titlebar
 ---@field include_titlebar boolean
+---The title of the window.
+---@field title string
 ---The height of the titlebar
 ---@field titlebar_height integer
 local FocusBorder = {}
@@ -657,7 +659,7 @@ function FocusBorder:view()
                 height = Widget.length.Fixed(self.titlebar_height),
                 children = {
                     Widget.text({
-                        text = "TITLE GOES HERE",
+                        text = self.title,
                         style = {
                             pixels = self.titlebar_height - 2,
                         },
@@ -707,7 +709,7 @@ function FocusBorder:view()
                                 },
                             },
                         },
-                        on_press = "maximize",
+                        on_press = { maximize = true },
                         child = Widget.Image({
                             handle = {
                                 rgba = {
@@ -764,7 +766,7 @@ function FocusBorder:view()
                                 },
                             },
                         },
-                        on_press = "close",
+                        on_press = { close = true },
                         child = Widget.Image({
                             handle = {
                                 rgba = {
@@ -832,13 +834,19 @@ function FocusBorder:view()
 end
 
 function FocusBorder:update(msg)
-    if msg == true then
+    if msg.set_focused == true then
         self.focused = true
-    elseif msg == false then
+    end
+    if msg.set_focused == false then
         self.focused = false
-    elseif msg == "maximize" then
+    end
+    if msg.title_changed then
+        self.title = msg.title_changed
+    end
+    if msg.maximize then
         self.window:toggle_maximized()
-    elseif msg == "close" then
+    end
+    if msg.close then
         self.window:close()
     end
 end
@@ -877,14 +885,34 @@ function FocusBorder:decorate()
     local signal = require("pinnacle.window").connect_signal({
         focused = function(focused)
             if self.window:foreign_toplevel_list_identifier() then
-                border:send_message(self.window.id == focused.id)
+                border:send_message({
+                    set_focused = self.window.id == focused.id,
+                })
             else
                 signal_holder[1]:disconnect_all()
+                signal_holder[2]:disconnect_all()
             end
         end,
     })
 
     signal_holder[1] = signal
+
+    local signal = require("pinnacle.window").connect_signal({
+        title_changed = function(win, title)
+            if self.window:foreign_toplevel_list_identifier() then
+                if win.id == self.window.id then
+                    border:send_message({
+                        title_changed = title,
+                    })
+                end
+            else
+                signal_holder[1]:disconnect_all()
+                signal_holder[2]:disconnect_all()
+            end
+        end,
+    })
+
+    signal_holder[2] = signal
 
     return border
 end
