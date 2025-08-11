@@ -58,9 +58,10 @@ impl ForeignToplevelHandler for State {
             return;
         };
 
-        self.update_window_layout_mode_and_layout(&window, |layout_mode| {
-            layout_mode.set_client_fullscreen(true);
-        });
+        self.pinnacle
+            .update_window_layout_mode(&window, |layout_mode| {
+                layout_mode.set_client_fullscreen(true);
+            });
     }
 
     fn unset_fullscreen(&mut self, wl_surface: WlSurface) {
@@ -70,9 +71,10 @@ impl ForeignToplevelHandler for State {
             return;
         };
 
-        self.update_window_layout_mode_and_layout(&window, |layout_mode| {
-            layout_mode.set_client_fullscreen(false);
-        });
+        self.pinnacle
+            .update_window_layout_mode(&window, |layout_mode| {
+                layout_mode.set_client_fullscreen(false);
+            });
     }
 
     fn set_maximized(&mut self, wl_surface: WlSurface) {
@@ -82,9 +84,10 @@ impl ForeignToplevelHandler for State {
             return;
         };
 
-        self.update_window_layout_mode_and_layout(&window, |layout_mode| {
-            layout_mode.set_client_maximized(true);
-        });
+        self.pinnacle
+            .update_window_layout_mode(&window, |layout_mode| {
+                layout_mode.set_client_maximized(true);
+            });
     }
 
     fn unset_maximized(&mut self, wl_surface: WlSurface) {
@@ -94,9 +97,10 @@ impl ForeignToplevelHandler for State {
             return;
         };
 
-        self.update_window_layout_mode_and_layout(&window, |layout_mode| {
-            layout_mode.set_client_maximized(false);
-        });
+        self.pinnacle
+            .update_window_layout_mode(&window, |layout_mode| {
+                layout_mode.set_client_maximized(false);
+            });
     }
 
     // TODO:

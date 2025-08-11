@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+pub mod layout;
 pub mod rules;
 
 use std::{cell::RefCell, collections::HashMap, ops::Deref, rc::Rc};
@@ -809,17 +810,14 @@ impl State {
             });
         }
 
-        let Some(output) = window.output(&self.pinnacle) else {
+        if window.output(&self.pinnacle).is_none() {
             return;
         };
 
-        self.update_window_layout_mode_and_layout(&window, |_| ());
-        // `update_window_layout_mode_and_layout` won't request a layout because
-        // the mode isn't updated. As a consequence of the method doing 3 different
-        // things, we do a manual request here.
-        if window.with_state(|state| state.layout_mode.is_tiled()) {
-            self.pinnacle.request_layout(&output);
-        }
+        self.pinnacle.update_window_geometry(
+            &window,
+            window.with_state(|state| state.layout_mode.is_tiled()),
+        );
 
         // TODO: xdg activation
 

@@ -7,7 +7,6 @@ pub mod idle;
 pub mod session_lock;
 #[cfg(feature = "snowcap")]
 pub mod snowcap_decoration;
-pub mod window;
 pub mod xdg_activation;
 mod xdg_shell;
 pub mod xwayland;
@@ -381,7 +380,7 @@ impl CompositorHandler for State {
                     {
                         self.pinnacle.request_layout(&output);
                     } else {
-                        self.update_window_layout_mode_and_layout(&win, |_| ());
+                        self.pinnacle.update_window_geometry(&win, false);
                     }
                 }
 
