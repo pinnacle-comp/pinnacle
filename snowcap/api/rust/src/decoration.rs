@@ -32,6 +32,18 @@ pub struct Bounds {
     pub bottom: u32,
 }
 
+impl Bounds {
+    /// Creates bounds where all edges are the given amount.
+    pub fn all(bounds: u32) -> Self {
+        Self {
+            left: bounds,
+            right: bounds,
+            top: bounds,
+            bottom: bounds,
+        }
+    }
+}
+
 impl From<Bounds> for decoration::v1::Bounds {
     fn from(value: Bounds) -> Self {
         Self {
