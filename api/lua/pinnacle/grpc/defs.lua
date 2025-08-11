@@ -1097,6 +1097,13 @@ local pinnacle_window_v1_DecorationMode = {
 ---@class pinnacle.signal.v1.WindowFocusedResponse
 ---@field window_id integer?
 
+---@class pinnacle.signal.v1.WindowTitleChangedRequest
+---@field control pinnacle.signal.v1.StreamControl?
+
+---@class pinnacle.signal.v1.WindowTitleChangedResponse
+---@field window_id integer?
+---@field title string?
+
 ---@class pinnacle.signal.v1.TagActiveRequest
 ---@field control pinnacle.signal.v1.StreamControl?
 
@@ -1463,6 +1470,8 @@ pinnacle.signal.v1.WindowPointerLeaveRequest = {}
 pinnacle.signal.v1.WindowPointerLeaveResponse = {}
 pinnacle.signal.v1.WindowFocusedRequest = {}
 pinnacle.signal.v1.WindowFocusedResponse = {}
+pinnacle.signal.v1.WindowTitleChangedRequest = {}
+pinnacle.signal.v1.WindowTitleChangedResponse = {}
 pinnacle.signal.v1.TagActiveRequest = {}
 pinnacle.signal.v1.TagActiveResponse = {}
 pinnacle.signal.v1.InputDeviceAddedRequest = {}
@@ -2652,6 +2661,27 @@ pinnacle.signal.v1.SignalService.WindowFocused.response = ".pinnacle.signal.v1.W
 ---@return string | nil An error string, if any
 function Client:pinnacle_signal_v1_SignalService_WindowFocused(callback)
     return self:bidirectional_streaming_request(pinnacle.signal.v1.SignalService.WindowFocused, callback)
+end
+pinnacle.signal.v1.SignalService.WindowTitleChanged = {}
+pinnacle.signal.v1.SignalService.WindowTitleChanged.service = "pinnacle.signal.v1.SignalService"
+pinnacle.signal.v1.SignalService.WindowTitleChanged.method = "WindowTitleChanged"
+pinnacle.signal.v1.SignalService.WindowTitleChanged.request = ".pinnacle.signal.v1.WindowTitleChangedRequest"
+pinnacle.signal.v1.SignalService.WindowTitleChanged.response = ".pinnacle.signal.v1.WindowTitleChangedResponse"
+
+---Performs a bidirectional-streaming request.
+---
+---`callback` will be called with every streamed response.
+---
+---The raw client-to-server stream is returned to allow you to send encoded messages.
+---
+---@nodiscard
+---
+---@param callback fun(response: pinnacle.signal.v1.WindowTitleChangedResponse, stream: grpc_client.h2.Stream)
+---
+---@return grpc_client.h2.Stream | nil
+---@return string | nil An error string, if any
+function Client:pinnacle_signal_v1_SignalService_WindowTitleChanged(callback)
+    return self:bidirectional_streaming_request(pinnacle.signal.v1.SignalService.WindowTitleChanged, callback)
 end
 pinnacle.signal.v1.SignalService.TagActive = {}
 pinnacle.signal.v1.SignalService.TagActive.service = "pinnacle.signal.v1.SignalService"

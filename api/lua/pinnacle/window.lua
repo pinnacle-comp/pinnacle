@@ -152,12 +152,14 @@ local signal_name_to_SignalName = {
     pointer_enter = "WindowPointerEnter",
     pointer_leave = "WindowPointerLeave",
     focused = "WindowFocused",
+    title_changed = "WindowTitleChanged",
 }
 
 ---@class pinnacle.window.WindowSignal Signals related to compositor events.
 ---@field pointer_enter fun(window: pinnacle.window.WindowHandle)? The pointer entered a window.
 ---@field pointer_leave fun(window: pinnacle.window.WindowHandle)? The pointer left a window.
 ---@field focused fun(window: pinnacle.window.WindowHandle)? The window got keyboard focus.
+---@field title_changed fun(window: pinnacle.window.WindowHandle, title: string)? A window's title changed.
 
 ---Connects to a window signal.
 ---

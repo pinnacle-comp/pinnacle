@@ -17,6 +17,7 @@ use smithay::{
 use tracing::warn;
 
 use crate::{
+    api::signal::Signal,
     focus::keyboard::KeyboardFocusTarget,
     state::{State, WithState},
     window::{
@@ -434,9 +435,19 @@ impl XdgShellHandler for State {
     }
 
     fn title_changed(&mut self, surface: ToplevelSurface) {
-        let Some(window) = self.pinnacle.window_for_surface(surface.wl_surface()) else {
+        let Some(window) = self
+            .pinnacle
+            .window_for_surface(surface.wl_surface())
+            .cloned()
+        else {
             return;
         };
+
+        self.pinnacle
+            .signal_state
+            .window_title_changed
+            .signal(&window);
+
         let title = window.title().unwrap_or_default();
         window.with_state(|state| {
             if let Some(handle) = state.foreign_toplevel_list_handle.as_ref() {
