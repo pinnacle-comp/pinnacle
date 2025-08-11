@@ -184,12 +184,15 @@ impl WindowElement {
         let (mut size, loc) = {
             #[cfg(feature = "snowcap")]
             {
-                // Not `has_fullscreen_state`, we need the calculation done beforehand
+                // Not `should_not_have_ssd`, we need the calculation done beforehand
                 if self.with_state(|state| {
                     state.layout_mode.is_fullscreen()
                         || state.decoration_mode
                             == Some(zxdg_toplevel_decoration_v1::Mode::ClientSide)
-                }) {
+                }) || self
+                    .x11_surface()
+                    .is_some_and(|surface| surface.is_decorated())
+                {
                     (size, loc)
                 } else {
                     let mut size = size;
