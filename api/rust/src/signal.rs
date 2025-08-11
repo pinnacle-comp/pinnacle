@@ -506,6 +506,7 @@ where
 /// A handle that can be used to disconnect from a signal connection.
 ///
 /// This will remove the connected callback.
+#[derive(Debug, Clone)]
 pub struct SignalHandle {
     id: SignalConnId,
     remove_callback_sender: UnboundedSender<SignalConnId>,
@@ -522,8 +523,8 @@ impl SignalHandle {
         }
     }
 
-    /// Disconnect this signal connection.
-    pub fn disconnect(self) {
+    /// Disconnects this signal connection.
+    pub fn disconnect(&self) {
         self.remove_callback_sender
             .send(self.id)
             .expect("failed to disconnect signal");
