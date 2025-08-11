@@ -662,11 +662,13 @@ impl FocusBorder {
         .unwrap();
 
         let signal_holder = Arc::new(OnceLock::<SignalHandle>::new());
+        let signal_holder2 = Arc::new(OnceLock::<SignalHandle>::new());
 
         // We use the foreign toplevel ID to tell if the window is alive
         let signal =
             crate::window::connect_signal(crate::signal::WindowSignal::Focused(Box::new({
                 let signal_holder = signal_holder.clone();
+                let signal_holder2 = signal_holder2.clone();
                 let window = window.clone();
                 let border = border.clone();
                 move |focused| {
@@ -674,17 +676,17 @@ impl FocusBorder {
                         border.send_message(FocusBorderMessage::SetFocused(&window == focused));
                     } else {
                         signal_holder.get().unwrap().disconnect();
+                        signal_holder2.get().unwrap().disconnect();
                     }
                 }
             })));
 
         signal_holder.set(signal).unwrap();
 
-        let signal_holder = Arc::new(OnceLock::<SignalHandle>::new());
-
         let signal =
             crate::window::connect_signal(crate::signal::WindowSignal::TitleChanged(Box::new({
                 let signal_holder = signal_holder.clone();
+                let signal_holder2 = signal_holder2.clone();
                 let window = window.clone();
                 let border = border.clone();
                 move |win, title| {
@@ -694,11 +696,12 @@ impl FocusBorder {
                         }
                     } else {
                         signal_holder.get().unwrap().disconnect();
+                        signal_holder2.get().unwrap().disconnect();
                     }
                 }
             })));
 
-        signal_holder.set(signal).unwrap();
+        signal_holder2.set(signal).unwrap();
 
         border
     }
