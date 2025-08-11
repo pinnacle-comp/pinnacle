@@ -66,6 +66,24 @@ local QuitPrompt = {}
 ---@field height integer
 local BindOverlay = {}
 
+---A border that shows window focus, with an optional titlebar.
+---@class pinnacle.snowcap.integration.FocusBorder : snowcap.widget.Program
+---The window this border is decorating.
+---@field window pinnacle.window.WindowHandle
+---The thickness of the border, in pixels.
+---@field thickness integer
+---The color of the border when it's focused.
+---@field focused_color snowcap.widget.Color
+---The color of the border when it's unfocused.
+---@field unfocused_color snowcap.widget.Color
+---Whether the window this border surrounds is focused.
+---@field focused boolean
+---Whether to draw a titlebar
+---@field include_titlebar boolean
+---The height of the titlebar
+---@field titlebar_height integer
+local FocusBorder = {}
+
 function QuitPrompt:view()
     local Widget = require("snowcap.widget")
 
@@ -532,6 +550,345 @@ function BindOverlay:show()
     end)
 end
 
+local B = "\0\0\0\255"
+local T = "\0\0\0\0"
+
+-- stylua: ignore
+local exit_icon = table.concat({
+    T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,
+    T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,
+    T,T,B,B,B,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,B,B,B,T,T,
+    T,T,B,B,B,B,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,B,B,B,B,T,T,
+    T,T,B,B,B,B,B,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,B,B,B,B,B,T,T,
+    T,T,T,B,B,B,B,B,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,B,B,B,B,B,T,T,T,
+    T,T,T,T,B,B,B,B,B,T,T,T,T,T,T,T,T,T,T,T,T,T,T,B,B,B,B,B,T,T,T,T,
+    T,T,T,T,T,B,B,B,B,B,T,T,T,T,T,T,T,T,T,T,T,T,B,B,B,B,B,T,T,T,T,T,
+    T,T,T,T,T,T,B,B,B,B,B,T,T,T,T,T,T,T,T,T,T,B,B,B,B,B,T,T,T,T,T,T,
+    T,T,T,T,T,T,T,B,B,B,B,B,T,T,T,T,T,T,T,T,B,B,B,B,B,T,T,T,T,T,T,T,
+    T,T,T,T,T,T,T,T,B,B,B,B,B,T,T,T,T,T,T,B,B,B,B,B,T,T,T,T,T,T,T,T,
+    T,T,T,T,T,T,T,T,T,B,B,B,B,B,T,T,T,T,B,B,B,B,B,T,T,T,T,T,T,T,T,T,
+    T,T,T,T,T,T,T,T,T,T,B,B,B,B,B,T,T,B,B,B,B,B,T,T,T,T,T,T,T,T,T,T,
+    T,T,T,T,T,T,T,T,T,T,T,B,B,B,B,B,B,B,B,B,B,T,T,T,T,T,T,T,T,T,T,T,
+    T,T,T,T,T,T,T,T,T,T,T,T,B,B,B,B,B,B,B,B,T,T,T,T,T,T,T,T,T,T,T,T,
+    T,T,T,T,T,T,T,T,T,T,T,T,T,B,B,B,B,B,B,T,T,T,T,T,T,T,T,T,T,T,T,T,
+    T,T,T,T,T,T,T,T,T,T,T,T,T,B,B,B,B,B,B,T,T,T,T,T,T,T,T,T,T,T,T,T,
+    T,T,T,T,T,T,T,T,T,T,T,T,B,B,B,B,B,B,B,B,T,T,T,T,T,T,T,T,T,T,T,T,
+    T,T,T,T,T,T,T,T,T,T,T,B,B,B,B,B,B,B,B,B,B,T,T,T,T,T,T,T,T,T,T,T,
+    T,T,T,T,T,T,T,T,T,T,B,B,B,B,B,T,T,B,B,B,B,B,T,T,T,T,T,T,T,T,T,T,
+    T,T,T,T,T,T,T,T,T,B,B,B,B,B,T,T,T,T,B,B,B,B,B,T,T,T,T,T,T,T,T,T,
+    T,T,T,T,T,T,T,T,B,B,B,B,B,T,T,T,T,T,T,B,B,B,B,B,T,T,T,T,T,T,T,T,
+    T,T,T,T,T,T,T,B,B,B,B,B,T,T,T,T,T,T,T,T,B,B,B,B,B,T,T,T,T,T,T,T,
+    T,T,T,T,T,T,B,B,B,B,B,T,T,T,T,T,T,T,T,T,T,B,B,B,B,B,T,T,T,T,T,T,
+    T,T,T,T,T,B,B,B,B,B,T,T,T,T,T,T,T,T,T,T,T,T,B,B,B,B,B,T,T,T,T,T,
+    T,T,T,T,B,B,B,B,B,T,T,T,T,T,T,T,T,T,T,T,T,T,T,B,B,B,B,B,T,T,T,T,
+    T,T,T,B,B,B,B,B,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,B,B,B,B,B,T,T,T,
+    T,T,B,B,B,B,B,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,B,B,B,B,B,T,T,
+    T,T,B,B,B,B,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,B,B,B,B,T,T,
+    T,T,B,B,B,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,B,B,B,T,T,
+    T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,
+    T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T
+})
+
+-- stylua: ignore
+local maximize_icon = table.concat({
+    T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,
+    T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,
+    T,T,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,T,T,
+    T,T,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,T,T,
+    T,T,B,B,B,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,B,B,B,T,T,
+    T,T,B,B,B,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,B,B,B,T,T,
+    T,T,B,B,B,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,B,B,B,T,T,
+    T,T,B,B,B,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,B,B,B,T,T,
+    T,T,B,B,B,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,B,B,B,T,T,
+    T,T,B,B,B,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,B,B,B,T,T,
+    T,T,B,B,B,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,B,B,B,T,T,
+    T,T,B,B,B,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,B,B,B,T,T,
+    T,T,B,B,B,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,B,B,B,T,T,
+    T,T,B,B,B,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,B,B,B,T,T,
+    T,T,B,B,B,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,B,B,B,T,T,
+    T,T,B,B,B,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,B,B,B,T,T,
+    T,T,B,B,B,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,B,B,B,T,T,
+    T,T,B,B,B,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,B,B,B,T,T,
+    T,T,B,B,B,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,B,B,B,T,T,
+    T,T,B,B,B,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,B,B,B,T,T,
+    T,T,B,B,B,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,B,B,B,T,T,
+    T,T,B,B,B,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,B,B,B,T,T,
+    T,T,B,B,B,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,B,B,B,T,T,
+    T,T,B,B,B,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,B,B,B,T,T,
+    T,T,B,B,B,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,B,B,B,T,T,
+    T,T,B,B,B,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,B,B,B,T,T,
+    T,T,B,B,B,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,B,B,B,T,T,
+    T,T,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,T,T,
+    T,T,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,T,T,
+    T,T,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,T,T,
+    T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,
+    T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T
+})
+
+function FocusBorder:view()
+    local Widget = require("snowcap.widget")
+
+    local function brighten(amt)
+        local color = self.focused and self.focused_color or self.unfocused_color
+        color = require("pinnacle.util").deep_copy(color)
+        color.red = color.red + amt
+        color.green = color.green + amt
+        color.blue = color.blue + amt
+        return color
+    end
+
+    local children = {}
+
+    if self.include_titlebar then
+        local titlebar = Widget.container({
+            style = {
+                background_color = self.focused and self.focused_color or self.unfocused_color,
+            },
+            padding = {
+                top = self.thickness,
+                right = self.thickness,
+                bottom = 0,
+                left = self.thickness,
+            },
+            child = Widget.row({
+                item_alignment = Widget.alignment.START,
+                spacing = 4,
+                width = Widget.length.Fill,
+                height = Widget.length.Fixed(self.titlebar_height),
+                children = {
+                    Widget.text({
+                        text = "TITLE GOES HERE",
+                        style = {
+                            pixels = self.titlebar_height - 2,
+                        },
+                        width = Widget.length.Fill,
+                    }),
+                    Widget.button({
+                        width = Widget.length.Fixed(self.titlebar_height),
+                        height = Widget.length.Fixed(self.titlebar_height),
+                        padding = {
+                            top = 4,
+                            bottom = 4,
+                            right = 4,
+                            left = 4,
+                        },
+                        style = {
+                            active = {
+                                background_color = brighten(0.3),
+                                border = {
+                                    radius = {
+                                        bottom_left = 1000,
+                                        bottom_right = 1000,
+                                        top_left = 1000,
+                                        top_right = 1000,
+                                    },
+                                },
+                            },
+                            hovered = {
+                                background_color = brighten(0.4),
+                                border = {
+                                    radius = {
+                                        bottom_left = 1000,
+                                        bottom_right = 1000,
+                                        top_left = 1000,
+                                        top_right = 1000,
+                                    },
+                                },
+                            },
+                            pressed = {
+                                background_color = brighten(0.5),
+                                border = {
+                                    radius = {
+                                        bottom_left = 1000,
+                                        bottom_right = 1000,
+                                        top_left = 1000,
+                                        top_right = 1000,
+                                    },
+                                },
+                            },
+                        },
+                        on_press = "maximize",
+                        child = Widget.Image({
+                            handle = {
+                                rgba = {
+                                    width = 32,
+                                    height = 32,
+                                    rgba = maximize_icon,
+                                },
+                            },
+                            width = Widget.length.Fill,
+                            height = Widget.length.Fill,
+                        }),
+                    }),
+                    Widget.button({
+                        width = Widget.length.Fixed(self.titlebar_height),
+                        height = Widget.length.Fixed(self.titlebar_height),
+                        padding = {
+                            top = 4,
+                            bottom = 4,
+                            right = 4,
+                            left = 4,
+                        },
+                        style = {
+                            active = {
+                                background_color = brighten(0.3),
+                                border = {
+                                    radius = {
+                                        bottom_left = 1000,
+                                        bottom_right = 1000,
+                                        top_left = 1000,
+                                        top_right = 1000,
+                                    },
+                                },
+                            },
+                            hovered = {
+                                background_color = brighten(0.4),
+                                border = {
+                                    radius = {
+                                        bottom_left = 1000,
+                                        bottom_right = 1000,
+                                        top_left = 1000,
+                                        top_right = 1000,
+                                    },
+                                },
+                            },
+                            pressed = {
+                                background_color = brighten(0.5),
+                                border = {
+                                    radius = {
+                                        bottom_left = 1000,
+                                        bottom_right = 1000,
+                                        top_left = 1000,
+                                        top_right = 1000,
+                                    },
+                                },
+                            },
+                        },
+                        on_press = "close",
+                        child = Widget.Image({
+                            handle = {
+                                rgba = {
+                                    width = 32,
+                                    height = 32,
+                                    rgba = exit_icon,
+                                },
+                            },
+                            width = Widget.length.Fill,
+                            height = Widget.length.Fill,
+                        }),
+                    }),
+                },
+            }),
+        })
+
+        table.insert(children, titlebar)
+    end
+
+    table.insert(
+        children,
+        Widget.container({
+            width = Widget.length.Fill,
+            height = Widget.length.Fill,
+            padding = {
+                left = self.thickness,
+                right = self.thickness,
+                bottom = self.thickness,
+                top = self.thickness,
+            },
+            style = {
+                background_color = {
+                    red = 0,
+                    green = 0,
+                    blue = 0,
+                    alpha = 0,
+                },
+                border = {
+                    color = self.focused and self.focused_color or self.unfocused_color,
+                    width = self.thickness,
+                    radius = {
+                        top_right = 0,
+                        top_left = 0,
+                        bottom_right = 0,
+                        bottom_left = 0,
+                    },
+                },
+            },
+            child = Widget.input_region({
+                width = Widget.length.Fill,
+                height = Widget.length.Fill,
+                add = false,
+                child = Widget.row({
+                    children = {},
+                }),
+            }),
+        })
+    )
+
+    local col = Widget.column({
+        children = children,
+    })
+
+    return col
+end
+
+function FocusBorder:update(msg)
+    if msg == true then
+        self.focused = true
+    elseif msg == false then
+        self.focused = false
+    elseif msg == "maximize" then
+        self.window:toggle_maximized()
+    elseif msg == "close" then
+        self.window:close()
+    end
+end
+
+---Decorates the window with this focus border.
+---
+---@return snowcap.decoration.DecorationHandle|nil
+function FocusBorder:decorate()
+    local Deco = require("snowcap.decoration")
+
+    local border = Deco.new_widget({
+        program = self,
+        toplevel_identifier = self.window:foreign_toplevel_list_identifier() or "",
+        bounds = {
+            left = self.thickness,
+            right = self.thickness,
+            top = self.thickness * 2 + self.titlebar_height,
+            bottom = self.thickness,
+        },
+        extents = {
+            left = self.thickness,
+            right = self.thickness,
+            top = self.thickness * 2 + self.titlebar_height,
+            bottom = self.thickness,
+        },
+        z_index = 20,
+    })
+
+    if not border then
+        return nil
+    end
+
+    ---@type pinnacle.signal.SignalHandles[]
+    local signal_holder = {}
+
+    local signal = require("pinnacle.window").connect_signal({
+        focused = function(focused)
+            if self.window:foreign_toplevel_list_identifier() then
+                border:send_message(self.window.id == focused.id)
+            else
+                signal_holder[1]:disconnect_all()
+            end
+        end,
+    })
+
+    signal_holder[1] = signal
+
+    return border
+end
+
 ---Creates the default quit prompt.
 ---
 ---Some of its characteristics can be changed by altering its fields.
@@ -582,6 +939,54 @@ function integration.bind_overlay()
     setmetatable(prompt, { __index = BindOverlay })
 
     return prompt
+end
+
+---Creates the default focus border without a titlebar.
+---
+---@param window pinnacle.window.WindowHandle
+---
+---@return pinnacle.snowcap.integration.FocusBorder
+function integration.focus_border(window)
+    local Widget = require("snowcap.widget")
+
+    ---@type pinnacle.snowcap.integration.FocusBorder
+    local border = {
+        window = window,
+        thickness = 4,
+        focused_color = Widget.color.from_rgba(0.4, 0.15, 0.7),
+        unfocused_color = Widget.color.from_rgba(0.15, 0.15, 0.15),
+        focused = false,
+        include_titlebar = false,
+        titlebar_height = 0,
+    }
+
+    setmetatable(border, { __index = FocusBorder })
+
+    return border
+end
+
+---Creates the default focus border with a titlebar.
+---
+---@param window pinnacle.window.WindowHandle
+---
+---@return pinnacle.snowcap.integration.FocusBorder
+function integration.focus_border_with_titlebar(window)
+    local Widget = require("snowcap.widget")
+
+    ---@type pinnacle.snowcap.integration.FocusBorder
+    local border = {
+        window = window,
+        thickness = 4,
+        focused_color = Widget.color.from_rgba(0.4, 0.15, 0.7),
+        unfocused_color = Widget.color.from_rgba(0.15, 0.15, 0.15),
+        focused = false,
+        include_titlebar = true,
+        titlebar_height = 16,
+    }
+
+    setmetatable(border, { __index = FocusBorder })
+
+    return border
 end
 
 return snowcap

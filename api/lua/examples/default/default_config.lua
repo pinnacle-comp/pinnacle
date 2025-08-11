@@ -348,10 +348,19 @@ Pinnacle.setup(function()
     -- Other stuff       --
     -----------------------
 
-    -- There are no server-side decorations yet, so request all clients use client-side decorations.
-    Window.add_window_rule(function(window)
-        window:set_decoration_mode("client_side")
-    end)
+    -- Enable focus borders
+    if Snowcap then
+        -- Add borders to already existing windows
+        for _, win in ipairs(Window.get_all()) do
+            Snowcap.integration.focus_border_with_titlebar(win):decorate()
+        end
+
+        -- Add borders to new windows
+        Window.add_window_rule(function(window)
+            window:set_decoration_mode("server_side")
+            Snowcap.integration.focus_border_with_titlebar(window):decorate()
+        end)
+    end
 
     -- Enable sloppy focus
     Window.connect_signal({
