@@ -13,7 +13,8 @@ use pinnacle_api_defs::pinnacle::signal::{
         OutputPointerLeaveResponse, OutputResizeRequest, OutputResizeResponse, SignalRequest,
         StreamControl, TagActiveRequest, TagActiveResponse, WindowFocusedRequest,
         WindowFocusedResponse, WindowPointerEnterRequest, WindowPointerEnterResponse,
-        WindowPointerLeaveRequest, WindowPointerLeaveResponse,
+        WindowPointerLeaveRequest, WindowPointerLeaveResponse, WindowTitleChangedRequest,
+        WindowTitleChangedResponse,
     },
 };
 use smithay::output::Output;
@@ -44,6 +45,7 @@ pub struct SignalState {
     pub window_pointer_enter: WindowPointerEnter,
     pub window_pointer_leave: WindowPointerLeave,
     pub window_focused: WindowFocused,
+    pub window_title_changed: WindowTitleChanged,
 
     // Tag
     pub tag_active: TagActive,
@@ -65,6 +67,7 @@ impl SignalState {
         self.window_pointer_enter.clear();
         self.window_pointer_leave.clear();
         self.window_focused.clear();
+        self.window_title_changed.clear();
 
         self.tag_active.clear();
 
@@ -308,6 +311,28 @@ impl Signal for WindowFocused {
 }
 
 #[derive(Debug, Default)]
+pub struct WindowTitleChanged {
+    v1: SignalData<signal::v1::WindowTitleChangedResponse>,
+}
+
+impl Signal for WindowTitleChanged {
+    type Args<'a> = &'a WindowElement;
+
+    fn signal(&mut self, window: Self::Args<'_>) {
+        self.v1.signal(|buf| {
+            buf.push_back(signal::v1::WindowTitleChangedResponse {
+                window_id: window.with_state(|state| state.id.0),
+                title: window.title().unwrap_or_default(),
+            });
+        });
+    }
+
+    fn clear(&mut self) {
+        self.v1.instances.clear();
+    }
+}
+
+#[derive(Debug, Default)]
 pub struct TagActive {
     v1: SignalData<signal::v1::TagActiveResponse>,
 }
@@ -466,6 +491,7 @@ impl signal::v1::signal_service_server::SignalService for SignalService {
     type WindowPointerEnterStream = ResponseStream<WindowPointerEnterResponse>;
     type WindowPointerLeaveStream = ResponseStream<WindowPointerLeaveResponse>;
     type WindowFocusedStream = ResponseStream<WindowFocusedResponse>;
+    type WindowTitleChangedStream = ResponseStream<WindowTitleChangedResponse>;
 
     type TagActiveStream = ResponseStream<TagActiveResponse>;
 
@@ -578,6 +604,17 @@ impl signal::v1::signal_service_server::SignalService for SignalService {
 
         start_signal_stream(self.sender.clone(), in_stream, |state| {
             &mut state.pinnacle.signal_state.window_focused.v1
+        })
+    }
+
+    async fn window_title_changed(
+        &self,
+        request: Request<Streaming<WindowTitleChangedRequest>>,
+    ) -> Result<Response<Self::WindowTitleChangedStream>, Status> {
+        let in_stream = request.into_inner();
+
+        start_signal_stream(self.sender.clone(), in_stream, |state| {
+            &mut state.pinnacle.signal_state.window_title_changed.v1
         })
     }
 
