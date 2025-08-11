@@ -100,7 +100,9 @@ impl XwmHandler for State {
             state.foreign_toplevel_list_handle = Some(handle);
         });
 
-        if let Some(output) = self.pinnacle.focused_output()
+        if unmapped.window.output(&self.pinnacle).is_some() {
+            self.pinnacle.request_window_rules(&mut unmapped);
+        } else if let Some(output) = self.pinnacle.focused_output()
             && output.with_state(|state| !state.tags.is_empty())
         {
             unmapped.window.set_tags_to_output(output);
