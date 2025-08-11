@@ -983,8 +983,9 @@ function integration.focus_border(window)
         thickness = 4,
         focused_color = Widget.color.from_rgba(0.4, 0.15, 0.7),
         unfocused_color = Widget.color.from_rgba(0.15, 0.15, 0.15),
-        focused = false,
+        focused = window:focused(),
         include_titlebar = false,
+        title = "",
         titlebar_height = 0,
     }
 
@@ -1007,8 +1008,9 @@ function integration.focus_border_with_titlebar(window)
         thickness = 4,
         focused_color = Widget.color.from_rgba(0.4, 0.15, 0.7),
         unfocused_color = Widget.color.from_rgba(0.15, 0.15, 0.15),
-        focused = false,
+        focused = window:focused(),
         include_titlebar = true,
+        title = window:title(),
         titlebar_height = 16,
     }
 
