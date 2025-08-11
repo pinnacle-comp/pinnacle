@@ -180,25 +180,29 @@ impl CompositorHandler for State {
                     let mut unmapped = self.pinnacle.unmapped_windows.swap_remove(idx);
                     unmapped.window.on_commit();
 
-                    if let Some(output) = self.pinnacle.focused_output().cloned() {
-                        if output.with_state(|state| !state.tags.is_empty())
-                            && matches!(unmapped.state, UnmappedState::WaitingForTags { .. })
+                    if matches!(unmapped.state, UnmappedState::WaitingForTags { .. }) {
+                        if unmapped.window.output(&self.pinnacle).is_some() {
+                            self.pinnacle.request_window_rules(&mut unmapped);
+                        } else if let Some(output) = self.pinnacle.focused_output().cloned()
+                            && output.with_state(|state| !state.tags.is_empty())
                         {
                             // FIXME: If there are no tags and the window still commits a buffer,
                             // Pinnacle will crash at `map_new_window`.
                             unmapped.window.set_tags_to_output(&output);
                             self.pinnacle.request_window_rules(&mut unmapped);
                         }
+                    }
 
-                        if let Some(toplevel) = unmapped.window.toplevel() {
-                            toplevel.with_pending_state(|state| {
-                                state.bounds = self
-                                    .pinnacle
-                                    .space
-                                    .output_geometry(&output)
-                                    .map(|geo| geo.size);
-                            });
-                        }
+                    if let Some(output) = unmapped.window.output(&self.pinnacle)
+                        && let Some(toplevel) = unmapped.window.toplevel()
+                    {
+                        toplevel.with_pending_state(|state| {
+                            state.bounds = self
+                                .pinnacle
+                                .space
+                                .output_geometry(&output)
+                                .map(|geo| geo.size);
+                        });
                     }
 
                     self.pinnacle.unmapped_windows.push(unmapped);

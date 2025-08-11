@@ -226,16 +226,30 @@ impl XdgShellHandler for State {
         }
     }
 
-    fn fullscreen_request(&mut self, surface: ToplevelSurface, _wl_output: Option<WlOutput>) {
+    fn fullscreen_request(&mut self, surface: ToplevelSurface, wl_output: Option<WlOutput>) {
         let _span = tracy_client::span!("XdgShellHandler::fullscreen_request");
 
-        // TODO: Respect client output preference
+        let requested_output = wl_output.and_then(|wl_output| {
+            self.pinnacle
+                .outputs
+                .iter()
+                .find(|output| output.owns(&wl_output))
+                .filter(|output| {
+                    output.with_state(|state| !state.tags.is_empty())
+                        && self.pinnacle.space.output_geometry(output).is_some()
+                })
+                .cloned()
+        });
 
         if let Some(window) = self
             .pinnacle
             .window_for_surface(surface.wl_surface())
             .cloned()
         {
+            if let Some(output) = requested_output {
+                window.set_tags_to_output(&output);
+            }
+
             window.with_state_mut(|state| state.need_configure = true);
             self.pinnacle
                 .update_window_layout_mode(&window, |mode| mode.set_client_fullscreen(true));
@@ -243,6 +257,10 @@ impl XdgShellHandler for State {
             .pinnacle
             .unmapped_window_for_surface_mut(surface.wl_surface())
         {
+            if let Some(output) = requested_output {
+                unmapped.window.set_tags_to_output(&output);
+            }
+
             match &mut unmapped.state {
                 UnmappedState::WaitingForTags { client_requests } => {
                     client_requests.layout_mode = Some(FullscreenOrMaximized::Fullscreen);

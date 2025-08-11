@@ -159,8 +159,6 @@ fn mapped_fullscreen_twice() {
     fixture.flush();
 }
 
-// FIXME: Not implemented
-#[ignore]
 #[test_log::test]
 fn mapped_set_fullscreen_on_output() {
     let (mut fixture, _, output) = set_up();
@@ -175,7 +173,7 @@ fn mapped_set_fullscreen_on_output() {
     fixture
         .client(client_id)
         .window_for_surface(surface)
-        .set_fullscreen(outputs.iter().nth(2));
+        .set_fullscreen(outputs.iter().nth(1));
     fixture.roundtrip(client_id);
     fixture.wait_client_configure(client_id);
     fixture.flush();
@@ -186,6 +184,30 @@ fn mapped_set_fullscreen_on_output() {
         fixture
             .client(client_id)
             .window_for_surface(surface)
+            .fullscreen
+    );
+    assert_eq!(output.with_state(|state| state.tags.clone()), tags);
+}
+
+#[test_log::test]
+fn unmapped_set_fullscreen_on_output() {
+    let (mut fixture, _, output) = set_up();
+
+    let client_id = fixture.add_client();
+
+    let outputs = fixture.client(client_id).wl_outputs().clone();
+
+    // Use floating window since the layout tree will not update
+    let surface = fixture.spawn_floating_window_with(client_id, (500, 500), |w| {
+        w.set_fullscreen(outputs.iter().nth(1))
+    });
+
+    let tags = fixture.pinnacle().windows[0].with_state(|state| state.tags.clone());
+
+    assert!(
+        fixture
+            .client(client_id)
+            .window_for_surface(&surface)
             .fullscreen
     );
     assert_eq!(output.with_state(|state| state.tags.clone()), tags);
