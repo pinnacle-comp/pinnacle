@@ -603,17 +603,12 @@ pub enum FocusBorderMessage {
 
 impl FocusBorder {
     /// Creates a new focus border without a titlebar.
-    pub fn new(
-        window: &WindowHandle,
-        thickness: u32,
-        focused_color: Color,
-        unfocused_color: Color,
-    ) -> Self {
+    pub fn new(window: &WindowHandle) -> Self {
         Self {
             window: window.clone(),
-            thickness,
-            focused_color,
-            unfocused_color,
+            thickness: 4,
+            focused_color: Color::rgb(0.4, 0.15, 0.7),
+            unfocused_color: Color::rgb(0.15, 0.15, 0.15),
             focused: false,
             include_titlebar: false,
             titlebar_height: 0,
@@ -621,21 +616,15 @@ impl FocusBorder {
     }
 
     /// Creates a new focus border with a titlebar.
-    pub fn new_with_titlebar(
-        window: &WindowHandle,
-        thickness: u32,
-        focused_color: Color,
-        unfocused_color: Color,
-        titlebar_height: u32,
-    ) -> Self {
+    pub fn new_with_titlebar(window: &WindowHandle) -> Self {
         Self {
             window: window.clone(),
-            thickness,
-            focused_color,
-            unfocused_color,
+            thickness: 4,
+            focused_color: Color::rgb(0.4, 0.15, 0.7),
+            unfocused_color: Color::rgb(0.15, 0.15, 0.15),
             focused: false,
             include_titlebar: true,
-            titlebar_height,
+            titlebar_height: 16,
         }
     }
 

@@ -347,40 +347,20 @@ async fn config() {
         }
     });
 
-    // Enable focus borders
+    // Enable focus borders with titlebars
     #[cfg(feature = "snowcap")]
     {
-        use pinnacle_api::experimental::snowcap_api::widget::Color;
         use pinnacle_api::snowcap::FocusBorder;
-
-        let thickness = 4;
-        let focused_color = Color::rgb(0.4, 0.15, 0.7);
-        let unfocused_color = Color::rgb(0.15, 0.15, 0.15);
-        let titlebar_height = 16;
 
         // Add borders to already existing windows.
         for win in window::get_all() {
-            FocusBorder::new_with_titlebar(
-                &win,
-                thickness,
-                focused_color,
-                unfocused_color,
-                titlebar_height,
-            )
-            .decorate();
+            FocusBorder::new_with_titlebar(&win).decorate();
         }
 
         // Add borders to new windows.
         window::add_window_rule(move |window| {
             window.set_decoration_mode(window::DecorationMode::ServerSide);
-            FocusBorder::new_with_titlebar(
-                &window,
-                thickness,
-                focused_color,
-                unfocused_color,
-                titlebar_height,
-            )
-            .decorate();
+            FocusBorder::new_with_titlebar(&window).decorate();
         });
     }
 
