@@ -586,6 +586,8 @@ pub struct FocusBorder {
     pub focused: bool,
     /// Whether to draw a titlebar.
     pub include_titlebar: bool,
+    /// The title of the window.
+    pub title: String,
     /// The height of the titlebar.
     pub titlebar_height: u32,
 }
@@ -599,6 +601,8 @@ pub enum FocusBorderMessage {
     Maximize,
     /// Close the window this border decorates.
     Close,
+    /// The title changed.
+    TitleChanged(String),
 }
 
 impl FocusBorder {
@@ -611,6 +615,7 @@ impl FocusBorder {
             unfocused_color: Color::rgb(0.15, 0.15, 0.15),
             focused: false,
             include_titlebar: false,
+            title: String::new(),
             titlebar_height: 0,
         }
     }
@@ -624,6 +629,7 @@ impl FocusBorder {
             unfocused_color: Color::rgb(0.15, 0.15, 0.15),
             focused: false,
             include_titlebar: true,
+            title: window.title(),
             titlebar_height: 16,
         }
     }
@@ -655,14 +661,14 @@ impl FocusBorder {
         )
         .unwrap();
 
-        let border_clone = border.clone();
-
         let signal_holder = Arc::new(OnceLock::<SignalHandle>::new());
 
         // We use the foreign toplevel ID to tell if the window is alive
         let signal =
             crate::window::connect_signal(crate::signal::WindowSignal::Focused(Box::new({
                 let signal_holder = signal_holder.clone();
+                let window = window.clone();
+                let border = border.clone();
                 move |focused| {
                     if window.foreign_toplevel_list_identifier().is_some() {
                         border.send_message(FocusBorderMessage::SetFocused(&window == focused));
@@ -674,7 +680,27 @@ impl FocusBorder {
 
         signal_holder.set(signal).unwrap();
 
-        border_clone
+        let signal_holder = Arc::new(OnceLock::<SignalHandle>::new());
+
+        let signal =
+            crate::window::connect_signal(crate::signal::WindowSignal::TitleChanged(Box::new({
+                let signal_holder = signal_holder.clone();
+                let window = window.clone();
+                let border = border.clone();
+                move |win, title| {
+                    if window.foreign_toplevel_list_identifier().is_some() {
+                        if &window == win {
+                            border.send_message(FocusBorderMessage::TitleChanged(title.into()));
+                        }
+                    } else {
+                        signal_holder.get().unwrap().disconnect();
+                    }
+                }
+            })));
+
+        signal_holder.set(signal).unwrap();
+
+        border
     }
 }
 
@@ -768,6 +794,9 @@ impl Program for FocusBorder {
             FocusBorderMessage::Close => {
                 self.window.close();
             }
+            FocusBorderMessage::TitleChanged(title) => {
+                self.title = title;
+            }
         }
     }
 
@@ -777,7 +806,7 @@ impl Program for FocusBorder {
         if self.include_titlebar {
             let titlebar = Container::new(
                 Row::new_with_children([
-                    Text::new("TITLE GOES HERE")
+                    Text::new(&self.title)
                         .style(text::Style {
                             color: None,
                             pixels: Some(self.titlebar_height as f32 - 2.0),
@@ -954,18 +983,6 @@ impl Program for FocusBorder {
 
         row = row.push(focus_border);
 
-        let mut row: WidgetDef<FocusBorderMessage> = row.into();
-
-        row.theme = Some(snowcap_api::widget::Theme {
-            button_style: Some(Styles {
-                active: Some(button::Style::new().background_color(Color::rgb(0.85, 0.7, 1.0))),
-                hovered: Some(button::Style::new().background_color(Color::rgb(0.9, 0.8, 1.0))),
-                pressed: Some(button::Style::new().background_color(Color::rgb(0.95, 0.9, 1.0))),
-                disabled: Some(button::Style::new().background_color(Color::rgb(0.85, 0.85, 0.85))),
-            }),
-            ..Default::default()
-        });
-
-        row
+        row.into()
     }
 }

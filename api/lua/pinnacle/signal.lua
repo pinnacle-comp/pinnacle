@@ -89,6 +89,14 @@ local signals = {
         ---@type fun(response: table)
         on_response = nil,
     },
+    WindowTitleChanged = {
+        ---@type grpc_client.h2.Stream?
+        sender = nil,
+        ---@type (fun(window: pinnacle.window.WindowHandle, title: string))[]
+        callbacks = {},
+        ---@type fun(response: table)
+        on_response = nil,
+    },
     TagActive = {
         ---@type grpc_client.h2.Stream?
         sender = nil,
@@ -226,6 +234,16 @@ signals.WindowFocused.on_response = function(response)
 
     for _, callback in ipairs(signals.WindowFocused.callbacks) do
         protected_callback("WindowFocused", callback, window_handle)
+    end
+end
+
+signals.WindowTitleChanged.on_response = function(response)
+    ---@diagnostic disable-next-line: invisible
+    local window_handle = require("pinnacle.window").handle.new(response.window_id)
+    local title = response.title or ""
+
+    for _, callback in ipairs(signals.WindowTitleChanged.callbacks) do
+        protected_callback("WindowTitleChanged", callback, window_handle, title)
     end
 end
 
