@@ -260,26 +260,43 @@ impl Fixture {
         window.set_min_size(size.0, size.1);
         window.set_max_size(size.0, size.1);
         pre_initial_commit(window);
+
+        tracing::debug!("Sending initial commit");
         window.commit();
         let surface = window.surface();
         self.roundtrip(id);
+
+        tracing::debug!("Wait for initial_commit");
+        // The client must acknowledge [the initial configure] before committing a buffer. Let's
+        // ensure it does.
+        self.wait_client_configure(id);
 
         // Commit a buffer
         let window = self.client(id).window_for_surface(&surface);
         window.attach_buffer();
         window.set_size(size.0, size.1);
+        tracing::debug!("Buffer & size commit");
         window.commit();
         self.roundtrip(id);
 
+        tracing::debug!("Wait for size configuration");
         // wait a bit for the size to be set
         self.wait_client_configure(id);
         self.client(id).ack_all_window();
         self.roundtrip(id);
 
-        // Waiting to be activated/focused.
-        self.wait_client_configure(id);
-        self.client(id).ack_all_window();
-        self.roundtrip(id);
+        // Waiting one last time because we're getting focused/activated at this point.
+        let pinnacle_win = self.pinnacle().windows.last().cloned().unwrap();
+        let output = pinnacle_win.output(self.pinnacle());
+        let focused_output = self.pinnacle().focused_output();
+
+        if output.as_ref() == focused_output {
+            tracing::info!("Wait activation");
+            // Waiting to be activated/focused.
+            self.wait_client_configure(id);
+            self.client(id).ack_all_window();
+            self.roundtrip(id);
+        }
 
         // Wait for pending_transactions, if any
         self.flush();
