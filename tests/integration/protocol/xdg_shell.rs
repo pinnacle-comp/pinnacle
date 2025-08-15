@@ -37,7 +37,7 @@ fn set_up() -> (Fixture, Output, Output) {
         state.add_tags([tag]);
     });
 
-    let output2 = fixture.add_output(Rectangle::new((0, 0).into(), (1920, 1080).into()));
+    let output2 = fixture.add_output(Rectangle::new((1920, 1080).into(), (1920, 1080).into()));
     output2.with_state_mut(|state| {
         let tag = Tag::new("2".to_string());
         tag.set_active(true);
@@ -160,6 +160,50 @@ fn mapped_fullscreen_twice() {
 }
 
 #[test_log::test]
+fn mapped_fullscreen_twice_two_outputs() {
+    let (mut fixture, output, output2) = set_up();
+
+    let client_id = fixture.add_client();
+
+    let surfaces = fixture.spawn_windows(1, client_id);
+    let surface = &surfaces[0];
+
+    let outputs = fixture.client(client_id).wl_outputs().clone();
+
+    fixture
+        .client(client_id)
+        .window_for_surface(surface)
+        .set_fullscreen(outputs.iter().nth(0));
+    fixture.roundtrip(client_id);
+    fixture.wait_client_configure(client_id);
+    fixture.flush();
+
+    let tags = fixture.pinnacle().windows[0].with_state(|state| state.tags.clone());
+
+    assert!(
+        fixture
+            .client(client_id)
+            .window_for_surface(surface)
+            .fullscreen
+    );
+    assert_eq!(output.with_state(|state| state.tags.clone()), tags);
+
+    fixture
+        .client(client_id)
+        .window_for_surface(surface)
+        .set_fullscreen(outputs.iter().nth(1));
+    fixture.roundtrip(client_id);
+    fixture.wait_client_configure(client_id);
+    fixture.flush();
+
+    let window = fixture.pinnacle().windows[0].clone();
+    let output_geo = fixture.pinnacle().space.output_geometry(&output2);
+    let window_geo = fixture.pinnacle().space.element_geometry(&window);
+
+    assert_eq!(output_geo, window_geo);
+}
+
+#[test_log::test]
 fn mapped_set_fullscreen_on_output() {
     let (mut fixture, _, output) = set_up();
 
@@ -187,6 +231,51 @@ fn mapped_set_fullscreen_on_output() {
             .fullscreen
     );
     assert_eq!(output.with_state(|state| state.tags.clone()), tags);
+}
+
+#[test_log::test]
+fn mapped_set_fullscreen_on_output_update_floating_loc() {
+    let (mut fixture, _, output) = set_up();
+
+    let client_id = fixture.add_client();
+
+    let surface = fixture.spawn_floating_window_with(client_id, (500, 500), |_| ());
+
+    let outputs = fixture.client(client_id).wl_outputs().clone();
+
+    fixture
+        .client(client_id)
+        .window_for_surface(&surface)
+        .set_fullscreen(outputs.iter().nth(1));
+    fixture.roundtrip(client_id);
+    fixture.wait_client_configure(client_id);
+    fixture.flush();
+
+    let tags = fixture.pinnacle().windows[0].with_state(|state| state.tags.clone());
+
+    assert!(
+        fixture
+            .client(client_id)
+            .window_for_surface(&surface)
+            .fullscreen
+    );
+    assert_eq!(output.with_state(|state| state.tags.clone()), tags);
+
+    fixture
+        .client(client_id)
+        .window_for_surface(&surface)
+        .unset_fullscreen();
+    fixture.roundtrip(client_id);
+    fixture.wait_client_configure(client_id);
+    fixture.flush();
+
+    let window = fixture.pinnacle().windows[0].clone();
+    let window_geo = fixture.pinnacle().space.element_geometry(&window).unwrap();
+    let output_geo = fixture.pinnacle().space.output_geometry(&output).unwrap();
+
+    tracing::warn!("window_geo = {:?}", window_geo);
+    tracing::warn!("window_geo = {:?}", output_geo);
+    assert!(output_geo.intersection(window_geo).is_some());
 }
 
 #[test_log::test]

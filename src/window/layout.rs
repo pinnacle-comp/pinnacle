@@ -229,6 +229,11 @@ impl Pinnacle {
     ///
     /// This function additionally fixup the window floating location to prevent the window from
     /// 'jumping back' if it becomes tiled or spilled.
+    ///
+    /// The function will request a new layout if the window was in a tiled state.
+    ///
+    /// [`Pinnacle::update_window_geometry`] or [`Pinnacle::update_window_layout_mode`] should be
+    /// called for the move to be effective.
     pub fn move_window_to_output(&mut self, window: &WindowElement, target: Output) {
         let _span = tracy_client::span!("Pinnacle::move_window_to_output");
 
@@ -260,9 +265,6 @@ impl Pinnacle {
         window.with_state_mut(|state| state.set_floating_loc(Some(loc)));
 
         let layout_mode = window.with_state(|state| state.layout_mode);
-        let layout_needs_update = layout_mode.is_tiled() || layout_mode.is_spilled();
-
-        self.update_window_geometry(window, layout_needs_update);
 
         if let Some(output) = current_output
             && layout_mode.is_tiled()
