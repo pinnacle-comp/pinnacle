@@ -157,6 +157,8 @@ impl PointerGrab<State> for MoveSurfaceGrab {
                     state
                         .pinnacle
                         .move_window_to_output(&self.window, output_under_pointer.clone());
+
+                    state.pinnacle.update_window_geometry(&self.window, false);
                 }
             }
         }

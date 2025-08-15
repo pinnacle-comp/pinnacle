@@ -246,13 +246,24 @@ impl XdgShellHandler for State {
             .window_for_surface(surface.wl_surface())
             .cloned()
         {
-            if let Some(output) = requested_output {
-                window.set_tags_to_output(&output);
-            }
+            let mut geometry_only = false;
 
             window.with_state_mut(|state| state.need_configure = true);
-            self.pinnacle
-                .update_window_layout_mode(&window, |mode| mode.set_client_fullscreen(true));
+
+            if window.output(&self.pinnacle) != requested_output
+                && let Some(output) = requested_output
+            {
+                self.pinnacle.move_window_to_output(&window, output);
+
+                geometry_only = window.with_state(|state| state.layout_mode.is_fullscreen());
+            }
+
+            if geometry_only {
+                self.pinnacle.update_window_geometry(&window, false);
+            } else {
+                self.pinnacle
+                    .update_window_layout_mode(&window, |mode| mode.set_client_fullscreen(true));
+            }
         } else if let Some(unmapped) = self
             .pinnacle
             .unmapped_window_for_surface_mut(surface.wl_surface())
