@@ -5,12 +5,11 @@ pub mod tree;
 use std::{
     collections::{HashMap, HashSet, hash_map::Entry},
     rc::Rc,
-    time::Duration,
 };
 
 use indexmap::IndexSet;
 use smithay::{
-    desktop::{WindowSurface, layer_map_for_output, utils::surface_primary_scanout_output},
+    desktop::layer_map_for_output,
     output::{Output, WeakOutput},
     reexports::wayland_protocols::xdg::shell::server::xdg_toplevel,
     utils::{Logical, Rectangle, Size},
@@ -25,7 +24,7 @@ use crate::{
     state::{Pinnacle, State, WithState},
     tag::TagId,
     util::transaction::{Location, PendingTransaction, TransactionBuilder},
-    window::{UnmappingWindow, WindowElement, ZIndexElement},
+    window::{UnmappingWindow, WindowElement},
 };
 
 impl Pinnacle {
@@ -74,50 +73,15 @@ impl Pinnacle {
         let mut snapshot_windows = Vec::new();
 
         for win in to_unmap {
-            backend.with_renderer(|renderer| {
-                win.capture_snapshot_and_store(
-                    renderer,
-                    output.current_scale().fractional_scale().into(),
-                    1.0,
-                );
-            });
-
-            if let Some(snap) = win.with_state_mut(|state| state.snapshot.take()) {
-                let Some(loc) = self.space.element_location(&win) else {
-                    unreachable!();
-                };
-
-                let unmapping = Rc::new(UnmappingWindow {
-                    snapshot: snap,
-                    fullscreen: win.with_state(|state| state.layout_mode.is_fullscreen()),
-                    space_loc: loc,
-                });
-
-                let weak = Rc::downgrade(&unmapping);
-                snapshot_windows.push(unmapping);
-
-                let z_index = self
-                    .z_index_stack
-                    .iter()
-                    .position(|z| matches!(z, crate::window::ZIndexElement::Window(w) if w == win))
-                    .expect("window to be in the stack");
-
-                self.z_index_stack
-                    .insert(z_index, ZIndexElement::Unmapping(weak));
-            }
-
             if win.with_state(|state| state.layout_mode.is_floating())
                 && let Some(loc) = self.space.element_location(&win)
             {
                 win.with_state_mut(|state| state.set_floating_loc(loc));
             }
-            let to_schedule = self.space.outputs_for_element(&win);
-            self.space.unmap_elem(&win);
-            self.loop_handle.insert_idle(move |state| {
-                for output in to_schedule {
-                    state.schedule_render(&output);
-                }
-            });
+
+            if let Some(unmapping) = self.unmap_window(backend, &win, output) {
+                snapshot_windows.push(unmapping);
+            }
         }
 
         let tiled_windows = windows_on_foc_tags
@@ -179,34 +143,14 @@ impl Pinnacle {
             .chain(wins_and_geos_other)
             .collect::<Vec<_>>();
 
-        for (win, geo, is_tiled) in wins_and_geos.iter() {
-            if *is_tiled {
-                win.with_state_mut(|s| s.layout_mode.set_spilled(false));
-                win.set_tiled_states();
-            } else {
-                self.configure_window_if_nontiled(win);
-            }
-
-            win.set_pending_geo(geo.size, Some(geo.loc));
-        }
-
         let mut transaction_builder = TransactionBuilder::new();
 
-        for (win, geo, _) in wins_and_geos {
-            if let WindowSurface::Wayland(toplevel) = win.underlying_surface() {
-                let serial = toplevel.send_pending_configure();
-                transaction_builder.add(&win, Location::MapTo(geo.loc), serial, &self.loop_handle);
-
-                // Send a frame to get unmapped windows to update
-                win.send_frame(
-                    output,
-                    self.clock.now(),
-                    Some(Duration::ZERO),
-                    surface_primary_scanout_output,
-                );
-            } else {
-                transaction_builder.add(&win, Location::MapTo(geo.loc), None, &self.loop_handle);
+        for (win, geo, is_tiled) in wins_and_geos {
+            if is_tiled {
+                win.with_state_mut(|s| s.layout_mode.set_spilled(false));
             }
+
+            self.configure_window_and_add_map(&mut transaction_builder, &win, output, geo);
         }
 
         let mut unmapping = self
@@ -403,6 +347,8 @@ impl State {
     pub fn update_layout(&mut self) {
         let _span = tracy_client::span!("State::update_layout");
 
+        let mut outputs = HashSet::new();
+
         for output in self.pinnacle.outputs.clone() {
             let mut transactions = Vec::new();
 
@@ -423,7 +369,6 @@ impl State {
                 }
             }
 
-            let mut outputs = Vec::new();
             let mut locs = HashMap::new();
 
             for transaction in transactions {
@@ -466,12 +411,16 @@ impl State {
                     let _ = surface.configure(Rectangle::new(loc, surface.geometry().size));
                 }
 
-                self.pinnacle.space.map_element(window, loc, false);
-            }
+                // if the window moved out of an output, we want to get it first.
+                outputs.extend(self.pinnacle.space.outputs_for_element(&window));
 
-            for output in outputs {
-                self.schedule_render(&output);
+                self.pinnacle.space.map_element(window.clone(), loc, false);
+                outputs.extend(self.pinnacle.space.outputs_for_element(&window));
             }
+        }
+
+        for output in outputs {
+            self.schedule_render(&output);
         }
 
         let mut wins_to_update = Vec::new();
@@ -487,7 +436,7 @@ impl State {
         }
 
         for win in wins_to_update {
-            self.update_window_layout_mode_and_layout(&win, |_| ());
+            self.pinnacle.update_window_geometry(&win, false);
         }
     }
 }

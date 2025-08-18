@@ -13,6 +13,7 @@ use crate::{
     focus::keyboard::KeyboardFocusTarget,
     state::{State, WithState},
     tag::Tag,
+    util::transaction::TransactionBuilder,
     window::WindowElement,
 };
 
@@ -58,7 +59,10 @@ pub fn set_geometry(
         state.floating_size = window_size;
     });
 
-    state.update_window_layout_mode_and_layout(window, |_| ());
+    state.pinnacle.update_window_geometry(
+        window,
+        window.with_state(|state| state.layout_mode.is_tiled()),
+    );
 }
 
 // TODO: minimized
@@ -390,15 +394,19 @@ pub fn swap(state: &mut State, window: WindowElement, target: WindowElement) {
         return;
     };
 
+    let window_was_on_active_tag = window.is_on_active_tag();
+    let target_was_on_active_tag = target.is_on_active_tag();
+
     tracing::debug!("Swapping window positions");
     state.pinnacle.layout_state.pending_swap = true;
-
     state.pinnacle.swap_window_positions(&window, &target);
-    if output != target_output {
-        tracing::debug!("Swapping window outputs");
-        window.set_tags_to_output(&target_output);
-        target.set_tags_to_output(&output);
-    }
+
+    tracing::debug!("Swapping window tags");
+    let window_tags = window.with_state(|state| state.tags.clone());
+    let target_tags = target.with_state(|state| state.tags.clone());
+
+    window.with_state_mut(|state| state.tags = target_tags);
+    target.with_state_mut(|state| state.tags = window_tags);
 
     // Swap floating attribute. In case of cross-output swap, this prevent window jumping back.
     let window_floating_x = window.with_state(|state| state.floating_x);
@@ -421,23 +429,55 @@ pub fn swap(state: &mut State, window: WindowElement, target: WindowElement) {
         state.floating_size = target_floating_size
     });
 
-    if window.with_state(|state| !state.layout_mode.is_tiled())
-        || target.with_state(|state| !state.layout_mode.is_tiled())
-    {
-        tracing::debug!("Swapping non tiled window");
-        let window_layout_mode = window.with_state(|state| state.layout_mode);
-        let target_layout_mode = target.with_state(|state| state.layout_mode);
+    let window_layout_mode = window.with_state(|state| state.layout_mode);
+    let window_geo = state.pinnacle.space.element_geometry(&window);
 
-        state.update_window_layout_mode_and_layout(&window, |layout| {
-            layout.apply_mode(target_layout_mode)
-        });
-        state.update_window_layout_mode_and_layout(&target, |layout| {
-            layout.apply_mode(window_layout_mode)
-        });
-    } else {
-        state.pinnacle.request_layout(&output);
-        if output != target_output {
-            state.pinnacle.request_layout(&target_output);
-        }
+    let target_layout_mode = target.with_state(|state| state.layout_mode);
+    let target_geo = state.pinnacle.space.element_geometry(&target);
+
+    let mut builder = TransactionBuilder::new();
+    let mut unmappings = Vec::new();
+
+    if target_was_on_active_tag {
+        let geo = target_geo.expect("Target should have had a geometry");
+        window.with_state_mut(|state| state.layout_mode.apply_mode(target_layout_mode));
+
+        state
+            .pinnacle
+            .configure_window_and_add_map(&mut builder, &window, &output, geo);
+    } else if let Some(unmapping) =
+        state
+            .pinnacle
+            .unmap_window(&mut state.backend, &window, &output)
+    {
+        window.with_state_mut(|state| state.layout_mode.apply_mode(target_layout_mode));
+        unmappings.push(unmapping);
     }
+
+    if window_was_on_active_tag {
+        let geo = window_geo.expect("Window should have had a geometry");
+        target.with_state_mut(|state| state.layout_mode.apply_mode(window_layout_mode));
+
+        state
+            .pinnacle
+            .configure_window_and_add_map(&mut builder, &target, &output, geo);
+    } else if let Some(unmapping) =
+        state
+            .pinnacle
+            .unmap_window(&mut state.backend, &target, &target_output)
+    {
+        target.with_state_mut(|state| state.layout_mode.apply_mode(window_layout_mode));
+        unmappings.push(unmapping);
+    }
+
+    // We need one output here. I've picked the one the window was on, although I doubt it matters
+    // in this specific case. I guess the alternative would be one TB per output.
+    state
+        .pinnacle
+        .layout_state
+        .pending_transactions
+        .add_for_output(
+            &output,
+            builder.into_pending(unmappings, state.pinnacle.layout_state.pending_swap, false),
+        );
 }

@@ -287,7 +287,9 @@ impl LayoutMode {
     pub fn set_client_maximized(&mut self, maximized: bool) {
         match maximized {
             true => {
-                if !self.is_maximized() {
+                if !self.is_maximized()
+                    && self.client_requested_mode != Some(FullscreenOrMaximized::Fullscreen)
+                {
                     self.client_requested_mode = Some(FullscreenOrMaximized::Maximized);
                 }
             }
@@ -384,6 +386,7 @@ pub struct WindowElementState {
     pub floating_x: Option<i32>,
     pub floating_y: Option<i32>,
     pub floating_size: Size<i32, Logical>,
+    pub need_configure: bool,
 
     pub pending_transactions: Vec<(Serial, Transaction)>,
 
@@ -486,6 +489,45 @@ impl WindowElement {
             }
         }
     }
+
+    /// Apply current mode layout mode to the window underlying surface
+    ///
+    /// Toplevel need a call to `send_configure` or `send_pending_configure` for these changes to
+    /// be effectives.
+    pub(crate) fn configure_states(&self) {
+        let _span = tracy_client::span!("WindowElement::configure_states");
+
+        match self.with_state(|state| state.layout_mode.current()) {
+            LayoutModeKind::Tiled => {
+                self.set_tiled_states();
+            }
+            LayoutModeKind::Floating | LayoutModeKind::Spilled => {
+                self.set_floating_states();
+            }
+            LayoutModeKind::Maximized => {
+                self.set_maximized_states();
+            }
+            LayoutModeKind::Fullscreen => {
+                self.set_fullscreen_states();
+            }
+        }
+    }
+
+    /// Send a configure event to the window toplevel.
+    ///
+    /// This function respect WindowElementState::need_configure to determine whether to
+    /// unconditionally send the event.
+    pub(crate) fn configure(&self) -> Option<Serial> {
+        let force = self.with_state(|state| state.need_configure);
+        self.with_state_mut(|state| state.need_configure = false);
+
+        if force {
+            self.toplevel().map(|toplevel| toplevel.send_configure())
+        } else {
+            self.toplevel()
+                .and_then(|toplevel| toplevel.send_pending_configure())
+        }
+    }
 }
 
 impl Pinnacle {
@@ -512,11 +554,15 @@ impl Pinnacle {
             return;
         };
 
-        match layout_mode.current() {
-            LayoutModeKind::Tiled => (),
-            LayoutModeKind::Floating | LayoutModeKind::Spilled => {
-                window.set_floating_states();
+        if layout_mode.is_tiled() {
+            return;
+        }
 
+        window.configure_states();
+
+        match layout_mode.current() {
+            LayoutModeKind::Tiled => unreachable!(),
+            LayoutModeKind::Floating | LayoutModeKind::Spilled => {
                 let (size, loc) =
                     window.with_state(|state| (state.floating_size, state.floating_loc()));
 
@@ -529,11 +575,9 @@ impl Pinnacle {
                 };
                 non_exclusive_geo.loc += output_geo.loc;
 
-                window.set_maximized_states();
                 window.set_pending_geo(non_exclusive_geo.size, Some(non_exclusive_geo.loc));
             }
             LayoutModeKind::Fullscreen => {
-                window.set_fullscreen_states();
                 window.set_pending_geo(output_geo.size, Some(output_geo.loc));
             }
         }
@@ -606,6 +650,7 @@ impl WindowElementState {
             floating_x: Default::default(),
             floating_y: Default::default(),
             floating_size: Default::default(),
+            need_configure: false,
             minimized: false,
             snapshot: None,
             mapped_hook_id: None,
