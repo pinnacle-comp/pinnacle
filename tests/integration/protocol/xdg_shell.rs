@@ -273,8 +273,6 @@ fn mapped_set_fullscreen_on_output_update_floating_loc() {
     let window_geo = fixture.pinnacle().space.element_geometry(&window).unwrap();
     let output_geo = fixture.pinnacle().space.output_geometry(&output).unwrap();
 
-    tracing::warn!("window_geo = {:?}", window_geo);
-    tracing::warn!("window_geo = {:?}", output_geo);
     assert!(output_geo.intersection(window_geo).is_some());
 }
 
