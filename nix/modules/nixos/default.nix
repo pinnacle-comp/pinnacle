@@ -21,6 +21,7 @@ in with lib.options; {
       xdg.portal = lib.mkIf cfg.xdg-portals.enable {
         enable = true;
         wlr.enable = true;
+        configPackages = [cfg.package];
         extraPortals = [
           pkgs.xdg-desktop-portal-wlr
           pkgs.xdg-desktop-portal-gtk
