@@ -107,6 +107,9 @@ rustPlatform.buildRustPackage {
     mkdir -p $out/share/wayland-sessions
     install -m644 ${../../resources/pinnacle.desktop} $out/share/wayland-sessions/pinnacle.desktop
     patchShebangs $out/bin/pinnacle-session
+    mkdir -p $out/share/xdg-desktop-portal
+    install -m644 ${../../resources/pinnacle-portals.conf} $out/share/xdg-desktop-portal/pinnacle-portals.conf
+    install -m644 ${../../resources/pinnacle-portals.conf} $out/share/xdg-desktop-portal/pinnacle-uwsm-portals.conf
   '';
 
   runtimeDependencies = [
