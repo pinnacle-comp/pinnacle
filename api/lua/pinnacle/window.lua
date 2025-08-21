@@ -185,13 +185,11 @@ local signal_name_to_SignalName = {
 ---@see pinnacle.signal.SignalHandles.disconnect_all - To disconnect from these signals
 function window.connect_signal(signals)
     ---@diagnostic disable-next-line: invisible
-    local handles = require("pinnacle.signal").handles.new({})
+    local handles = require("pinnacle.signal").handles.new()
 
     for signal, callback in pairs(signals) do
-        require("pinnacle.signal").add_callback(signal_name_to_SignalName[signal], callback)
         local handle =
-            ---@diagnostic disable-next-line: invisible
-            require("pinnacle.signal").handle.new(signal_name_to_SignalName[signal], callback)
+            require("pinnacle.signal").add_callback(signal_name_to_SignalName[signal], callback)
         handles[signal] = handle
     end
 
