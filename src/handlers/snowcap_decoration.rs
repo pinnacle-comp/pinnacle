@@ -64,7 +64,9 @@ impl SnowcapDecorationHandler for State {
 
         let decoration_surface = DecorationSurface::new(surface);
 
-        add_decoration_pre_commit_hook(&decoration_surface);
+        let hook = add_decoration_pre_commit_hook(&decoration_surface);
+
+        decoration_surface.with_state_mut(|state| state.hook_id = Some(hook));
 
         window.with_state_mut(|state| {
             state.decoration_surfaces.push(decoration_surface);
