@@ -37,8 +37,9 @@ impl State {
 }
 
 pub struct SnowcapLayer {
+    // Drop order: `surface` needs to be dropped first as
+    // `layer` will also attempt to destroy the wl_surface.
     pub surface: SnowcapSurface,
-
     pub layer: LayerSurface,
 
     /// The logical size of the output this layer is on.

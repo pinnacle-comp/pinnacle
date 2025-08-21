@@ -29,8 +29,8 @@ use crate::{
 };
 
 pub struct SnowcapSurface {
-    // SAFETY: Drop order: surface needs to be dropped before the wl surface
-    surface: <crate::compositor::Compositor as iced_graphics::Compositor>::Surface,
+    // This is an option so we can drop it first
+    surface: Option<<crate::compositor::Compositor as iced_graphics::Compositor>::Surface>,
     pub wl_surface: WlSurface,
     compositor_state: CompositorState,
     queue_handle: QueueHandle<State>,
@@ -62,8 +62,12 @@ pub struct SnowcapSurface {
 
 impl Drop for SnowcapSurface {
     fn drop(&mut self) {
+        // SAFETY: This needs to be dropped first, it implicitly borrows the wl_surface
+        self.surface.take();
+
         self.fractional_scale.destroy();
         self.wl_surface.destroy();
+        self.viewport.destroy();
     }
 }
 
@@ -120,7 +124,7 @@ impl SnowcapSurface {
         let widgets = SnowcapWidgetProgram::new(widgets);
 
         Self {
-            surface: iced_surface,
+            surface: Some(iced_surface),
             wl_surface,
             compositor_state,
             queue_handle: state.queue_handle.clone(),
@@ -184,7 +188,7 @@ impl SnowcapSurface {
 
         self.widgets.draw(&mut self.renderer, cursor);
 
-        match (&mut self.renderer, &mut self.surface) {
+        match (&mut self.renderer, self.surface.as_mut().unwrap()) {
             (Renderer::Primary(renderer), Surface::Primary(surface)) => {
                 iced_wgpu::window::compositor::present(
                     renderer,
@@ -256,7 +260,11 @@ impl SnowcapSurface {
 
             let buffer_size = self.widgets.viewport(self.output_scale).physical_size();
 
-            compositor.configure_surface(&mut self.surface, buffer_size.width, buffer_size.height);
+            compositor.configure_surface(
+                self.surface.as_mut().unwrap(),
+                buffer_size.width,
+                buffer_size.height,
+            );
         }
 
         let cursor = match self.pointer_location {
