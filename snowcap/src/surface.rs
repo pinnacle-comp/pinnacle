@@ -63,6 +63,7 @@ pub struct SnowcapSurface {
 impl Drop for SnowcapSurface {
     fn drop(&mut self) {
         self.fractional_scale.destroy();
+        self.wl_surface.destroy();
     }
 }
 
@@ -114,9 +115,7 @@ impl SnowcapSurface {
 
         let iced_surface = compositor.create_surface(window_handle, 1, 1);
 
-        let clipboard = unsafe {
-            WaylandClipboard::new(wl_surface.backend().upgrade().unwrap().display_ptr() as *mut _)
-        };
+        let clipboard = WaylandClipboard;
 
         let widgets = SnowcapWidgetProgram::new(widgets);
 
