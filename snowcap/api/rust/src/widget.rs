@@ -195,6 +195,9 @@ impl<Msg> From<Widget<Msg>> for widget::v1::widget_def::Widget {
     }
 }
 
+/// A color.
+///
+/// All channels are ranges from [0.0, 1.0].
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct Color {
     pub red: f32,
@@ -203,25 +206,38 @@ pub struct Color {
     pub alpha: f32,
 }
 
-impl From<[f32; 4]> for Color {
-    fn from(value: [f32; 4]) -> Self {
+impl Color {
+    /// Creates a `Color` from red, green, and blue channels.
+    ///
+    /// Values range from 0.0 to 1.0, inclusive.
+    ///
+    /// The alpha channel is set to 1.0.
+    pub fn rgb(red: f32, green: f32, blue: f32) -> Self {
+        Self::rgba(red, green, blue, 1.0)
+    }
+
+    /// Creates a `Color` from red, green, blue, and alpha channels.
+    ///
+    /// Values range from 0.0 to 1.0, inclusive.
+    pub fn rgba(red: f32, green: f32, blue: f32, alpha: f32) -> Self {
         Self {
-            red: value[0],
-            blue: value[1],
-            green: value[2],
-            alpha: value[3],
+            red: red.clamp(0.0, 1.0),
+            green: green.clamp(0.0, 1.0),
+            blue: blue.clamp(0.0, 1.0),
+            alpha: alpha.clamp(0.0, 1.0),
         }
     }
 }
 
+impl From<[f32; 4]> for Color {
+    fn from([red, green, blue, alpha]: [f32; 4]) -> Self {
+        Color::rgba(red, green, blue, alpha)
+    }
+}
+
 impl From<[f32; 3]> for Color {
-    fn from(value: [f32; 3]) -> Self {
-        Self {
-            red: value[0],
-            blue: value[1],
-            green: value[2],
-            alpha: 1.0,
-        }
+    fn from([red, green, blue]: [f32; 3]) -> Self {
+        Color::rgb(red, green, blue)
     }
 }
 
@@ -229,8 +245,8 @@ impl From<Color> for widget::v1::Color {
     fn from(value: Color) -> Self {
         widget::v1::Color {
             red: value.red,
-            green: value.blue,
-            blue: value.green,
+            green: value.green,
+            blue: value.blue,
             alpha: value.alpha,
         }
     }

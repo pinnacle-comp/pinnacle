@@ -347,10 +347,22 @@ async fn config() {
         }
     });
 
-    // There are no server-side decorations yet, so request all clients use client-side decorations.
-    window::add_window_rule(|window| {
-        window.set_decoration_mode(window::DecorationMode::ClientSide);
-    });
+    // Enable focus borders with titlebars
+    #[cfg(feature = "snowcap")]
+    {
+        use pinnacle_api::snowcap::FocusBorder;
+
+        // Add borders to already existing windows.
+        for win in window::get_all() {
+            FocusBorder::new_with_titlebar(&win).decorate();
+        }
+
+        // Add borders to new windows.
+        window::add_window_rule(move |window| {
+            window.set_decoration_mode(window::DecorationMode::ServerSide);
+            FocusBorder::new_with_titlebar(&window).decorate();
+        });
+    }
 
     // Enable sloppy focus
     window::connect_signal(WindowSignal::PointerEnter(Box::new(|win| {

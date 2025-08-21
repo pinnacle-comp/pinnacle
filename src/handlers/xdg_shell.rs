@@ -17,6 +17,7 @@ use smithay::{
 use tracing::warn;
 
 use crate::{
+    api::signal::Signal,
     focus::keyboard::KeyboardFocusTarget,
     state::{State, WithState},
     window::{
@@ -201,6 +202,23 @@ impl XdgShellHandler for State {
             }
         };
 
+        if let Some(pointer) = seat.get_pointer() {
+            if pointer.is_grabbed()
+                && !(pointer.has_grab(serial)
+                    || pointer.has_grab(grab.previous_serial().unwrap_or_else(|| grab.serial())))
+            {
+                grab.ungrab(PopupUngrabStrategy::All);
+                return;
+            }
+
+            // INFO: PointerHandle::set_grab unsets the previous pointer grab.
+            // If the previous pointer grab was a `PopupPointerGrab`, the
+            // corresponding `PopupKeyboardGrab` will *also* be ungrabbed.
+            // This needs to be above the below `PopupKeyboardGrab` set or else
+            // it immediately gets ungrabbed.
+            pointer.set_grab(self, PopupPointerGrab::new(&grab), serial, Focus::Keep);
+        }
+
         if let Some(keyboard) = seat.get_keyboard() {
             if keyboard.is_grabbed()
                 && !(keyboard.has_grab(serial)
@@ -212,17 +230,6 @@ impl XdgShellHandler for State {
 
             keyboard.set_focus(self, grab.current_grab(), serial);
             keyboard.set_grab(self, PopupKeyboardGrab::new(&grab), serial);
-        }
-
-        if let Some(pointer) = seat.get_pointer() {
-            if pointer.is_grabbed()
-                && !(pointer.has_grab(serial)
-                    || pointer.has_grab(grab.previous_serial().unwrap_or_else(|| grab.serial())))
-            {
-                grab.ungrab(PopupUngrabStrategy::All);
-                return;
-            }
-            pointer.set_grab(self, PopupPointerGrab::new(&grab), serial, Focus::Keep);
         }
     }
 
@@ -434,9 +441,19 @@ impl XdgShellHandler for State {
     }
 
     fn title_changed(&mut self, surface: ToplevelSurface) {
-        let Some(window) = self.pinnacle.window_for_surface(surface.wl_surface()) else {
+        let Some(window) = self
+            .pinnacle
+            .window_for_surface(surface.wl_surface())
+            .cloned()
+        else {
             return;
         };
+
+        self.pinnacle
+            .signal_state
+            .window_title_changed
+            .signal(&window);
+
         let title = window.title().unwrap_or_default();
         window.with_state(|state| {
             if let Some(handle) = state.foreign_toplevel_list_handle.as_ref() {
