@@ -24,6 +24,9 @@
   callPackage,
   libglvnd,
   autoPatchelfHook,
+  fetchzip,
+  fetchurl,
+  libxcrypt,
 }:
 let
   pinnacle = ../..;
@@ -41,13 +44,50 @@ let
   };
   version = "0.1.0";
 
-  luaClient = lua54Packages.buildLuarocksPackage {
+  # we need a newer version of luaposix than what's in nixpkgs
+  luaposix = lua54Packages.luaposix.overrideAttrs (old: rec {
+    version = "36.3.0-1";
+    knownRockspec =
+      (fetchurl {
+        url = "mirror://luarocks/luaposix-36.3-1.rockspec";
+        sha256 = "sha256-6/sAsOWrrXjdzPlAp/Z5FetQfzrkrf6TmOz3FZaBiks=";
+      }).outPath;
+    src = fetchzip {
+      url = "http://github.com/luaposix/luaposix/archive/v36.3.zip";
+      sha256 = "sha256-RKDH1sB7r7xDqueByWwps5fBfl5GBL9L86FjzfStBUw=";
+    };
+
+    disabled = lua54Packages.luaOlder "5.1" || lua54Packages.luaAtLeast "5.5";
+    propagatedBuildInputs = with lua54Packages; [ bit32 std-normalize libxcrypt pkg-config ];
+    meta.broken = disabled;
+  });
+
+  lua-client-api = lua54Packages.buildLuarocksPackage rec {
     inherit meta version;
-    pname = "pinnacle";
-    src = ../../api/lua;
-    propagatedBuildInputs = [lua5_4];
+    pname = "pinnacle-client-api";
+    src = lib.fileset.toSource {
+      root = ../..;
+      # we should probably filter out parts of the repo that aren't relevant but this at least works
+      fileset = lib.fileset.unions [../../api ../../snowcap];
+    };
+    sourceRoot = "${src.name}/api/lua";
+    knownRockspec = ../../api/lua/rockspecs/pinnacle-api-0.1.0-1.rockspec;
+    propagatedBuildInputs = with lua54Packages; [cqueues http lua-protobuf compat53 luaposix];
+
+    postInstall = ''
+      mkdir -p $out/share/pinnacle/protobuf/pinnacle
+      cp -rL --no-preserve ownership,mode ${../..}/api/protobuf/pinnacle $out/share/pinnacle/protobuf
+      mkdir -p $out/share/pinnacle/snowcap/protobuf/snowcap
+      cp -rL --no-preserve ownership,mode ${../..}/snowcap/api/protobuf/snowcap $out/share/pinnacle/snowcap/protobuf
+      mkdir -p $out/share/pinnacle/protobuf/google
+      cp -rL --no-preserve ownership,mode ${../..}/api/protobuf/google $out/share/pinnacle/protobuf
+      mkdir -p $out/share/pinnacle/snowcap/protobuf/google
+      cp -rL --no-preserve ownership,mode ${../..}/snowcap/api/protobuf/google $out/share/pinnacle/snowcap/protobuf
+      find $out/share/pinnacle
+    '';
   };
-  lua = lua5_4.withPackages (ps: [ ps.luarocks luaClient]);
+  buildLuaConfig = args: callPackage ./pinnacle-lua-config (args // { inherit lua-client-api; });
+  lua = lua5_4.withPackages (ps: [ lua-client-api ]);
 in
 rustPlatform.buildRustPackage {
   inherit meta version;
@@ -92,6 +132,7 @@ rustPlatform.buildRustPackage {
     protobuf
     lua54Packages.luarocks
     lua5_4
+    lua-client-api
     git
     wayland
     wlcs-script
@@ -134,7 +175,8 @@ rustPlatform.buildRustPackage {
   ];
 
   passthru = {
-    inherit buildRustConfig;
+    inherit buildRustConfig buildLuaConfig;
     providedSessions = [ "pinnacle" ];
+    lua-client-api = lua-client-api;
   };
 }

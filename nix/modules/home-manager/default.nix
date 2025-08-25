@@ -24,18 +24,24 @@ let
 in with lib.options; {
   options.wayland.windowManager.pinnacle = {
     enable = mkEnableOption "pinnacle";
-    package = mkPackageOption pkgs "pinnacle-config" {
+
+    package = mkPackageOption pkgs "pinnacle" {
+      default = "pinnacle";
+      example = "pkgs.pinnacle";
+      extraDescription = "package containing the pinnacle server binary";
+    };
+
+    clientPackage = mkPackageOption pkgs "pinnacle-config" {
       default = "pinnacle-config";
       example = "pkgs.pinnacle-config";
       extraDescription = "package containing the command/script to run as the pinnacle user configuration.";
     };
-    config = {
 
+    config = {
       execCmd = mkOption {
         type = lib.types.listOf (lib.types.oneOf (with lib.types; [str path]));
-        default = ["${cfg.package}/bin/pinnacle-config"];
+        default = ["${cfg.clientPackage}/bin/pinnacle-config"];
         example = ''["''${pkgs.pinnacle-config}/bin/pinnacle-config"]'';
-        # TODO: figure out how to package and run lua configuration scripts
         description = ''
           the command to run for the pinnacle user configuration, provided via the pinnacle config toml file to the pinnacle server binary.
           this defaults to ''${pkgs.pinnacle-config}/bin/pinnacle-config -- you can provide this package via a nixpkgs overlay like:
@@ -108,11 +114,23 @@ in with lib.options; {
   config = let
     configFile = settingsFormat.generate "pinnacle.toml" cfg.mergedSettings;
   in lib.mkIf cfg.enable {
+    home.packages = [cfg.package cfg.clientPackage pkgs.protobuf];
+
     xdg.configFile."pinnacle/pinnacle.toml" = {
       source = configFile;
-      onChange = lib.optionalString (cfg.package != null) ''
-        ${cfg.package}/bin/pinnacle client -e "Pinnacle.reload_config()"
+      onChange = ''
+        PATH="${pkgs.protobuf}/bin/protoc:''${PATH}" ${cfg.package}/bin/pinnacle client -e "Pinnacle.reload_config()"
       '';
+    };
+
+    xdg.dataFile = {
+      "pinnacle" = {
+        source = "${cfg.package.lua-client-api}/share/pinnacle";
+        force = true;
+        onChange = ''
+          PATH="${pkgs.protobuf}/bin/protoc:''${PATH}" ${cfg.package}/bin/pinnacle client -e "Pinnacle.reload_config()"
+        '';
+      };
     };
 
     systemd.user.services.pinnacle = lib.mkIf (cfg.systemd.enable && cfg.systemd.useService) {
@@ -128,7 +146,7 @@ in with lib.options; {
       Service = {
         Slice = ["session.slice"];
         Type = "notify";
-        ExecStart = "${pkgs.pinnacle}/bin/pinnacle --session";
+        ExecStart = "${cfg.package}/bin/pinnacle --session";
       };
     };
 
