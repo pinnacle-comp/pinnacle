@@ -87,7 +87,7 @@ in with lib.options; {
 
       example = ''
         ```nix
-          programs.pinnacle.settings = {
+          programs.pinnacle.extraSettings = {
             env = {
               "MY_ENV_VAR" = "super special env var";
             };
@@ -119,7 +119,7 @@ in with lib.options; {
     xdg.configFile."pinnacle/pinnacle.toml" = {
       source = configFile;
       onChange = ''
-        PATH="${pkgs.protobuf}/bin/protoc:''${PATH}" ${cfg.package}/bin/pinnacle client -e "Pinnacle.reload_config()"
+        PATH="${pkgs.protobuf}/bin:''${PATH}" ${cfg.package}/bin/pinnacle client -e "Pinnacle.reload_config()"
       '';
     };
 
@@ -128,7 +128,7 @@ in with lib.options; {
         source = "${cfg.package.lua-client-api}/share/pinnacle";
         force = true;
         onChange = ''
-          PATH="${pkgs.protobuf}/bin/protoc:''${PATH}" ${cfg.package}/bin/pinnacle client -e "Pinnacle.reload_config()"
+          PATH="${pkgs.protobuf}/bin:''${PATH}" ${cfg.package}/bin/pinnacle client -e "Pinnacle.reload_config()"
         '';
       };
     };
