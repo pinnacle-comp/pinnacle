@@ -110,8 +110,9 @@ in with lib.options; {
   in lib.mkIf cfg.enable {
     xdg.configFile."pinnacle/pinnacle.toml" = {
       source = configFile;
-      # TODO: make pinnacle reload config when this file changes without needing to restart the whole graphical session
-      # example: https://github.com/nix-community/home-manager/blob/2b73c2fcca690b6eca4f520179e54ae760f25d4e/modules/services/window-managers/i3-sway/sway.nix#L726
+      onChange = lib.optionalString (cfg.package != null) ''
+        ${cfg.package}/bin/pinnacle client -e "Pinnacle.reload_config()"
+      '';
     };
 
     systemd.user.services.pinnacle = lib.mkIf (cfg.systemd.enable && cfg.systemd.useService) {
