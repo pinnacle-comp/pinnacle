@@ -87,7 +87,7 @@ in with lib.options; {
 
       example = ''
         ```nix
-          programs.pinnacle.settings = {
+          programs.pinnacle.extraSettings = {
             env = {
               "MY_ENV_VAR" = "super special env var";
             };
