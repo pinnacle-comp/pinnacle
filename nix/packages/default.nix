@@ -26,18 +26,33 @@
   autoPatchelfHook,
 }:
 let
-  lua = lua5_4.withPackages (ps: [ lua54Packages.luarocks ]);
   pinnacle = ../..;
   wlcs-script = writeScriptBin "wlcs" ''
     #!/bin/sh
     ${wlcs}/libexec/wlcs/wlcs "$@"
   '';
   buildRustConfig = callPackage ./pinnacle-config.nix { };
+
+  meta = {
+    description = "A WIP Smithay-based Wayland compositor, inspired by AwesomeWM and configured in Lua or Rust";
+    homepage = "https://pinnacle-comp.github.io/pinnacle/";
+    license = lib.licenses.gpl3;
+    maintainers = [ "pinnacle-comp" ];
+  };
+  version = "0.1.0";
+
+  luaClient = lua54Packages.buildLuarocksPackage {
+    inherit meta version;
+    pname = "pinnacle";
+    src = ../../api/lua;
+    propagatedBuildInputs = [lua5_4];
+  };
+  lua = lua5_4.withPackages (ps: [ ps.luarocks luaClient]);
 in
 rustPlatform.buildRustPackage {
+  inherit meta version;
 
   pname = "pinnacle-server";
-  version = "0.1.0";
   src = pinnacle;
   cargoLock = {
     lockFile = "${pinnacle}/Cargo.lock";
@@ -118,20 +133,8 @@ rustPlatform.buildRustPackage {
     libglvnd # libEGL
   ];
 
-  # TODO: unsure if this is supposed to be provided via meta or as part of the main attrs
   passthru = {
     inherit buildRustConfig;
     providedSessions = [ "pinnacle" ];
-  };
-
-  meta = {
-    description = "A WIP Smithay-based Wayland compositor, inspired by AwesomeWM and configured in Lua or Rust";
-    homepage = "https://pinnacle-comp.github.io/pinnacle/";
-    license = lib.licenses.gpl3;
-    maintainers = [ "pinnacle-comp" ];
-    passthru = {
-      inherit buildRustConfig;
-      providedSessions = [ "pinnacle" ];
-    };
   };
 }
