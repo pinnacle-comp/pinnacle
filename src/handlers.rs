@@ -1012,6 +1012,22 @@ impl Pinnacle {
                 positioner
                     .constraint_adjustment
                     .remove(ConstraintAdjustment::FlipX);
+
+                #[cfg(feature = "snowcap")]
+                {
+                    // Offset by the decoration offset
+
+                    let offset = if let Some(win) = self.window_for_surface(&root) {
+                        win.with_state(|state| {
+                            let bounds = state.max_decoration_bounds();
+                            Point::new(bounds.left as i32, bounds.top as i32)
+                        })
+                    } else {
+                        Default::default()
+                    };
+
+                    positioner.offset += offset;
+                }
             }
 
             let (root_global_loc, output) = if let Some(win) = self.window_for_surface(&root) {
