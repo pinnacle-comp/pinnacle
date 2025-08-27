@@ -58,7 +58,12 @@ let
     };
 
     disabled = lua54Packages.luaOlder "5.1" || lua54Packages.luaAtLeast "5.5";
-    propagatedBuildInputs = with lua54Packages; [ bit32 std-normalize libxcrypt pkg-config ];
+    propagatedBuildInputs = with lua54Packages; [
+      bit32
+      std-normalize
+      libxcrypt
+      pkg-config
+    ];
     meta.broken = disabled;
   });
 
@@ -68,11 +73,20 @@ let
     src = lib.fileset.toSource {
       root = ../..;
       # we should probably filter out parts of the repo that aren't relevant but this at least works
-      fileset = lib.fileset.unions [../../api ../../snowcap];
+      fileset = lib.fileset.unions [
+        ../../api
+        ../../snowcap
+      ];
     };
     sourceRoot = "${src.name}/api/lua";
     knownRockspec = ../../api/lua/rockspecs/pinnacle-api-0.1.0-1.rockspec;
-    propagatedBuildInputs = with lua54Packages; [cqueues http lua-protobuf compat53 luaposix];
+    propagatedBuildInputs = with lua54Packages; [
+      cqueues
+      http
+      lua-protobuf
+      compat53
+      luaposix
+    ];
 
     postInstall = ''
       mkdir -p $out/share/pinnacle/protobuf/pinnacle
@@ -157,6 +171,7 @@ rustPlatform.buildRustPackage {
         cargo
         lua
         wlcs-script
+        xwayland
       ]
     }
     install -m755 ${../../resources/pinnacle-session} $out/bin/pinnacle-session
