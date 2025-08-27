@@ -1,7 +1,12 @@
-{pkgs, config, lib, ...}:
+{
+  pkgs,
+  config,
+  lib,
+  ...
+}:
 let
   cfg = config.wayland.windowManager.pinnacle;
-  settingsFormat = pkgs.formats.toml {};
+  settingsFormat = pkgs.formats.toml { };
   systemdModule = {
     options = with lib.options; {
       enable = mkOption {
@@ -21,7 +26,9 @@ let
       xdgAutostart = mkEnableOption "autostart xdg applications";
     };
   };
-in with lib.options; {
+in
+with lib.options;
+{
   options.wayland.windowManager.pinnacle = {
     enable = mkEnableOption "pinnacle";
 
@@ -39,8 +46,16 @@ in with lib.options; {
 
     config = {
       execCmd = mkOption {
-        type = lib.types.listOf (lib.types.oneOf (with lib.types; [str path]));
-        default = ["${cfg.clientPackage}/bin/pinnacle-config"];
+        type = lib.types.listOf (
+          lib.types.oneOf (
+            with lib.types;
+            [
+              str
+              path
+            ]
+          )
+        );
+        default = [ "${cfg.clientPackage}/bin/pinnacle-config" ];
         example = ''["''${pkgs.pinnacle-config}/bin/pinnacle-config"]'';
         description = ''
           the command to run for the pinnacle user configuration, provided via the pinnacle config toml file to the pinnacle server binary.
@@ -83,7 +98,7 @@ in with lib.options; {
     extraSettings = mkOption {
       type = lib.types.attrs;
 
-      default = {};
+      default = { };
 
       example = ''
         ```nix
@@ -107,71 +122,90 @@ in with lib.options; {
       type = settingsFormat.type;
       default = {
         run = cfg.config.execCmd;
-      } // cfg.extraSettings;
+      }
+      // cfg.extraSettings;
     };
   };
 
-  config = let
-    configFile = settingsFormat.generate "pinnacle.toml" cfg.mergedSettings;
-  in lib.mkIf cfg.enable {
-    home.packages = [cfg.package cfg.clientPackage pkgs.protobuf];
+  config =
+    let
+      configFile = settingsFormat.generate "pinnacle.toml" cfg.mergedSettings;
+    in
+    lib.mkIf cfg.enable {
+      home.packages = [
+        cfg.package
+        cfg.clientPackage
+        pkgs.protobuf
+        pkgs.xwayland
+      ];
 
-    xdg.configFile."pinnacle/pinnacle.toml" = {
-      source = configFile;
-      onChange = ''
-        PATH="${pkgs.protobuf}/bin:''${PATH}" ${cfg.package}/bin/pinnacle client -e "Pinnacle.reload_config()"
-      '';
-    };
-
-    xdg.dataFile = {
-      "pinnacle" = {
-        source = "${cfg.package.lua-client-api}/share/pinnacle";
-        force = true;
+      xdg.configFile."pinnacle/pinnacle.toml" = {
+        source = configFile;
         onChange = ''
           PATH="${pkgs.protobuf}/bin:''${PATH}" ${cfg.package}/bin/pinnacle client -e "Pinnacle.reload_config()"
         '';
       };
-    };
 
-    systemd.user.services.pinnacle = lib.mkIf (cfg.systemd.enable && cfg.systemd.useService) {
-      Unit = {
-        Description = "A Wayland compositor inspired by AwesomeWM";
-        BindsTo = ["graphical-session.target"];
-        Wants = ["graphical-session-pre.target"]
-                ++ lib.optionals cfg.systemd.xdgAutostart ["xdg-desktop-autostart.target"];
-        After = ["graphical-session-pre.target"];
-        Before = ["graphical-session.target"]
-                 ++ lib.optionals cfg.systemd.xdgAutostart ["xdg-desktop-autostart.target"];
+      xdg.dataFile = {
+        "pinnacle" = {
+          source = "${cfg.package.lua-client-api}/share/pinnacle";
+          force = true;
+          onChange = ''
+            PATH="${pkgs.protobuf}/bin:''${PATH}" ${cfg.package}/bin/pinnacle client -e "Pinnacle.reload_config()"
+          '';
+        };
       };
-      Service = {
-        Slice = ["session.slice"];
-        Type = "notify";
-        ExecStart = "${cfg.package}/bin/pinnacle --session";
+
+      systemd.user.services.pinnacle = lib.mkIf (cfg.systemd.enable && cfg.systemd.useService) {
+        Unit = {
+          Description = "A Wayland compositor inspired by AwesomeWM";
+          BindsTo = [ "graphical-session.target" ];
+          Wants = [
+            "graphical-session-pre.target"
+          ]
+          ++ lib.optionals cfg.systemd.xdgAutostart [ "xdg-desktop-autostart.target" ];
+          After = [ "graphical-session-pre.target" ];
+          Before = [
+            "graphical-session.target"
+          ]
+          ++ lib.optionals cfg.systemd.xdgAutostart [ "xdg-desktop-autostart.target" ];
+        };
+        Service = {
+          Slice = [ "session.slice" ];
+          Type = "notify";
+          ExecStart = "${cfg.package}/bin/pinnacle --session";
+        };
+      };
+
+      systemd.user.targets.pinnacle-shutdown = lib.mkIf (cfg.systemd.enable && cfg.systemd.useService) {
+        Unit = {
+          Description = "Shutdown running Pinnacle session";
+          DefaultDependencies = false;
+          StopWhenUnneeded = true;
+
+          Conflicts = [
+            "graphical-session.target"
+            "graphical-session-pre.target"
+          ];
+          After = [
+            "graphical-session.target"
+            "graphical-session-pre.target"
+          ];
+        };
+      };
+
+      systemd.user.targets.pinnacle-session = lib.mkIf (cfg.systemd.enable && !cfg.systemd.useService) {
+        Unit = {
+          Description = "Pinnacle compositor session";
+          Documentation = [ "man:systemd.special(7)" ];
+          BindsTo = [ "graphical-session.target" ];
+          Wants = [
+            "graphical-session-pre.target"
+          ]
+          ++ lib.optionals cfg.systemd.xdgAutostart [ "xdg-desktop-autostart.target" ];
+          After = [ "graphical-session-pre.target" ];
+          Before = lib.optionals cfg.systemd.xdgAutostart [ "xdg-desktop-autostart.target" ];
+        };
       };
     };
-
-    systemd.user.targets.pinnacle-shutdown = lib.mkIf (cfg.systemd.enable && cfg.systemd.useService) {
-      Unit = {
-        Description = "Shutdown running Pinnacle session";
-        DefaultDependencies = false;
-        StopWhenUnneeded = true;
-
-        Conflicts = ["graphical-session.target" "graphical-session-pre.target"];
-        After = ["graphical-session.target" "graphical-session-pre.target"];
-      };
-    };
-
-    systemd.user.targets.pinnacle-session = lib.mkIf (cfg.systemd.enable && !cfg.systemd.useService) {
-      Unit = {
-        Description = "Pinnacle compositor session";
-        Documentation = [ "man:systemd.special(7)" ];
-        BindsTo = [ "graphical-session.target" ];
-        Wants = [
-          "graphical-session-pre.target"
-        ] ++ lib.optionals cfg.systemd.xdgAutostart ["xdg-desktop-autostart.target"];
-        After = [ "graphical-session-pre.target" ];
-        Before = lib.optionals cfg.systemd.xdgAutostart ["xdg-desktop-autostart.target"];
-      };
-    };
-  };
 }
