@@ -227,7 +227,10 @@ impl SnowcapSurface {
         if let Some(scale) = self.pending_output_scale.take()
             && scale != self.output_scale
         {
-            self.output_scale = scale;
+            // HACK: With exact fractional scaling, there's a small seam between
+            // adjacent widgets with fractional scales like 1.125.
+            // Rounding up to the nearest 0.25 seems to work around that issue.
+            self.output_scale = (scale * 4.0).ceil() / 4.0;
             needs_rebuild = true;
         }
         if let Some(bounds) = self.pending_bounds.take()
