@@ -648,13 +648,21 @@ impl FocusBorder {
             snowcap_api::decoration::Bounds {
                 left: thickness,
                 right: thickness,
-                top: thickness * 2 + titlebar_height,
+                top: if titlebar_height > 0 {
+                    thickness * 2 + titlebar_height
+                } else {
+                    thickness
+                },
                 bottom: thickness,
             },
             snowcap_api::decoration::Bounds {
                 left: thickness,
                 right: thickness,
-                top: thickness * 2 + titlebar_height,
+                top: if titlebar_height > 0 {
+                    thickness * 2 + titlebar_height
+                } else {
+                    thickness
+                },
                 bottom: thickness,
             },
             20,

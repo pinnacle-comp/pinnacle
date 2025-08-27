@@ -863,13 +863,15 @@ function FocusBorder:decorate()
         bounds = {
             left = self.thickness,
             right = self.thickness,
-            top = self.thickness * 2 + self.titlebar_height,
+            top = self.titlebar_height > 0 and self.thickness * 2 + self.titlebar_height
+                or self.thickness,
             bottom = self.thickness,
         },
         extents = {
             left = self.thickness,
             right = self.thickness,
-            top = self.thickness * 2 + self.titlebar_height,
+            top = self.titlebar_height > 0 and self.thickness * 2 + self.titlebar_height
+                or self.thickness,
             bottom = self.thickness,
         },
         z_index = 20,
