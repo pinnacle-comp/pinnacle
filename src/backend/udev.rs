@@ -962,14 +962,6 @@ impl Udev {
 
         let (phys_w, phys_h) = connector.size().unwrap_or_default();
 
-        if pinnacle.outputs.iter().any(|op| {
-            op.user_data()
-                .get::<UdevOutputData>()
-                .is_some_and(|op_id| op_id.crtc == crtc)
-        }) {
-            return;
-        }
-
         let output = Output::new(
             output_name,
             PhysicalProperties {
