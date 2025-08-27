@@ -50,7 +50,6 @@ pub struct SnowcapDecoration {
 impl Drop for SnowcapDecoration {
     fn drop(&mut self) {
         self.decoration.destroy();
-        self.foreign_toplevel_list_handle.destroy();
     }
 }
 
