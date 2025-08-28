@@ -101,7 +101,7 @@ let
     '';
   };
   buildLuaConfig = args: callPackage ./pinnacle-lua-config (args // { inherit lua-client-api; });
-  lua = lua5_4.withPackages (ps: [ lua-client-api ]);
+  lua = lua5_4.withPackages (ps: [ lua-client-api ps.cjson ]);
 in
 rustPlatform.buildRustPackage {
   inherit meta version;
