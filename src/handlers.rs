@@ -11,7 +11,7 @@ pub mod xdg_activation;
 mod xdg_shell;
 pub mod xwayland;
 
-use std::{collections::HashMap, mem, os::fd::OwnedFd, sync::Arc};
+use std::{collections::HashMap, os::fd::OwnedFd, sync::Arc};
 
 use smithay::{
     backend::{
@@ -1002,7 +1002,7 @@ impl Pinnacle {
             return;
         };
 
-        let mut positioner = popup.with_pending_state(|state| mem::take(&mut state.positioner));
+        let mut positioner = popup.with_pending_state(|state| state.positioner);
 
         let popup_geo = (|| -> Option<Rectangle<i32, Logical>> {
             let parent = popup.get_parent_surface()?;
@@ -1061,7 +1061,6 @@ impl Pinnacle {
 
         popup.with_pending_state(|state| {
             state.geometry = popup_geo;
-            state.positioner = positioner;
         });
     }
 
