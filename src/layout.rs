@@ -412,7 +412,9 @@ impl State {
                     // `loc` includes bounds but we need to configure the x11 surface
                     // with its actual location
                     #[cfg(feature = "snowcap")]
-                    let loc = {
+                    let loc = if window.should_not_have_ssd() {
+                        loc
+                    } else {
                         let mut loc = loc;
                         let max_bounds = window.with_state(|state| state.max_decoration_bounds());
                         loc.x += max_bounds.left as i32;
