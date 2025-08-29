@@ -200,7 +200,7 @@ impl WindowElement {
                     let max_bounds = self.with_state(|state| state.max_decoration_bounds());
                     if let Some(loc) = loc.as_mut() {
                         loc.x += max_bounds.left as i32;
-                        loc.y += max_bounds.right as i32;
+                        loc.y += max_bounds.top as i32;
                     }
                     size.w = i32::max(1, size.w - max_bounds.left as i32 - max_bounds.right as i32);
                     size.h = i32::max(1, size.h - max_bounds.top as i32 - max_bounds.bottom as i32);

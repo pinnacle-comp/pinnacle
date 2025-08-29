@@ -408,6 +408,17 @@ impl State {
 
             for (window, loc) in locs {
                 if let Some(surface) = window.x11_surface() {
+                    // FIXME: Don't do this here
+                    // `loc` includes bounds but we need to configure the x11 surface
+                    // with its actual location
+                    #[cfg(feature = "snowcap")]
+                    let loc = {
+                        let mut loc = loc;
+                        let max_bounds = window.with_state(|state| state.max_decoration_bounds());
+                        loc.x += max_bounds.left as i32;
+                        loc.y += max_bounds.top as i32;
+                        loc
+                    };
                     let _ = surface.configure(Rectangle::new(loc, surface.geometry().size));
                 }
 
