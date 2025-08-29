@@ -27,6 +27,7 @@ use smithay::{
     utils::{Logical, Physical, Point, Scale},
     wayland::shell::wlr_layer,
 };
+use tracing::warn;
 use util::{snapshot::SnapshotRenderElement, surface::WlSurfaceTextureRenderElement};
 
 use crate::{
@@ -488,7 +489,14 @@ fn window_render_elements<R: PRenderer + AsGlesRenderer>(
                 false
             }
         });
-        assert!(found);
+        if !found {
+            // FIXME: figure out why this is happening,
+            // seems to only happen with x11 windows
+            warn!(
+                app_id = ?window.class(),
+                "window was not in z_index stack while rendering"
+            );
+        }
         renderables.extend(unmapping_windows.into_iter().map(itertools::Either::Right));
         renderables.push(itertools::Either::Left(window));
     }
