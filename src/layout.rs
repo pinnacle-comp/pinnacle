@@ -377,6 +377,12 @@ impl State {
                         warn!("Attempted to map a window without active tags");
                         continue;
                     }
+
+                    if !self.pinnacle.windows.contains(&window) {
+                        // The window closed in the time between the transaction and here.
+                        continue;
+                    }
+
                     outputs.extend(window.output(&self.pinnacle));
 
                     let loc = match loc {
