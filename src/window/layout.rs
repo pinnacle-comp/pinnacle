@@ -65,9 +65,6 @@ impl Pinnacle {
         let to_schedule = self.space.outputs_for_element(window);
         self.space.unmap_elem(window);
 
-        self.z_index_stack
-            .retain(|elem| !matches!(elem, ZIndexElement::Window(win) if win == window));
-
         self.loop_handle.insert_idle(move |state| {
             for output in to_schedule {
                 state.schedule_render(&output);
