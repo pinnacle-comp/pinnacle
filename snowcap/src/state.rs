@@ -5,7 +5,7 @@ use smithay_client_toolkit::{
     compositor::CompositorState,
     output::OutputState,
     reexports::{
-        calloop::{self, LoopHandle, LoopSignal},
+        calloop::{self, Dispatcher, LoopHandle, LoopSignal},
         calloop_wayland_source::WaylandSource,
         client::{
             Connection, QueueHandle,
@@ -43,6 +43,7 @@ pub struct State {
     pub loop_handle: LoopHandle<'static, State>,
     pub loop_signal: LoopSignal,
     pub conn: Connection,
+    pub wayland_source: Dispatcher<'static, WaylandSource<State>, State>,
 
     pub runtime: crate::runtime::Runtime,
     pub registry_state: RegistryState,
@@ -104,9 +105,13 @@ impl State {
         let foreign_toplevel_list: ExtForeignToplevelListV1 =
             globals.bind(&queue_handle, 1..=1, ()).unwrap();
 
-        WaylandSource::new(conn.clone(), event_queue)
-            .insert(loop_handle.clone())
-            .unwrap();
+        let wayland_source = WaylandSource::new(conn.clone(), event_queue);
+
+        let dispatcher = Dispatcher::new(wayland_source, |_, queue, data| {
+            queue.dispatch_pending(data)
+        });
+
+        loop_handle.register_dispatcher(dispatcher.clone())?;
 
         // Attempt to create a wgpu renderer upfront; this takes a non-trivial amount of time to do
         let compositor = crate::wgpu::Compositor::new()
@@ -196,6 +201,7 @@ impl State {
             loop_handle,
             loop_signal,
             conn: conn.clone(),
+            wayland_source: dispatcher,
             runtime,
 
             registry_state,
