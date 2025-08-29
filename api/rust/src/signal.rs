@@ -278,6 +278,22 @@ signals! {
                 }
             },
         }
+        /// A window's title changed.
+        ///
+        /// Callbacks receive the window and new title.
+        WindowTitleChanged = {
+            enum_name = TitleChanged,
+            callback_type = Box<dyn FnMut(&WindowHandle, &str) + Send + 'static>,
+            client_request = window_title_changed,
+            on_response = |response, callbacks| {
+                let handle = WindowHandle { id: response.window_id };
+                let title = response.title;
+
+                for callback in callbacks {
+                    callback(&handle, &title);
+                }
+            },
+        }
     }
     /// Signals relating to tag events.
     TagSignal => {
@@ -328,6 +344,7 @@ pub(crate) struct SignalState {
     pub(crate) window_pointer_enter: SignalData<WindowPointerEnter>,
     pub(crate) window_pointer_leave: SignalData<WindowPointerLeave>,
     pub(crate) window_focused: SignalData<WindowFocused>,
+    pub(crate) window_title_changed: SignalData<WindowTitleChanged>,
 
     pub(crate) tag_active: SignalData<TagActive>,
 
@@ -354,6 +371,7 @@ impl SignalState {
             window_pointer_enter: SignalData::new(),
             window_pointer_leave: SignalData::new(),
             window_focused: SignalData::new(),
+            window_title_changed: SignalData::new(),
 
             tag_active: SignalData::new(),
 
@@ -373,6 +391,7 @@ impl SignalState {
         self.window_pointer_enter.reset();
         self.window_pointer_leave.reset();
         self.window_focused.reset();
+        self.window_title_changed.reset();
 
         self.tag_active.reset();
 
@@ -506,6 +525,7 @@ where
 /// A handle that can be used to disconnect from a signal connection.
 ///
 /// This will remove the connected callback.
+#[derive(Debug, Clone)]
 pub struct SignalHandle {
     id: SignalConnId,
     remove_callback_sender: UnboundedSender<SignalConnId>,
@@ -522,8 +542,8 @@ impl SignalHandle {
         }
     }
 
-    /// Disconnect this signal connection.
-    pub fn disconnect(self) {
+    /// Disconnects this signal connection.
+    pub fn disconnect(&self) {
         self.remove_callback_sender
             .send(self.id)
             .expect("failed to disconnect signal");

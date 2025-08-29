@@ -1,11 +1,15 @@
 use smithay::{
+    backend::renderer::utils::SurfaceView,
     reexports::{
         calloop::Interest,
         wayland_server::{Resource, protocol::wl_surface::WlSurface},
     },
-    utils::HookId,
+    utils::{HookId, Logical, Point, Rectangle},
     wayland::{
-        compositor::{self, BufferAssignment, CompositorHandler, SurfaceAttributes},
+        compositor::{
+            self, BufferAssignment, CompositorHandler, SubsurfaceCachedState, SurfaceAttributes,
+            SurfaceData, TraversalAction, with_surface_tree_downward,
+        },
         dmabuf,
         shell::xdg::{ToplevelSurface, XdgToplevelSurfaceData},
     },
@@ -156,13 +160,14 @@ pub fn add_mapped_toplevel_pre_commit_hook(toplevel: &ToplevelSurface) -> HookId
             let mut deco_serials = Vec::new();
 
             #[cfg(feature = "snowcap")]
-            if let Some(geometry) = compositor::with_states(surface, |states| {
-                let mut guard = states
-                    .cached_state
-                    .get::<smithay::wayland::shell::xdg::SurfaceCachedState>();
-                guard.pending().geometry
-            }) {
-                let size = geometry.size;
+            {
+                let size = compositor::with_states(surface, |states| {
+                    let mut guard = states
+                        .cached_state
+                        .get::<smithay::wayland::shell::xdg::SurfaceCachedState>();
+                    guard.pending().geometry.map(|geo| geo.size)
+                })
+                .unwrap_or_else(|| pending_bbox(surface).size);
 
                 window.with_state(|state| {
                     for deco in state.decoration_surfaces.iter() {
@@ -350,4 +355,74 @@ impl Pinnacle {
             compositor::remove_pre_commit_hook(surface, prev_hook);
         }
     }
+}
+
+fn pending_surface_view(states: &SurfaceData) -> Option<SurfaceView> {
+    let mut guard = states.cached_state.get::<SurfaceAttributes>();
+    let attrs = guard.pending();
+    match attrs.buffer.as_ref() {
+        Some(BufferAssignment::NewBuffer(buffer)) => {
+            use smithay::{
+                backend::renderer::buffer_dimensions, wayland::viewporter::ViewportCachedState,
+            };
+
+            let dimens = buffer_dimensions(buffer)?;
+            let surface_size = dimens.to_logical(attrs.buffer_scale, attrs.buffer_transform.into());
+            let dst = states
+                .cached_state
+                .get::<ViewportCachedState>()
+                .pending()
+                .size()
+                .unwrap_or_else(|| {
+                    surface_size
+                        .to_f64()
+                        .to_physical(1.0)
+                        .to_logical(1.0)
+                        .to_i32_round()
+                });
+            let offset = if states.role == Some("subsurface") {
+                states
+                    .cached_state
+                    .get::<SubsurfaceCachedState>()
+                    .pending()
+                    .location
+            } else {
+                Default::default()
+            };
+            Some(SurfaceView {
+                src: Default::default(), // unused here
+                dst,
+                offset,
+            })
+        }
+        _ => None,
+    }
+}
+
+fn pending_bbox(surface: &WlSurface) -> Rectangle<i32, Logical> {
+    let _span = tracy_client::span!("crate::hook::pending_bbox");
+
+    let mut bounding_box = Rectangle::default();
+
+    with_surface_tree_downward(
+        surface,
+        (0, 0).into(),
+        |_surface, states, loc: &Point<i32, Logical>| {
+            let mut loc = *loc;
+
+            if let Some(surface_view) = pending_surface_view(states) {
+                loc += surface_view.offset;
+
+                bounding_box = bounding_box.merge(Rectangle::new(loc, surface_view.dst));
+
+                TraversalAction::DoChildren(loc)
+            } else {
+                TraversalAction::SkipChildren
+            }
+        },
+        |_, _, _| (),
+        |_, _, _| true,
+    );
+
+    bounding_box
 }

@@ -51,6 +51,8 @@ impl State {
             .lock_surface_focus
             .take_if(|lock| !lock.alive());
 
+        let popup_root = keyboard.grab_start_data().and_then(|data| data.focus);
+
         // Only allow keyboard focus on lock surfaces when locked
         if !self.pinnacle.lock_state.is_unlocked() {
             let lock_surface = self
@@ -112,6 +114,14 @@ impl State {
 
         if let Some(exclusive_layer_focus) = exclusive_layer_focus {
             let layer_target = KeyboardFocusTarget::LayerSurface(exclusive_layer_focus);
+
+            if popup_root
+                .as_ref()
+                .is_some_and(|popup_root| popup_root == &layer_target)
+            {
+                return;
+            }
+
             if keyboard.current_focus().as_ref() == Some(&layer_target) {
                 return;
             }
@@ -135,6 +145,14 @@ impl State {
 
         if let Some(layer) = self.pinnacle.on_demand_layer_focus.as_ref() {
             let layer_target = KeyboardFocusTarget::LayerSurface(layer.clone());
+
+            if popup_root
+                .as_ref()
+                .is_some_and(|popup_root| popup_root == &layer_target)
+            {
+                return;
+            }
+
             if keyboard.current_focus().as_ref() == Some(&layer_target) {
                 return;
             }
@@ -148,6 +166,13 @@ impl State {
                 }
             }
 
+            return;
+        }
+
+        if popup_root
+            .as_ref()
+            .is_some_and(|popup_root| matches!(popup_root, KeyboardFocusTarget::Window(_)))
+        {
             return;
         }
 

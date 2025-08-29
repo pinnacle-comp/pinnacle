@@ -78,6 +78,12 @@ impl SnowcapDecoration {
         extents: Bounds,
         widgets: ViewFn,
     ) -> Option<Self> {
+        // INFO: It's possible for a window rule to come in before Snowcap receives
+        // the identifier for the corresponding toplevel handle. We do a roundtrip here
+        // to receive that before continuing.
+        let dispatcher = state.wayland_source.clone();
+        let _ = dispatcher.as_source_mut().queue().roundtrip(state);
+
         let foreign_toplevel_list_handle = state
             .foreign_toplevel_list_handles
             .iter()

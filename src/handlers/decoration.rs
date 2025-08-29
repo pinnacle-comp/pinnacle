@@ -181,7 +181,13 @@ impl XdgDecorationHandler for State {
 }
 delegate_xdg_decoration!(State);
 
-type KdeDecorationObject = RefCell<Option<Weak<OrgKdeKwinServerDecoration>>>;
+type KdeDecorationObject = RefCell<KdeDecorationObjectInner>;
+
+#[derive(Default)]
+struct KdeDecorationObjectInner {
+    protocol_obj: Option<Weak<OrgKdeKwinServerDecoration>>,
+    last_requested_mode: Option<org_kde_kwin_server_decoration::Mode>,
+}
 
 impl KdeDecorationHandler for State {
     fn kde_decoration_state(&self) -> &KdeDecorationState {
@@ -210,17 +216,12 @@ impl KdeDecorationHandler for State {
         decoration.mode(kde_mode);
 
         compositor::with_states(surface, |states| {
-            if !states
+            states
                 .data_map
-                .insert_if_missing(|| RefCell::new(Some(decoration.downgrade())))
-            {
-                states
-                    .data_map
-                    .get::<KdeDecorationObject>()
-                    .unwrap()
-                    .borrow_mut()
-                    .replace(decoration.downgrade());
-            }
+                .get_or_insert(KdeDecorationObject::default)
+                .borrow_mut()
+                .protocol_obj
+                .replace(decoration.downgrade());
         });
     }
 
@@ -247,6 +248,21 @@ impl KdeDecorationHandler for State {
         };
 
         if let WEnum::Value(mode) = mode {
+            // Server is responsible for preventing KDE decoration feedback loops
+            let already_requested_mode = compositor::with_states(surface, |states| {
+                let last_requested_mode = states
+                    .data_map
+                    .get_or_insert(KdeDecorationObject::default)
+                    .borrow_mut()
+                    .last_requested_mode
+                    .replace(mode);
+                last_requested_mode == Some(mode)
+            });
+
+            if already_requested_mode {
+                return;
+            }
+
             let kde_mode = self.request_mode(
                 toplevel,
                 match mode {
@@ -280,10 +296,10 @@ impl KdeDecorationHandler for State {
         self.unset_mode(toplevel);
 
         compositor::with_states(surface, |states| {
-            let kde_decoration = states.data_map.get::<KdeDecorationObject>();
-            if let Some(decoration) = kde_decoration {
-                decoration.borrow_mut().take();
-            }
+            states
+                .data_map
+                .get_or_insert(KdeDecorationObject::default)
+                .take();
         });
     }
 }
@@ -292,13 +308,15 @@ delegate_kde_decoration!(State);
 /// Updates the KDE decoration mode of a surface (if it has one) from an XDG decoration mode.
 pub fn update_kde_decoration_mode(surface: &WlSurface, mode: zxdg_toplevel_decoration_v1::Mode) {
     compositor::with_states(surface, |states| {
-        let kde_decoration = states.data_map.get::<KdeDecorationObject>();
-        if let Some(kde_decoration) = kde_decoration
-            && let Some(decoration) = kde_decoration
-                .borrow()
-                .as_ref()
-                .and_then(|obj| obj.upgrade().ok())
-        {
+        let decoration = states
+            .data_map
+            .get_or_insert(KdeDecorationObject::default)
+            .borrow()
+            .protocol_obj
+            .as_ref()
+            .and_then(|obj| obj.upgrade().ok());
+
+        if let Some(decoration) = decoration {
             let mode = match mode {
                 zxdg_toplevel_decoration_v1::Mode::ServerSide => {
                     org_kde_kwin_server_decoration::Mode::Server

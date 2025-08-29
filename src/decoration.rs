@@ -22,7 +22,7 @@ use smithay::{
         wayland_protocols::wp::presentation_time::server::wp_presentation_feedback,
         wayland_server::protocol::wl_surface::WlSurface,
     },
-    utils::{IsAlive, Logical, Point, Rectangle, Serial, user_data::UserDataMap},
+    utils::{HookId, IsAlive, Logical, Point, Rectangle, Serial, user_data::UserDataMap},
     wayland::{
         compositor::{self, SurfaceData},
         dmabuf::DmabufFeedback,
@@ -68,6 +68,17 @@ struct DecorationSurfaceInner {
 impl Drop for DecorationSurfaceInner {
     fn drop(&mut self) {
         self.surface.decoration_surface().closed();
+
+        let hook = self
+            .userdata
+            .get_or_insert(RefCell::<DecorationSurfaceState>::default)
+            .borrow_mut()
+            .hook_id
+            .take();
+
+        if let Some(hook) = hook {
+            compositor::remove_pre_commit_hook(self.surface.wl_surface(), hook);
+        }
     }
 }
 
@@ -250,6 +261,7 @@ impl WaylandFocus for DecorationSurface {
 pub struct DecorationSurfaceState {
     pub bounds_changed: AtomicBool,
     pub pending_transactions: Vec<(Serial, Transaction)>,
+    pub hook_id: Option<HookId>,
 }
 
 impl WithState for DecorationSurface {

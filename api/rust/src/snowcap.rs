@@ -4,14 +4,20 @@
 //! Snowcap is a really-early-in-development widget system, designed for Pinnacle.
 //! This module contains preliminary widgets made with the system.
 
+use std::sync::{Arc, OnceLock};
+
 use indexmap::IndexMap;
 use snowcap_api::{
+    decoration::DecorationHandle,
     layer::{ExclusiveZone, KeyboardInteractivity, ZLayer},
     widget::{
-        Alignment, Color, Length, Padding, Program, WidgetDef,
+        Alignment, Border, Color, Length, Padding, Program, Radius, WidgetDef,
+        button::{self, Button, Styles},
         column::Column,
         container::Container,
         font::{Family, Font, Weight},
+        image::{Handle, Image},
+        input_region::InputRegion,
         row::Row,
         scrollable::Scrollable,
         text::{self, Text},
@@ -19,7 +25,11 @@ use snowcap_api::{
 };
 use xkbcommon::xkb::Keysym;
 
-use crate::input::{BindInfoKind, Mod};
+use crate::{
+    input::{BindInfoKind, Mod},
+    signal::SignalHandle,
+    window::WindowHandle,
+};
 
 /// A quit prompt.
 ///
@@ -558,5 +568,432 @@ impl ConfigCrashedMessage {
                 handle.close();
             }
         });
+    }
+}
+
+/// A border that shows window focus, with an optional titlebar.
+#[derive(Debug, Clone)]
+pub struct FocusBorder {
+    /// The window this border is decorating.
+    pub window: WindowHandle,
+    /// The thickness of the border, in pixels.
+    pub thickness: u32,
+    /// The color of the border when it's focused.
+    pub focused_color: Color,
+    /// The color of the border when it's unfocused.
+    pub unfocused_color: Color,
+    /// Whether the window this border surrounds is focused.
+    pub focused: bool,
+    /// Whether to draw a titlebar.
+    pub include_titlebar: bool,
+    /// The title of the window.
+    pub title: String,
+    /// The height of the titlebar.
+    pub titlebar_height: u32,
+}
+
+/// A message that changes a [`FocusBorder`].
+#[derive(Clone)]
+pub enum FocusBorderMessage {
+    /// Make this border focused or not.
+    SetFocused(bool),
+    /// Maximize the window this border decorates.
+    Maximize,
+    /// Close the window this border decorates.
+    Close,
+    /// The title changed.
+    TitleChanged(String),
+}
+
+impl FocusBorder {
+    /// Creates a new focus border without a titlebar.
+    pub fn new(window: &WindowHandle) -> Self {
+        Self {
+            window: window.clone(),
+            thickness: 4,
+            focused_color: Color::rgb(0.4, 0.15, 0.7),
+            unfocused_color: Color::rgb(0.15, 0.15, 0.15),
+            focused: window.focused(),
+            include_titlebar: false,
+            title: String::new(),
+            titlebar_height: 0,
+        }
+    }
+
+    /// Creates a new focus border with a titlebar.
+    pub fn new_with_titlebar(window: &WindowHandle) -> Self {
+        Self {
+            window: window.clone(),
+            thickness: 4,
+            focused_color: Color::rgb(0.4, 0.15, 0.7),
+            unfocused_color: Color::rgb(0.15, 0.15, 0.15),
+            focused: window.focused(),
+            include_titlebar: true,
+            title: window.title(),
+            titlebar_height: 16,
+        }
+    }
+
+    /// Decorates the window with this focus border.
+    pub fn decorate(self) -> DecorationHandle<FocusBorderMessage> {
+        let thickness = self.thickness;
+        let titlebar_height = self.titlebar_height;
+        let window = self.window.clone();
+
+        let border = snowcap_api::decoration::new_widget(
+            self,
+            window
+                .foreign_toplevel_list_identifier()
+                .unwrap_or_default(),
+            snowcap_api::decoration::Bounds {
+                left: thickness,
+                right: thickness,
+                top: if titlebar_height > 0 {
+                    thickness * 2 + titlebar_height
+                } else {
+                    thickness
+                },
+                bottom: thickness,
+            },
+            snowcap_api::decoration::Bounds {
+                left: thickness,
+                right: thickness,
+                top: if titlebar_height > 0 {
+                    thickness * 2 + titlebar_height
+                } else {
+                    thickness
+                },
+                bottom: thickness,
+            },
+            20,
+        )
+        .unwrap();
+
+        let signal_holder = Arc::new(OnceLock::<SignalHandle>::new());
+        let signal_holder2 = Arc::new(OnceLock::<SignalHandle>::new());
+
+        // We use the foreign toplevel ID to tell if the window is alive
+        let signal =
+            crate::window::connect_signal(crate::signal::WindowSignal::Focused(Box::new({
+                let signal_holder = signal_holder.clone();
+                let signal_holder2 = signal_holder2.clone();
+                let window = window.clone();
+                let border = border.clone();
+                move |focused| {
+                    if window.foreign_toplevel_list_identifier().is_some() {
+                        border.send_message(FocusBorderMessage::SetFocused(&window == focused));
+                    } else {
+                        signal_holder.get().unwrap().disconnect();
+                        signal_holder2.get().unwrap().disconnect();
+                    }
+                }
+            })));
+
+        signal_holder.set(signal).unwrap();
+
+        let signal =
+            crate::window::connect_signal(crate::signal::WindowSignal::TitleChanged(Box::new({
+                let signal_holder = signal_holder.clone();
+                let signal_holder2 = signal_holder2.clone();
+                let window = window.clone();
+                let border = border.clone();
+                move |win, title| {
+                    if window.foreign_toplevel_list_identifier().is_some() {
+                        if &window == win {
+                            border.send_message(FocusBorderMessage::TitleChanged(title.into()));
+                        }
+                    } else {
+                        signal_holder.get().unwrap().disconnect();
+                        signal_holder2.get().unwrap().disconnect();
+                    }
+                }
+            })));
+
+        signal_holder2.set(signal).unwrap();
+
+        border
+    }
+}
+
+const B: u32 = 0x000000ff;
+const T: u32 = 0x00000000;
+
+// don't ask lol
+#[rustfmt::skip]
+const EXIT_ICON: &[u32] = &[
+    T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,
+    T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,
+    T,T,B,B,B,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,B,B,B,T,T,
+    T,T,B,B,B,B,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,B,B,B,B,T,T,
+    T,T,B,B,B,B,B,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,B,B,B,B,B,T,T,
+    T,T,T,B,B,B,B,B,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,B,B,B,B,B,T,T,T,
+    T,T,T,T,B,B,B,B,B,T,T,T,T,T,T,T,T,T,T,T,T,T,T,B,B,B,B,B,T,T,T,T,
+    T,T,T,T,T,B,B,B,B,B,T,T,T,T,T,T,T,T,T,T,T,T,B,B,B,B,B,T,T,T,T,T,
+    T,T,T,T,T,T,B,B,B,B,B,T,T,T,T,T,T,T,T,T,T,B,B,B,B,B,T,T,T,T,T,T,
+    T,T,T,T,T,T,T,B,B,B,B,B,T,T,T,T,T,T,T,T,B,B,B,B,B,T,T,T,T,T,T,T,
+    T,T,T,T,T,T,T,T,B,B,B,B,B,T,T,T,T,T,T,B,B,B,B,B,T,T,T,T,T,T,T,T,
+    T,T,T,T,T,T,T,T,T,B,B,B,B,B,T,T,T,T,B,B,B,B,B,T,T,T,T,T,T,T,T,T,
+    T,T,T,T,T,T,T,T,T,T,B,B,B,B,B,T,T,B,B,B,B,B,T,T,T,T,T,T,T,T,T,T,
+    T,T,T,T,T,T,T,T,T,T,T,B,B,B,B,B,B,B,B,B,B,T,T,T,T,T,T,T,T,T,T,T,
+    T,T,T,T,T,T,T,T,T,T,T,T,B,B,B,B,B,B,B,B,T,T,T,T,T,T,T,T,T,T,T,T,
+    T,T,T,T,T,T,T,T,T,T,T,T,T,B,B,B,B,B,B,T,T,T,T,T,T,T,T,T,T,T,T,T,
+    T,T,T,T,T,T,T,T,T,T,T,T,T,B,B,B,B,B,B,T,T,T,T,T,T,T,T,T,T,T,T,T,
+    T,T,T,T,T,T,T,T,T,T,T,T,B,B,B,B,B,B,B,B,T,T,T,T,T,T,T,T,T,T,T,T,
+    T,T,T,T,T,T,T,T,T,T,T,B,B,B,B,B,B,B,B,B,B,T,T,T,T,T,T,T,T,T,T,T,
+    T,T,T,T,T,T,T,T,T,T,B,B,B,B,B,T,T,B,B,B,B,B,T,T,T,T,T,T,T,T,T,T,
+    T,T,T,T,T,T,T,T,T,B,B,B,B,B,T,T,T,T,B,B,B,B,B,T,T,T,T,T,T,T,T,T,
+    T,T,T,T,T,T,T,T,B,B,B,B,B,T,T,T,T,T,T,B,B,B,B,B,T,T,T,T,T,T,T,T,
+    T,T,T,T,T,T,T,B,B,B,B,B,T,T,T,T,T,T,T,T,B,B,B,B,B,T,T,T,T,T,T,T,
+    T,T,T,T,T,T,B,B,B,B,B,T,T,T,T,T,T,T,T,T,T,B,B,B,B,B,T,T,T,T,T,T,
+    T,T,T,T,T,B,B,B,B,B,T,T,T,T,T,T,T,T,T,T,T,T,B,B,B,B,B,T,T,T,T,T,
+    T,T,T,T,B,B,B,B,B,T,T,T,T,T,T,T,T,T,T,T,T,T,T,B,B,B,B,B,T,T,T,T,
+    T,T,T,B,B,B,B,B,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,B,B,B,B,B,T,T,T,
+    T,T,B,B,B,B,B,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,B,B,B,B,B,T,T,
+    T,T,B,B,B,B,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,B,B,B,B,T,T,
+    T,T,B,B,B,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,B,B,B,T,T,
+    T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,
+    T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,
+];
+
+#[rustfmt::skip]
+const MAXIMIZE_ICON: &[u32] = &[
+    T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,
+    T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,
+    T,T,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,T,T,
+    T,T,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,T,T,
+    T,T,B,B,B,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,B,B,B,T,T,
+    T,T,B,B,B,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,B,B,B,T,T,
+    T,T,B,B,B,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,B,B,B,T,T,
+    T,T,B,B,B,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,B,B,B,T,T,
+    T,T,B,B,B,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,B,B,B,T,T,
+    T,T,B,B,B,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,B,B,B,T,T,
+    T,T,B,B,B,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,B,B,B,T,T,
+    T,T,B,B,B,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,B,B,B,T,T,
+    T,T,B,B,B,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,B,B,B,T,T,
+    T,T,B,B,B,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,B,B,B,T,T,
+    T,T,B,B,B,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,B,B,B,T,T,
+    T,T,B,B,B,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,B,B,B,T,T,
+    T,T,B,B,B,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,B,B,B,T,T,
+    T,T,B,B,B,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,B,B,B,T,T,
+    T,T,B,B,B,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,B,B,B,T,T,
+    T,T,B,B,B,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,B,B,B,T,T,
+    T,T,B,B,B,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,B,B,B,T,T,
+    T,T,B,B,B,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,B,B,B,T,T,
+    T,T,B,B,B,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,B,B,B,T,T,
+    T,T,B,B,B,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,B,B,B,T,T,
+    T,T,B,B,B,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,B,B,B,T,T,
+    T,T,B,B,B,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,B,B,B,T,T,
+    T,T,B,B,B,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,B,B,B,T,T,
+    T,T,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,T,T,
+    T,T,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,T,T,
+    T,T,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,T,T,
+    T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,
+    T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,
+];
+
+impl Program for FocusBorder {
+    type Message = FocusBorderMessage;
+
+    fn update(&mut self, msg: Self::Message) {
+        match msg {
+            FocusBorderMessage::SetFocused(focused) => {
+                self.focused = focused;
+            }
+            FocusBorderMessage::Maximize => {
+                self.window.toggle_maximized();
+            }
+            FocusBorderMessage::Close => {
+                self.window.close();
+            }
+            FocusBorderMessage::TitleChanged(title) => {
+                self.title = title;
+            }
+        }
+    }
+
+    fn view(&self) -> WidgetDef<Self::Message> {
+        let mut row = Column::new();
+
+        if self.include_titlebar {
+            let titlebar = Container::new(
+                Row::new_with_children([
+                    Text::new(&self.title)
+                        .style(text::Style {
+                            color: None,
+                            pixels: Some(self.titlebar_height as f32 - 2.0),
+                            font: None,
+                        })
+                        .width(Length::Fill)
+                        .into(),
+                    Button::new(
+                        Image::new(Handle::Rgba {
+                            width: 32,
+                            height: 32,
+                            bytes: MAXIMIZE_ICON
+                                .iter()
+                                .flat_map(|rgba| rgba.to_be_bytes())
+                                .collect(),
+                        })
+                        .width(Length::Fill)
+                        .height(Length::Fill),
+                    )
+                    .width(Length::Fixed((self.titlebar_height) as f32))
+                    .height(Length::Fixed((self.titlebar_height) as f32))
+                    .padding(Padding::from(4.0))
+                    .style(
+                        Styles {
+                            active: Some(button::Style::new().background_color({
+                                let mut color = if self.focused {
+                                    self.focused_color
+                                } else {
+                                    self.unfocused_color
+                                };
+                                color.red += 0.3;
+                                color.green += 0.3;
+                                color.blue += 0.3;
+                                color
+                            })),
+                            hovered: Some(button::Style::new().background_color({
+                                let mut color = if self.focused {
+                                    self.focused_color
+                                } else {
+                                    self.unfocused_color
+                                };
+                                color.red += 0.4;
+                                color.green += 0.4;
+                                color.blue += 0.4;
+                                color
+                            })),
+                            pressed: Some(button::Style::new().background_color({
+                                let mut color = if self.focused {
+                                    self.focused_color
+                                } else {
+                                    self.unfocused_color
+                                };
+                                color.red += 0.5;
+                                color.green += 0.5;
+                                color.blue += 0.5;
+                                color
+                            })),
+                            disabled: None,
+                        }
+                        .border(Border {
+                            color: None,
+                            width: None,
+                            radius: Some(Radius::from(1000.0)),
+                        }),
+                    )
+                    .on_press(FocusBorderMessage::Maximize)
+                    .into(),
+                    Button::new(
+                        Image::new(Handle::Rgba {
+                            width: 32,
+                            height: 32,
+                            bytes: EXIT_ICON
+                                .iter()
+                                .flat_map(|rgba| rgba.to_be_bytes())
+                                .collect(),
+                        })
+                        .width(Length::Fill)
+                        .height(Length::Fill),
+                    )
+                    .width(Length::Fixed((self.titlebar_height) as f32))
+                    .height(Length::Fixed((self.titlebar_height) as f32))
+                    .padding(Padding::from(4.0))
+                    .style(
+                        Styles {
+                            active: Some(button::Style::new().background_color({
+                                let mut color = if self.focused {
+                                    self.focused_color
+                                } else {
+                                    self.unfocused_color
+                                };
+                                color.red += 0.3;
+                                color.green += 0.3;
+                                color.blue += 0.3;
+                                color
+                            })),
+                            hovered: Some(button::Style::new().background_color({
+                                let mut color = if self.focused {
+                                    self.focused_color
+                                } else {
+                                    self.unfocused_color
+                                };
+                                color.red += 0.4;
+                                color.green += 0.4;
+                                color.blue += 0.4;
+                                color
+                            })),
+                            pressed: Some(button::Style::new().background_color({
+                                let mut color = if self.focused {
+                                    self.focused_color
+                                } else {
+                                    self.unfocused_color
+                                };
+                                color.red += 0.5;
+                                color.green += 0.5;
+                                color.blue += 0.5;
+                                color
+                            })),
+                            disabled: None,
+                        }
+                        .border(Border {
+                            color: None,
+                            width: None,
+                            radius: Some(Radius::from(1000.0)),
+                        }),
+                    )
+                    .on_press(FocusBorderMessage::Close)
+                    .into(),
+                ])
+                .item_alignment(Alignment::Start)
+                .spacing(4.0)
+                .width(Length::Fill)
+                .height(Length::Fixed(self.titlebar_height as f32)),
+            )
+            .style(snowcap_api::widget::container::Style {
+                text_color: None,
+                background_color: Some(if self.focused {
+                    self.focused_color
+                } else {
+                    self.unfocused_color
+                }),
+                border: None,
+            })
+            .padding(Padding {
+                top: self.thickness as f32,
+                right: self.thickness as f32,
+                bottom: 0.0,
+                left: self.thickness as f32,
+            });
+
+            row = row.push(titlebar);
+        }
+
+        let focus_border = Container::new(
+            InputRegion::new(false, Row::new())
+                .width(Length::Fill)
+                .height(Length::Fill),
+        )
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .padding(Padding::from(self.thickness as f32))
+        .style(
+            snowcap_api::widget::container::Style::new()
+                .background_color(Color::from([0.0, 0.0, 0.0, 0.0]))
+                .border(snowcap_api::widget::Border {
+                    color: Some(if self.focused {
+                        self.focused_color
+                    } else {
+                        self.unfocused_color
+                    }),
+                    width: Some(self.thickness as f32),
+                    radius: Some(Radius::default()),
+                }),
+        );
+
+        row = row.push(focus_border);
+
+        row.into()
     }
 }

@@ -29,8 +29,8 @@ use crate::{
 };
 
 pub struct SnowcapSurface {
-    // SAFETY: Drop order: surface needs to be dropped before the wl surface
-    surface: <crate::compositor::Compositor as iced_graphics::Compositor>::Surface,
+    // This is an option so we can drop it first
+    surface: Option<<crate::compositor::Compositor as iced_graphics::Compositor>::Surface>,
     pub wl_surface: WlSurface,
     compositor_state: CompositorState,
     queue_handle: QueueHandle<State>,
@@ -62,7 +62,12 @@ pub struct SnowcapSurface {
 
 impl Drop for SnowcapSurface {
     fn drop(&mut self) {
+        // SAFETY: This needs to be dropped first, it implicitly borrows the wl_surface
+        self.surface.take();
+
         self.fractional_scale.destroy();
+        self.wl_surface.destroy();
+        self.viewport.destroy();
     }
 }
 
@@ -114,14 +119,12 @@ impl SnowcapSurface {
 
         let iced_surface = compositor.create_surface(window_handle, 1, 1);
 
-        let clipboard = unsafe {
-            WaylandClipboard::new(wl_surface.backend().upgrade().unwrap().display_ptr() as *mut _)
-        };
+        let clipboard = WaylandClipboard;
 
         let widgets = SnowcapWidgetProgram::new(widgets);
 
         Self {
-            surface: iced_surface,
+            surface: Some(iced_surface),
             wl_surface,
             compositor_state,
             queue_handle: state.queue_handle.clone(),
@@ -185,7 +188,7 @@ impl SnowcapSurface {
 
         self.widgets.draw(&mut self.renderer, cursor);
 
-        match (&mut self.renderer, &mut self.surface) {
+        match (&mut self.renderer, self.surface.as_mut().unwrap()) {
             (Renderer::Primary(renderer), Surface::Primary(surface)) => {
                 iced_wgpu::window::compositor::present(
                     renderer,
@@ -224,7 +227,10 @@ impl SnowcapSurface {
         if let Some(scale) = self.pending_output_scale.take()
             && scale != self.output_scale
         {
-            self.output_scale = scale;
+            // HACK: With exact fractional scaling, there's a small seam between
+            // adjacent widgets with fractional scales like 1.125.
+            // Rounding up to the nearest 0.25 seems to work around that issue.
+            self.output_scale = (scale * 4.0).ceil() / 4.0;
             needs_rebuild = true;
         }
         if let Some(bounds) = self.pending_bounds.take()
@@ -257,7 +263,11 @@ impl SnowcapSurface {
 
             let buffer_size = self.widgets.viewport(self.output_scale).physical_size();
 
-            compositor.configure_surface(&mut self.surface, buffer_size.width, buffer_size.height);
+            compositor.configure_surface(
+                self.surface.as_mut().unwrap(),
+                buffer_size.width,
+                buffer_size.height,
+            );
         }
 
         let cursor = match self.pointer_location {
