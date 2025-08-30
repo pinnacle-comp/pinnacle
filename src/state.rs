@@ -30,8 +30,7 @@ use crate::{
 };
 use smithay::{
     backend::renderer::element::{
-        RenderElementState, RenderElementStates, default_primary_scanout_output_compare,
-        utils::select_dmabuf_feedback,
+        RenderElementState, RenderElementStates, utils::select_dmabuf_feedback,
     },
     desktop::{
         LayerSurface, PopupManager, Space, layer_map_for_output,
@@ -637,8 +636,8 @@ impl Pinnacle {
         }
     }
 
-    /// Returns a custom primary scanout output comparison function that, in addition to performing
-    /// the [`default_primary_scanout_output_compare`], checks if the returned output actually
+    /// Returns a custom primary scanout output comparison function that picks the output with
+    /// a larger visible area, as well as checks if the returned output actually
     /// exists. If it doesn't, it returns the new output.
     ///
     /// This is needed because when turning a monitor off and on, windows will *still* have the old
@@ -657,12 +656,11 @@ impl Pinnacle {
     ) -> &'a Output
     + '_ {
         |current_output, current_state, next_output, next_state| {
-            let new_op = default_primary_scanout_output_compare(
-                current_output,
-                current_state,
-                next_output,
-                next_state,
-            );
+            let new_op = if next_state.visible_area > current_state.visible_area {
+                next_output
+            } else {
+                current_output
+            };
 
             if self.outputs.contains(new_op) {
                 new_op
