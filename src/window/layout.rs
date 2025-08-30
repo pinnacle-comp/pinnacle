@@ -10,7 +10,7 @@ use crate::{
     backend::Backend,
     state::{Pinnacle, WithState},
     util::transaction::{Location, TransactionBuilder},
-    window::{ZIndexElement, window_state::LayoutMode},
+    window::window_state::LayoutMode,
 };
 
 use super::{UnmappingWindow, WindowElement};

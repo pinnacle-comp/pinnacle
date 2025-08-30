@@ -520,29 +520,29 @@ impl SelectionHandler for State {
 }
 
 impl DataDeviceHandler for State {
-    fn data_device_state(&self) -> &DataDeviceState {
-        &self.pinnacle.data_device_state
+    fn data_device_state(&mut self) -> &mut DataDeviceState {
+        &mut self.pinnacle.data_device_state
     }
 }
 delegate_data_device!(State);
 
 impl PrimarySelectionHandler for State {
-    fn primary_selection_state(&self) -> &PrimarySelectionState {
-        &self.pinnacle.primary_selection_state
+    fn primary_selection_state(&mut self) -> &mut PrimarySelectionState {
+        &mut self.pinnacle.primary_selection_state
     }
 }
 delegate_primary_selection!(State);
 
 impl wlr_data_control::DataControlHandler for State {
-    fn data_control_state(&self) -> &wlr_data_control::DataControlState {
-        &self.pinnacle.wlr_data_control_state
+    fn data_control_state(&mut self) -> &mut wlr_data_control::DataControlState {
+        &mut self.pinnacle.wlr_data_control_state
     }
 }
 delegate_data_control!(State);
 
 impl ext_data_control::DataControlHandler for State {
-    fn data_control_state(&self) -> &ext_data_control::DataControlState {
-        &self.pinnacle.ext_data_control_state
+    fn data_control_state(&mut self) -> &mut ext_data_control::DataControlState {
+        &mut self.pinnacle.ext_data_control_state
     }
 }
 delegate_ext_data_control!(State);

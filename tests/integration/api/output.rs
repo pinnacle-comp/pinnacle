@@ -507,11 +507,7 @@ fn output_handle_model() {
 fn output_handle_serial() {
     let (mut fixture, output, _) = set_up();
 
-    let serial = "this-is-a-serial-138421";
-
-    output.with_state_mut(|state| {
-        state.serial = serial.into();
-    });
+    let serial = output.physical_properties().serial_number;
 
     fixture.spawn_blocking(move || {
         assert_eq!(

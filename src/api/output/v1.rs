@@ -356,7 +356,7 @@ impl output::v1::output_service_server::OutputService for super::OutputService {
                 .unwrap_or_default();
             let serial = output
                 .as_ref()
-                .map(|op| op.with_state(|state| state.serial.clone()))
+                .map(|op| op.physical_properties().serial_number)
                 .unwrap_or_default();
 
             Ok(GetInfoResponse {

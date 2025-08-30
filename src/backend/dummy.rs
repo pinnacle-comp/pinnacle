@@ -99,6 +99,7 @@ impl Pinnacle {
             subpixel: Subpixel::Unknown,
             make: make.to_string(),
             model: model.to_string(),
+            serial_number: format!("dummy-output-serial-{name}"),
         };
 
         let output = Output::new(name.to_string(), physical_properties);

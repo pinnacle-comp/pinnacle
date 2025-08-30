@@ -339,7 +339,8 @@ impl Udev {
                                             unreachable!();
                                         };
 
-                                        if let Err(err) = backend.drm_output_manager.activate(true)
+                                        if let Err(err) =
+                                            backend.drm_output_manager.lock().activate(true)
                                         {
                                             error!("Error activating DRM device: {err}");
                                         }
@@ -873,7 +874,7 @@ impl Udev {
         let drm_output_manager = DrmOutputManager::new(
             drm,
             allocator,
-            GbmFramebufferExporter::new(gbm.clone(), Some(render_node)),
+            GbmFramebufferExporter::new(gbm.clone(), render_node.into()),
             Some(gbm),
             color_formats.iter().copied(),
             render_formats,
@@ -969,6 +970,7 @@ impl Udev {
                 subpixel: Subpixel::from(connector.subpixel()),
                 make,
                 model,
+                serial_number: serial,
             },
         );
         let global = output.create_global::<State>(&self.display_handle);
@@ -978,7 +980,6 @@ impl Udev {
         pinnacle.output_focus_stack.add_to_end(output.clone());
 
         output.with_state_mut(|state| {
-            state.serial = serial;
             state.debug_damage_tracker = OutputDamageTracker::from_output(&output);
         });
 
@@ -1014,7 +1015,7 @@ impl Udev {
         let drm_output = {
             let planes = surface.planes().clone();
 
-            match device.drm_output_manager.initialize_output(
+            match device.drm_output_manager.lock().initialize_output(
                 crtc,
                 drm_mode,
                 &[connector.handle()],
@@ -1813,7 +1814,8 @@ fn handle_pending_screencopy<'a>(
 
                     let mut offscreen_fb = renderer.bind(&mut offscreen)?;
 
-                    let sync_point = render_frame_result.blit_frame_result(
+                    // TODO: Figure out if this sync point needs waiting
+                    let _ = render_frame_result.blit_frame_result(
                         untransformed_output_size,
                         Transform::Normal,
                         output.current_scale().fractional_scale(),
@@ -1827,14 +1829,9 @@ fn handle_pending_screencopy<'a>(
                         },
                     )?;
 
-                    // ayo are we supposed to wait this here (granted it doesn't do anything
-                    // because it's always ready but I want to be correct here)
-                    //
-                    // renderer.wait(&sync_point)?; // no-op
-
                     let mut dmabuf_fb = renderer.bind(&mut dmabuf)?;
 
-                    renderer.blit(
+                    let sync_point = renderer.blit(
                         &offscreen_fb,
                         &mut dmabuf_fb,
                         screencopy.physical_region(),

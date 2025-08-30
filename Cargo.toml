@@ -54,7 +54,7 @@ snowcap-protocols = { path = "./snowcap/snowcap-protocols" }
 
 [workspace.dependencies.smithay]
 git = "https://github.com/Smithay/smithay"
-rev = "52107d3"
+rev = "20d2dac"
 # path = "../../git/smithay"
 default-features = false
 features = [
@@ -105,7 +105,7 @@ rust-version.workspace = true
 [dependencies]
 # Smithay
 smithay = { workspace = true }
-smithay-drm-extras = { git = "https://github.com/Smithay/smithay", rev = "52107d3" }
+smithay-drm-extras = { git = "https://github.com/Smithay/smithay", rev = "20d2dac" }
 # Tracing
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }

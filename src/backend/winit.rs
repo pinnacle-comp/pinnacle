@@ -103,6 +103,7 @@ impl Winit {
             subpixel: Subpixel::Unknown,
             make: "Pinnacle".to_string(),
             model: "Winit Window".to_string(),
+            serial_number: "pinnacle-winit-serial-1234".to_string(),
         };
 
         let output = Output::new("Pinnacle Window".to_string(), physical_properties);

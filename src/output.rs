@@ -64,8 +64,6 @@ pub struct OutputState {
     pub enabled_global_id: Option<GlobalId>,
 
     pub screencopies: Vec<Screencopy>,
-    // This monitor's edid serial. "Unknown" if it doesn't have one.
-    pub serial: String,
     pub modes: Vec<Mode>,
     pub lock_surface: Option<LockSurface>,
     pub blanking_state: BlankingState,
@@ -84,7 +82,6 @@ impl Default for OutputState {
             tags: Default::default(),
             enabled_global_id: Default::default(),
             screencopies: Default::default(),
-            serial: Default::default(),
             modes: Default::default(),
             lock_surface: Default::default(),
             blanking_state: Default::default(),
