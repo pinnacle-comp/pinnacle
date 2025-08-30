@@ -516,6 +516,8 @@ fn output_handle_serial() {
         );
     });
 
+    let serial = output.physical_properties().serial_number;
+
     spawn_lua_blocking! {
         fixture,
         assert(Output.get_focused():serial(), $serial)
