@@ -48,12 +48,13 @@
         };
 
         devShell = pkgs.mkShell {
-          nativeBuildInputs = [ pkgs.pkg-config ];
+          nativeBuildInputs = [ pkgs.pkg-config pkgs.lua5_4 pkgs.libgbm ];
           buildInputs = with pkgs; [
             # rust devel tools
             combinedToolchain
             rust-analyzer
             cargo-outdated
+            clang
 
             # wlcs
             (writeScriptBin "wlcs" ''
@@ -66,6 +67,7 @@
             # build time stuff
             protobuf
             lua54Packages.luarocks
+            lua5_4
 
             # libs
             seatd.dev
@@ -75,6 +77,8 @@
             mesa
             xwayland
             libdisplay-info
+            libgbm
+            pkg-config
 
             # winit on x11
             xorg.libXcursor
@@ -87,9 +91,10 @@
             wayland
             mesa
             libglvnd # libEGL
+            libgbm
           ];
 
-          LD_LIBRARY_PATH = "${pkgs.wayland}/lib:${pkgs.libGL}/lib:${pkgs.libxkbcommon}/lib";
+          LD_LIBRARY_PATH = "${pkgs.wayland}/lib:${pkgs.libGL}/lib:${pkgs.libxkbcommon}/lib:${pkgs.libgbm}/lib";
         };
       }
     ))
