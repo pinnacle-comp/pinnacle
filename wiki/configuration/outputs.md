@@ -100,3 +100,78 @@ hdmi1.set_loc(dp1, Alignment::LeftAlignBottom);
 > You may opt to use external tools like [kanshi](https://sr.ht/~emersion/kanshi/)
 > to simplify the process of laying out outputs, especially when your monitor setup
 > changes frequently.
+
+### Variable refresh rate
+
+Variable refresh rate (VRR), also known as adaptive sync, allows supported monitors to refresh
+below the maximum refresh rate. This prevents stuttering for applications like games that
+may not be able to hit FPS that matches the refresh rate of the display.
+
+Outputs have three VRR modes:
+
+1. **Off**
+
+   This disables VRR on the output.
+
+   ::: tabs key:langs
+   == Lua
+   ```lua
+   require("pinnacle.output").get_focused():set_vrr(false)
+   ```
+   == Rust
+   ```rust
+   output::get_focused().set_vrr(Vrr::Off);
+   ```
+   :::
+
+2. **Always-On**
+
+   This enables VRR on the output at all times.
+
+   ::: tabs key:langs
+   == Lua
+   ```lua
+   require("pinnacle.output").get_focused():set_vrr(true)
+   ```
+   == Rust
+   ```rust
+   output::get_focused().set_vrr(Vrr::AlwaysOn);
+   ```
+   :::
+
+3. **On-Demand**
+
+   This only enables VRR on the output while a window with an active VRR demand is visible.
+
+   ::: tabs key:langs
+   == Lua
+   ```lua
+   require("pinnacle.output").get_focused():set_vrr("on_demand")
+   ```
+   == Rust
+   ```rust
+   output::get_focused().set_vrr(Vrr::OnDemand);
+   ```
+   :::
+
+   To set a window's VRR demand, call `set_vrr_demand`. A window can have either no demand,
+   which prevents it from turning on VRR, or one of the following two demands:
+
+   1. When visible - The window will turn on VRR when it is visible anywhere on the output, or
+   2. When fullscreen - The window will turn on VRR when it is both visible *and* fullscreen
+      on the output.
+
+   ::: tabs key:langs
+   == Lua
+   ```lua
+   require("pinnacle.window").get_focused():set_vrr_demand(nil)
+   require("pinnacle.window").get_focused():set_vrr_demand("visible")
+   require("pinnacle.window").get_focused():set_vrr_demand("fullscreen")
+   ```
+   == Rust
+   ```rust
+   window::get_focused().set_vrr_demand(None);
+   window::get_focused().set_vrr_demand(VrrDemand::when_visible());
+   window::get_focused().set_vrr_demand(VrrDemand::when_fullscreen());
+   ```
+   :::

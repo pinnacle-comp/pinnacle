@@ -3,16 +3,13 @@ use std::{num::NonZeroU64, time::Duration};
 use smithay::utils::{Clock, Monotonic};
 use tracing::error;
 
-// yo i gotta stop copying stuff from niri i don't remember what this is for
-
 pub struct FrameClock {
     last_presentation_time: Option<Duration>,
     refresh_interval_ns: Option<NonZeroU64>,
-    // TODO: vrr
+    vrr: bool,
 }
 
 impl FrameClock {
-    // TODO: vrr
     pub fn new(refresh_interval: Option<Duration>) -> Self {
         let refresh_interval_ns = refresh_interval.map(|interval| {
             assert_eq!(interval.as_secs(), 0);
@@ -22,12 +19,27 @@ impl FrameClock {
         Self {
             last_presentation_time: None,
             refresh_interval_ns,
+            // This always starts false, setting vrr to true is a runtime operation
+            vrr: false,
         }
     }
 
     pub fn refresh_interval(&self) -> Option<Duration> {
         self.refresh_interval_ns
             .map(|ns| Duration::from_nanos(ns.get()))
+    }
+
+    pub fn set_vrr(&mut self, vrr: bool) {
+        if self.vrr == vrr {
+            return;
+        }
+
+        self.vrr = vrr;
+        self.last_presentation_time = None;
+    }
+
+    pub fn vrr(&self) -> bool {
+        self.vrr
     }
 
     pub fn presented(&mut self, presentation_time: Duration) {
@@ -74,7 +86,17 @@ impl FrameClock {
         let ns_since_last = duration_since_last.as_nanos() as u64;
         let ns_to_next = (ns_since_last / refresh_interval_ns + 1) * refresh_interval_ns;
 
-        // TODO: vrr
-        last_presentation_time + Duration::from_nanos(ns_to_next) - now
+        // If VRR is enabled and more than one frame passed since last presentation, assume that we
+        // can present immediately.
+        if self.vrr && ns_to_next > refresh_interval_ns {
+            Duration::ZERO
+        } else {
+            last_presentation_time + Duration::from_nanos(ns_to_next) - now
+        }
+    }
+
+    pub fn time_since_last_presentation(&self, clock: &Clock<Monotonic>) -> Option<Duration> {
+        self.last_presentation_time
+            .map(|past| Duration::from(clock.now()) - past)
     }
 }

@@ -729,6 +729,66 @@ fn window_handle_set_decoration_mode() {
 }
 
 #[test_log::test]
+fn window_handle_set_vrr_demand() {
+    for_each_api(|lang| {
+        let (mut fixture, _) = set_up();
+
+        let client_id = fixture.add_client();
+
+        let _surface = fixture.spawn_windows(1, client_id).remove(0);
+        let window = fixture.pinnacle().windows[0].clone();
+
+        match lang {
+            Lang::Rust => fixture.spawn_blocking(|| {
+                pinnacle_api::window::get_focused()
+                    .unwrap()
+                    .set_vrr_demand(pinnacle_api::window::VrrDemand::when_visible());
+            }),
+            Lang::Lua => spawn_lua_blocking! {
+                fixture,
+                Window.get_focused():set_vrr_demand("visible")
+            },
+        }
+
+        assert_eq!(
+            window.with_state(|state| state.vrr_demand),
+            Some(pinnacle::window::window_state::VrrDemand { fullscreen: false })
+        );
+
+        match lang {
+            Lang::Rust => fixture.spawn_blocking(|| {
+                pinnacle_api::window::get_focused()
+                    .unwrap()
+                    .set_vrr_demand(pinnacle_api::window::VrrDemand::when_fullscreen());
+            }),
+            Lang::Lua => spawn_lua_blocking! {
+                fixture,
+                Window.get_focused():set_vrr_demand("fullscreen")
+            },
+        }
+
+        assert_eq!(
+            window.with_state(|state| state.vrr_demand),
+            Some(pinnacle::window::window_state::VrrDemand { fullscreen: true })
+        );
+
+        match lang {
+            Lang::Rust => fixture.spawn_blocking(|| {
+                pinnacle_api::window::get_focused()
+                    .unwrap()
+                    .set_vrr_demand(None);
+            }),
+            Lang::Lua => spawn_lua_blocking! {
+                fixture,
+                Window.get_focused():set_vrr_demand(nil)
+            },
+        }
+
+        assert_eq!(window.with_state(|state| state.vrr_demand), None);
+    });
+}
+
+#[test_log::test]
 fn window_handle_move_to_tag() {
     for_each_api(|lang| {
         let (mut fixture, output) = set_up();

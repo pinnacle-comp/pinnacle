@@ -78,6 +78,10 @@ impl Dummy {
     pub(super) fn set_output_powered(&self, output: &Output, powered: bool) {
         output.with_state_mut(|state| state.powered = powered);
     }
+
+    pub(super) fn set_output_vrr(&self, output: &Output, vrr: bool) {
+        output.with_state_mut(|state| state.is_vrr_on = vrr);
+    }
 }
 
 impl Pinnacle {

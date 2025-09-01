@@ -20,6 +20,7 @@ use pinnacle_api_defs::pinnacle::{
             GetOutputsInDirRequest, GetPhysicalSizeRequest, GetPoweredRequest, GetRequest,
             GetScaleRequest, GetTagIdsRequest, GetTransformRequest, SetLocRequest, SetModeRequest,
             SetModelineRequest, SetPoweredRequest, SetScaleRequest, SetTransformRequest,
+            SetVrrRequest,
         },
     },
     util::v1::{AbsOrRel, SetOrToggle},
@@ -258,6 +259,21 @@ impl From<Transform> for output::v1::Transform {
             Transform::Flipped270 => output::v1::Transform::Flipped270,
         }
     }
+}
+
+/// The state of variable refresh rate on an output.
+#[doc(alias = "AdaptiveSync")]
+#[doc(alias = "VariableRefreshRate")]
+#[derive(Default, Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub enum Vrr {
+    /// Variable refresh rate should be off.
+    #[default]
+    Off,
+    /// Variable refresh rate should be on at all times.
+    AlwaysOn,
+    /// Variable refresh rate should be on when a window with an
+    /// active [`VrrDemand`](crate::window::VrrDemand) is visible.
+    OnDemand,
 }
 
 impl OutputHandle {
@@ -603,6 +619,25 @@ impl OutputHandle {
             .set_powered(SetPoweredRequest {
                 output_name: self.name(),
                 set_or_toggle: SetOrToggle::Toggle.into(),
+            })
+            .block_on_tokio()
+            .unwrap();
+    }
+
+    /// Sets the variable refresh rate state of this output.
+    ///
+    /// See [`Vrr`] for possible states and their behaviors.
+    #[doc(alias = "set_adaptive_sync")]
+    #[doc(alias = "set_variable_refresh_rate")]
+    pub fn set_vrr(&self, vrr: Vrr) {
+        Client::output()
+            .set_vrr(SetVrrRequest {
+                output_name: self.name(),
+                vrr: match vrr {
+                    Vrr::Off => output::v1::Vrr::Off,
+                    Vrr::AlwaysOn => output::v1::Vrr::AlwaysOn,
+                    Vrr::OnDemand => output::v1::Vrr::OnDemand,
+                } as i32,
             })
             .block_on_tokio()
             .unwrap();

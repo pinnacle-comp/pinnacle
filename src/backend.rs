@@ -98,6 +98,15 @@ impl Backend {
         }
     }
 
+    pub fn set_output_vrr(&mut self, output: &Output, vrr: bool) {
+        match self {
+            Backend::Winit(_) => (),
+            Backend::Udev(udev) => udev.set_output_vrr(output, vrr),
+            #[cfg(feature = "testing")]
+            Backend::Dummy(dummy) => dummy.set_output_vrr(output, vrr),
+        }
+    }
+
     fn set_output_powered(
         &mut self,
         output: &Output,

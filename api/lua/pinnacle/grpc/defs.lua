@@ -596,6 +596,14 @@ local pinnacle_output_v1_Transform = {
     TRANSFORM_FLIPPED_270 = 8,
 }
 
+---@enum pinnacle.output.v1.Vrr
+local pinnacle_output_v1_Vrr = {
+    VRR_UNSPECIFIED = 0,
+    VRR_OFF = 1,
+    VRR_ALWAYS_ON = 2,
+    VRR_ON_DEMAND = 3,
+}
+
 ---@enum pinnacle.render.v1.Filter
 local pinnacle_render_v1_Filter = {
     FILTER_UNSPECIFIED = 0,
@@ -894,6 +902,12 @@ local pinnacle_window_v1_DecorationMode = {
 ---@class pinnacle.output.v1.SetPoweredRequest
 ---@field output_name string?
 ---@field set_or_toggle pinnacle.util.v1.SetOrToggle?
+
+---@class pinnacle.output.v1.SetVrrRequest
+---@field output_name string?
+---@field vrr pinnacle.output.v1.Vrr?
+
+---@class pinnacle.output.v1.SetVrrResponse
 
 ---@class pinnacle.output.v1.FocusRequest
 ---@field output_name string?
@@ -1293,6 +1307,15 @@ local pinnacle_window_v1_DecorationMode = {
 
 ---@class pinnacle.window.v1.SetTagsResponse
 
+---@class pinnacle.window.v1.VrrDemand
+---@field fullscreen boolean?
+
+---@class pinnacle.window.v1.SetVrrDemandRequest
+---@field window_id integer?
+---@field vrr_demand pinnacle.window.v1.VrrDemand?
+
+---@class pinnacle.window.v1.SetVrrDemandResponse
+
 ---@class pinnacle.window.v1.MoveToOutputRequest
 ---@field window_id integer?
 ---@field output_name string?
@@ -1404,6 +1427,8 @@ pinnacle.output.v1.SetModelineRequest = {}
 pinnacle.output.v1.SetScaleRequest = {}
 pinnacle.output.v1.SetTransformRequest = {}
 pinnacle.output.v1.SetPoweredRequest = {}
+pinnacle.output.v1.SetVrrRequest = {}
+pinnacle.output.v1.SetVrrResponse = {}
 pinnacle.output.v1.FocusRequest = {}
 pinnacle.output.v1.FocusResponse = {}
 pinnacle.output.v1.GetRequest = {}
@@ -1536,6 +1561,9 @@ pinnacle.window.v1.MoveToTagRequest = {}
 pinnacle.window.v1.SetTagRequest = {}
 pinnacle.window.v1.SetTagsRequest = {}
 pinnacle.window.v1.SetTagsResponse = {}
+pinnacle.window.v1.VrrDemand = {}
+pinnacle.window.v1.SetVrrDemandRequest = {}
+pinnacle.window.v1.SetVrrDemandResponse = {}
 pinnacle.window.v1.MoveToOutputRequest = {}
 pinnacle.window.v1.MoveToOutputResponse = {}
 pinnacle.window.v1.RaiseRequest = {}
@@ -1562,6 +1590,7 @@ pinnacle.input.v1.SendEventsMode = pinnacle_input_v1_SendEventsMode
 pinnacle.input.v1.DeviceType = pinnacle_input_v1_DeviceType
 pinnacle.layout.v1.FlexDir = pinnacle_layout_v1_FlexDir
 pinnacle.output.v1.Transform = pinnacle_output_v1_Transform
+pinnacle.output.v1.Vrr = pinnacle_output_v1_Vrr
 pinnacle.render.v1.Filter = pinnacle_render_v1_Filter
 pinnacle.signal.v1.StreamControl = pinnacle_signal_v1_StreamControl
 pinnacle.v1.Backend = pinnacle_v1_Backend
@@ -2123,6 +2152,23 @@ pinnacle.output.v1.OutputService.SetPowered.response = ".google.protobuf.Empty"
 ---@return string | nil error An error string, if any
 function Client:pinnacle_output_v1_OutputService_SetPowered(data)
     return self:unary_request(pinnacle.output.v1.OutputService.SetPowered, data)
+end
+pinnacle.output.v1.OutputService.SetVrr = {}
+pinnacle.output.v1.OutputService.SetVrr.service = "pinnacle.output.v1.OutputService"
+pinnacle.output.v1.OutputService.SetVrr.method = "SetVrr"
+pinnacle.output.v1.OutputService.SetVrr.request = ".pinnacle.output.v1.SetVrrRequest"
+pinnacle.output.v1.OutputService.SetVrr.response = ".pinnacle.output.v1.SetVrrResponse"
+
+---Performs a unary request.
+---
+---@nodiscard
+---
+---@param data pinnacle.output.v1.SetVrrRequest
+---
+---@return pinnacle.output.v1.SetVrrResponse | nil response
+---@return string | nil error An error string, if any
+function Client:pinnacle_output_v1_OutputService_SetVrr(data)
+    return self:unary_request(pinnacle.output.v1.OutputService.SetVrr, data)
 end
 pinnacle.output.v1.OutputService.Focus = {}
 pinnacle.output.v1.OutputService.Focus.service = "pinnacle.output.v1.OutputService"
@@ -3343,6 +3389,23 @@ pinnacle.window.v1.WindowService.SetTags.response = ".pinnacle.window.v1.SetTags
 ---@return string | nil error An error string, if any
 function Client:pinnacle_window_v1_WindowService_SetTags(data)
     return self:unary_request(pinnacle.window.v1.WindowService.SetTags, data)
+end
+pinnacle.window.v1.WindowService.SetVrrDemand = {}
+pinnacle.window.v1.WindowService.SetVrrDemand.service = "pinnacle.window.v1.WindowService"
+pinnacle.window.v1.WindowService.SetVrrDemand.method = "SetVrrDemand"
+pinnacle.window.v1.WindowService.SetVrrDemand.request = ".pinnacle.window.v1.SetVrrDemandRequest"
+pinnacle.window.v1.WindowService.SetVrrDemand.response = ".pinnacle.window.v1.SetVrrDemandResponse"
+
+---Performs a unary request.
+---
+---@nodiscard
+---
+---@param data pinnacle.window.v1.SetVrrDemandRequest
+---
+---@return pinnacle.window.v1.SetVrrDemandResponse | nil response
+---@return string | nil error An error string, if any
+function Client:pinnacle_window_v1_WindowService_SetVrrDemand(data)
+    return self:unary_request(pinnacle.window.v1.WindowService.SetVrrDemand, data)
 end
 pinnacle.window.v1.WindowService.MoveToOutput = {}
 pinnacle.window.v1.WindowService.MoveToOutput.service = "pinnacle.window.v1.WindowService"

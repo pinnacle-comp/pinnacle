@@ -65,6 +65,19 @@ message SetPoweredRequest {
   pinnacle.util.v1.SetOrToggle set_or_toggle = 2;
 }
 
+enum Vrr {
+  VRR_UNSPECIFIED = 0;
+  VRR_OFF = 1;
+  VRR_ALWAYS_ON = 2;
+  VRR_ON_DEMAND = 3;
+}
+
+message SetVrrRequest {
+  string output_name = 1;
+  Vrr vrr = 2;
+}
+message SetVrrResponse {}
+
 message FocusRequest {
   string output_name = 1;
 }
@@ -189,6 +202,7 @@ service OutputService {
   rpc SetScale(SetScaleRequest) returns (google.protobuf.Empty);
   rpc SetTransform(SetTransformRequest) returns (google.protobuf.Empty);
   rpc SetPowered(SetPoweredRequest) returns (google.protobuf.Empty);
+  rpc SetVrr(SetVrrRequest) returns (SetVrrResponse);
   // Focuses the given output.
   rpc Focus(FocusRequest) returns (FocusResponse);
 

@@ -884,7 +884,7 @@ impl OutputManagementHandler for State {
                     position,
                     transform,
                     scale,
-                    adaptive_sync: _,
+                    adaptive_sync,
                 } => {
                     self.pinnacle.set_output_enabled(&output, true);
                     self.set_output_powered(&output, true);
@@ -920,6 +920,13 @@ impl OutputManagementHandler for State {
                         scale.map(Scale::Fractional),
                         position,
                     );
+
+                    if let Some(adaptive_sync) = adaptive_sync {
+                        self.backend.set_output_vrr(&output, adaptive_sync);
+                        output.with_state_mut(|state| {
+                            state.is_vrr_on_demand = false;
+                        });
+                    }
 
                     self.pinnacle.request_layout(&output);
 

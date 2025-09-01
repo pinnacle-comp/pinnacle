@@ -468,6 +468,45 @@ fn output_handle_toggle_powered() {
 }
 
 #[test_log::test]
+fn output_handle_set_vrr() {
+    for_each_api(|lang| {
+        let (mut fixture, output, _) = set_up();
+
+        match lang {
+            Lang::Rust => fixture.spawn_blocking(move || {
+                pinnacle_api::output::get_focused()
+                    .unwrap()
+                    .set_vrr(pinnacle_api::output::Vrr::AlwaysOn);
+            }),
+            Lang::Lua => {
+                spawn_lua_blocking! {
+                    fixture,
+                    Output.get_focused():set_vrr(true)
+                }
+            }
+        }
+
+        assert!(output.with_state(|state| state.is_vrr_on));
+
+        match lang {
+            Lang::Rust => fixture.spawn_blocking(move || {
+                pinnacle_api::output::get_focused()
+                    .unwrap()
+                    .set_vrr(pinnacle_api::output::Vrr::Off);
+            }),
+            Lang::Lua => {
+                spawn_lua_blocking! {
+                    fixture,
+                    Output.get_focused():set_vrr(false)
+                }
+            }
+        }
+
+        assert!(output.with_state(|state| !state.is_vrr_on));
+    });
+}
+
+#[test_log::test]
 fn output_handle_make() {
     let (mut fixture, output, _) = set_up();
 

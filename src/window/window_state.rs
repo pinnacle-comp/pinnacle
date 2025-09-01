@@ -399,6 +399,8 @@ pub struct WindowElementState {
     pub foreign_toplevel_list_handle: Option<ForeignToplevelHandle>,
     #[cfg(feature = "snowcap")]
     pub decoration_surfaces: Vec<DecorationSurface>,
+
+    pub vrr_demand: Option<VrrDemand>,
 }
 
 impl WindowElement {
@@ -660,6 +662,7 @@ impl WindowElementState {
             foreign_toplevel_list_handle: None,
             #[cfg(feature = "snowcap")]
             decoration_surfaces: Vec::new(),
+            vrr_demand: None,
         }
     }
 
@@ -691,6 +694,11 @@ impl WindowElementState {
         }
         max_bounds
     }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct VrrDemand {
+    pub fullscreen: bool,
 }
 
 #[cfg(test)]

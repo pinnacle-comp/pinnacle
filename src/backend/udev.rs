@@ -42,7 +42,7 @@ use smithay::{
         session::{self, Session, libseat::LibSeatSession},
         udev::{self, UdevBackend, UdevEvent},
     },
-    desktop::utils::OutputPresentationFeedback,
+    desktop::utils::{OutputPresentationFeedback, surface_primary_scanout_output},
     output::{Output, PhysicalProperties, Subpixel},
     reexports::{
         calloop::{
@@ -1245,16 +1245,16 @@ impl Udev {
                         presentation_time
                     };
 
-                    feedback.presented::<_, smithay::utils::Monotonic>(
-                        time,
-                        surface
-                            .frame_clock
-                            .refresh_interval()
-                            .map(Refresh::Fixed)
-                            .unwrap_or(Refresh::Unknown),
-                        seq,
-                        flags,
-                    );
+                    let refresh = surface
+                        .frame_clock
+                        .refresh_interval()
+                        .map(match surface.frame_clock.vrr() {
+                            true => Refresh::Variable,
+                            false => Refresh::Fixed,
+                        })
+                        .unwrap_or(Refresh::Unknown);
+
+                    feedback.presented::<_, smithay::utils::Monotonic>(time, refresh, seq, flags);
                 }
 
                 output.with_state_mut(|state| {
@@ -1463,6 +1463,43 @@ impl Udev {
             frame_flags.remove(FrameFlags::ALLOW_CURSOR_PLANE_SCANOUT);
         }
 
+        if surface.frame_clock.vrr()
+            && let Some(time_since_last_presentation) = surface
+                .frame_clock
+                .time_since_last_presentation(&pinnacle.clock)
+        {
+            // We want to skip cursor-only updates so moving the mouse doesn't jump the refresh
+            // rate to the max, which would cause stuttering in games. We're doing this only
+            // when vrr is on and the cursor is above a fullscreen window.
+            //
+            // However, this would cause the cursor to freeze if the window doesn't refresh.
+            // Therefore we're forcing the cursor to refresh at at least 24 fps.
+            //
+            // TODO: This is probably not the best behavior for videos. We should use content-type
+            // to improve that.
+
+            const _24_FPS: Duration = Duration::from_nanos(1_000_000_000 / 24);
+
+            let too_long_since_last_present =
+                time_to_next_presentation + time_since_last_presentation > _24_FPS;
+            let window_under = pinnacle.space.element_under(
+                pinnacle
+                    .seat
+                    .get_pointer()
+                    .unwrap()
+                    .current_location()
+                    .to_i32_round(),
+            );
+            let cursor_over_fs_window = window_under
+                .is_some_and(|(win, _)| win.with_state(|state| state.layout_mode.is_fullscreen()));
+            if !too_long_since_last_present && cursor_over_fs_window {
+                // FIXME: With a non-1 scale, the cursor no longer resides on the cursor plane,
+                // making this useless
+
+                frame_flags |= FrameFlags::SKIP_CURSOR_ONLY_UPDATES;
+            }
+        }
+
         let render_frame_result = surface.drm_output.render_frame(
             &mut renderer,
             &output_render_elements,
@@ -1530,6 +1567,8 @@ impl Udev {
                                 output,
                                 Some(surface.frame_callback_sequence),
                             );
+
+                            self.update_output_vrr(pinnacle, output);
 
                             // Return here to not queue the estimated vblank timer on a submitted frame
                             return;
@@ -1643,6 +1682,58 @@ impl Udev {
         } else {
             pinnacle.send_frame_callbacks(output, Some(surface.frame_callback_sequence));
         }
+    }
+
+    fn update_output_vrr(&mut self, pinnacle: &mut Pinnacle, output: &Output) {
+        if output.with_state(|state| !state.is_vrr_on_demand) {
+            return;
+        }
+
+        let vrr = pinnacle.space.elements_for_output(output).any(|win| {
+            let Some(demand) = win.with_state(|state| state.vrr_demand) else {
+                return false;
+            };
+
+            let mut visible = false;
+            win.with_surfaces(|surface, states| {
+                if surface_primary_scanout_output(surface, states).as_ref() == Some(output) {
+                    visible = true;
+                }
+            });
+
+            visible
+                // FIXME: We probably want to check the actual fullscreen state, not the layout mode,
+                // but this isn't a *super* huge deal
+                && (!demand.fullscreen || win.with_state(|state| state.layout_mode.is_fullscreen()))
+        });
+
+        self.set_output_vrr(output, vrr);
+    }
+
+    pub(super) fn set_output_vrr(&mut self, output: &Output, vrr: bool) {
+        let Some(surface) = render_surface_for_output(output, &mut self.backends) else {
+            return;
+        };
+
+        if surface.frame_clock.vrr() == vrr {
+            return;
+        }
+
+        info!(
+            "{} vrr on output {}",
+            if vrr { "Enabling" } else { "Disabling" },
+            output.name()
+        );
+
+        if let Err(err) = surface.drm_output.with_compositor(|comp| comp.use_vrr(vrr)) {
+            warn!("Failed to set vrr on output {}: {err}", output.name());
+        }
+        surface.frame_clock.set_vrr(
+            surface
+                .drm_output
+                .with_compositor(|comp| comp.vrr_enabled()),
+        );
+        output.with_state_mut(|state| state.is_vrr_on = surface.frame_clock.vrr());
     }
 }
 

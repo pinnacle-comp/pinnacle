@@ -74,6 +74,8 @@ pub struct OutputState {
     pub powered: bool,
     /// Damage tracker for debugging damage.
     pub debug_damage_tracker: OutputDamageTracker,
+    pub is_vrr_on: bool,
+    pub is_vrr_on_demand: bool,
 }
 
 impl Default for OutputState {
@@ -91,6 +93,8 @@ impl Default for OutputState {
                 1.0,
                 Default::default(),
             ),
+            is_vrr_on: false,
+            is_vrr_on_demand: false,
         }
     }
 }

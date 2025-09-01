@@ -551,6 +551,37 @@ function WindowHandle:set_tags(tags)
     end
 end
 
+---Sets this window's vrr demand.
+---
+---This works in conjunction with an output with an on-demand vrr state.
+---
+---@param vrr_demand? # The vrr demand, or `nil` to have none.
+---| "visible" # Turns vrr on on an on-demand vrr output when a window is visible.
+---| "fullscreen" # Turns vrr on on an on-demand vrr output when a window is both visible *and* fullscreen.
+function WindowHandle:set_vrr_demand(vrr_demand)
+    ---@type pinnacle.window.v1.VrrDemand?
+    local demand = nil
+
+    if vrr_demand == "visible" then
+        demand = {
+            fullscreen = false,
+        }
+    elseif vrr_demand == "fullscreen" then
+        demand = {
+            fullscreen = true,
+        }
+    end
+
+    local _, err = client:pinnacle_window_v1_WindowService_SetVrrDemand({
+        window_id = self.id,
+        vrr_demand = demand,
+    })
+
+    if err then
+        log.error(err)
+    end
+end
+
 ---Raises a window.
 ---
 ---This will bring the window to the front.

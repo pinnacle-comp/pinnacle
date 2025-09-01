@@ -23,7 +23,8 @@ use pinnacle_api_defs::pinnacle::{
             GetWindowsInDirRequest, LowerRequest, MoveGrabRequest, MoveToOutputRequest,
             MoveToTagRequest, RaiseRequest, ResizeGrabRequest, ResizeTileRequest,
             SetDecorationModeRequest, SetFloatingRequest, SetFocusedRequest, SetFullscreenRequest,
-            SetGeometryRequest, SetMaximizedRequest, SetTagRequest, SetTagsRequest, SwapRequest,
+            SetGeometryRequest, SetMaximizedRequest, SetTagRequest, SetTagsRequest,
+            SetVrrDemandRequest, SwapRequest,
         },
     },
 };
@@ -210,6 +211,27 @@ pub enum DecorationMode {
     ClientSide,
     /// The server should draw decorations.
     ServerSide,
+}
+
+/// A demand for variable refresh rate on an output.
+#[derive(Default, Debug, Clone, Copy, Hash, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct VrrDemand {
+    /// Whether the window must be fullscreen for vrr to turn on.
+    pub fullscreen: bool,
+}
+
+impl VrrDemand {
+    /// Creates a [`VrrDemand`] that turns on vrr when a window is visible.
+    pub fn when_visible() -> Self {
+        Default::default()
+    }
+
+    /// Creates a [`VrrDemand`] that turns on vrr when a window is both
+    /// visible *and* fullscreen.
+    pub fn when_fullscreen() -> Self {
+        Self { fullscreen: true }
+    }
 }
 
 impl WindowHandle {
@@ -565,6 +587,27 @@ impl WindowHandle {
 
         Client::window()
             .set_tags(SetTagsRequest { window_id, tag_ids })
+            .block_on_tokio()
+            .unwrap();
+    }
+
+    /// Sets this window's [`VrrDemand`].
+    ///
+    /// When set to `None`, this window has no vrr demand.
+    ///
+    /// This works in conjunction with an output with
+    /// [`Vrr::OnDemand`](crate::output::Vrr::OnDemand).
+    pub fn set_vrr_demand(&self, vrr_demand: impl Into<Option<VrrDemand>>) {
+        let window_id = self.id;
+        let vrr_demand: Option<_> = vrr_demand.into();
+
+        Client::window()
+            .set_vrr_demand(SetVrrDemandRequest {
+                window_id,
+                vrr_demand: vrr_demand.map(|vrr_demand| window::v1::VrrDemand {
+                    fullscreen: vrr_demand.fullscreen,
+                }),
+            })
             .block_on_tokio()
             .unwrap();
     }

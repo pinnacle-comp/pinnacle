@@ -11,6 +11,7 @@ use pinnacle_api_defs::pinnacle::{
             GetResponse, GetScaleRequest, GetScaleResponse, GetTagIdsRequest, GetTagIdsResponse,
             GetTransformRequest, GetTransformResponse, SetLocRequest, SetModeRequest,
             SetModelineRequest, SetPoweredRequest, SetScaleRequest, SetTransformRequest,
+            SetVrrRequest, SetVrrResponse,
         },
     },
     util::{
@@ -319,6 +320,36 @@ impl output::v1::output_service_server::OutputService for super::OutputService {
             if powered {
                 state.schedule_render(&output);
             }
+        })
+        .await
+    }
+
+    async fn set_vrr(&self, request: Request<SetVrrRequest>) -> TonicResult<SetVrrResponse> {
+        let request = request.into_inner();
+        let vrr = request.vrr();
+        let output_name = OutputName(request.output_name);
+
+        run_unary(&self.sender, move |state| {
+            let Some(output) = output_name.output(&state.pinnacle) else {
+                return Ok(SetVrrResponse {});
+            };
+
+            let is_vrr_on_demand = vrr == output::v1::Vrr::OnDemand;
+            let vrr = vrr == output::v1::Vrr::AlwaysOn;
+
+            output.with_state_mut(|state| {
+                state.is_vrr_on_demand = is_vrr_on_demand;
+            });
+
+            if !is_vrr_on_demand {
+                if vrr {
+                    state.backend.set_output_vrr(&output, true);
+                } else {
+                    state.backend.set_output_vrr(&output, false);
+                }
+            }
+
+            Ok(SetVrrResponse {})
         })
         .await
     }

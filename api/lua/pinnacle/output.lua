@@ -576,6 +576,33 @@ function OutputHandle:toggle_powered()
     end
 end
 
+---Sets the variable refresh rate state of this output.
+---
+---@param vrr
+---| true # Turns vrr on at all times.
+---| false # Turns vrr off.
+---| "on_demand" # Turns vrr on whenever a window with an active vrr demand is visible.
+function OutputHandle:set_vrr(vrr)
+    local vrr_msg = output_v1.Vrr.VRR_UNSPECIFIED
+
+    if vrr == true then
+        vrr_msg = output_v1.Vrr.VRR_ALWAYS_ON
+    elseif vrr == false then
+        vrr_msg = output_v1.Vrr.VRR_OFF
+    elseif vrr == "on_demand" then
+        vrr_msg = output_v1.Vrr.VRR_ON_DEMAND
+    end
+
+    local _, err = client:pinnacle_output_v1_OutputService_SetVrr({
+        output_name = self.name,
+        vrr = vrr_msg,
+    })
+
+    if err then
+        log.error(err)
+    end
+end
+
 ---Focuses this output.
 function OutputHandle:focus()
     local _, err = client:pinnacle_output_v1_OutputService_Focus({

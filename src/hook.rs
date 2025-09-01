@@ -357,6 +357,7 @@ impl Pinnacle {
     }
 }
 
+#[cfg(feature = "snowcap")]
 fn pending_surface_view(states: &SurfaceData) -> Option<SurfaceView> {
     let mut guard = states.cached_state.get::<SurfaceAttributes>();
     let attrs = guard.pending();
@@ -399,6 +400,7 @@ fn pending_surface_view(states: &SurfaceData) -> Option<SurfaceView> {
     }
 }
 
+#[cfg(feature = "snowcap")]
 fn pending_bbox(surface: &WlSurface) -> Rectangle<i32, Logical> {
     let _span = tracy_client::span!("crate::hook::pending_bbox");
 

@@ -19,7 +19,8 @@ use pinnacle_api_defs::pinnacle::{
             MoveToTagRequest, RaiseRequest, ResizeGrabRequest, ResizeTileRequest,
             SetDecorationModeRequest, SetFloatingRequest, SetFocusedRequest, SetFullscreenRequest,
             SetGeometryRequest, SetMaximizedRequest, SetTagRequest, SetTagsRequest,
-            SetTagsResponse, SwapRequest, SwapResponse, WindowRuleRequest, WindowRuleResponse,
+            SetTagsResponse, SetVrrDemandRequest, SetVrrDemandResponse, SwapRequest, SwapResponse,
+            WindowRuleRequest, WindowRuleResponse,
         },
     },
 };
@@ -43,7 +44,7 @@ use crate::{
     util::rect::Direction,
     window::{
         UnmappedState,
-        window_state::{LayoutMode, LayoutModeKind, WindowId},
+        window_state::{LayoutMode, LayoutModeKind, VrrDemand, WindowId},
     },
 };
 
@@ -697,6 +698,35 @@ impl v1::window_service_server::WindowService for super::WindowService {
             }
 
             Ok(SetTagsResponse {})
+        })
+        .await
+    }
+
+    async fn set_vrr_demand(
+        &self,
+        request: Request<SetVrrDemandRequest>,
+    ) -> TonicResult<SetVrrDemandResponse> {
+        let request = request.into_inner();
+
+        let window_id = WindowId(request.window_id);
+        let vrr_demand = request.vrr_demand.map(|vrr_demand| VrrDemand {
+            fullscreen: vrr_demand.fullscreen,
+        });
+
+        run_unary(&self.sender, move |state| {
+            let Some(window) = window_id.window(&state.pinnacle).or_else(|| {
+                window_id
+                    .unmapped_window(&state.pinnacle)
+                    .map(|unmapped| unmapped.window.clone())
+            }) else {
+                return Ok(SetVrrDemandResponse {});
+            };
+
+            window.with_state_mut(|state| {
+                state.vrr_demand = vrr_demand;
+            });
+
+            Ok(SetVrrDemandResponse {})
         })
         .await
     }

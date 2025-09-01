@@ -155,6 +155,16 @@ message SetTagsRequest {
 }
 message SetTagsResponse {}
 
+message VrrDemand {
+  bool fullscreen = 1;
+}
+
+message SetVrrDemandRequest {
+  uint32 window_id = 1;
+  optional VrrDemand vrr_demand = 2;
+}
+message SetVrrDemandResponse {}
+
 message MoveToOutputRequest {
   uint32 window_id = 1;
   string output_name = 2;
@@ -229,6 +239,7 @@ service WindowService {
   rpc SetTag(SetTagRequest) returns (google.protobuf.Empty);
   // Sets the exact tags of this window.
   rpc SetTags(SetTagsRequest) returns (SetTagsResponse);
+  rpc SetVrrDemand(SetVrrDemandRequest) returns (SetVrrDemandResponse);
   rpc MoveToOutput(MoveToOutputRequest) returns (MoveToOutputResponse);
   rpc Raise(RaiseRequest) returns (google.protobuf.Empty);
   rpc Lower(LowerRequest) returns (LowerResponse);

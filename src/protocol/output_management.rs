@@ -108,7 +108,7 @@ pub struct OutputData {
     position: Point<i32, Logical>,
     transform: Transform,
     scale: f64,
-    _adaptive_sync: bool,
+    adaptive_sync: bool,
 }
 
 impl OutputManagementManagerState {
@@ -143,7 +143,7 @@ impl OutputManagementManagerState {
             position: output.current_location(),
             transform: output.current_transform(),
             scale: output.current_scale().fractional_scale(),
-            _adaptive_sync: false, // TODO:
+            adaptive_sync: false,
         };
 
         self.outputs.insert(output.downgrade(), output_data);
@@ -345,9 +345,19 @@ impl OutputManagementManagerState {
                             head.scale(new_scale);
                             output_data.scale = new_scale;
                         }
-                    }
 
-                    // TODO: adaptive sync
+                        if head.version() >= zwlr_output_head_v1::EVT_ADAPTIVE_SYNC_SINCE
+                            && output.with_state(|state| state.is_vrr_on)
+                                != output_data.adaptive_sync
+                        {
+                            let adaptive_sync = output.with_state(|state| state.is_vrr_on);
+                            head.adaptive_sync(match adaptive_sync {
+                                true => AdaptiveSyncState::Enabled,
+                                false => AdaptiveSyncState::Disabled,
+                            });
+                            output_data.adaptive_sync = adaptive_sync;
+                        }
+                    }
                 }
 
                 manager_data.serial = serial;
@@ -406,12 +416,10 @@ where
     }
 
     if head.version() >= zwlr_output_head_v1::EVT_ADAPTIVE_SYNC_SINCE {
-        // TODO:
-        // head.adaptive_sync(match data.adaptive_sync {
-        //     true => AdaptiveSyncState::Enabled,
-        //     false => AdaptiveSyncState::Disabled,
-        // });
-        head.adaptive_sync(AdaptiveSyncState::Disabled);
+        head.adaptive_sync(match output.with_state(|state| state.is_vrr_on) {
+            true => AdaptiveSyncState::Enabled,
+            false => AdaptiveSyncState::Disabled,
+        });
     }
 
     head.enabled(true as i32);

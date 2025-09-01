@@ -75,3 +75,8 @@ if let Some(focused) = window::get_focused() {
 
 Note: The sort is geometry-based, so focusing across the tiled layout
 may not be 100% intuitive. This may be an area of improvement in the future.
+
+## On-demand variable refresh rate
+
+Windows can be set to turn on variable refresh rate (VRR) on outputs with on-demand VRR.
+See [Variable refresh rate](./outputs#variable-refresh-rate) for more information.
