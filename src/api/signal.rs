@@ -18,11 +18,11 @@ use pinnacle_api_defs::pinnacle::signal::{
     },
 };
 use smithay::output::Output;
-use tokio::sync::mpsc::UnboundedSender;
 use tonic::{Request, Response, Status, Streaming};
 use tracing::warn;
 
 use crate::{
+    api::Sender,
     state::{State, WithState},
     tag::Tag,
     window::WindowElement,
@@ -82,7 +82,7 @@ pub struct SignalData<T> {
 
 #[derive(Debug)]
 struct SignalInstance<T> {
-    sender: UnboundedSender<Result<T, Status>>,
+    sender: Sender<Result<T, Status>>,
     ready: bool,
     buffer: VecDeque<T>,
 }
@@ -395,14 +395,14 @@ impl<T> SignalData<T> {
                 && let Some(data) = instance.buffer.pop_front()
             {
                 instance.ready = false;
-                return instance.sender.send(Ok(data)).is_ok();
+                return instance.sender.send_blocking(Ok(data)).is_ok();
             }
 
             true
         })
     }
 
-    fn connect(&mut self, id: ClientSignalId, sender: UnboundedSender<Result<T, Status>>) {
+    fn connect(&mut self, id: ClientSignalId, sender: Sender<Result<T, Status>>) {
         self.instances.insert(
             id,
             SignalInstance {
@@ -427,7 +427,7 @@ impl<T> SignalData<T> {
 
         if let Some(data) = instance.buffer.pop_front() {
             instance.ready = false;
-            if instance.sender.send(Ok(data)).is_err() {
+            if instance.sender.send_blocking(Ok(data)).is_err() {
                 self.instances.remove(&id);
             }
         } else {

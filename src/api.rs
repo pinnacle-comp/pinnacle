@@ -25,6 +25,7 @@ use crate::state::State;
 pub type ResponseStream<T> = Pin<Box<dyn Stream<Item = Result<T, Status>> + Send>>;
 pub type StateFnSender = calloop::channel::Sender<Box<dyn FnOnce(&mut State) + Send>>;
 pub type TonicResult<T> = Result<Response<T>, Status>;
+pub type Sender<T> = async_channel::Sender<T>;
 
 async fn run_unary_no_response<F>(
     fn_sender: &StateFnSender,
@@ -125,50 +126,23 @@ where
 ///   the incoming client-to-server stream.
 fn run_bidirectional_streaming<F1, F2, I, O>(
     fn_sender: StateFnSender,
-    mut in_stream: Streaming<I>,
+    in_stream: Streaming<I>,
     on_client_request: F1,
     with_out_stream_and_in_stream_join_handle: F2,
 ) -> Result<Response<ResponseStream<O>>, Status>
 where
     F1: Fn(&mut State, I) + Clone + Send + 'static,
-    F2: FnOnce(&mut State, UnboundedSender<Result<O, Status>>, JoinHandle<()>) + Send + 'static,
+    F2: FnOnce(&mut State, Sender<Result<O, Status>>, JoinHandle<()>) + Send + 'static,
     I: Send + 'static,
     O: Send + 'static,
 {
-    let (sender, receiver) = unbounded_channel::<Result<O, Status>>();
-
-    let fn_sender_clone = fn_sender.clone();
-
-    let with_in_stream = async move {
-        while let Some(request) = in_stream.next().await {
-            match request {
-                Ok(request) => {
-                    let on_client_request = on_client_request.clone();
-                    // TODO: handle error
-                    let _ = fn_sender_clone.send(Box::new(move |state: &mut State| {
-                        on_client_request(state, request);
-                    }));
-                }
-                Err(err) => {
-                    debug!("bidirectional stream error: {err}");
-                    break;
-                }
-            }
-        }
-    };
-
-    let join_handle = tokio::spawn(with_in_stream);
-
-    let with_out_stream_and_in_stream_join_handle = Box::new(|state: &mut State| {
-        with_out_stream_and_in_stream_join_handle(state, sender, join_handle);
-    });
-
-    fn_sender
-        .send(with_out_stream_and_in_stream_join_handle)
-        .map_err(|_| Status::internal("failed to execute request"))?;
-
-    let receiver_stream = tokio_stream::wrappers::UnboundedReceiverStream::new(receiver);
-    Ok(Response::new(Box::pin(receiver_stream)))
+    run_bidirectional_streaming_mapped(
+        fn_sender,
+        in_stream,
+        on_client_request,
+        with_out_stream_and_in_stream_join_handle,
+        std::convert::identity,
+    )
 }
 
 /// Begins a bidirectional grpc stream, mapping the channel message beforehand.
@@ -191,16 +165,17 @@ fn run_bidirectional_streaming_mapped<F1, F2, FM, I, O, M>(
 ) -> Result<Response<ResponseStream<O>>, Status>
 where
     F1: Fn(&mut State, I) + Clone + Send + 'static,
-    F2: FnOnce(&mut State, UnboundedSender<M>, JoinHandle<()>) + Send + 'static,
+    F2: FnOnce(&mut State, Sender<M>, JoinHandle<()>) + Send + 'static,
     FM: Fn(M) -> Result<O, Status> + Send + 'static,
     I: Send + 'static,
     O: Send + 'static,
     M: Send + 'static,
 {
-    let (sender, receiver) = unbounded_channel::<M>();
+    let (sender, receiver) = async_channel::unbounded::<M>();
 
     let fn_sender_clone = fn_sender.clone();
 
+    let receiver_clone = receiver.clone();
     let with_in_stream = async move {
         while let Some(request) = in_stream.next().await {
             match request {
@@ -213,6 +188,7 @@ where
                 }
                 Err(err) => {
                     debug!("bidirectional stream error: {err}");
+                    receiver_clone.close();
                     break;
                 }
             }
@@ -229,6 +205,5 @@ where
         .send(with_out_stream_and_in_stream_join_handle)
         .map_err(|_| Status::internal("failed to execute request"))?;
 
-    let receiver_stream = tokio_stream::wrappers::UnboundedReceiverStream::new(receiver);
-    Ok(Response::new(Box::pin(receiver_stream.map(map))))
+    Ok(Response::new(Box::pin(receiver.map(map))))
 }

@@ -73,6 +73,7 @@ impl layout::v1::layout_service_server::LayoutService for super::LayoutService {
                                 window_count: info.window_count,
                                 tag_ids: info.tag_ids.into_iter().map(|id| id.to_inner()).collect(),
                             }))
+                            .await
                             .is_err()
                         {
                             break;

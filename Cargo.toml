@@ -152,6 +152,7 @@ profiling = { version = "1.0.16", optional = true } # Only used to enable profil
 tracy-client = { workspace = true }
 sd-notify = "0.4.5"
 snowcap-protocols = { workspace = true }
+async-channel = "2.5.0"
 
 [build-dependencies]
 vergen-gitcl = { version = "1.0.5", features = ["rustc", "cargo", "si"] }

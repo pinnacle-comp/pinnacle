@@ -4,10 +4,10 @@ use smithay::{
     reexports::wayland_protocols::xdg::decoration::zv1::server::zxdg_toplevel_decoration_v1,
     utils::{Logical, Size},
 };
-use tokio::sync::mpsc::UnboundedSender;
 use tracing::error;
 
 use crate::{
+    api::Sender,
     state::{Pinnacle, WithState},
     tag::Tag,
 };
@@ -28,7 +28,7 @@ use std::{
 #[derive(Debug, Default)]
 pub struct WindowRuleState {
     pub pending_windows: HashMap<WindowElement, PendingWindowRuleRequest>,
-    pub senders: Vec<(UnboundedSender<WindowRuleRequest>, Arc<AtomicU32>)>,
+    pub senders: Vec<(Sender<WindowRuleRequest>, Arc<AtomicU32>)>,
     current_request_id: u32,
 }
 
@@ -72,7 +72,7 @@ impl WindowRuleState {
         let mut waiting_on = Vec::new();
         self.senders.retain(|(sender, id)| {
             let sent = sender
-                .send(WindowRuleRequest {
+                .send_blocking(WindowRuleRequest {
                     request_id,
                     window_id: window.with_state(|state| state.id),
                 })
@@ -99,11 +99,7 @@ impl WindowRuleState {
         true
     }
 
-    pub fn new_sender(
-        &mut self,
-        sender: UnboundedSender<WindowRuleRequest>,
-        id_ctr: Arc<AtomicU32>,
-    ) {
+    pub fn new_sender(&mut self, sender: Sender<WindowRuleRequest>, id_ctr: Arc<AtomicU32>) {
         self.senders.push((sender, id_ctr));
     }
 
