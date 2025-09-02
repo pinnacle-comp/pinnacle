@@ -123,7 +123,7 @@ pub struct Udev {
     pub(super) dmabuf_state: Option<(DmabufState, DmabufGlobal)>,
     pub(super) primary_gpu: DrmNode,
     pub(super) gpu_manager: GpuManager<GbmGlesBackend<GlesRenderer, DrmDeviceFd>>,
-    backends: HashMap<DrmNode, UdevBackendData>,
+    devices: HashMap<DrmNode, Device>,
 
     pub(super) upscale_filter: TextureFilter,
     pub(super) downscale_filter: TextureFilter,
@@ -205,7 +205,7 @@ impl Udev {
             session,
             primary_gpu,
             gpu_manager,
-            backends: HashMap::new(),
+            devices: HashMap::new(),
 
             upscale_filter: TextureFilter::Linear,
             downscale_filter: TextureFilter::Linear,
@@ -290,8 +290,8 @@ impl Udev {
                                 libinput_context.suspend();
                                 info!("pausing session");
 
-                                for backend in udev.backends.values_mut() {
-                                    backend.drm_output_manager.pause();
+                                for device in udev.devices.values_mut() {
+                                    device.drm_output_manager.pause();
                                 }
                             }
                             session::Event::ActivateSession => {
@@ -318,7 +318,7 @@ impl Udev {
                                         .collect::<HashMap<_, _>>();
 
                                     let (connected_devices, disconnected_devices) =
-                                        udev.backends.keys().copied().partition::<Vec<_>, _>(
+                                        udev.devices.keys().copied().partition::<Vec<_>, _>(
                                             |node| device_list.contains_key(node),
                                         );
 
@@ -335,12 +335,12 @@ impl Udev {
 
                                     // INFO: see if this can be moved below udev.device_changed
                                     {
-                                        let Some(backend) = udev.backends.get_mut(&node) else {
+                                        let Some(device) = udev.devices.get_mut(&node) else {
                                             unreachable!();
                                         };
 
                                         if let Err(err) =
-                                            backend.drm_output_manager.lock().activate(true)
+                                            device.drm_output_manager.lock().activate(true)
                                         {
                                             error!("Error activating DRM device: {err}");
                                         }
@@ -348,7 +348,7 @@ impl Udev {
 
                                     udev.device_changed(pinnacle, node);
 
-                                    let Some(backend) = udev.backends.get_mut(&node) else {
+                                    let Some(device) = udev.devices.get_mut(&node) else {
                                         unreachable!();
                                     };
 
@@ -356,12 +356,12 @@ impl Udev {
                                     //
                                     // Also welcome to some really doodoo code
 
-                                    for (crtc, surface) in backend.surfaces.iter_mut() {
+                                    for (crtc, surface) in device.surfaces.iter_mut() {
                                         match mem::take(&mut surface.pending_gamma_change) {
                                             PendingGammaChange::Idle => {
                                                 debug!("Restoring from previous gamma");
                                                 if let Err(err) = Udev::set_gamma_internal(
-                                                    backend.drm_output_manager.device(),
+                                                    device.drm_output_manager.device(),
                                                     crtc,
                                                     surface.previous_gamma.clone(),
                                                 ) {
@@ -372,7 +372,7 @@ impl Udev {
                                             PendingGammaChange::Restore => {
                                                 debug!("Restoring to original gamma");
                                                 if let Err(err) = Udev::set_gamma_internal(
-                                                    backend.drm_output_manager.device(),
+                                                    device.drm_output_manager.device(),
                                                     crtc,
                                                     None::<[&[u16]; 3]>,
                                                 ) {
@@ -383,7 +383,7 @@ impl Udev {
                                             PendingGammaChange::Change(gamma) => {
                                                 debug!("Changing to pending gamma");
                                                 match Udev::set_gamma_internal(
-                                                    backend.drm_output_manager.device(),
+                                                    device.drm_output_manager.device(),
                                                     crtc,
                                                     Some([&gamma[0], &gamma[1], &gamma[2]]),
                                                 ) {
@@ -453,20 +453,19 @@ impl Udev {
                 udev.dmabuf_state = Some((dmabuf_state, global));
 
                 let gpu_manager = &mut udev.gpu_manager;
-                udev.backends.values_mut().for_each(|backend_data| {
+                udev.devices.values_mut().for_each(|device| {
                     // Update the per drm surface dmabuf feedback
-                    backend_data.surfaces.values_mut().for_each(|surface_data| {
-                        surface_data.dmabuf_feedback =
-                            surface_data.dmabuf_feedback.take().or_else(|| {
-                                surface_data.drm_output.with_compositor(|compositor| {
-                                    get_surface_dmabuf_feedback(
-                                        primary_gpu,
-                                        surface_data.render_node,
-                                        gpu_manager,
-                                        compositor.surface(),
-                                    )
-                                })
-                            });
+                    device.surfaces.values_mut().for_each(|surface| {
+                        surface.dmabuf_feedback = surface.dmabuf_feedback.take().or_else(|| {
+                            surface.drm_output.with_compositor(|compositor| {
+                                get_surface_dmabuf_feedback(
+                                    primary_gpu,
+                                    surface.render_node,
+                                    gpu_manager,
+                                    compositor.surface(),
+                                )
+                            })
+                        });
                     });
                 });
 
@@ -479,7 +478,7 @@ impl Udev {
     pub fn schedule_render(&mut self, output: &Output) {
         let _span = tracy_client::span!("Udev::schedule_render");
 
-        let Some(surface) = render_surface_for_output(output, &mut self.backends) else {
+        let Some(surface) = render_surface_for_output(output, &mut self.devices) else {
             debug!("no render surface on output {}", output.name());
             return;
         };
@@ -513,7 +512,7 @@ impl Udev {
         let UdevOutputData { device_id, crtc } =
             output.user_data().get::<UdevOutputData>().unwrap();
 
-        let Some(backend_data) = self.backends.get_mut(device_id) else {
+        let Some(device) = self.devices.get_mut(device_id) else {
             return;
         };
 
@@ -522,7 +521,7 @@ impl Udev {
         } else {
             output.with_state_mut(|state| state.powered = false);
 
-            if let Err(err) = backend_data
+            if let Err(err) = device
                 .surfaces
                 .get_mut(crtc)
                 .unwrap()
@@ -532,7 +531,7 @@ impl Udev {
                 warn!("Failed to clear compositor state on crtc {crtc:?}: {err}");
             }
 
-            if let Some(surface) = render_surface_for_output(output, &mut self.backends)
+            if let Some(surface) = render_surface_for_output(output, &mut self.devices)
                 && let RenderState::WaitingForEstimatedVblankAndScheduled(token)
                 | RenderState::WaitingForEstimatedVblank(token) =
                     mem::take(&mut surface.render_state)
@@ -566,7 +565,7 @@ impl BackendData for Udev {
         let _span = tracy_client::span!("Udev: BackendData::reset_buffers");
 
         if let Some(id) = output.user_data().get::<UdevOutputData>()
-            && let Some(gpu) = self.backends.get_mut(&id.device_id)
+            && let Some(gpu) = self.devices.get_mut(&id.device_id)
             && let Some(surface) = gpu.surfaces.get_mut(&id.crtc)
         {
             surface.drm_output.reset_buffers();
@@ -585,10 +584,10 @@ impl BackendData for Udev {
         let _span = tracy_client::span!("Udev: BackendData::set_output_mode");
 
         let drm_mode = self
-            .backends
+            .devices
             .iter()
-            .find_map(|(_, backend)| {
-                backend
+            .find_map(|(_, device)| {
+                device
                     .drm_scanner
                     .crtcs()
                     .find(|(_, handle)| {
@@ -614,7 +613,7 @@ impl BackendData for Udev {
                 }
             });
 
-        if let Some(render_surface) = render_surface_for_output(output, &mut self.backends)
+        if let Some(render_surface) = render_surface_for_output(output, &mut self.devices)
             && let Ok(mut renderer) = self.gpu_manager.single_renderer(&self.primary_gpu)
         {
             match render_surface.drm_output.use_mode(
@@ -646,7 +645,7 @@ impl BackendData for Udev {
 }
 
 // TODO: document desperately
-struct UdevBackendData {
+struct Device {
     surfaces: HashMap<crtc::Handle, RenderSurface>,
     drm_output_manager: DrmOutputManager<
         GbmAllocator<DrmDeviceFd>,
@@ -880,9 +879,9 @@ impl Udev {
             render_formats,
         );
 
-        self.backends.insert(
+        self.devices.insert(
             node,
-            UdevBackendData {
+            Device {
                 registration_token,
                 drm_output_manager,
                 drm_scanner: DrmScanner::new(),
@@ -906,7 +905,7 @@ impl Udev {
     ) {
         debug!(?node, ?connector, ?crtc, "Udev::connector_connected");
 
-        let Some(device) = self.backends.get_mut(&node) else {
+        let Some(device) = self.devices.get_mut(&node) else {
             warn!(?node, "Device disappeared");
             return;
         };
@@ -1092,7 +1091,7 @@ impl Udev {
     ) {
         debug!(?node, ?crtc, "Udev::connector_disconnected");
 
-        let Some(device) = self.backends.get_mut(&node) else {
+        let Some(device) = self.devices.get_mut(&node) else {
             warn!(?node, "Device disappeared");
             return;
         };
@@ -1118,7 +1117,7 @@ impl Udev {
     fn device_changed(&mut self, pinnacle: &mut Pinnacle, node: DrmNode) {
         debug!(?node, "Udev::device_changed");
 
-        let Some(device) = self.backends.get_mut(&node) else {
+        let Some(device) = self.devices.get_mut(&node) else {
             warn!(?node, "Device disappeared");
             return;
         };
@@ -1157,7 +1156,7 @@ impl Udev {
     fn device_removed(&mut self, pinnacle: &mut Pinnacle, node: DrmNode) {
         debug!(?node, "Udev::device_removed");
 
-        let Some(device) = self.backends.get(&node) else {
+        let Some(device) = self.devices.get(&node) else {
             warn!(?node, "Device disappeared");
             return;
         };
@@ -1174,13 +1173,10 @@ impl Udev {
 
         debug!("Surfaces dropped");
 
-        // drop the backends on this side
-        if let Some(backend_data) = self.backends.remove(&node) {
-            self.gpu_manager
-                .as_mut()
-                .remove_node(&backend_data.render_node);
+        if let Some(device) = self.devices.remove(&node) {
+            self.gpu_manager.as_mut().remove_node(&device.render_node);
 
-            pinnacle.loop_handle.remove(backend_data.registration_token);
+            pinnacle.loop_handle.remove(device.registration_token);
 
             debug!("Dropping device");
         }
@@ -1196,7 +1192,7 @@ impl Udev {
         let span = tracy_client::span!("Udev::on_vblank");
 
         let Some(surface) = self
-            .backends
+            .devices
             .get_mut(&dev_id)
             .and_then(|device| device.surfaces.get_mut(&crtc))
         else {
@@ -1293,7 +1289,7 @@ impl Udev {
         let span = tracy_client::span!("Udev::render_if_scheduled");
         span.emit_text(&output.name());
 
-        let Some(surface) = render_surface_for_output(output, &mut self.backends) else {
+        let Some(surface) = render_surface_for_output(output, &mut self.devices) else {
             return;
         };
 
@@ -1312,12 +1308,12 @@ impl Udev {
 
         let UdevOutputData { device_id, .. } = output.user_data().get().unwrap();
         let is_active = self
-            .backends
+            .devices
             .get(device_id)
             .map(|device| device.drm_output_manager.device().is_active())
             .unwrap_or_default();
 
-        let Some(surface) = render_surface_for_output(output, &mut self.backends) else {
+        let Some(surface) = render_surface_for_output(output, &mut self.devices) else {
             return;
         };
 
@@ -1658,7 +1654,7 @@ impl Udev {
         let span = tracy_client::span!("Udev::on_estimated_vblank_timer");
         span.emit_text(&output.name());
 
-        let Some(surface) = render_surface_for_output(output, &mut self.backends) else {
+        let Some(surface) = render_surface_for_output(output, &mut self.devices) else {
             return;
         };
 
@@ -1711,7 +1707,7 @@ impl Udev {
     }
 
     pub(super) fn set_output_vrr(&mut self, output: &Output, vrr: bool) {
-        let Some(surface) = render_surface_for_output(output, &mut self.backends) else {
+        let Some(surface) = render_surface_for_output(output, &mut self.devices) else {
             return;
         };
 
@@ -1739,11 +1735,11 @@ impl Udev {
 
 fn render_surface_for_output<'a>(
     output: &Output,
-    backends: &'a mut HashMap<DrmNode, UdevBackendData>,
+    devices: &'a mut HashMap<DrmNode, Device>,
 ) -> Option<&'a mut RenderSurface> {
     let UdevOutputData { device_id, crtc } = output.user_data().get()?;
 
-    backends
+    devices
         .get_mut(device_id)
         .and_then(|device| device.surfaces.get_mut(crtc))
 }

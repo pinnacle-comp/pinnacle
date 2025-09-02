@@ -13,7 +13,7 @@ use super::{Udev, UdevOutputData};
 impl Udev {
     pub fn set_gamma(&mut self, output: &Output, gamma: Option<[&[u16]; 3]>) -> anyhow::Result<()> {
         if !self.session.is_active() {
-            render_surface_for_output(output, &mut self.backends)
+            render_surface_for_output(output, &mut self.devices)
                 .context("no render surface for output")?
                 .pending_gamma_change = match gamma {
                 Some([r, g, b]) => {
@@ -30,7 +30,7 @@ impl Udev {
             .context("no udev output data for output")?;
 
         let drm_device = self
-            .backends
+            .devices
             .get(device_id)
             .context("no udev backend data for output")?
             .drm_output_manager
@@ -38,7 +38,7 @@ impl Udev {
 
         let ret = Udev::set_gamma_internal(drm_device, crtc, gamma);
 
-        render_surface_for_output(output, &mut self.backends)
+        render_surface_for_output(output, &mut self.devices)
             .context("no render surface for output")?
             .previous_gamma = match ret.is_ok() {
             true => gamma.map(|[r, g, b]| [r.into(), g.into(), b.into()]),
@@ -107,7 +107,7 @@ impl Udev {
             .context("no udev output data for output")?;
 
         let drm_device = self
-            .backends
+            .devices
             .get(device_id)
             .context("no udev backend data for output")?
             .drm_output_manager
