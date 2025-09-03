@@ -51,6 +51,8 @@ tower = { version = "0.5.2", features = ["util"] }
 passfd = "0.1.6"
 tracy-client = { version = "0.18.1", default-features = false }
 snowcap-protocols = { path = "./snowcap/snowcap-protocols" }
+wayland-backend = "0.3.11"
+wayland-scanner = "0.31.7"
 
 [workspace.dependencies.smithay]
 git = "https://github.com/Smithay/smithay"
@@ -70,7 +72,6 @@ features = [
     "renderer_gl",
     "renderer_multi",
     # egl
-    "use_system_lib",
     "backend_egl",
     # winit
     "backend_winit",
@@ -153,6 +154,8 @@ tracy-client = { workspace = true }
 sd-notify = "0.4.5"
 snowcap-protocols = { workspace = true }
 async-channel = "2.5.0"
+wayland-backend = { workspace = true }
+wayland-scanner = { workspace = true }
 
 [build-dependencies]
 vergen-gitcl = { version = "1.0.5", features = ["rustc", "cargo", "si"] }

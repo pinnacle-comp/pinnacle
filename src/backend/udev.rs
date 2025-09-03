@@ -8,6 +8,7 @@ use assert_matches::assert_matches;
 pub use drm::drm_mode_from_modeinfo;
 use frame::FrameClock;
 use indexmap::IndexSet;
+use wayland_backend::server::GlobalId;
 
 use std::{collections::HashMap, mem, path::Path, time::Duration};
 
@@ -30,8 +31,8 @@ use smithay::{
         egl::{EGLDevice, EGLDisplay, context::ContextPriority},
         libinput::{LibinputInputBackend, LibinputSessionInterface},
         renderer::{
-            self, Bind, Blit, BufferType, ExportMem, ImportDma, ImportEgl, ImportMemWl, Offscreen,
-            Renderer, TextureFilter,
+            self, Bind, Blit, BufferType, ExportMem, ImportDma, ImportMemWl, Offscreen, Renderer,
+            TextureFilter,
             damage::OutputDamageTracker,
             element::{self, Element, Id, surface::render_elements_from_surface_tree},
             gles::{GlesRenderbuffer, GlesRenderer},
@@ -64,7 +65,7 @@ use smithay::{
     },
     utils::{DeviceFd, Rectangle, Transform},
     wayland::{
-        dmabuf::{self, DmabufFeedback, DmabufFeedbackBuilder, DmabufGlobal, DmabufState},
+        dmabuf::{self, DmabufFeedback, DmabufFeedbackBuilder, DmabufGlobal},
         presentation::Refresh,
         shm::shm_format_to_fourcc,
     },
@@ -120,10 +121,12 @@ pub struct Udev {
     pub session: LibSeatSession,
     udev_dispatcher: Dispatcher<'static, UdevBackend, State>,
     display_handle: DisplayHandle,
-    pub(super) dmabuf_state: Option<(DmabufState, DmabufGlobal)>,
     pub(super) primary_gpu: DrmNode,
     pub(super) gpu_manager: GpuManager<GbmGlesBackend<GlesRenderer, DrmDeviceFd>>,
     devices: HashMap<DrmNode, Device>,
+    /// The global corresponding to the primary gpu
+    dmabuf_global: Option<DmabufGlobal>,
+    drm_global: Option<GlobalId>,
 
     pub(super) upscale_filter: TextureFilter,
     pub(super) downscale_filter: TextureFilter,
@@ -201,11 +204,12 @@ impl Udev {
         let mut udev = Udev {
             display_handle,
             udev_dispatcher,
-            dmabuf_state: None,
             session,
             primary_gpu,
             gpu_manager,
             devices: HashMap::new(),
+            dmabuf_global: None,
+            drm_global: None,
 
             upscale_filter: TextureFilter::Linear,
             downscale_filter: TextureFilter::Linear,
@@ -426,48 +430,6 @@ impl Udev {
                         .single_renderer(&primary_gpu)?
                         .shm_formats(),
                 );
-
-                let mut renderer = udev.gpu_manager.single_renderer(&primary_gpu)?;
-
-                info!(
-                    ?primary_gpu,
-                    "Trying to initialize EGL Hardware Acceleration",
-                );
-
-                match renderer.bind_wl_display(&udev.display_handle) {
-                    Ok(_) => info!("EGL hardware-acceleration enabled"),
-                    Err(err) => error!(?err, "Failed to initialize EGL hardware-acceleration"),
-                }
-
-                // init dmabuf support with format list from our primary gpu
-                let dmabuf_formats = renderer.dmabuf_formats();
-                let default_feedback =
-                    DmabufFeedbackBuilder::new(primary_gpu.dev_id(), dmabuf_formats)
-                        .build()
-                        .expect("failed to create dmabuf feedback");
-                let mut dmabuf_state = DmabufState::new();
-                let global = dmabuf_state.create_global_with_default_feedback::<State>(
-                    &udev.display_handle,
-                    &default_feedback,
-                );
-                udev.dmabuf_state = Some((dmabuf_state, global));
-
-                let gpu_manager = &mut udev.gpu_manager;
-                udev.devices.values_mut().for_each(|device| {
-                    // Update the per drm surface dmabuf feedback
-                    device.surfaces.values_mut().for_each(|surface| {
-                        surface.dmabuf_feedback = surface.dmabuf_feedback.take().or_else(|| {
-                            surface.drm_output.with_compositor(|compositor| {
-                                get_surface_dmabuf_feedback(
-                                    primary_gpu,
-                                    surface.render_node,
-                                    gpu_manager,
-                                    compositor.surface(),
-                                )
-                            })
-                        });
-                    });
-                });
 
                 Ok(udev)
             }),
@@ -853,6 +815,37 @@ impl Udev {
             .add_node(render_node, gbm.clone())
             .context("failed to add device to GpuManager")?;
 
+        if render_node == self.primary_gpu {
+            let renderer = self.gpu_manager.single_renderer(&render_node)?;
+
+            let (dmabuf_global, drm_global_id) = pinnacle
+                .init_hardware_accel(render_node, renderer.dmabuf_formats())
+                .inspect_err(|err| {
+                    error!("Failed to initialize EGL hardware acceleration: {err}");
+                })?;
+
+            assert!(self.dmabuf_global.replace(dmabuf_global).is_none());
+            assert!(self.drm_global.replace(drm_global_id).is_none());
+
+            // Update the per drm surface dmabuf feedback
+            for device in self.devices.values_mut() {
+                for surface in device.surfaces.values_mut() {
+                    let dmabuf_feedback = surface.drm_output.with_compositor(|compositor| {
+                        get_surface_dmabuf_feedback(
+                            render_node,
+                            surface.render_node,
+                            &mut self.gpu_manager,
+                            compositor.surface(),
+                        )
+                    });
+
+                    if let Some(dmabuf_feedback) = dmabuf_feedback {
+                        surface.dmabuf_feedback.replace(dmabuf_feedback);
+                    }
+                }
+            }
+        }
+
         let allocator = GbmAllocator::new(
             gbm.clone(),
             GbmBufferFlags::RENDERING | GbmBufferFlags::SCANOUT,
@@ -1164,21 +1157,59 @@ impl Udev {
         let crtcs = device
             .drm_scanner
             .crtcs()
-            .map(|(info, crtc)| (info.clone(), crtc))
+            .map(|(_info, crtc)| crtc)
             .collect::<Vec<_>>();
 
-        for (_connector, crtc) in crtcs {
+        for crtc in crtcs {
             self.connector_disconnected(pinnacle, node, crtc);
         }
 
         debug!("Surfaces dropped");
 
-        if let Some(device) = self.devices.remove(&node) {
-            self.gpu_manager.as_mut().remove_node(&device.render_node);
+        let Some(device) = self.devices.remove(&node) else {
+            unreachable!()
+        };
 
-            pinnacle.loop_handle.remove(device.registration_token);
+        self.gpu_manager.as_mut().remove_node(&device.render_node);
 
-            debug!("Dropping device");
+        pinnacle.loop_handle.remove(device.registration_token);
+
+        if node == self.primary_gpu {
+            if let Some(dmabuf_global) = self.dmabuf_global.take() {
+                pinnacle
+                    .dmabuf_state
+                    .disable_global::<State>(&pinnacle.display_handle, &dmabuf_global);
+                // Niri waits 10 seconds to destroy the global
+                pinnacle
+                    .loop_handle
+                    .insert_source(
+                        Timer::from_duration(Duration::from_secs(10)),
+                        move |_, _, state| {
+                            state.pinnacle.dmabuf_state.destroy_global::<State>(
+                                &state.pinnacle.display_handle,
+                                dmabuf_global,
+                            );
+                            TimeoutAction::Drop
+                        },
+                    )
+                    .unwrap();
+
+                for device in self.devices.values_mut() {
+                    for surface in device.surfaces.values_mut() {
+                        surface.dmabuf_feedback = None;
+                    }
+                }
+            } else {
+                error!("Could not remove dmabuf global because it was missing");
+            }
+
+            if let Some(drm_global_id) = self.drm_global.take() {
+                pinnacle
+                    .display_handle
+                    .remove_global::<State>(drm_global_id);
+            } else {
+                error!("Could not remove drm global because it was missing");
+            }
         }
     }
 

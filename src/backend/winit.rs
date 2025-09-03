@@ -7,8 +7,8 @@ use smithay::{
     backend::{
         egl::EGLDevice,
         renderer::{
-            self, Bind, Blit, BufferType, ExportMem, ImportDma, ImportEgl, ImportMemWl,
-            TextureFilter, buffer_type,
+            self, Bind, Blit, BufferType, ExportMem, ImportDma, ImportMemWl, TextureFilter,
+            buffer_type,
             damage::{self, OutputDamageTracker, RenderOutputResult},
             element::{self, surface::render_elements_from_surface_tree},
             gles::GlesRenderer,
@@ -29,12 +29,9 @@ use smithay::{
         },
     },
     utils::{Rectangle, Transform},
-    wayland::{
-        dmabuf::{self, DmabufFeedback, DmabufFeedbackBuilder, DmabufGlobal, DmabufState},
-        presentation::Refresh,
-    },
+    wayland::{dmabuf, presentation::Refresh},
 };
-use tracing::{debug, error, trace, warn};
+use tracing::{debug, error, info, trace, warn};
 
 use crate::{
     output::{BlankingState, OutputMode},
@@ -52,7 +49,6 @@ const LOGO_BYTES: &[u8] = include_bytes!("../../resources/pinnacle_logo_icon.rgb
 pub struct Winit {
     pub backend: WinitGraphicsBackend<GlesRenderer>,
     pub damage_tracker: OutputDamageTracker,
-    pub dmabuf_state: (DmabufState, DmabufGlobal, Option<DmabufFeedback>),
     pub full_redraw: u8,
     output: Output,
 }
@@ -87,7 +83,7 @@ impl Winit {
             .with_name("pinnacle", "pinnacle")
             .with_window_icon(Icon::from_rgba(LOGO_BYTES.to_vec(), 64, 64).ok());
 
-        let (mut winit_backend, winit_evt_loop) =
+        let (winit_backend, winit_evt_loop) =
             match winit::init_from_attributes::<GlesRenderer>(window_attrs) {
                 Ok(ret) => ret,
                 Err(err) => anyhow::bail!("Failed to init winit backend: {err}"),
@@ -122,61 +118,14 @@ impl Winit {
         output.set_preferred(mode);
         output.with_state_mut(|state| state.modes = vec![mode]);
 
-        let render_node =
-            EGLDevice::device_for_display(winit_backend.renderer().egl_context().display())
-                .and_then(|device| device.try_get_render_node());
-
-        let dmabuf_default_feedback = match render_node {
-            Ok(Some(node)) => {
-                let dmabuf_formats = winit_backend.renderer().dmabuf_formats();
-                let dmabuf_default_feedback =
-                    DmabufFeedbackBuilder::new(node.dev_id(), dmabuf_formats)
-                        .build()
-                        .expect("DmabufFeedbackBuilder error");
-                Some(dmabuf_default_feedback)
-            }
-            Ok(None) => {
-                warn!("failed to query render node, dmabuf will use v3");
-                None
-            }
-            Err(err) => {
-                warn!("{}", err);
-                None
-            }
-        };
-
-        let dmabuf_state = match dmabuf_default_feedback {
-            Some(default_feedback) => {
-                let mut dmabuf_state = DmabufState::new();
-                let dmabuf_global = dmabuf_state.create_global_with_default_feedback::<State>(
-                    &display_handle,
-                    &default_feedback,
-                );
-                (dmabuf_state, dmabuf_global, Some(default_feedback))
-            }
-            None => {
-                let dmabuf_formats = winit_backend.renderer().dmabuf_formats();
-                let mut dmabuf_state = DmabufState::new();
-                let dmabuf_global =
-                    dmabuf_state.create_global::<State>(&display_handle, dmabuf_formats);
-                (dmabuf_state, dmabuf_global, None)
-            }
-        };
-
-        if winit_backend
-            .renderer()
-            .bind_wl_display(&display_handle)
-            .is_ok()
-        {
-            tracing::info!("EGL hardware-acceleration enabled");
-        }
+        let global = output.create_global::<State>(&display_handle);
+        output.with_state_mut(|state| state.enabled_global_id = Some(global));
 
         winit_backend.window().set_cursor_visible(false);
 
         let mut winit = Winit {
             backend: winit_backend,
             damage_tracker: OutputDamageTracker::from_output(&output),
-            dmabuf_state,
             full_redraw: 0,
             output,
         };
@@ -184,9 +133,28 @@ impl Winit {
         let seat_name = winit.seat_name();
 
         let init = Box::new(move |pinnacle: &mut Pinnacle| {
+            let render_node =
+                EGLDevice::device_for_display(winit.backend.renderer().egl_context().display())
+                    .and_then(|device| device.try_get_render_node());
+
+            let dmabuf_formats = winit.backend.renderer().dmabuf_formats();
+
+            match render_node {
+                Ok(Some(render_node)) => {
+                    match pinnacle.init_hardware_accel(render_node, dmabuf_formats) {
+                        Ok(_) => info!("EGL hardware acceleration enabled"),
+                        Err(err) => warn!("Failed to bind EGL display: {err}"),
+                    }
+                }
+                Ok(None) => {
+                    warn!("Failed to bind EGL display: failed to query render node");
+                }
+                Err(err) => {
+                    warn!("Failed to bind EGL display: {err}");
+                }
+            };
+
             let output = winit.output.clone();
-            let global = output.create_global::<State>(&display_handle);
-            output.with_state_mut(|state| state.enabled_global_id = Some(global));
 
             pinnacle.focus_output(&output);
 

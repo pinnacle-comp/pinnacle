@@ -20,6 +20,7 @@ use crate::{
     layout::LayoutState,
     process::ProcessState,
     protocol::{
+        drm::WlDrmState,
         foreign_toplevel::{self, ForeignToplevelManagerState},
         gamma_control::GammaControlManagerState,
         output_management::OutputManagementManagerState,
@@ -62,6 +63,7 @@ use smithay::{
             with_surface_tree_downward,
         },
         cursor_shape::CursorShapeManagerState,
+        dmabuf::DmabufState,
         foreign_toplevel_list::ForeignToplevelListState,
         fractional_scale::{FractionalScaleManagerState, with_fractional_scale},
         idle_inhibit::IdleInhibitManagerState,
@@ -139,6 +141,7 @@ pub struct Pinnacle {
     pub data_device_state: DataDeviceState,
     pub seat_state: SeatState<State>,
     pub shm_state: ShmState,
+    pub dmabuf_state: DmabufState,
     pub output_manager_state: OutputManagerState,
     pub xdg_shell_state: XdgShellState,
     pub viewporter_state: ViewporterState,
@@ -170,6 +173,7 @@ pub struct Pinnacle {
     pub foreign_toplevel_list_state: ForeignToplevelListState,
     #[cfg(feature = "snowcap")]
     pub snowcap_decoration_state: SnowcapDecorationState,
+    pub wl_drm_state: WlDrmState,
 
     pub lock_state: LockState,
 
@@ -391,6 +395,7 @@ impl Pinnacle {
             data_device_state: DataDeviceState::new::<State>(&display_handle),
             seat_state,
             shm_state: ShmState::new::<State>(&display_handle, vec![]),
+            dmabuf_state: DmabufState::new(),
             space: Space::<WindowElement>::default(),
             output_manager_state: OutputManagerState::new_with_xdg_output::<State>(&display_handle),
             xdg_shell_state: XdgShellState::new_with_capabilities::<State>(
@@ -459,6 +464,7 @@ impl Pinnacle {
             foreign_toplevel_list_state: ForeignToplevelListState::new::<State>(&display_handle),
             #[cfg(feature = "snowcap")]
             snowcap_decoration_state: SnowcapDecorationState::new::<State>(&display_handle),
+            wl_drm_state: WlDrmState,
 
             lock_state: LockState::default(),
 

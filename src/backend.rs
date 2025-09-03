@@ -1,16 +1,21 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+use anyhow::Context;
 use smithay::{
     backend::{
-        allocator::dmabuf::Dmabuf,
+        allocator::{dmabuf::Dmabuf, format::FormatSet},
+        drm::{DrmNode, NodeType},
         renderer::{ImportDma, Renderer, TextureFilter, gles::GlesRenderer},
     },
     delegate_dmabuf,
     output::Output,
     reexports::{calloop::LoopHandle, wayland_server::protocol::wl_surface::WlSurface},
-    wayland::dmabuf::{DmabufGlobal, DmabufHandler, DmabufState, ImportNotifier},
+    wayland::dmabuf::{
+        DmabufFeedbackBuilder, DmabufGlobal, DmabufHandler, DmabufState, ImportNotifier,
+    },
 };
-use tracing::error;
+use tracing::{error, warn};
+use wayland_backend::server::GlobalId;
 
 use crate::{
     output::OutputMode,
@@ -118,6 +123,29 @@ impl Backend {
             Backend::Udev(udev) => udev.set_output_powered(output, loop_handle, powered),
             #[cfg(feature = "testing")]
             Backend::Dummy(dummy) => dummy.set_output_powered(output, powered),
+        }
+    }
+
+    pub fn dmabuf_imported(&mut self, dmabuf: Dmabuf) -> anyhow::Result<()> {
+        match self {
+            Backend::Winit(winit) => winit
+                .backend
+                .renderer()
+                .import_dmabuf(&dmabuf, None)
+                .map(|_| ())
+                .context("winit dmabuf import failed"),
+            Backend::Udev(udev) => udev
+                .gpu_manager
+                .single_renderer(&udev.primary_gpu)
+                .and_then(|mut renderer| renderer.import_dmabuf(&dmabuf, None))
+                .map(|_| ())
+                .context("udev dmabuf import failed"),
+            #[cfg(feature = "testing")]
+            Backend::Dummy(dummy) => dummy
+                .renderer
+                .import_dmabuf(&dmabuf, None)
+                .map(|_| ())
+                .context("dummy dmabuf import failed"),
         }
     }
 
@@ -230,18 +258,7 @@ impl BackendData for Backend {
 
 impl DmabufHandler for State {
     fn dmabuf_state(&mut self) -> &mut DmabufState {
-        match &mut self.backend {
-            Backend::Winit(winit) => &mut winit.dmabuf_state.0,
-            Backend::Udev(udev) => {
-                &mut udev
-                    .dmabuf_state
-                    .as_mut()
-                    .expect("udev had no dmabuf state")
-                    .0
-            }
-            #[cfg(feature = "testing")]
-            Backend::Dummy(_) => unreachable!(),
-        }
+        &mut self.pinnacle.dmabuf_state
     }
 
     fn dmabuf_imported(
@@ -250,32 +267,48 @@ impl DmabufHandler for State {
         dmabuf: Dmabuf,
         notifier: ImportNotifier,
     ) {
-        let res = match &mut self.backend {
-            Backend::Winit(winit) => winit
-                .backend
-                .renderer()
-                .import_dmabuf(&dmabuf, None)
-                .map(|_| ())
-                .map_err(|_| ()),
-            Backend::Udev(udev) => udev
-                .gpu_manager
-                .single_renderer(&udev.primary_gpu)
-                .and_then(|mut renderer| renderer.import_dmabuf(&dmabuf, None))
-                .map(|_| ())
-                .map_err(|_| ()),
-            #[cfg(feature = "testing")]
-            Backend::Dummy(dummy) => dummy
-                .renderer
-                .import_dmabuf(&dmabuf, None)
-                .map(|_| ())
-                .map_err(|_| ()),
-        };
-
-        if res.is_ok() {
-            let _ = notifier.successful::<State>();
-        } else {
-            notifier.failed();
+        match self.backend.dmabuf_imported(dmabuf) {
+            Ok(_) => {
+                let _ = notifier.successful::<State>();
+            }
+            Err(err) => {
+                warn!("Failed to import dmabuf: {err}");
+                notifier.failed();
+            }
         }
     }
 }
 delegate_dmabuf!(State);
+
+impl Pinnacle {
+    /// Initializes EGL hardware acceleration.
+    ///
+    /// Returns the created dmabuf global and drm global id if successful.
+    fn init_hardware_accel(
+        &mut self,
+        render_node: DrmNode,
+        dmabuf_formats: FormatSet,
+    ) -> anyhow::Result<(DmabufGlobal, GlobalId)> {
+        let feedback = DmabufFeedbackBuilder::new(render_node.dev_id(), dmabuf_formats.clone())
+            .build()
+            .context("failed to build dmabuf feedback")?;
+
+        let dmabuf_global = self
+            .dmabuf_state
+            .create_global_with_default_feedback::<State>(&self.display_handle, &feedback);
+
+        let drm_global_id = self.wl_drm_state.create_global::<State>(
+            &self.display_handle,
+            render_node
+                .dev_path_with_type(NodeType::Render)
+                .or_else(|| render_node.dev_path())
+                .ok_or(anyhow::anyhow!(
+                    "Could not determine path for gpu node: {render_node}"
+                ))?,
+            dmabuf_formats,
+            &dmabuf_global,
+        );
+
+        Ok((dmabuf_global, drm_global_id))
+    }
+}
