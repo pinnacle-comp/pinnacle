@@ -74,6 +74,7 @@ use tonic::transport::{Endpoint, Uri};
 use tower::service_fn;
 
 pub mod debug;
+pub mod experimental;
 pub mod input;
 pub mod layout;
 pub mod output;
@@ -86,14 +87,6 @@ pub mod snowcap;
 pub mod tag;
 pub mod util;
 pub mod window;
-
-/// Experimental APIs.
-///
-/// IMPORTANT: These are unstable and may change at any moment.
-pub mod experimental {
-    #[cfg(feature = "snowcap")]
-    pub use snowcap_api;
-}
 
 mod client;
 

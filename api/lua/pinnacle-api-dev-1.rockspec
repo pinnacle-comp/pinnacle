@@ -37,6 +37,7 @@ build = {
         ["pinnacle.snowcap"] = "pinnacle/snowcap.lua",
         ["pinnacle.log"] = "pinnacle/log.lua",
         ["pinnacle.debug"] = "pinnacle/debug.lua",
+        ["pinnacle.experimental"] = "pinnacle/experimental.lua",
 
         -- scuff city
         ["pinnacle.snowcap.snowcap"] = "pinnacle/snowcap/snowcap.lua",
