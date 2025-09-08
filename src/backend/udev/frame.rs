@@ -97,6 +97,6 @@ impl FrameClock {
 
     pub fn time_since_last_presentation(&self, clock: &Clock<Monotonic>) -> Option<Duration> {
         self.last_presentation_time
-            .map(|past| Duration::from(clock.now()) - past)
+            .and_then(|past| Duration::from(clock.now()).checked_sub(past))
     }
 }
