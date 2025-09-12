@@ -14,7 +14,7 @@ use smithay::{
         PopupSurface, PositionerState, ToplevelSurface, XdgShellHandler, XdgShellState,
     },
 };
-use tracing::warn;
+use tracing::{debug, warn};
 
 use crate::{
     api::signal::Signal,
@@ -102,14 +102,21 @@ impl XdgShellHandler for State {
     fn new_popup(&mut self, surface: PopupSurface, _positioner: PositionerState) {
         let _span = tracy_client::span!("XdgShellHandler::new_popup");
 
-        self.pinnacle.position_popup(&surface);
+        if surface.get_parent_surface().is_none() {
+            // The parent needs to be set via another protocol.
+            return;
+        }
+
+        if let Err(err) = self.pinnacle.position_popup(&surface) {
+            debug!("Failed to position popup: {err}");
+        }
 
         if let Err(err) = self
             .pinnacle
             .popup_manager
             .track_popup(PopupKind::from(surface))
         {
-            tracing::warn!("failed to track popup: {}", err);
+            warn!("Failed to track popup: {err}");
         }
     }
 
@@ -163,8 +170,13 @@ impl XdgShellHandler for State {
             state.geometry = positioner.get_geometry();
             state.positioner = positioner;
         });
-        self.pinnacle.position_popup(&surface);
+        if let Err(err) = self.pinnacle.position_popup(&surface) {
+            debug!("Failed to reposition popup: {err}");
+        }
         surface.send_repositioned(token);
+        if let Err(err) = surface.send_configure() {
+            warn!("Failed to configure popup: {err}");
+        }
     }
 
     fn grab(&mut self, surface: PopupSurface, seat: WlSeat, serial: Serial) {

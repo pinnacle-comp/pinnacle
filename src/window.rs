@@ -254,6 +254,8 @@ impl WindowElement {
         self.0.geometry()
     }
 
+    /// Returns the surface under the given point relative to
+    /// (0, 0) of this window's root wl surface.
     pub fn surface_under<P: Into<Point<f64, Logical>>>(
         &self,
         point: P,
@@ -271,35 +273,22 @@ impl WindowElement {
 
             let point = point.into();
 
+            let max_bounds = self.with_state(|state| state.max_decoration_bounds());
+
+            // Check for popups.
             if let Some(surface) = self.wl_surface()
                 && surface_type.contains(WindowSurfaceType::POPUP)
             {
+                // Popups are located relative to the actual window,
+                // so offset by the decoration offset.
+                let bounds_offset = Point::new(max_bounds.left as i32, max_bounds.top as i32);
+
                 for (popup, location) in PopupManager::popups_for_surface(&surface) {
                     let offset = self.geometry().loc + location - popup.geometry().loc;
-                    let surf =
-                        under_from_surface_tree(popup.wl_surface(), point, offset, surface_type);
-                    if surf.is_some() {
-                        return surf;
-                    }
-                }
-            }
-
-            let max_bounds = self.with_state(|state| state.max_decoration_bounds());
-
-            let mut decos = self.with_state(|state| state.decoration_surfaces.clone());
-            decos.sort_by_key(|deco| deco.z_index());
-            let mut decos = decos.into_iter().rev().peekable();
-
-            if surface_type.contains(WindowSurfaceType::TOPLEVEL) {
-                for deco in decos.peeking_take_while(|deco| deco.z_index() >= 0) {
-                    let bounds_offset = Point::new(
-                        (max_bounds.left - deco.bounds().left) as i32,
-                        (max_bounds.top - deco.bounds().top) as i32,
-                    );
                     let surf = under_from_surface_tree(
-                        deco.wl_surface(),
+                        popup.wl_surface(),
                         point,
-                        deco.location() + self.geometry().loc + bounds_offset,
+                        offset + bounds_offset,
                         surface_type,
                     );
                     if surf.is_some() {
@@ -308,30 +297,53 @@ impl WindowElement {
                 }
             }
 
-            if let Some(surface) = self.wl_surface()
-                && surface_type.contains(WindowSurfaceType::TOPLEVEL)
-            {
+            if !surface_type.contains(WindowSurfaceType::TOPLEVEL) {
+                return None;
+            }
+
+            let mut decos = self.with_state(|state| state.decoration_surfaces.clone());
+            decos.sort_by_key(|deco| deco.z_index());
+            let mut decos = decos.into_iter().rev().peekable();
+
+            // Check for decoration surfaces above the window.
+            for deco in decos.peeking_take_while(|deco| deco.z_index() >= 0) {
+                let bounds_offset = Point::new(
+                    (max_bounds.left - deco.bounds().left) as i32,
+                    (max_bounds.top - deco.bounds().top) as i32,
+                );
+                let surf = under_from_surface_tree(
+                    deco.wl_surface(),
+                    point,
+                    deco.location() + self.geometry().loc + bounds_offset,
+                    surface_type,
+                );
+                if surf.is_some() {
+                    return surf;
+                }
+            }
+
+            // Check for the window itself.
+            if let Some(surface) = self.wl_surface() {
                 let surf = under_from_surface_tree(&surface, point, (0, 0), surface_type);
                 if surf.is_some() {
                     return surf;
                 }
             }
 
-            if surface_type.contains(WindowSurfaceType::TOPLEVEL) {
-                for deco in decos {
-                    let bounds_offset = Point::new(
-                        (max_bounds.left - deco.bounds().left) as i32,
-                        (max_bounds.top - deco.bounds().top) as i32,
-                    );
-                    let surf = under_from_surface_tree(
-                        deco.wl_surface(),
-                        point,
-                        deco.location() + self.geometry().loc + bounds_offset,
-                        surface_type,
-                    );
-                    if surf.is_some() {
-                        return surf;
-                    }
+            // Check for decoration surfaces below the window.
+            for deco in decos {
+                let bounds_offset = Point::new(
+                    (max_bounds.left - deco.bounds().left) as i32,
+                    (max_bounds.top - deco.bounds().top) as i32,
+                );
+                let surf = under_from_surface_tree(
+                    deco.wl_surface(),
+                    point,
+                    deco.location() + self.geometry().loc + bounds_offset,
+                    surface_type,
+                );
+                if surf.is_some() {
+                    return surf;
                 }
             }
 

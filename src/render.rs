@@ -148,8 +148,19 @@ impl WindowElement {
     ) -> SplitRenderElements<WaylandSurfaceRenderElement<R>> {
         let _span = tracy_client::span!("WindowElement::render_elements");
 
-        let popup_location = location.to_physical_precise_round(scale);
+        #[cfg(feature = "snowcap")]
+        let offset = self.with_state(|state| {
+            let bounds = state.max_decoration_bounds();
+            Point::new(bounds.left as i32, bounds.top as i32)
+        });
+
+        #[cfg(not(feature = "snowcap"))]
+        let offset = Point::default();
+
         let window_location = (location - self.geometry().loc).to_physical_precise_round(scale);
+
+        // Popups render relative to the actual window, so offset by the decoration offset.
+        let surface_location = (location + offset).to_physical_precise_round(scale);
 
         let (deco_elems_under, deco_elems_over) = self.with_state(|state| {
             #[cfg(feature = "snowcap")]
@@ -223,7 +234,7 @@ impl WindowElement {
                     .collect::<Vec<_>>();
 
                 let popup_elements =
-                    popup_render_elements(surface, renderer, popup_location, scale, alpha);
+                    popup_render_elements(surface, renderer, surface_location, scale, alpha);
 
                 SplitRenderElements {
                     surface_elements,

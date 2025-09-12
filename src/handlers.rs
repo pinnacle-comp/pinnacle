@@ -14,6 +14,7 @@ pub mod xwayland;
 
 use std::{collections::HashMap, os::fd::OwnedFd, sync::Arc};
 
+use anyhow::Context;
 use smithay::{
     backend::{
         input::TabletToolDescriptor,
@@ -241,8 +242,10 @@ impl CompositorHandler for State {
                     if let PopupKind::Xdg(popup) = popup
                         && popup.with_pending_state(|state| state.positioner.reactive)
                     {
-                        self.pinnacle.position_popup(&popup);
-                        if let Err(err) = popup.send_pending_configure() {
+                        if let Err(err) = self.pinnacle.position_popup(&popup) {
+                            debug!("Failed to position reactive popup: {err}");
+                        }
+                        if let Err(err) = popup.send_configure() {
                             warn!("Failed to configure reactive popup: {err}");
                         }
                     }
@@ -722,7 +725,18 @@ impl WlrLayerShellHandler for State {
 
     fn new_popup(&mut self, _parent: wlr_layer::LayerSurface, popup: PopupSurface) {
         trace!("WlrLayerShellHandler::new_popup");
-        self.pinnacle.position_popup(&popup);
+
+        if let Err(err) = self.pinnacle.position_popup(&popup) {
+            debug!("Failed to position popup: {err}");
+        }
+
+        if let Err(err) = self
+            .pinnacle
+            .popup_manager
+            .track_popup(PopupKind::from(popup))
+        {
+            warn!("Failed to track popup: {err}");
+        }
     }
 }
 delegate_layer_shell!(State);
@@ -1003,54 +1017,69 @@ delegate_pointer_gestures!(State);
 delegate_single_pixel_buffer!(State);
 
 impl Pinnacle {
-    fn position_popup(&self, popup: &PopupSurface) {
+    fn position_popup(&self, popup: &PopupSurface) -> anyhow::Result<()> {
         let _span = tracy_client::span!("Pinnacle::position_popup");
 
         let Ok(root) = find_popup_root_surface(&PopupKind::Xdg(popup.clone())) else {
-            return;
+            anyhow::bail!("popup had no root surface");
         };
 
         let mut positioner = popup.with_pending_state(|state| state.positioner);
 
-        let popup_geo = (|| -> Option<Rectangle<i32, Logical>> {
-            let parent = popup.get_parent_surface()?;
+        let Some(parent) = popup.get_parent_surface() else {
+            unreachable!("popup has a root surface and therefore a parent");
+        };
 
+        let popup_geo = {
             if parent == root {
                 // Slide toplevel popup x's instead of flipping; this mimics Awesome
                 positioner
                     .constraint_adjustment
                     .remove(ConstraintAdjustment::FlipX);
+            }
 
-                #[cfg(feature = "snowcap")]
-                {
-                    // Offset by the decoration offset
+            #[cfg(feature = "snowcap")]
+            {
+                // The anchor rectangle is relative to the window's wl surface.
+                // If there is a decoration, we need to offset the anchor rect
+                // by the decoration offset.
 
-                    let offset = if let Some(win) = self.window_for_surface(&root) {
-                        win.with_state(|state| {
-                            let bounds = state.max_decoration_bounds();
-                            Point::new(bounds.left as i32, bounds.top as i32)
-                        })
-                    } else {
-                        Default::default()
-                    };
+                let offset = if let Some(win) = self.window_for_surface(&root) {
+                    win.with_state(|state| {
+                        let bounds = state.max_decoration_bounds();
+                        Point::new(bounds.left as i32, bounds.top as i32)
+                    })
+                } else {
+                    Default::default()
+                };
 
-                    positioner.offset += offset;
-                }
+                positioner.anchor_rect.loc += offset;
             }
 
             let (root_global_loc, output) = if let Some(win) = self.window_for_surface(&root) {
-                let win_geo = self.space.element_geometry(win)?;
-                (win_geo.loc, self.focused_output()?.clone())
+                let win_geo = self
+                    .space
+                    .element_geometry(win)
+                    .context("window was not mapped")?;
+
+                (
+                    win_geo.loc,
+                    self.focused_output().context("no focused output")?.clone(),
+                )
             } else {
-                self.space.outputs().find_map(|op| {
-                    let layer_map = layer_map_for_output(op);
-                    let layer = layer_map.layer_for_surface(&root, WindowSurfaceType::TOPLEVEL)?;
-                    let output_loc = self.space.output_geometry(op)?.loc;
-                    Some((
-                        layer_map.layer_geometry(layer)?.loc + output_loc,
-                        op.clone(),
-                    ))
-                })?
+                self.space
+                    .outputs()
+                    .find_map(|op| {
+                        let layer_map = layer_map_for_output(op);
+                        let layer =
+                            layer_map.layer_for_surface(&root, WindowSurfaceType::TOPLEVEL)?;
+                        let output_loc = self.space.output_geometry(op)?.loc;
+                        Some((
+                            layer_map.layer_geometry(layer)?.loc + output_loc,
+                            op.clone(),
+                        ))
+                    })
+                    .context("no valid parent")?
             };
 
             let parent_global_loc = if root == parent {
@@ -1059,17 +1088,38 @@ impl Pinnacle {
                 root_global_loc + get_popup_toplevel_coords(&PopupKind::Xdg(popup.clone()))
             };
 
-            let mut output_geo = self.space.output_geometry(&output)?;
+            let mut output_geo = self
+                .space
+                .output_geometry(&output)
+                .context("output was not mapped")?;
 
             // Make local to parent
             output_geo.loc -= parent_global_loc;
-            Some(positioner.get_unconstrained_geometry(output_geo))
-        })()
-        .unwrap_or_else(|| positioner.get_geometry());
+            positioner.get_unconstrained_geometry(output_geo)
+        };
+
+        #[cfg(feature = "snowcap")]
+        let popup_geo = {
+            // Make the popup location relative to the wl surface
+            // by "undoing" the offset above.
+
+            let offset = if let Some(win) = self.window_for_surface(&root) {
+                win.with_state(|state| {
+                    let bounds = state.max_decoration_bounds();
+                    Point::new(bounds.left as i32, bounds.top as i32)
+                })
+            } else {
+                Default::default()
+            };
+
+            Rectangle::new(popup_geo.loc - offset, popup_geo.size)
+        };
 
         popup.with_pending_state(|state| {
             state.geometry = popup_geo;
         });
+
+        Ok(())
     }
 
     // From Niri
