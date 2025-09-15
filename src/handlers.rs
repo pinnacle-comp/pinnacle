@@ -2,6 +2,7 @@
 
 pub mod decoration;
 mod drm;
+pub mod ext_workspace;
 mod foreign_toplevel;
 pub mod foreign_toplevel_list;
 pub mod idle;
