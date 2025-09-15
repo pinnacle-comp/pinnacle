@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use std::{
+    fmt::Display,
     hash::Hash,
     sync::{
         Arc, Mutex,
@@ -17,6 +18,12 @@ static TAG_ID_COUNTER: AtomicU32 = AtomicU32::new(0);
 /// A unique id for a [`Tag`].
 #[derive(Debug, Hash, PartialEq, Eq, Clone, Copy)]
 pub struct TagId(u32);
+
+impl Display for TagId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
 
 impl TagId {
     /// Creates a new tag ID.
