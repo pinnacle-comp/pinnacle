@@ -33,7 +33,7 @@ run = ["cargo", "run"]
 :::
 
 The `run` field declares the command that Pinnacle will run to start your config.
-For a Lua config, it spins up an instance of Lua. For a Rust config, it delegates to Cargo.
+For a Lua config, it spins up an instance of Lua. For a Rust config, it delegates to Cargo, there is no need to run `cargo build` manually after config modification.
 
 ### Other Fields
 
@@ -57,7 +57,7 @@ API calls are valid:
 
 :::tabs key:langs
 == Lua
-```lua 
+```lua
 local Pinnacle = require("pinnacle")
 Pinnacle.setup(function()
     -- All the config stuff here
@@ -74,6 +74,9 @@ pinnacle_api::main!(config);
 
 The entry point connects to Pinnacle's gRPC server, calls your config function, and blocks to execute
 incoming and outgoing gRPC requests and replies. Any API calls made before the entry point will fail.
+
+> [!NOTE]
+> By default you can reload the config with `super + ctrl + r` without restarting Pinnacle.
 
 ## On crashing and deadlocks
 
