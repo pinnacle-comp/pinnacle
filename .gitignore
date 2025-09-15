@@ -20,5 +20,6 @@ wlcs
 **/.vitepress/dist/
 **/node_modules/
 
+.direnv/
 # nix build artifacts
 result
