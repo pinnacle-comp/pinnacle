@@ -19,3 +19,6 @@ wlcs
 **/.vitepress/cache/
 **/.vitepress/dist/
 **/node_modules/
+
+# nix build artifacts
+result
