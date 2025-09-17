@@ -10,6 +10,7 @@ use snowcap_api_defs::snowcap::{
     },
     widget::v1::{GetWidgetEventsRequest, get_widget_events_request, get_widget_events_response},
 };
+use tokio::sync::mpsc::UnboundedSender;
 use tokio_stream::StreamExt;
 use tracing::error;
 use xkbcommon::xkb::Keysym;
@@ -131,7 +132,7 @@ pub fn new_widget<Msg, P>(
     keyboard_interactivity: KeyboardInteractivity,
     exclusive_zone: ExclusiveZone,
     layer: ZLayer,
-) -> Result<LayerHandle, NewLayerError>
+) -> Result<LayerHandle<Msg>, NewLayerError>
 where
     Msg: Clone + Send + 'static,
     P: Program<Message = Msg> + Send + 'static,
@@ -168,55 +169,82 @@ where
         .block_on_tokio()?
         .into_inner();
 
+    let (msg_send, mut msg_recv) = tokio::sync::mpsc::unbounded_channel::<Msg>();
+
     tokio::spawn(async move {
-        while let Some(Ok(event)) = event_stream.next().await {
-            let id = WidgetId(event.widget_id);
-            let Some(event) = event.event else {
-                continue;
-            };
-            match event {
-                get_widget_events_response::Event::Button(_event) => {
-                    if let Some(msg) = callbacks.get(&id) {
-                        program.update(msg.clone());
-                        let widget_def = program.view();
+        loop {
+            let msg = tokio::select! {
+                Some(Ok(event)) = event_stream.next() => {
+                    let id = WidgetId(event.widget_id);
+                    let Some(event) = event.event else {
+                        continue;
+                    };
 
-                        callbacks.clear();
-
-                        widget_def.collect_messages(&mut callbacks, |def, cbs| {
-                            if let Widget::Button(button) = &def.widget {
-                                cbs.extend(button.on_press.clone());
-                            }
-                        });
-
-                        Client::layer()
-                            .update_layer(UpdateLayerRequest {
-                                layer_id,
-                                widget_def: Some(widget_def.into()),
-                                anchor: None,
-                                keyboard_interactivity: None,
-                                exclusive_zone: None,
-                                layer: None,
-                            })
-                            .await
-                            .unwrap();
+                    match event {
+                        get_widget_events_response::Event::Button(_event) => {
+                            callbacks.get(&id).cloned()
+                        }
                     }
                 }
-            }
+                Some(msg) = msg_recv.recv() => {
+                    Some(msg)
+                }
+                else => break,
+            };
+
+            let Some(msg) = msg else {
+                continue;
+            };
+
+            program.update(msg.clone());
+
+            let widget_def = program.view();
+
+            callbacks.clear();
+
+            widget_def.collect_messages(&mut callbacks, |def, cbs| {
+                if let Widget::Button(button) = &def.widget {
+                    cbs.extend(button.on_press.clone());
+                }
+            });
+
+            Client::layer()
+                .update_layer(UpdateLayerRequest {
+                    layer_id,
+                    widget_def: Some(widget_def.into()),
+                    anchor: None,
+                    keyboard_interactivity: None,
+                    exclusive_zone: None,
+                    layer: None,
+                })
+                .await
+                .unwrap();
         }
     });
 
     Ok(LayerHandle {
         id: layer_id.into(),
+        msg_sender: msg_send,
     })
 }
 
 /// A handle to a layer surface.
-#[derive(Debug, Clone)]
-pub struct LayerHandle {
+#[derive(Clone)]
+pub struct LayerHandle<Msg> {
     id: WidgetId,
+    msg_sender: UnboundedSender<Msg>,
 }
 
-impl LayerHandle {
+impl<Msg> std::fmt::Debug for LayerHandle<Msg> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("LayerHandle").field("id", &self.id).finish()
+    }
+}
+
+impl<Msg> LayerHandle<Msg>
+where
+    Msg: Clone + Send + 'static,
+{
     /// Close this layer widget.
     pub fn close(&self) {
         if let Err(status) = Client::layer()
@@ -229,10 +257,15 @@ impl LayerHandle {
         }
     }
 
+    /// Sends a message to this Layer [`Program`].
+    pub fn send_message(&self, message: Msg) {
+        let _ = self.msg_sender.send(message);
+    }
+
     /// Do something on key press.
     pub fn on_key_press(
         &self,
-        mut on_press: impl FnMut(LayerHandle, Keysym, Modifiers) + Send + 'static,
+        mut on_press: impl FnMut(LayerHandle<Msg>, Keysym, Modifiers) + Send + 'static,
     ) {
         let mut stream = match Client::input()
             .keyboard_key(KeyboardKeyRequest {
