@@ -68,12 +68,11 @@ fn tags_by_output<'a>(
     outputs: impl Iterator<Item = &'a Output> + 'a,
 ) -> impl Iterator<Item = (Output, Tag)> {
     outputs.flat_map(|output| {
-        let out_res = output.clone();
-        output.with_state(move |outp| {
+        output.with_state(|outp| {
             outp.tags
                 .clone()
                 .into_iter()
-                .map(move |tag| (out_res.clone(), tag))
+                .map(|tag| (output.clone(), tag))
         })
     })
 }
