@@ -598,6 +598,7 @@ impl OutputHandler for State {
         let _span = tracy_client::span!("OutputHandler::output_bound");
 
         crate::protocol::foreign_toplevel::on_output_bound(self, &output, &wl_output);
+        crate::protocol::ext_workspace::on_output_bound(self, &output, &wl_output);
     }
 }
 delegate_output!(State);
