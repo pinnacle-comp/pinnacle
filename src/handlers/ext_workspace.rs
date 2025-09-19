@@ -1,7 +1,4 @@
-use smithay::output::Output;
-
 use crate::delegate_ext_workspace;
-use crate::output::OutputName;
 use crate::protocol::ext_workspace::{ExtWorkspaceHandler, ExtWorkspaceManagerState};
 use crate::state::State;
 use crate::tag::TagId;
@@ -23,10 +20,8 @@ impl ExtWorkspaceHandler for State {
         }
     }
 
-    fn assign_workspace(&mut self, id: TagId, output: Output) {
-        if let Some(tag) = id.tag(&self.pinnacle) {
-            crate::api::tag::add(self, Some(tag.name()), OutputName(output.name()));
-        }
+    fn remove_workspace(&mut self, id: TagId) {
+        crate::api::tag::remove(self, Vec::from_iter(id.tag(&self.pinnacle)));
     }
 }
 

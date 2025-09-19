@@ -5,7 +5,7 @@ use std::mem;
 use ext_workspace_group_handle_v1::ExtWorkspaceGroupHandleV1;
 use ext_workspace_handle_v1::ExtWorkspaceHandleV1;
 use ext_workspace_manager_v1::ExtWorkspaceManagerV1;
-use smithay::output::{Output, WeakOutput};
+use smithay::output::Output;
 use smithay::reexports::wayland_protocols::ext::workspace::v1::server::{
     ext_workspace_group_handle_v1, ext_workspace_handle_v1, ext_workspace_manager_v1,
 };
@@ -24,22 +24,21 @@ pub trait ExtWorkspaceHandler {
     fn ext_workspace_manager_state(&mut self) -> &mut ExtWorkspaceManagerState;
     fn activate_workspace(&mut self, id: TagId);
     fn deactivate_workspace(&mut self, id: TagId);
-    fn assign_workspace(&mut self, id: TagId, output: Output);
+    fn remove_workspace(&mut self, id: TagId);
 }
 
 enum Action {
-    Assign(TagId, WeakOutput),
     Activate(TagId),
     Deactivate(TagId),
+    Remove(TagId),
 }
 
 impl Action {
     fn order(&self) -> u8 {
-        // First assign everything (move across outputs), then activate.
         match self {
-            Action::Assign(_, _) => 0,
-            Action::Activate(_) => 1,
-            Action::Deactivate(_) => 2,
+            Action::Activate(_) => 0,
+            Action::Deactivate(_) => 1,
+            Action::Remove(_) => 2,
         }
     }
 }
@@ -378,7 +377,7 @@ impl ExtWorkspaceData {
         workspace.capabilities(
             ext_workspace_handle_v1::WorkspaceCapabilities::Activate
                 | ext_workspace_handle_v1::WorkspaceCapabilities::Deactivate
-                | ext_workspace_handle_v1::WorkspaceCapabilities::Assign,
+                | ext_workspace_handle_v1::WorkspaceCapabilities::Remove,
         );
 
         self.instances.push(workspace);
@@ -480,13 +479,9 @@ where
 
                 for action in actions {
                     match action {
-                        Action::Assign(ws_id, output) => {
-                            if let Some(output) = output.upgrade() {
-                                state.assign_workspace(ws_id, output);
-                            }
-                        }
                         Action::Activate(id) => state.activate_workspace(id),
                         Action::Deactivate(id) => state.deactivate_workspace(id),
+                        Action::Remove(id) => state.remove_workspace(id),
                     }
                 }
             }
@@ -550,18 +545,11 @@ where
                 let actions = protocol_state.instances.get_mut(data).unwrap();
                 actions.push(Action::Deactivate(workspace));
             }
-            ext_workspace_handle_v1::Request::Assign { workspace_group } => {
-                if let Some(output) = protocol_state
-                    .tag_groups
-                    .iter()
-                    .find(|(_, data)| data.instances.contains(&workspace_group))
-                    .map(|(output, _)| output.clone())
-                {
-                    let actions = protocol_state.instances.get_mut(data).unwrap();
-                    actions.push(Action::Assign(workspace, output.downgrade()));
-                }
+            ext_workspace_handle_v1::Request::Assign { .. } => (),
+            ext_workspace_handle_v1::Request::Remove => {
+                let actions = protocol_state.instances.get_mut(data).unwrap();
+                actions.push(Action::Remove(workspace));
             }
-            ext_workspace_handle_v1::Request::Remove => (),
             ext_workspace_handle_v1::Request::Destroy => (),
             _ => unreachable!(),
         }
