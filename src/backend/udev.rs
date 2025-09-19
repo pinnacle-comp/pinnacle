@@ -1069,8 +1069,10 @@ impl Udev {
             output.with_state_mut(|state| state.tags.clone_from(tags));
             pinnacle.change_output_state(self, &output, None, None, *scale, Some(*loc));
         } else {
-            pinnacle.signal_state.output_connect.signal(&output);
+            pinnacle.signal_state.output_setup.signal(&output);
         }
+
+        pinnacle.signal_state.output_connect.signal(&output);
 
         pinnacle.output_management_manager_state.update::<State>();
     }

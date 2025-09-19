@@ -64,6 +64,7 @@ pub mod pinnacle {
             impl_signal_request!(
                 OutputConnectRequest,
                 OutputDisconnectRequest,
+                OutputSetupRequest,
                 OutputResizeRequest,
                 OutputMoveRequest,
                 OutputPointerEnterRequest,

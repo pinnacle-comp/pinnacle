@@ -23,6 +23,13 @@ message OutputDisconnectResponse {
   string output_name = 1;
 }
 
+message OutputSetupRequest {
+  StreamControl control = 1;
+}
+message OutputSetupResponse {
+  string output_name = 1;
+}
+
 message OutputResizeRequest {
   StreamControl control = 1;
 }
@@ -117,6 +124,7 @@ message InputDeviceAddedResponse {
 service SignalService {
   rpc OutputConnect(stream OutputConnectRequest) returns (stream OutputConnectResponse);
   rpc OutputDisconnect(stream OutputDisconnectRequest) returns (stream OutputDisconnectResponse);
+  rpc OutputSetup(stream OutputSetupRequest) returns (stream OutputSetupResponse);
   rpc OutputResize(stream OutputResizeRequest) returns (stream OutputResizeResponse);
   rpc OutputMove(stream OutputMoveRequest) returns (stream OutputMoveResponse);
   rpc OutputPointerEnter(stream OutputPointerEnterRequest) returns (stream OutputPointerEnterResponse);
