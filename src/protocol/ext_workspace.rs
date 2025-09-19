@@ -80,6 +80,7 @@ fn tags_by_output<'a>(
     })
 }
 
+// FIXME: I was going to delete this function as dead code as it's never called but rustc seems to believe it is? why and where?
 pub fn on_output_bound(state: &mut State, output: &Output, wl_output: &WlOutput) {
     let Some(client) = wl_output.client() else {
         return;
