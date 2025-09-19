@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use std::cell::RefCell;
+use std::{cell::RefCell, collections::HashMap};
 
 use indexmap::IndexSet;
 use smithay::{
@@ -17,7 +17,8 @@ use crate::{
     api::signal::Signal,
     backend::BackendData,
     config::ConnectorSavedState,
-    protocol::screencopy::Screencopy,
+    handlers::image_copy_capture::SessionDamageTrackers,
+    protocol::{image_copy_capture::session::Session, screencopy::Screencopy},
     state::{Pinnacle, State, WithState},
     tag::Tag,
     util::centered_loc,
@@ -76,6 +77,8 @@ pub struct OutputState {
     pub debug_damage_tracker: OutputDamageTracker,
     pub is_vrr_on: bool,
     pub is_vrr_on_demand: bool,
+
+    pub capture_sessions: HashMap<Session, SessionDamageTrackers>,
 }
 
 impl Default for OutputState {
@@ -95,6 +98,7 @@ impl Default for OutputState {
             ),
             is_vrr_on: false,
             is_vrr_on_demand: false,
+            capture_sessions: Default::default(),
         }
     }
 }

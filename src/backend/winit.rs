@@ -243,12 +243,14 @@ impl Winit {
                 .map(|ptr| ptr.current_location())
                 .unwrap_or((0.0, 0.0).into());
 
+            let output_loc = pinnacle.space.output_geometry(&self.output).unwrap().loc;
+            let scale = self.output.current_scale().fractional_scale();
+
             let (pointer_render_elements, _cursor_ids) = pointer_render_elements(
-                &self.output,
+                (pointer_location - output_loc.to_f64()).to_physical_precise_round(scale),
+                scale,
                 self.backend.renderer(),
                 &mut pinnacle.cursor_state,
-                &pinnacle.space,
-                pointer_location,
                 pinnacle.dnd_icon.as_ref(),
                 &pinnacle.clock,
             );
@@ -374,6 +376,10 @@ impl Winit {
                         &render_output_result,
                         &pinnacle.loop_handle,
                     );
+
+                    pinnacle.loop_handle.insert_idle(|state| {
+                        state.process_capture_sessions();
+                    });
                 }
 
                 let now = pinnacle.clock.now();

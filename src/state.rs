@@ -24,6 +24,8 @@ use crate::{
         ext_workspace::{self, ExtWorkspaceManagerState},
         foreign_toplevel::{self, ForeignToplevelManagerState},
         gamma_control::GammaControlManagerState,
+        image_capture_source::ImageCaptureSourceState,
+        image_copy_capture::ImageCopyCaptureState,
         output_management::OutputManagementManagerState,
         output_power_management::OutputPowerManagementState,
         screencopy::ScreencopyManagerState,
@@ -176,6 +178,8 @@ pub struct Pinnacle {
     #[cfg(feature = "snowcap")]
     pub snowcap_decoration_state: SnowcapDecorationState,
     pub wl_drm_state: WlDrmState,
+    pub image_capture_source_state: ImageCaptureSourceState,
+    pub image_copy_capture_state: ImageCopyCaptureState,
 
     pub lock_state: LockState,
 
@@ -387,6 +391,10 @@ impl Pinnacle {
 
         let (blocker_cleared_tx, blocker_cleared_rx) = std::sync::mpsc::channel();
 
+        loop_handle.insert_idle(|state| {
+            state.set_copy_capture_buffer_constraints();
+        });
+
         let pinnacle = Pinnacle {
             loop_signal,
             loop_handle: loop_handle.clone(),
@@ -472,6 +480,14 @@ impl Pinnacle {
             #[cfg(feature = "snowcap")]
             snowcap_decoration_state: SnowcapDecorationState::new::<State>(&display_handle),
             wl_drm_state: WlDrmState,
+            image_capture_source_state: ImageCaptureSourceState::new::<State, _>(
+                &display_handle,
+                filter_restricted_client,
+            ),
+            image_copy_capture_state: ImageCopyCaptureState::new::<State, _>(
+                &display_handle,
+                filter_restricted_client,
+            ),
 
             lock_state: LockState::default(),
 

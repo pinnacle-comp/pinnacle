@@ -6,6 +6,8 @@ pub mod ext_workspace;
 mod foreign_toplevel;
 pub mod foreign_toplevel_list;
 pub mod idle;
+mod image_capture_source;
+pub mod image_copy_capture;
 pub mod session_lock;
 #[cfg(feature = "snowcap")]
 pub mod snowcap_decoration;
@@ -215,9 +217,7 @@ impl CompositorHandler for State {
             }
 
             // Window surface commit
-            if let Some(window) = self.pinnacle.window_for_surface(surface).cloned()
-                && window.is_wayland()
-            {
+            if let Some(window) = self.pinnacle.window_for_surface(surface).cloned() {
                 let Some(is_mapped) =
                     with_renderer_surface_state(surface, |state| state.buffer().is_some())
                 else {
@@ -226,28 +226,30 @@ impl CompositorHandler for State {
 
                 window.on_commit();
 
-                // Toplevel has become unmapped,
-                // see https://wayland.app/protocols/xdg-shell#xdg_toplevel
-                if !is_mapped {
-                    self.pinnacle.remove_window(&window, true);
+                if window.is_wayland() {
+                    // Toplevel has become unmapped,
+                    // see https://wayland.app/protocols/xdg-shell#xdg_toplevel
+                    if !is_mapped {
+                        self.pinnacle.remove_window(&window, true);
 
-                    let output = window.output(&self.pinnacle);
+                        let output = window.output(&self.pinnacle);
 
-                    if let Some(output) = output {
-                        self.pinnacle.request_layout(&output);
-                    }
-                }
-
-                // Update reactive popups
-                for (popup, _) in PopupManager::popups_for_surface(surface) {
-                    if let PopupKind::Xdg(popup) = popup
-                        && popup.with_pending_state(|state| state.positioner.reactive)
-                    {
-                        if let Err(err) = self.pinnacle.position_popup(&popup) {
-                            debug!("Failed to position reactive popup: {err}");
+                        if let Some(output) = output {
+                            self.pinnacle.request_layout(&output);
                         }
-                        if let Err(err) = popup.send_configure() {
-                            warn!("Failed to configure reactive popup: {err}");
+                    }
+
+                    // Update reactive popups
+                    for (popup, _) in PopupManager::popups_for_surface(surface) {
+                        if let PopupKind::Xdg(popup) = popup
+                            && popup.with_pending_state(|state| state.positioner.reactive)
+                        {
+                            if let Err(err) = self.pinnacle.position_popup(&popup) {
+                                debug!("Failed to position reactive popup: {err}");
+                            }
+                            if let Err(err) = popup.send_configure() {
+                                warn!("Failed to configure reactive popup: {err}");
+                            }
                         }
                     }
                 }
