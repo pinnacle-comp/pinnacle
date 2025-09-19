@@ -14,12 +14,17 @@ local layer_handle = {}
 
 ---@class snowcap.layer.LayerHandle
 ---@field id integer
+---@field private update fun(msg:any)
 local LayerHandle = {}
 
-function layer_handle.new(id)
+---@param id integer
+---@param update fun(msg: any)
+---@return snowcap.layer.LayerHandle
+function layer_handle.new(id, update)
     ---@type snowcap.layer.LayerHandle
     local self = {
         id = id,
+        update = update,
     }
     setmetatable(self, { __index = LayerHandle })
     return self
@@ -149,7 +154,33 @@ function layer.new_widget(args)
         end
     end)
 
-    return layer_handle.new(layer_id)
+    return layer_handle.new(layer_id, function(msg)
+        pcall(function()
+            args.program:update(msg)
+        end)
+
+        local widget_def = args.program:view()
+        callbacks = {}
+
+        require("snowcap.widget")._traverse_widget_tree(
+            widget_def,
+            callbacks,
+            function(callbacks, widget)
+                if widget.button and widget.button.on_press then
+                    callbacks[widget.button.widget_id] = widget.button.on_press
+                end
+            end
+        )
+
+        local _, err = client:snowcap_layer_v1_LayerService_UpdateLayer({
+            layer_id = layer_id,
+            widget_def = widget.widget_def_into_api(widget_def),
+        })
+
+        if err then
+            log.error(err)
+        end
+    end)
 end
 
 ---@param on_press fun(mods: snowcap.input.Modifiers, key: snowcap.Key)
@@ -186,6 +217,10 @@ function LayerHandle:close()
     if err then
         log.error(err)
     end
+end
+
+function LayerHandle:send_message(message)
+    self.update(message)
 end
 
 layer.anchor = anchor

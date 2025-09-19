@@ -31,7 +31,7 @@ pub mod input_grab {
     }
 
     /// A handle to an input grab.
-    pub struct InputGrabber(LayerHandle);
+    pub struct InputGrabber(LayerHandle<()>);
 
     impl InputGrabber {
         /// Stops this input grab.
