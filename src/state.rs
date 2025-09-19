@@ -21,7 +21,7 @@ use crate::{
     process::ProcessState,
     protocol::{
         drm::WlDrmState,
-        ext_workspace::ExtWorkspaceManagerState,
+        ext_workspace::{self, ExtWorkspaceManagerState},
         foreign_toplevel::{self, ForeignToplevelManagerState},
         gamma_control::GammaControlManagerState,
         output_management::OutputManagementManagerState,
@@ -263,6 +263,7 @@ impl State {
         self.pinnacle.popup_manager.cleanup();
         self.update_pointer_focus();
         foreign_toplevel::refresh(self);
+        ext_workspace::refresh(self);
         self.pinnacle.refresh_idle_inhibit();
 
         self.backend.render_scheduled_outputs(&mut self.pinnacle);
