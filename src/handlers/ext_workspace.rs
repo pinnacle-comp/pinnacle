@@ -13,7 +13,13 @@ impl ExtWorkspaceHandler for State {
 
     fn activate_workspace(&mut self, id: TagId) {
         if let Some(tag) = id.tag(&self.pinnacle) {
-            crate::api::tag::switch_to(self, &tag);
+            crate::api::tag::set_active(self, &tag, Some(true));
+        }
+    }
+
+    fn deactivate_workspace(&mut self, id: TagId) {
+        if let Some(tag) = id.tag(&self.pinnacle) {
+            crate::api::tag::set_active(self, &tag, Some(false));
         }
     }
 

@@ -23,12 +23,14 @@ const VERSION: u32 = 1;
 pub trait ExtWorkspaceHandler {
     fn ext_workspace_manager_state(&mut self) -> &mut ExtWorkspaceManagerState;
     fn activate_workspace(&mut self, id: TagId);
+    fn deactivate_workspace(&mut self, id: TagId);
     fn assign_workspace(&mut self, id: TagId, output: Output);
 }
 
 enum Action {
     Assign(TagId, WeakOutput),
     Activate(TagId),
+    Deactivate(TagId),
 }
 
 impl Action {
@@ -37,6 +39,7 @@ impl Action {
         match self {
             Action::Assign(_, _) => 0,
             Action::Activate(_) => 1,
+            Action::Deactivate(_) => 2,
         }
     }
 }
@@ -250,10 +253,10 @@ fn refresh_workspace(
     tag: &Tag,
 ) -> bool {
     let mut state = ext_workspace_handle_v1::State::empty();
-    if output.with_state(|outp| outp.focused_tags().any(|ft| ft.id() == tag_id)) {
+    if tag.active() {
         state |= ext_workspace_handle_v1::State::Active;
     }
-    if tag.active() {
+    if output.with_state(|outp| outp.focused_tags().any(|ft| ft.id() == tag_id)) {
         state |= ext_workspace_handle_v1::State::Urgent;
     }
 
@@ -373,6 +376,7 @@ impl ExtWorkspaceData {
         workspace.state(self.state);
         workspace.capabilities(
             ext_workspace_handle_v1::WorkspaceCapabilities::Activate
+                | ext_workspace_handle_v1::WorkspaceCapabilities::Deactivate
                 | ext_workspace_handle_v1::WorkspaceCapabilities::Assign,
         );
 
@@ -481,6 +485,7 @@ where
                             }
                         }
                         Action::Activate(id) => state.activate_workspace(id),
+                        Action::Deactivate(id) => state.deactivate_workspace(id),
                     }
                 }
             }
@@ -540,7 +545,10 @@ where
                 let actions = protocol_state.instances.get_mut(data).unwrap();
                 actions.push(Action::Activate(workspace));
             }
-            ext_workspace_handle_v1::Request::Deactivate => (),
+            ext_workspace_handle_v1::Request::Deactivate => {
+                let actions = protocol_state.instances.get_mut(data).unwrap();
+                actions.push(Action::Deactivate(workspace));
+            }
             ext_workspace_handle_v1::Request::Assign { workspace_group } => {
                 if let Some(output) = protocol_state
                     .tag_groups
