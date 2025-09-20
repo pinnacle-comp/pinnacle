@@ -495,7 +495,7 @@ where
                         .retain(|instance| instance.data() != Some(resource));
                 }
 
-                for data in state.tag_groups.values_mut() {
+                for data in state.tags.values_mut() {
                     data.instances
                         .retain(|instance| instance.data() != Some(resource));
                 }
