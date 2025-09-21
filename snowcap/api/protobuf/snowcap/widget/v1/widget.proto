@@ -128,6 +128,7 @@ message WidgetDef {
     Button button = 7;
     Image image = 8;
     InputRegion input_region = 9;
+    MouseArea mouse_area = 10;
   }
 }
 
@@ -290,6 +291,82 @@ message Image {
   }
 }
 
+message MouseArea {
+  WidgetDef child = 1;
+  bool on_press = 2;
+  bool on_release = 3;
+  bool on_double_click = 4;
+  bool on_right_press = 5;
+  bool on_right_release = 6;
+  bool on_middle_press = 7;
+  bool on_middle_release = 8;
+  bool on_scroll = 9;
+  bool on_enter = 10;
+  bool on_move = 11;
+  bool on_exit = 12;
+  optional uint32 widget_id = 13;
+  optional Interaction interaction = 14;
+
+  enum Interaction {
+    NONE = 0;
+    IDLE = 1;
+    POINTER = 2;
+    GRAB = 3;
+    TEXT = 4;
+    CROSSHAIR = 5;
+    GRABBING = 6;
+    RESIZE_HORIZONTAL = 7;
+    RESIZE_VERTICAL = 8;
+    RESIZE_DIAGONAL_UP = 9;
+    RESIZE_DIAGONAL_DOWN = 10;
+    NOT_ALLOWED = 11;
+    ZOOM_IN = 12;
+    ZOOM_OUT = 13;
+    CELL = 14;
+    MOVE = 15;
+    COPY = 16;
+    HELP = 17;
+  }
+
+  message Event {
+    enum Type {
+      PRESS = 0;
+      RELEASE = 1;
+      DOUBLE_CLICK = 2;
+      RIGHT_PRESS = 3;
+      RIGHT_RELEASE = 4;
+      MIDDLE_PRESS = 5;
+      MIDDLE_RELEASE = 6;
+      SCROLL = 7;
+      ENTER = 8;
+      MOVE = 9;
+      EXIT = 10;
+    }
+
+    Type event_type = 1;
+    oneof data {
+      ScrollDelta scroll_delta = 2;
+      Point point = 3;
+    }
+  }
+
+  message ScrollDelta {
+    message Lines {
+      float x = 1;
+      float y = 2;
+    }
+    message Pixels {
+      float x = 1;
+      float y = 2;
+    }
+  }
+
+  message Point {
+    float x = 1;
+    float y = 2;
+  }
+}
+
 message GetWidgetEventsRequest {
   oneof id {
     uint32 layer_id = 1;
@@ -302,6 +379,7 @@ message GetWidgetEventsResponse {
 
   oneof event {
     Button.Event button = 2;
+    MouseArea.Event mouse_area = 3;
   }
 }
 

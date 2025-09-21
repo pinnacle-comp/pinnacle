@@ -203,4 +203,45 @@ pub enum SnowcapMessage {
 #[derive(Debug, Clone)]
 pub enum WidgetEvent {
     Button,
+    MouseArea(MouseAreaEvent),
+}
+
+#[derive(Debug, Clone)]
+pub enum MouseAreaEvent {
+    Press,
+    Release,
+    DoubleClick,
+    RightPress,
+    RightRelease,
+    MiddlePress,
+    MiddleRelease,
+    Scroll,
+    Enter,
+    Move,
+    Exit,
+}
+
+impl From<MouseAreaEvent> for snowcap_api_defs::snowcap::widget::v1::mouse_area::Event {
+    fn from(value: MouseAreaEvent) -> Self {
+        use snowcap_api_defs::snowcap::widget::v1::mouse_area::event::Type;
+
+        let event_type = match value {
+            MouseAreaEvent::Press => Type::Press,
+            MouseAreaEvent::Release => Type::Release,
+            MouseAreaEvent::DoubleClick => Type::DoubleClick,
+            MouseAreaEvent::RightPress => Type::RightPress,
+            MouseAreaEvent::RightRelease => Type::RightRelease,
+            MouseAreaEvent::MiddlePress => Type::MiddlePress,
+            MouseAreaEvent::MiddleRelease => Type::MiddleRelease,
+            MouseAreaEvent::Scroll => Type::Scroll,
+            MouseAreaEvent::Enter => Type::Enter,
+            MouseAreaEvent::Move => Type::Move,
+            MouseAreaEvent::Exit => Type::Exit,
+        } as i32;
+
+        Self {
+            event_type,
+            data: None,
+        }
+    }
 }

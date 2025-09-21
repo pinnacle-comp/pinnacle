@@ -183,6 +183,9 @@ where
                     match event {
                         get_widget_events_response::Event::Button(_event) => {
                             callbacks.get(&id).cloned()
+                        },
+                        get_widget_events_response::Event::MouseArea(_event) => {
+                            todo!()
                         }
                     }
                 }
