@@ -205,4 +205,20 @@ pub enum SnowcapMessage {
 #[derive(Debug, Clone)]
 pub enum WidgetEvent {
     Button,
+    MouseArea(MouseAreaEvent),
+}
+
+#[derive(Debug, Clone)]
+pub enum MouseAreaEvent {
+    Press,
+    Release,
+    DoubleClick,
+    RightPress,
+    RightRelease,
+    MiddlePress,
+    MiddleRelease,
+    Scroll(iced::mouse::ScrollDelta),
+    Enter,
+    Move(iced::Point),
+    Exit,
 }

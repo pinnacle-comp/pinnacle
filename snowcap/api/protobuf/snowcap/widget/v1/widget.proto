@@ -151,6 +151,7 @@ message WidgetDef {
     Button button = 7;
     Image image = 8;
     InputRegion input_region = 9;
+    MouseArea mouse_area = 10;
   }
 }
 
@@ -317,6 +318,82 @@ message Image {
   }
 }
 
+message MouseArea {
+  WidgetDef child = 1;
+  bool on_press = 2;
+  bool on_release = 3;
+  bool on_double_click = 4;
+  bool on_right_press = 5;
+  bool on_right_release = 6;
+  bool on_middle_press = 7;
+  bool on_middle_release = 8;
+  bool on_scroll = 9;
+  bool on_enter = 10;
+  bool on_move = 11;
+  bool on_exit = 12;
+  optional Interaction interaction = 13;
+  optional uint32 widget_id = 14;
+
+  enum Interaction {
+    INTERACTION_NONE = 0;
+    INTERACTION_IDLE = 1;
+    INTERACTION_POINTER = 2;
+    INTERACTION_GRAB = 3;
+    INTERACTION_TEXT = 4;
+    INTERACTION_CROSSHAIR = 5;
+    INTERACTION_GRABBING = 6;
+    INTERACTION_RESIZE_HORIZONTAL = 7;
+    INTERACTION_RESIZE_VERTICAL = 8;
+    INTERACTION_RESIZE_DIAGONAL_UP = 9;
+    INTERACTION_RESIZE_DIAGONAL_DOWN = 10;
+    INTERACTION_NOT_ALLOWED = 11;
+    INTERACTION_ZOOM_IN = 12;
+    INTERACTION_ZOOM_OUT = 13;
+    INTERACTION_CELL = 14;
+    INTERACTION_MOVE = 15;
+    INTERACTION_COPY = 16;
+    INTERACTION_HELP = 17;
+  }
+
+  message Event {
+    oneof data {
+      google.protobuf.Empty press = 1;
+      google.protobuf.Empty release = 2;
+      google.protobuf.Empty double_click = 3;
+      google.protobuf.Empty right_press = 4;
+      google.protobuf.Empty right_release = 5;
+      google.protobuf.Empty middle_press = 6;
+      google.protobuf.Empty middle_release = 7;
+      ScrollEvent scroll = 8;
+      google.protobuf.Empty enter = 9;
+      MoveEvent move = 10;
+      google.protobuf.Empty exit = 11;
+    }
+  }
+
+  message ScrollEvent {
+    message Lines {
+      float x = 1;
+      float y = 2;
+    }
+
+    message Pixels {
+      float x = 1;
+      float y = 2;
+    }
+
+    oneof data {
+      Lines lines = 1;
+      Pixels pixels = 2;
+    }
+  }
+
+  message MoveEvent {
+    float x = 1;
+    float y = 2;
+  }
+}
+
 message GetWidgetEventsRequest {
   oneof id {
     uint32 layer_id = 1;
@@ -329,6 +406,7 @@ message WidgetEvent {
 
   oneof event {
     Button.Event button = 2;
+    MouseArea.Event mouse_area = 3;
   }
 }
 
