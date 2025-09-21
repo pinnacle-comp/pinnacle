@@ -16,7 +16,7 @@ use crate::{
     decoration::DecorationId,
     layer::LayerId,
     util::convert::{FromApi, TryFromApi},
-    widget::{ViewFn, WidgetEvent, WidgetId},
+    widget::{MouseAreaEvent, ViewFn, WidgetEvent, WidgetId},
 };
 
 #[tonic::async_trait]
@@ -54,6 +54,9 @@ impl widget_service_server::WidgetService for super::WidgetService {
                             event: Some(match event {
                                 WidgetEvent::Button => {
                                     widget_event::Event::Button(widget::v1::button::Event {})
+                                }
+                                WidgetEvent::MouseArea(evt) => {
+                                    widget_event::Event::MouseArea(evt.into())
                                 }
                             }),
                         })
@@ -679,6 +682,140 @@ pub fn widget_def_to_fn(def: WidgetDef) -> Option<ViewFn> {
 
             Some(f)
         }
+        widget_def::Widget::MouseArea(mouse_area) => {
+            let widget::v1::MouseArea {
+                child,
+                on_press,
+                on_release,
+                on_double_click,
+                on_right_press,
+                on_right_release,
+                on_middle_press,
+                on_middle_release,
+                on_scroll,
+                on_enter,
+                on_move,
+                on_exit,
+                interaction,
+                widget_id,
+            } = *mouse_area;
+
+            let child_widget_fn = child.and_then(|def| widget_def_to_fn(*def));
+
+            let f: ViewFn = Box::new(move || {
+                let mut mouse_area = iced::widget::MouseArea::new(
+                    child_widget_fn
+                        .as_ref()
+                        .map(|child| child())
+                        .unwrap_or_else(|| iced::widget::Text::new("NULL").into()),
+                );
+
+                if let Some(widget_id) = widget_id {
+                    if on_press {
+                        mouse_area =
+                            mouse_area.on_press(crate::widget::SnowcapMessage::WidgetEvent(
+                                WidgetId(widget_id),
+                                WidgetEvent::MouseArea(MouseAreaEvent::Press),
+                            ));
+                    }
+
+                    if on_release {
+                        mouse_area =
+                            mouse_area.on_release(crate::widget::SnowcapMessage::WidgetEvent(
+                                WidgetId(widget_id),
+                                WidgetEvent::MouseArea(MouseAreaEvent::Release),
+                            ));
+                    }
+
+                    if on_double_click {
+                        mouse_area =
+                            mouse_area.on_double_click(crate::widget::SnowcapMessage::WidgetEvent(
+                                WidgetId(widget_id),
+                                WidgetEvent::MouseArea(MouseAreaEvent::DoubleClick),
+                            ));
+                    }
+
+                    if on_right_press {
+                        mouse_area =
+                            mouse_area.on_right_press(crate::widget::SnowcapMessage::WidgetEvent(
+                                WidgetId(widget_id),
+                                WidgetEvent::MouseArea(MouseAreaEvent::RightPress),
+                            ));
+                    }
+
+                    if on_right_release {
+                        mouse_area = mouse_area.on_right_release(
+                            crate::widget::SnowcapMessage::WidgetEvent(
+                                WidgetId(widget_id),
+                                WidgetEvent::MouseArea(MouseAreaEvent::RightRelease),
+                            ),
+                        );
+                    }
+
+                    if on_middle_press {
+                        mouse_area =
+                            mouse_area.on_middle_press(crate::widget::SnowcapMessage::WidgetEvent(
+                                WidgetId(widget_id),
+                                WidgetEvent::MouseArea(MouseAreaEvent::MiddlePress),
+                            ));
+                    }
+
+                    if on_middle_release {
+                        mouse_area = mouse_area.on_middle_release(
+                            crate::widget::SnowcapMessage::WidgetEvent(
+                                WidgetId(widget_id),
+                                WidgetEvent::MouseArea(MouseAreaEvent::MiddleRelease),
+                            ),
+                        );
+                    }
+
+                    if on_scroll {
+                        mouse_area = mouse_area.on_scroll(move |scroll_delta| {
+                            crate::widget::SnowcapMessage::WidgetEvent(
+                                WidgetId(widget_id),
+                                WidgetEvent::MouseArea(MouseAreaEvent::Scroll(scroll_delta)),
+                            )
+                        });
+                    }
+
+                    if on_enter {
+                        mouse_area =
+                            mouse_area.on_enter(crate::widget::SnowcapMessage::WidgetEvent(
+                                WidgetId(widget_id),
+                                WidgetEvent::MouseArea(MouseAreaEvent::Enter),
+                            ));
+                    }
+
+                    if on_move {
+                        mouse_area = mouse_area.on_move(move |point| {
+                            crate::widget::SnowcapMessage::WidgetEvent(
+                                WidgetId(widget_id),
+                                WidgetEvent::MouseArea(MouseAreaEvent::Move(point)),
+                            )
+                        });
+                    }
+
+                    if on_exit {
+                        mouse_area =
+                            mouse_area.on_exit(crate::widget::SnowcapMessage::WidgetEvent(
+                                WidgetId(widget_id),
+                                WidgetEvent::MouseArea(MouseAreaEvent::Exit),
+                            ));
+                    }
+                }
+
+                let interaction = interaction
+                    .and_then(|repr| widget::v1::mouse_area::Interaction::try_from(repr).ok());
+                if let Some(interaction) = interaction {
+                    mouse_area =
+                        mouse_area.interaction(iced::mouse::Interaction::from_api(interaction));
+                }
+
+                mouse_area.into()
+            });
+
+            Some(f)
+        }
     }
 }
 
@@ -968,5 +1105,79 @@ impl TryFromApi<widget::v1::Gradient> for iced::Gradient {
                 Ok(iced::Gradient::Linear(lin))
             }
         }
+    }
+}
+
+impl FromApi<widget::v1::mouse_area::Interaction> for iced::mouse::Interaction {
+    fn from_api(api_type: widget::v1::mouse_area::Interaction) -> Self {
+        use widget::v1::mouse_area::Interaction;
+        match api_type {
+            Interaction::None => Self::None,
+            Interaction::Idle => Self::Idle,
+            Interaction::Pointer => Self::Pointer,
+            Interaction::Grab => Self::Grab,
+            Interaction::Text => Self::Text,
+            Interaction::Crosshair => Self::Crosshair,
+            Interaction::Grabbing => Self::Grabbing,
+            Interaction::ResizeHorizontal => Self::ResizingHorizontally,
+            Interaction::ResizeVertical => Self::ResizingVertically,
+            Interaction::ResizeDiagonalUp => Self::ResizingDiagonallyUp,
+            Interaction::ResizeDiagonalDown => Self::ResizingDiagonallyDown,
+            Interaction::NotAllowed => Self::NotAllowed,
+            Interaction::ZoomIn => Self::ZoomIn,
+            Interaction::ZoomOut => Self::ZoomOut,
+            Interaction::Cell => Self::Cell,
+            Interaction::Move => Self::Move,
+            Interaction::Copy => Self::Copy,
+            Interaction::Help => Self::Help,
+        }
+    }
+}
+
+impl From<MouseAreaEvent> for snowcap_api_defs::snowcap::widget::v1::mouse_area::Event {
+    fn from(value: MouseAreaEvent) -> Self {
+        use snowcap_api_defs::snowcap::widget::v1::mouse_area::{self, event::Data};
+
+        let data = match value {
+            MouseAreaEvent::Press => Data::Press(()),
+            MouseAreaEvent::Release => Data::Release(()),
+            MouseAreaEvent::DoubleClick => Data::DoubleClick(()),
+            MouseAreaEvent::RightPress => Data::RightPress(()),
+            MouseAreaEvent::RightRelease => Data::RightRelease(()),
+            MouseAreaEvent::MiddlePress => Data::MiddlePress(()),
+            MouseAreaEvent::MiddleRelease => Data::MiddleRelease(()),
+            MouseAreaEvent::Scroll(delta) => Data::Scroll(mouse_area::ScrollEvent::from_api(delta)),
+            MouseAreaEvent::Enter => Data::Enter(()),
+            MouseAreaEvent::Move(point) => Data::Move(mouse_area::MoveEvent::from_api(point)),
+            MouseAreaEvent::Exit => Data::Exit(()),
+        };
+
+        Self { data: Some(data) }
+    }
+}
+
+impl FromApi<iced::mouse::ScrollDelta>
+    for snowcap_api_defs::snowcap::widget::v1::mouse_area::ScrollEvent
+{
+    fn from_api(api_type: iced::mouse::ScrollDelta) -> Self {
+        use iced::mouse::ScrollDelta;
+        use snowcap_api_defs::snowcap::widget::v1::mouse_area::scroll_event;
+
+        let data = match api_type {
+            ScrollDelta::Lines { x, y } => scroll_event::Data::Lines(scroll_event::Lines { x, y }),
+            ScrollDelta::Pixels { x, y } => {
+                scroll_event::Data::Pixels(scroll_event::Pixels { x, y })
+            }
+        };
+
+        Self { data: Some(data) }
+    }
+}
+
+impl FromApi<iced::Point> for snowcap_api_defs::snowcap::widget::v1::mouse_area::MoveEvent {
+    fn from_api(api_type: iced::Point) -> Self {
+        let iced::Point { x, y } = api_type;
+
+        Self { x, y }
     }
 }
