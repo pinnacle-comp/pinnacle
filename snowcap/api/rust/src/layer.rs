@@ -185,6 +185,9 @@ where
                             widget_event::Event::Button(_event) => {
                                 callbacks.get(&id).cloned()
                             },
+                            widget_event::Event::MouseArea(_event) => {
+                                todo!()
+                            }
                         };
 
                         let Some(msg) = msg else {
