@@ -223,20 +223,20 @@ pub enum MouseAreaEvent {
 
 impl From<MouseAreaEvent> for snowcap_api_defs::snowcap::widget::v1::mouse_area::Event {
     fn from(value: MouseAreaEvent) -> Self {
-        use snowcap_api_defs::snowcap::widget::v1::mouse_area::event::Type;
+        use snowcap_api_defs::snowcap::widget::v1::mouse_area::EventType;
 
         let event_type = match value {
-            MouseAreaEvent::Press => Type::Press,
-            MouseAreaEvent::Release => Type::Release,
-            MouseAreaEvent::DoubleClick => Type::DoubleClick,
-            MouseAreaEvent::RightPress => Type::RightPress,
-            MouseAreaEvent::RightRelease => Type::RightRelease,
-            MouseAreaEvent::MiddlePress => Type::MiddlePress,
-            MouseAreaEvent::MiddleRelease => Type::MiddleRelease,
-            MouseAreaEvent::Scroll => Type::Scroll,
-            MouseAreaEvent::Enter => Type::Enter,
-            MouseAreaEvent::Move => Type::Move,
-            MouseAreaEvent::Exit => Type::Exit,
+            MouseAreaEvent::Press => EventType::EventPress,
+            MouseAreaEvent::Release => EventType::EventRelease,
+            MouseAreaEvent::DoubleClick => EventType::EventDoubleClick,
+            MouseAreaEvent::RightPress => EventType::EventRightPress,
+            MouseAreaEvent::RightRelease => EventType::EventRightRelease,
+            MouseAreaEvent::MiddlePress => EventType::EventMiddlePress,
+            MouseAreaEvent::MiddleRelease => EventType::EventMiddleRelease,
+            MouseAreaEvent::Scroll => EventType::EventScroll,
+            MouseAreaEvent::Enter => EventType::EventEnter,
+            MouseAreaEvent::Move => EventType::EventMove,
+            MouseAreaEvent::Exit => EventType::EventExit,
         } as i32;
 
         Self {
