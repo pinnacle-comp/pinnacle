@@ -88,6 +88,10 @@ function decoration.new_widget(args)
 
             if event.button then
                 msg = callbacks[widget_id]
+            elseif event.mouse_area then
+                if callbacks[widget_id] ~= nil then
+                    msg = widget._mouse_area_process_event(callbacks[widget_id], event.mouse_area)
+                end
             end
 
             if msg then
