@@ -76,6 +76,20 @@ local function exclusive_zone_to_api(zone)
     return -1
 end
 
+---@param callbacks any[]
+---@param widget snowcap.widget.WidgetDef
+local function _reload_callbacks(callbacks, widget)
+    if widget.button and widget.button.on_press then
+        callbacks[widget.button.widget_id] = widget.button.on_press
+    end
+
+    if widget.mouse_area and widget.mouse_area.widget_id then
+        local widget_id = widget.mouse_area.widget_id
+
+        callbacks[widget_id] = widget.mouse_area.callbacks
+    end
+end
+
 ---@class snowcap.layer.LayerArgs
 ---@field program snowcap.widget.Program
 ---@field anchor snowcap.layer.Anchor?
@@ -91,15 +105,7 @@ function layer.new_widget(args)
 
     local widget_def = args.program:view()
 
-    require("snowcap.widget")._traverse_widget_tree(
-        widget_def,
-        callbacks,
-        function(callbacks, widget)
-            if widget.button and widget.button.on_press then
-                callbacks[widget.button.widget_id] = widget.button.on_press
-            end
-        end
-    )
+    require("snowcap.widget")._traverse_widget_tree(widget_def, callbacks, _reload_callbacks)
 
     ---@type snowcap.layer.v1.NewLayerRequest
     local request = {
@@ -130,27 +136,32 @@ function layer.new_widget(args)
         layer_id = layer_id,
     }, function(response)
         local widget_id = response.widget_id or 0
+        local msg = nil
+
         if response.button then
-            if callbacks[widget_id] then
-                args.program:update(callbacks[widget_id])
-                local widget_def = args.program:view()
-                callbacks = {}
+            msg = callbacks[widget_id]
+        elseif response.mouse_area and callbacks[widget_id] ~= nil then
+            msg = require("snowcap.widget")._mouse_area_process_event(
+                callbacks[widget_id],
+                response.mouse_area
+            )
+        end
 
-                require("snowcap.widget")._traverse_widget_tree(
-                    widget_def,
-                    callbacks,
-                    function(callbacks, widget)
-                        if widget.button and widget.button.on_press then
-                            callbacks[widget.button.widget_id] = widget.button.on_press
-                        end
-                    end
-                )
+        if msg then
+            args.program:update(msg)
+            local widget_def = args.program:view()
+            callbacks = {}
 
-                local _, err = client:snowcap_layer_v1_LayerService_UpdateLayer({
-                    layer_id = layer_id,
-                    widget_def = widget.widget_def_into_api(widget_def),
-                })
-            end
+            require("snowcap.widget")._traverse_widget_tree(
+                widget_def,
+                callbacks,
+                _reload_callbacks
+            )
+
+            local _, err = client:snowcap_layer_v1_LayerService_UpdateLayer({
+                layer_id = layer_id,
+                widget_def = widget.widget_def_into_api(widget_def),
+            })
         end
     end)
 
@@ -162,15 +173,7 @@ function layer.new_widget(args)
         local widget_def = args.program:view()
         callbacks = {}
 
-        require("snowcap.widget")._traverse_widget_tree(
-            widget_def,
-            callbacks,
-            function(callbacks, widget)
-                if widget.button and widget.button.on_press then
-                    callbacks[widget.button.widget_id] = widget.button.on_press
-                end
-            end
-        )
+        require("snowcap.widget")._traverse_widget_tree(widget_def, callbacks, _reload_callbacks)
 
         local _, err = client:snowcap_layer_v1_LayerService_UpdateLayer({
             layer_id = layer_id,

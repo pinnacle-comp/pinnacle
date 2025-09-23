@@ -37,6 +37,20 @@ end
 ---@field top integer
 ---@field bottom integer
 
+---@param callbacks any[]
+---@param widget snowcap.widget.WidgetDef
+local function _reload_callbacks(callbacks, widget)
+    if widget.button and widget.button.on_press then
+        callbacks[widget.button.widget_id] = widget.button.on_press
+    end
+
+    if widget.mouse_area and widget.mouse_area.widget_id then
+        local widget_id = widget.mouse_area.widget_id
+
+        callbacks[widget_id] = widget.mouse_area.callbacks
+    end
+end
+
 ---@class snowcap.decoration.DecorationArgs
 ---@field program snowcap.widget.Program
 ---@field toplevel_identifier string
@@ -52,15 +66,7 @@ function decoration.new_widget(args)
 
     local widget_def = args.program:view()
 
-    require("snowcap.widget")._traverse_widget_tree(
-        widget_def,
-        callbacks,
-        function(callbacks, widget)
-            if widget.button and widget.button.on_press then
-                callbacks[widget.button.widget_id] = widget.button.on_press
-            end
-        end
-    )
+    require("snowcap.widget")._traverse_widget_tree(widget_def, callbacks, _reload_callbacks)
 
     ---@type snowcap.decoration.v1.NewDecorationRequest
     local request = {
@@ -91,27 +97,32 @@ function decoration.new_widget(args)
         decoration_id = decoration_id,
     }, function(response)
         local widget_id = response.widget_id or 0
+        local msg = nil
+
         if response.button then
-            if callbacks[widget_id] then
-                args.program:update(callbacks[widget_id])
-                local widget_def = args.program:view()
-                callbacks = {}
+            msg = callbacks[widget_id]
+        elseif response.mouse_area and callbacks[widget_id] ~= nil then
+            msg = require("snowcap.widget")._mouse_area_process_event(
+                callbacks[widget_id],
+                response.mouse_area
+            )
+        end
 
-                require("snowcap.widget")._traverse_widget_tree(
-                    widget_def,
-                    callbacks,
-                    function(callbacks, widget)
-                        if widget.button and widget.button.on_press then
-                            callbacks[widget.button.widget_id] = widget.button.on_press
-                        end
-                    end
-                )
+        if msg then
+            args.program:update(msg)
+            local widget_def = args.program:view()
+            callbacks = {}
 
-                local _, err = client:snowcap_decoration_v1_DecorationService_UpdateDecoration({
-                    decoration_id = decoration_id,
-                    widget_def = widget.widget_def_into_api(widget_def),
-                })
-            end
+            require("snowcap.widget")._traverse_widget_tree(
+                widget_def,
+                callbacks,
+                _reload_callbacks
+            )
+
+            local _, err = client:snowcap_decoration_v1_DecorationService_UpdateDecoration({
+                decoration_id = decoration_id,
+                widget_def = widget.widget_def_into_api(widget_def),
+            })
         end
     end)
 
@@ -120,15 +131,7 @@ function decoration.new_widget(args)
         local widget_def = args.program:view()
         callbacks = {}
 
-        require("snowcap.widget")._traverse_widget_tree(
-            widget_def,
-            callbacks,
-            function(callbacks, widget)
-                if widget.button and widget.button.on_press then
-                    callbacks[widget.button.widget_id] = widget.button.on_press
-                end
-            end
-        )
+        require("snowcap.widget")._traverse_widget_tree(widget_def, callbacks, _reload_callbacks)
 
         local _, err = client:snowcap_decoration_v1_DecorationService_UpdateDecoration({
             decoration_id = decoration_id,
