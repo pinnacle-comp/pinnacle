@@ -30,6 +30,7 @@
 ---@field button snowcap.widget.Button?
 ---@field image snowcap.widget.Image?
 ---@field input_region snowcap.widget.InputRegion?
+---@field mouse_area snowcap.widget.MouseArea?
 
 ---@class snowcap.widget.Border
 ---@field color snowcap.widget.Color?
@@ -172,6 +173,86 @@ local content_fit = {
 ---@field height snowcap.widget.Length?
 ---@field child snowcap.widget.WidgetDef
 
+---Emits messages on mouse events.
+---@class snowcap.widget.MouseArea
+---@field child snowcap.widget.WidgetDef MouseArea content
+---@field callbacks snowcap.widget.mouse_area.Callbacks Set of messages to emit on a mouse event.
+---@field interaction snowcap.widget.mouse.Interaction? mouse.Interaction to use when hovering the area
+---@field private widget_id integer?
+
+---@class snowcap.widget.mouse_area.Callbacks
+---@field on_press any? Message to emit on a left button press.
+---@field on_release any? Message to emit on a left button release.
+---@field on_double_click any? Message to emit on a left button double click.
+---@field on_right_press any? Message to emit on a right button press.
+---@field on_right_release any? Message to emit on a right button release.
+---@field on_middle_press any? Message to emit on a middle button press.
+---@field on_middle_release any? Message to emit on a middle button release.
+---@field on_scroll (fun(scroll_delta: snowcap.widget.mouse_area.ScrollDelta): any)? Message to emit when the scroll wheel is used.
+---@field on_enter any? Message to emit when the mouse pointer enter the area.
+---@field on_move (fun(point: snowcap.widget.mouse_area.Point): any)? Message to emit when the mouse move in the area.
+---@field on_exit any? Message to emit when the mouse pointer exit the area.
+
+---@class snowcap.widget.mouse_area.Event
+---@field event_type snowcap.widget.mouse_area.event.Type?
+---@field scroll_delta snowcap.widget.mouse_area.ScrollDelta?
+---@field point snowcap.widget.mouse_area.Point?
+
+---@enum snowcap.widget.mouse_area.event.Type
+local mouse_area_event_type = {
+    PRESS = 0,
+    RELEASE = 1,
+    DOUBLE_CLICK = 2,
+    RIGHT_PRESS = 3,
+    RIGHT_RELEASE = 4,
+    MIDDLE_PRESS = 5,
+    MIDDLE_RELEASE = 6,
+    SCROLL = 7,
+    ENTER = 8,
+    MOVE = 9,
+    EXIT = 10,
+}
+
+---@class snowcap.widget.mouse_area.ScrollDelta
+---@field lines snowcap.widget.mouse_area.ScrollDelta.Lines?
+---@field pixels snowcap.widget.mouse_area.ScrollDelta.Pixels?
+
+---@class snowcap.widget.mouse_area.ScrollDelta.Lines
+---@field x number?
+---@field y number?
+
+---@class snowcap.widget.mouse_area.ScrollDelta.Pixels
+---@field x number?
+---@field y number?
+
+---@class snowcap.widget.mouse_area.Point
+---@field x number?
+---@field y number?
+
+local mouse = {
+    ---@enum snowcap.widget.mouse.Interaction
+    interaction = {
+        NONE = 0,
+        IDLE = 1,
+        POINTER = 2,
+        GRAB = 3,
+        TEXT = 4,
+        CROSSHAIR = 5,
+        GRABBING = 6,
+        RESIZE_HORIZONTAL = 7,
+        RESIZE_VERTICAL = 8,
+        RESIZE_DIAGONAL_UP = 9,
+        RESIZE_DIAGONAL_DOWN = 10,
+        NOT_ALLOWED = 11,
+        ZOOM_IN = 12,
+        ZOOM_OUT = 13,
+        CELL = 14,
+        MOVE = 15,
+        COPY = 16,
+        HELP = 17,
+    },
+}
+
 ---@class snowcap.widget.Length
 ---@field fill {}?
 ---@field fill_portion integer?
@@ -297,6 +378,7 @@ local font = {
 
 ---@class snowcap.widget.Callback
 ---@field button fun(widget: snowcap.widget.WidgetDef)?
+---@field mouse_area fun(widget: snowcap.widget.WidgetDef)?
 
 local widget = {
     length = length,
@@ -306,6 +388,7 @@ local widget = {
     image = {
         content_fit = content_fit,
     },
+    mouse = mouse,
 }
 
 local widget_id_counter = 0
@@ -441,6 +524,30 @@ local function input_region_into_api(def)
     }
 end
 
+---@param def snowcap.widget.MouseArea
+---@return snowcap.widget.v1.MouseArea
+local function mouse_area_into_api(def)
+    def.callbacks = def.callbacks or {}
+
+    ---@type snowcap.widget.v1.MouseArea
+    return {
+        child = widget.widget_def_into_api(def.child),
+        on_press = def.callbacks.on_press ~= nil,
+        on_release = def.callbacks.on_release ~= nil,
+        on_double_click = def.callbacks.on_double_click ~= nil,
+        on_right_press = def.callbacks.on_right_press ~= nil,
+        on_right_release = def.callbacks.on_right_release ~= nil,
+        on_middle_press = def.callbacks.on_middle_press ~= nil,
+        on_middle_release = def.callbacks.on_middle_release ~= nil,
+        on_scroll = def.callbacks.on_scroll ~= nil,
+        on_enter = def.callbacks.on_enter ~= nil,
+        on_move = def.callbacks.on_move ~= nil,
+        on_exit = def.callbacks.on_exit ~= nil,
+        interaction = def.interaction, --[[@as snowcap.widget.v1.MouseArea.Interaction]]
+        widget_id = def.widget_id,
+    }
+end
+
 ---@param def snowcap.widget.WidgetDef
 ---@return snowcap.widget.v1.WidgetDef
 function widget.widget_def_into_api(def)
@@ -467,6 +574,9 @@ function widget.widget_def_into_api(def)
     end
     if def.input_region then
         def.input_region = input_region_into_api(def.input_region)
+    end
+    if def.mouse_area then
+        def.mouse_area = mouse_area_into_api(def.mouse_area)
     end
 
     return def --[[@as snowcap.widget.v1.WidgetDef]]
@@ -552,6 +662,41 @@ function widget.input_region(input_region)
     }
 end
 
+---@type { [string]: integer }
+local _mouse_area_unique_to_widget = {}
+
+---Create a new MouseArea widget.
+---@param mouse_area snowcap.widget.MouseArea
+---
+---@return snowcap.widget.WidgetDef
+function widget.mouse_area(mouse_area)
+    local has_cb = false
+
+    if mouse_area.callbacks then
+        has_cb = has_cb or mouse_area.callbacks.on_press ~= nil
+        has_cb = has_cb or mouse_area.callbacks.on_release ~= nil
+        has_cb = has_cb or mouse_area.callbacks.on_double_click ~= nil
+        has_cb = has_cb or mouse_area.callbacks.on_right_press ~= nil
+        has_cb = has_cb or mouse_area.callbacks.on_right_release ~= nil
+        has_cb = has_cb or mouse_area.callbacks.on_middle_press ~= nil
+        has_cb = has_cb or mouse_area.callbacks.on_middle_release ~= nil
+        has_cb = has_cb or mouse_area.callbacks.on_scroll ~= nil
+        has_cb = has_cb or mouse_area.callbacks.on_enter ~= nil
+        has_cb = has_cb or mouse_area.callbacks.on_move ~= nil
+        has_cb = has_cb or mouse_area.callbacks.on_exit ~= nil
+    end
+
+    if has_cb then
+        mouse_area.widget_id = widget_id_counter
+        widget_id_counter = widget_id_counter + 1
+    end
+
+    ---@type snowcap.widget.WidgetDef
+    return {
+        mouse_area = mouse_area,
+    }
+end
+
 ---@private
 ---@lcat nodoc
 ---@param wgt snowcap.widget.WidgetDef
@@ -575,7 +720,75 @@ function widget._traverse_widget_tree(wgt, callbacks, with_widget)
         widget._traverse_widget_tree(wgt.button.child, callbacks, with_widget)
     elseif wgt.input_region then
         widget._traverse_widget_tree(wgt.input_region.child, callbacks, with_widget)
+    elseif wgt.mouse_area then
+        widget._traverse_widget_tree(wgt.mouse_area.child, callbacks, with_widget)
     end
+end
+
+---@private
+---@lcat nodoc
+---@param callbacks any[]
+---@param wgt snowcap.widget.WidgetDef
+function widget._collect_callbacks(callbacks, wgt)
+    if wgt.button and wgt.button.on_press then
+        callbacks[wgt.button.widget_id] = wgt.button.on_press
+    end
+
+    if wgt.mouse_area and wgt.mouse_area.widget_id then
+        callbacks[wgt.mouse_area.widget_id] = wgt.mouse_area.callbacks
+    end
+end
+
+---@private
+---lcat nodoc
+---@param callbacks snowcap.widget.mouse_area.Callbacks
+---@return string?
+function widget._mouse_area_process_event(callbacks, event)
+    callbacks = callbacks or {}
+    local translate = {
+        [mouse_area_event_type.PRESS] = "on_press",
+        [mouse_area_event_type.RELEASE] = "on_release",
+        [mouse_area_event_type.DOUBLE_CLICK] = "on_double_click",
+        [mouse_area_event_type.RIGHT_PRESS] = "on_right_press",
+        [mouse_area_event_type.RIGHT_RELEASE] = "on_right_release",
+        [mouse_area_event_type.MIDDLE_PRESS] = "on_middle_press",
+        [mouse_area_event_type.MIDDLE_RELEASE] = "on_middle_release",
+        [mouse_area_event_type.SCROLL] = "on_scroll",
+        [mouse_area_event_type.ENTER] = "on_enter",
+        [mouse_area_event_type.MOVE] = "on_move",
+        [mouse_area_event_type.EXIT] = "on_exit",
+    }
+
+    local key = translate[event.event_type]
+    local cb = callbacks[key]
+
+    if cb == nil then
+        return nil
+    end
+
+    local msg = nil
+
+    if event.event_type == mouse_area_event_type.SCROLL then
+        local ok, val = pcall(cb, event.scroll_delta)
+
+        if not ok then
+            require("snowcap.log").error(val)
+        else
+            msg = val
+        end
+    elseif event.event_type == mouse_area_event_type.MOVE then
+        local ok, val = pcall(cb, event.point)
+
+        if not ok then
+            require("snowcap.log").error(val)
+        else
+            msg = val
+        end
+    else
+        msg = cb
+    end
+
+    return msg
 end
 
 return widget
