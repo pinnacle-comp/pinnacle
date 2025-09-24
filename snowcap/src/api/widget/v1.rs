@@ -705,10 +705,12 @@ pub fn widget_def_to_fn(def: WidgetDef) -> Option<ViewFn> {
                     }
 
                     if on_scroll {
-                        //mouse_area = mouse_area.on_scroll(crate::widget::SnowcapMessage::WidgetEvent(
-                        //WidgetId(widget_id),
-                        //WidgetEvent::MouseArea(MouseAreaEvent::DoubleClick)
-                        //));
+                        mouse_area = mouse_area.on_scroll(move |scroll_delta| {
+                            crate::widget::SnowcapMessage::WidgetEvent(
+                                WidgetId(widget_id),
+                                WidgetEvent::MouseArea(MouseAreaEvent::Scroll(scroll_delta)),
+                            )
+                        });
                     }
 
                     if on_enter {
@@ -720,10 +722,12 @@ pub fn widget_def_to_fn(def: WidgetDef) -> Option<ViewFn> {
                     }
 
                     if on_move {
-                        //mouse_area = mouse_area.on_move(crate::widget::SnowcapMessage::WidgetEvent(
-                        //WidgetId(widget_id),
-                        //WidgetEvent::MouseArea(MouseAreaEvent::DoubleClick)
-                        //));
+                        mouse_area = mouse_area.on_move(move |point| {
+                            crate::widget::SnowcapMessage::WidgetEvent(
+                                WidgetId(widget_id),
+                                WidgetEvent::MouseArea(MouseAreaEvent::Move(point)),
+                            )
+                        });
                     }
 
                     if on_exit {

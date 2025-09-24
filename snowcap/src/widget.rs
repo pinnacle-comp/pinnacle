@@ -5,7 +5,10 @@ use iced_graphics::Viewport;
 use iced_wgpu::core::{Clipboard, layout::Limits};
 use smithay_client_toolkit::reexports::client::{QueueHandle, protocol::wl_surface::WlSurface};
 
-use crate::{handlers::keyboard::KeyboardKey, state::State, widget::input_region::Collect};
+use crate::{
+    handlers::keyboard::KeyboardKey, state::State, util::convert::FromApi,
+    widget::input_region::Collect,
+};
 
 pub type Element = iced::Element<'static, SnowcapMessage, iced::Theme, crate::compositor::Renderer>;
 pub type UserInterface =
@@ -215,33 +218,59 @@ pub enum MouseAreaEvent {
     RightRelease,
     MiddlePress,
     MiddleRelease,
-    Scroll,
+    Scroll(iced::mouse::ScrollDelta),
     Enter,
-    Move,
+    Move(iced::Point),
     Exit,
 }
 
 impl From<MouseAreaEvent> for snowcap_api_defs::snowcap::widget::v1::mouse_area::Event {
     fn from(value: MouseAreaEvent) -> Self {
-        use snowcap_api_defs::snowcap::widget::v1::mouse_area::EventType;
+        use snowcap_api_defs::snowcap::widget::v1::mouse_area::{EventType, event::Data};
 
-        let event_type = match value {
-            MouseAreaEvent::Press => EventType::EventPress,
-            MouseAreaEvent::Release => EventType::EventRelease,
-            MouseAreaEvent::DoubleClick => EventType::EventDoubleClick,
-            MouseAreaEvent::RightPress => EventType::EventRightPress,
-            MouseAreaEvent::RightRelease => EventType::EventRightRelease,
-            MouseAreaEvent::MiddlePress => EventType::EventMiddlePress,
-            MouseAreaEvent::MiddleRelease => EventType::EventMiddleRelease,
-            MouseAreaEvent::Scroll => EventType::EventScroll,
-            MouseAreaEvent::Enter => EventType::EventEnter,
-            MouseAreaEvent::Move => EventType::EventMove,
-            MouseAreaEvent::Exit => EventType::EventExit,
-        } as i32;
+        let (event_type, data) = match value {
+            MouseAreaEvent::Press => (EventType::EventPress, None),
+            MouseAreaEvent::Release => (EventType::EventRelease, None),
+            MouseAreaEvent::DoubleClick => (EventType::EventDoubleClick, None),
+            MouseAreaEvent::RightPress => (EventType::EventRightPress, None),
+            MouseAreaEvent::RightRelease => (EventType::EventRightRelease, None),
+            MouseAreaEvent::MiddlePress => (EventType::EventMiddlePress, None),
+            MouseAreaEvent::MiddleRelease => (EventType::EventMiddleRelease, None),
+            MouseAreaEvent::Scroll(delta) => (EventType::EventScroll, Some(Data::from_api(delta))),
+            MouseAreaEvent::Enter => (EventType::EventEnter, None),
+            MouseAreaEvent::Move(point) => (EventType::EventMove, Some(Data::from_api(point))),
+            MouseAreaEvent::Exit => (EventType::EventExit, None),
+        };
 
-        Self {
-            event_type,
-            data: None,
-        }
+        let event_type: i32 = event_type.into();
+
+        Self { event_type, data }
+    }
+}
+
+impl FromApi<iced::mouse::ScrollDelta>
+    for snowcap_api_defs::snowcap::widget::v1::mouse_area::event::Data
+{
+    fn from_api(api_type: iced::mouse::ScrollDelta) -> Self {
+        use iced::mouse::ScrollDelta;
+        use snowcap_api_defs::snowcap::widget::v1::mouse_area::{self, scroll_delta};
+
+        let inner = match api_type {
+            ScrollDelta::Lines { x, y } => scroll_delta::Data::Line(scroll_delta::Lines { x, y }),
+            ScrollDelta::Pixels { x, y } => {
+                scroll_delta::Data::Pixels(scroll_delta::Pixels { x, y })
+            }
+        };
+
+        Self::ScrollDelta(mouse_area::ScrollDelta { data: Some(inner) })
+    }
+}
+
+impl FromApi<iced::Point> for snowcap_api_defs::snowcap::widget::v1::mouse_area::event::Data {
+    fn from_api(api_type: iced::Point) -> Self {
+        use snowcap_api_defs::snowcap::widget::v1::mouse_area::Point;
+
+        let iced::Point { x, y } = api_type;
+        Self::Point(Point { x, y })
     }
 }
