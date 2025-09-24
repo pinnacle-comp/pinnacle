@@ -36,9 +36,9 @@ enum Action {
 impl Action {
     fn order(&self) -> u8 {
         match self {
-            Action::Activate(_) => 0,
+            Action::Activate(_) => 2,
             Action::Deactivate(_) => 1,
-            Action::Remove(_) => 2,
+            Action::Remove(_) => 0,
         }
     }
 }
