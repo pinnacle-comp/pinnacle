@@ -106,7 +106,7 @@ rust-version.workspace = true
 [dependencies]
 # Smithay
 smithay = { workspace = true }
-smithay-drm-extras = { git = "https://github.com/Smithay/smithay", rev = "20d2dac" }
+smithay-drm-extras = { git = "https://github.com/Smithay/smithay", rev = "9ccbd35" }
 # Tracing
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
@@ -138,7 +138,7 @@ bytemuck = "1.23.1"
 pinnacle-api = { path = "./api/rust", default-features = false }
 gag = "1.0.0"
 drm-sys = "0.8.0"
-libdisplay-info = "0.2.2"
+libdisplay-info = "0.3.0"
 indexmap = { workspace = true }
 snowcap = { path = "./snowcap", optional = true }
 snowcap-api = { path = "./snowcap/api/rust", optional = true }
