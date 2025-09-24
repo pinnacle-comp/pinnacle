@@ -176,6 +176,7 @@ local content_fit = {
 ---@field child snowcap.widget.WidgetDef
 ---@field callbacks snowcap.widget.mouse_area.Callbacks
 ---@field interaction snowcap.widget.mouse.Interaction
+---@field unique_id string?
 ---@field private widget_id integer?
 
 ---@class snowcap.widget.mouse_area.Callbacks
@@ -659,6 +660,32 @@ function widget.input_region(input_region)
     }
 end
 
+---@type { [string]: integer }
+local _mouse_area_unique_to_widget = {}
+
+--- Generate a new widget_id, or return an existing one any.
+---
+---@param unique_id string?
+---
+---@return integer
+local function _mouse_area_get_id(unique_id)
+    if unique_id == nil then
+        widget_id = widget_id_counter
+        widget_id_counter = widget_id_counter + 1
+        return widget_id
+    end
+
+    local widget_id = _mouse_area_unique_to_widget[unique_id]
+
+    if widget_id == nil then
+        widget_id = widget_id_counter
+        widget_id_counter = widget_id_counter + 1
+        _mouse_area_unique_to_widget[unique_id] = widget_id
+    end
+
+    return widget_id
+end
+
 ---@param mouse_area snowcap.widget.MouseArea
 ---
 ---@return snowcap.widget.WidgetDef
@@ -679,9 +706,8 @@ function widget.mouse_area(mouse_area)
         has_cb = has_cb or mouse_area.callbacks.on_exit ~= nil
     end
 
-    if has_cb then
-        mouse_area.widget_id = widget_id_counter
-        widget_id_counter = widget_id_counter + 1
+    if mouse_area.unique_id or has_cb then
+        mouse_area.widget_id = _mouse_area_get_id(mouse_area.unique_id)
     end
 
     ---@type snowcap.widget.WidgetDef
