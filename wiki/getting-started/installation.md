@@ -14,9 +14,6 @@ yay -S pinnacle-comp
 yay -S pinnacle-comp-git
 ```
 
-> [!IMPORTANT]
-> The `-git` package is currently broken. Use the non `-git` version or build from source.
-
 :::
 
 ### NixOS
