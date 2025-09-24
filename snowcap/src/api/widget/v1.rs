@@ -15,7 +15,7 @@ use crate::{
     decoration::DecorationId,
     layer::LayerId,
     util::convert::FromApi,
-    widget::{ViewFn, WidgetEvent, WidgetId},
+    widget::{MouseAreaEvent, ViewFn, WidgetEvent, WidgetId},
 };
 
 #[tonic::async_trait]
@@ -644,8 +644,6 @@ pub fn widget_def_to_fn(def: WidgetDef) -> Option<ViewFn> {
                 );
 
                 if let Some(widget_id) = widget_id {
-                    use crate::widget::MouseAreaEvent;
-
                     if on_press {
                         mouse_area =
                             mouse_area.on_press(crate::widget::SnowcapMessage::WidgetEvent(
@@ -1003,5 +1001,56 @@ impl FromApi<widget::v1::mouse_area::Interaction> for iced::mouse::Interaction {
             Interaction::Copy => Self::Copy,
             Interaction::Help => Self::Help,
         }
+    }
+}
+
+impl From<MouseAreaEvent> for snowcap_api_defs::snowcap::widget::v1::mouse_area::Event {
+    fn from(value: MouseAreaEvent) -> Self {
+        use snowcap_api_defs::snowcap::widget::v1::mouse_area::{EventType, event::Data};
+
+        let (event_type, data) = match value {
+            MouseAreaEvent::Press => (EventType::EventPress, None),
+            MouseAreaEvent::Release => (EventType::EventRelease, None),
+            MouseAreaEvent::DoubleClick => (EventType::EventDoubleClick, None),
+            MouseAreaEvent::RightPress => (EventType::EventRightPress, None),
+            MouseAreaEvent::RightRelease => (EventType::EventRightRelease, None),
+            MouseAreaEvent::MiddlePress => (EventType::EventMiddlePress, None),
+            MouseAreaEvent::MiddleRelease => (EventType::EventMiddleRelease, None),
+            MouseAreaEvent::Scroll(delta) => (EventType::EventScroll, Some(Data::from_api(delta))),
+            MouseAreaEvent::Enter => (EventType::EventEnter, None),
+            MouseAreaEvent::Move(point) => (EventType::EventMove, Some(Data::from_api(point))),
+            MouseAreaEvent::Exit => (EventType::EventExit, None),
+        };
+
+        let event_type: i32 = event_type.into();
+
+        Self { event_type, data }
+    }
+}
+
+impl FromApi<iced::mouse::ScrollDelta>
+    for snowcap_api_defs::snowcap::widget::v1::mouse_area::event::Data
+{
+    fn from_api(api_type: iced::mouse::ScrollDelta) -> Self {
+        use iced::mouse::ScrollDelta;
+        use snowcap_api_defs::snowcap::widget::v1::mouse_area::{self, scroll_delta};
+
+        let inner = match api_type {
+            ScrollDelta::Lines { x, y } => scroll_delta::Data::Line(scroll_delta::Lines { x, y }),
+            ScrollDelta::Pixels { x, y } => {
+                scroll_delta::Data::Pixels(scroll_delta::Pixels { x, y })
+            }
+        };
+
+        Self::ScrollDelta(mouse_area::ScrollDelta { data: Some(inner) })
+    }
+}
+
+impl FromApi<iced::Point> for snowcap_api_defs::snowcap::widget::v1::mouse_area::event::Data {
+    fn from_api(api_type: iced::Point) -> Self {
+        use snowcap_api_defs::snowcap::widget::v1::mouse_area::Point;
+
+        let iced::Point { x, y } = api_type;
+        Self::Point(Point { x, y })
     }
 }
