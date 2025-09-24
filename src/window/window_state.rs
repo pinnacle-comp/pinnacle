@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use std::sync::atomic::{AtomicU32, Ordering};
+use std::{
+    collections::HashMap,
+    sync::atomic::{AtomicU32, Ordering},
+};
 
 use indexmap::IndexSet;
 use smithay::{
@@ -16,6 +19,8 @@ use tracing::warn;
 #[cfg(feature = "snowcap")]
 use crate::{decoration::DecorationSurface, protocol::snowcap_decoration::Bounds};
 use crate::{
+    handlers::image_copy_capture::SessionDamageTrackers,
+    protocol::image_copy_capture::session::Session,
     render::util::snapshot::WindowSnapshot,
     state::{Pinnacle, WithState},
     tag::Tag,
@@ -401,6 +406,8 @@ pub struct WindowElementState {
     pub decoration_surfaces: Vec<DecorationSurface>,
 
     pub vrr_demand: Option<VrrDemand>,
+
+    pub capture_sessions: HashMap<Session, SessionDamageTrackers>,
 }
 
 impl WindowElement {
@@ -663,6 +670,7 @@ impl WindowElementState {
             #[cfg(feature = "snowcap")]
             decoration_surfaces: Vec::new(),
             vrr_demand: None,
+            capture_sessions: Default::default(),
         }
     }
 
