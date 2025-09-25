@@ -542,6 +542,7 @@ local function mouse_area_into_api(def)
         on_move = def.callbacks.on_move ~= nil,
         on_exit = def.callbacks.on_exit ~= nil,
         interaction = def.interaction, --[[@as snowcap.widget.v1.MouseArea.Interaction]]
+        unique_id = def.unique_id,
         widget_id = def.widget_id,
     }
 end

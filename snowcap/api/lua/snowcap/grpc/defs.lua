@@ -898,15 +898,17 @@ local snowcap_layer_v1_Layer = {
 ---@field on_move boolean?
 ---@field on_exit boolean?
 ---@field interaction snowcap.widget.v1.MouseArea.Interaction?
+---@field unique_id string?
 ---@field widget_id integer?
 
 ---@class snowcap.widget.v1.MouseArea.Event
 ---@field event_type snowcap.widget.v1.MouseArea.EventType?
+---@field unique_id string?
 ---@field scroll_delta snowcap.widget.v1.MouseArea.ScrollDelta?
 ---@field point snowcap.widget.v1.MouseArea.Point?
 
 ---@class snowcap.widget.v1.MouseArea.ScrollDelta
----@field line snowcap.widget.v1.MouseArea.ScrollDelta.Lines?
+---@field lines snowcap.widget.v1.MouseArea.ScrollDelta.Lines?
 ---@field pixels snowcap.widget.v1.MouseArea.ScrollDelta.Pixels?
 
 ---@class snowcap.widget.v1.MouseArea.ScrollDelta.Lines

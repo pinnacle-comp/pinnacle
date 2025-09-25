@@ -305,7 +305,8 @@ message MouseArea {
   bool on_move = 11;
   bool on_exit = 12;
   optional Interaction interaction = 13;
-  optional uint32 widget_id = 14;
+  optional string unique_id = 14;
+  optional uint32 widget_id = 15;
 
   enum Interaction {
     INTERACTION_NONE = 0;
@@ -344,6 +345,7 @@ message MouseArea {
 
   message Event {
     EventType event_type = 1;
+    optional string unique_id = 4;
     oneof data {
       ScrollDelta scroll_delta = 2;
       Point point = 3;
@@ -362,7 +364,7 @@ message MouseArea {
     }
 
     oneof data {
-      Lines line = 1;
+      Lines lines = 1;
       Pixels pixels = 2;
     }
   }

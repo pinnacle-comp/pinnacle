@@ -15,7 +15,7 @@ use crate::{
     decoration::DecorationId,
     layer::LayerId,
     util::convert::FromApi,
-    widget::{MouseAreaEvent, ViewFn, WidgetEvent, WidgetId},
+    widget::{MouseAreaEvent, MouseAreaEventInner, ViewFn, WidgetEvent, WidgetId},
 };
 
 #[tonic::async_trait]
@@ -629,8 +629,9 @@ pub fn widget_def_to_fn(def: WidgetDef) -> Option<ViewFn> {
                 on_enter,
                 on_move,
                 on_exit,
-                widget_id,
                 interaction,
+                unique_id,
+                widget_id,
             } = *mouse_area;
 
             let child_widget_fn = child.and_then(|def| widget_def_to_fn(*def));
@@ -648,7 +649,10 @@ pub fn widget_def_to_fn(def: WidgetDef) -> Option<ViewFn> {
                         mouse_area =
                             mouse_area.on_press(crate::widget::SnowcapMessage::WidgetEvent(
                                 WidgetId(widget_id),
-                                WidgetEvent::MouseArea(MouseAreaEvent::Press),
+                                WidgetEvent::MouseArea(MouseAreaEvent {
+                                    unique_id: unique_id.clone(),
+                                    inner: MouseAreaEventInner::Press,
+                                }),
                             ));
                     }
 
@@ -656,7 +660,10 @@ pub fn widget_def_to_fn(def: WidgetDef) -> Option<ViewFn> {
                         mouse_area =
                             mouse_area.on_release(crate::widget::SnowcapMessage::WidgetEvent(
                                 WidgetId(widget_id),
-                                WidgetEvent::MouseArea(MouseAreaEvent::Release),
+                                WidgetEvent::MouseArea(MouseAreaEvent {
+                                    unique_id: unique_id.clone(),
+                                    inner: MouseAreaEventInner::Release,
+                                }),
                             ));
                     }
 
@@ -664,7 +671,10 @@ pub fn widget_def_to_fn(def: WidgetDef) -> Option<ViewFn> {
                         mouse_area =
                             mouse_area.on_double_click(crate::widget::SnowcapMessage::WidgetEvent(
                                 WidgetId(widget_id),
-                                WidgetEvent::MouseArea(MouseAreaEvent::DoubleClick),
+                                WidgetEvent::MouseArea(MouseAreaEvent {
+                                    unique_id: unique_id.clone(),
+                                    inner: MouseAreaEventInner::DoubleClick,
+                                }),
                             ));
                     }
 
@@ -672,7 +682,10 @@ pub fn widget_def_to_fn(def: WidgetDef) -> Option<ViewFn> {
                         mouse_area =
                             mouse_area.on_right_press(crate::widget::SnowcapMessage::WidgetEvent(
                                 WidgetId(widget_id),
-                                WidgetEvent::MouseArea(MouseAreaEvent::RightPress),
+                                WidgetEvent::MouseArea(MouseAreaEvent {
+                                    unique_id: unique_id.clone(),
+                                    inner: MouseAreaEventInner::RightPress,
+                                }),
                             ));
                     }
 
@@ -680,7 +693,10 @@ pub fn widget_def_to_fn(def: WidgetDef) -> Option<ViewFn> {
                         mouse_area = mouse_area.on_right_release(
                             crate::widget::SnowcapMessage::WidgetEvent(
                                 WidgetId(widget_id),
-                                WidgetEvent::MouseArea(MouseAreaEvent::RightRelease),
+                                WidgetEvent::MouseArea(MouseAreaEvent {
+                                    unique_id: unique_id.clone(),
+                                    inner: MouseAreaEventInner::RightRelease,
+                                }),
                             ),
                         );
                     }
@@ -689,7 +705,10 @@ pub fn widget_def_to_fn(def: WidgetDef) -> Option<ViewFn> {
                         mouse_area =
                             mouse_area.on_middle_press(crate::widget::SnowcapMessage::WidgetEvent(
                                 WidgetId(widget_id),
-                                WidgetEvent::MouseArea(MouseAreaEvent::MiddlePress),
+                                WidgetEvent::MouseArea(MouseAreaEvent {
+                                    unique_id: unique_id.clone(),
+                                    inner: MouseAreaEventInner::MiddlePress,
+                                }),
                             ));
                     }
 
@@ -697,16 +716,23 @@ pub fn widget_def_to_fn(def: WidgetDef) -> Option<ViewFn> {
                         mouse_area = mouse_area.on_middle_release(
                             crate::widget::SnowcapMessage::WidgetEvent(
                                 WidgetId(widget_id),
-                                WidgetEvent::MouseArea(MouseAreaEvent::MiddleRelease),
+                                WidgetEvent::MouseArea(MouseAreaEvent {
+                                    unique_id: unique_id.clone(),
+                                    inner: MouseAreaEventInner::MiddleRelease,
+                                }),
                             ),
                         );
                     }
 
                     if on_scroll {
+                        let unique_id = unique_id.clone();
                         mouse_area = mouse_area.on_scroll(move |scroll_delta| {
                             crate::widget::SnowcapMessage::WidgetEvent(
                                 WidgetId(widget_id),
-                                WidgetEvent::MouseArea(MouseAreaEvent::Scroll(scroll_delta)),
+                                WidgetEvent::MouseArea(MouseAreaEvent {
+                                    unique_id: unique_id.clone(),
+                                    inner: MouseAreaEventInner::Scroll(scroll_delta),
+                                }),
                             )
                         });
                     }
@@ -715,15 +741,22 @@ pub fn widget_def_to_fn(def: WidgetDef) -> Option<ViewFn> {
                         mouse_area =
                             mouse_area.on_enter(crate::widget::SnowcapMessage::WidgetEvent(
                                 WidgetId(widget_id),
-                                WidgetEvent::MouseArea(MouseAreaEvent::Enter),
+                                WidgetEvent::MouseArea(MouseAreaEvent {
+                                    unique_id: unique_id.clone(),
+                                    inner: MouseAreaEventInner::Enter,
+                                }),
                             ));
                     }
 
                     if on_move {
+                        let unique_id = unique_id.clone();
                         mouse_area = mouse_area.on_move(move |point| {
                             crate::widget::SnowcapMessage::WidgetEvent(
                                 WidgetId(widget_id),
-                                WidgetEvent::MouseArea(MouseAreaEvent::Move(point)),
+                                WidgetEvent::MouseArea(MouseAreaEvent {
+                                    unique_id: unique_id.clone(),
+                                    inner: MouseAreaEventInner::Move(point),
+                                }),
                             )
                         });
                     }
@@ -732,7 +765,10 @@ pub fn widget_def_to_fn(def: WidgetDef) -> Option<ViewFn> {
                         mouse_area =
                             mouse_area.on_exit(crate::widget::SnowcapMessage::WidgetEvent(
                                 WidgetId(widget_id),
-                                WidgetEvent::MouseArea(MouseAreaEvent::Exit),
+                                WidgetEvent::MouseArea(MouseAreaEvent {
+                                    unique_id: unique_id.clone(),
+                                    inner: MouseAreaEventInner::Exit,
+                                }),
                             ));
                     }
                 }
@@ -1007,24 +1043,31 @@ impl FromApi<widget::v1::mouse_area::Interaction> for iced::mouse::Interaction {
 impl From<MouseAreaEvent> for snowcap_api_defs::snowcap::widget::v1::mouse_area::Event {
     fn from(value: MouseAreaEvent) -> Self {
         use snowcap_api_defs::snowcap::widget::v1::mouse_area::{EventType, event::Data};
+        let MouseAreaEvent { unique_id, inner } = value;
 
-        let (event_type, data) = match value {
-            MouseAreaEvent::Press => (EventType::EventPress, None),
-            MouseAreaEvent::Release => (EventType::EventRelease, None),
-            MouseAreaEvent::DoubleClick => (EventType::EventDoubleClick, None),
-            MouseAreaEvent::RightPress => (EventType::EventRightPress, None),
-            MouseAreaEvent::RightRelease => (EventType::EventRightRelease, None),
-            MouseAreaEvent::MiddlePress => (EventType::EventMiddlePress, None),
-            MouseAreaEvent::MiddleRelease => (EventType::EventMiddleRelease, None),
-            MouseAreaEvent::Scroll(delta) => (EventType::EventScroll, Some(Data::from_api(delta))),
-            MouseAreaEvent::Enter => (EventType::EventEnter, None),
-            MouseAreaEvent::Move(point) => (EventType::EventMove, Some(Data::from_api(point))),
-            MouseAreaEvent::Exit => (EventType::EventExit, None),
+        let (event_type, data) = match inner {
+            MouseAreaEventInner::Press => (EventType::EventPress, None),
+            MouseAreaEventInner::Release => (EventType::EventRelease, None),
+            MouseAreaEventInner::DoubleClick => (EventType::EventDoubleClick, None),
+            MouseAreaEventInner::RightPress => (EventType::EventRightPress, None),
+            MouseAreaEventInner::RightRelease => (EventType::EventRightRelease, None),
+            MouseAreaEventInner::MiddlePress => (EventType::EventMiddlePress, None),
+            MouseAreaEventInner::MiddleRelease => (EventType::EventMiddleRelease, None),
+            MouseAreaEventInner::Scroll(delta) => {
+                (EventType::EventScroll, Some(Data::from_api(delta)))
+            }
+            MouseAreaEventInner::Enter => (EventType::EventEnter, None),
+            MouseAreaEventInner::Move(point) => (EventType::EventMove, Some(Data::from_api(point))),
+            MouseAreaEventInner::Exit => (EventType::EventExit, None),
         };
 
         let event_type: i32 = event_type.into();
 
-        Self { event_type, data }
+        Self {
+            event_type,
+            unique_id,
+            data,
+        }
     }
 }
 
@@ -1036,7 +1079,7 @@ impl FromApi<iced::mouse::ScrollDelta>
         use snowcap_api_defs::snowcap::widget::v1::mouse_area::{self, scroll_delta};
 
         let inner = match api_type {
-            ScrollDelta::Lines { x, y } => scroll_delta::Data::Line(scroll_delta::Lines { x, y }),
+            ScrollDelta::Lines { x, y } => scroll_delta::Data::Lines(scroll_delta::Lines { x, y }),
             ScrollDelta::Pixels { x, y } => {
                 scroll_delta::Data::Pixels(scroll_delta::Pixels { x, y })
             }

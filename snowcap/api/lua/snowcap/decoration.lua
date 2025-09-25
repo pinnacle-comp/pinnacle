@@ -44,10 +44,12 @@ local function _reload_callbacks(callbacks, widget)
         callbacks[widget.button.widget_id] = widget.button.on_press
     end
 
-    if widget.mouse_area and widget.mouse_area.widget_id then
-        local widget_id = widget.mouse_area.widget_id
+    if widget.mouse_area then
+        local id = widget.mouse_area.unique_id or widget.mouse_area.widget_id
 
-        callbacks[widget_id] = widget.mouse_area.callbacks
+        if id then
+            callbacks[id] = widget.mouse_area.callbacks
+        end
     end
 end
 
@@ -101,11 +103,15 @@ function decoration.new_widget(args)
 
         if response.button then
             msg = callbacks[widget_id]
-        elseif response.mouse_area and callbacks[widget_id] ~= nil then
-            msg = require("snowcap.widget")._mouse_area_process_event(
-                callbacks[widget_id],
-                response.mouse_area
-            )
+        elseif response.mouse_area then
+            widget_id = response.mouse_area.unique_id or widget_id
+
+            if callbacks[widget_id] ~= nil then
+                msg = require("snowcap.widget")._mouse_area_process_event(
+                    callbacks[widget_id],
+                    response.mouse_area
+                )
+            end
         end
 
         if msg then

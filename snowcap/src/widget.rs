@@ -207,7 +207,13 @@ pub enum WidgetEvent {
 }
 
 #[derive(Debug, Clone)]
-pub enum MouseAreaEvent {
+pub struct MouseAreaEvent {
+    pub unique_id: Option<String>,
+    pub inner: MouseAreaEventInner,
+}
+
+#[derive(Debug, Clone)]
+pub enum MouseAreaEventInner {
     Press,
     Release,
     DoubleClick,
