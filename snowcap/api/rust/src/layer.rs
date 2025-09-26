@@ -19,7 +19,7 @@ use crate::{
     BlockOnTokio,
     client::Client,
     input::Modifiers,
-    widget::{Program, Widget, WidgetId},
+    widget::{Program, WidgetDef, WidgetId, WidgetMessage},
 };
 
 // TODO: change to bitflag
@@ -137,15 +137,11 @@ where
     Msg: Clone + Send + 'static,
     P: Program<Message = Msg> + Send + 'static,
 {
-    let mut callbacks = HashMap::<WidgetId, Msg>::new();
+    let mut callbacks = HashMap::<WidgetId, WidgetMessage<Msg>>::new();
 
     let widget_def = program.view();
 
-    widget_def.collect_messages(&mut callbacks, |def, cbs| {
-        if let Widget::Button(button) = &def.widget {
-            cbs.extend(button.on_press.clone());
-        }
-    });
+    widget_def.collect_messages(&mut callbacks, WidgetDef::message_collector);
 
     let response = Client::layer()
         .new_layer(NewLayerRequest {
@@ -183,10 +179,20 @@ where
 
                         let msg = match event {
                             widget_event::Event::Button(_event) => {
-                                callbacks.get(&id).cloned()
+                                callbacks.get(&id).cloned().map(|f| {
+                                    match f {
+                                        WidgetMessage::Button(msg) => msg,
+                                        _ => unreachable!()
+                                    }
+                                })
                             },
-                            widget_event::Event::MouseArea(_event) => {
-                                todo!()
+                            widget_event::Event::MouseArea(event) => {
+                                callbacks.get(&id).cloned().and_then(|f| {
+                                    match f {
+                                        WidgetMessage::MouseArea(callbacks) => callbacks.process_event(event.into()),
+                                        _ => unreachable!()
+                                    }
+                                })
                             }
                         };
 
@@ -194,11 +200,11 @@ where
                             continue;
                         };
 
-                        program.update(msg.clone());
+                        program.update(msg);
                     }
                 }
                 Some(msg) = msg_recv.recv() => {
-                    program.update(msg.clone());
+                    program.update(msg);
                 }
                 else => break,
             };
@@ -207,11 +213,7 @@ where
 
             callbacks.clear();
 
-            widget_def.collect_messages(&mut callbacks, |def, cbs| {
-                if let Widget::Button(button) = &def.widget {
-                    cbs.extend(button.on_press.clone());
-                }
-            });
+            widget_def.collect_messages(&mut callbacks, WidgetDef::message_collector);
 
             Client::layer()
                 .update_layer(UpdateLayerRequest {
