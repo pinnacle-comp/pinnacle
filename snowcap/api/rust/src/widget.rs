@@ -8,6 +8,7 @@ pub mod container;
 pub mod font;
 pub mod image;
 pub mod input_region;
+pub mod mouse_area;
 pub mod row;
 pub mod scrollable;
 pub mod text;
@@ -21,6 +22,7 @@ use button::Button;
 use column::Column;
 use container::Container;
 use image::Image;
+use mouse_area::MouseArea;
 use row::Row;
 use scrollable::Scrollable;
 use snowcap_api_defs::snowcap::widget;
@@ -48,6 +50,35 @@ impl WidgetId {
 impl From<u32> for WidgetId {
     fn from(value: u32) -> Self {
         Self(value)
+    }
+}
+
+/// A unique key for a widget.
+///
+/// While most widget only need a [`WidgetId`], some need a stable identifier across view
+/// generations if multiple events can fire at once. WidgetKey holds both identifier in a way that
+/// can be used as a key in a HashMap.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub(crate) enum WidgetKey {
+    WidgetId(WidgetId),
+    UniqueId(String),
+}
+
+impl Default for WidgetKey {
+    fn default() -> Self {
+        Self::WidgetId(Default::default())
+    }
+}
+
+impl From<WidgetId> for WidgetKey {
+    fn from(value: WidgetId) -> Self {
+        Self::WidgetId(value)
+    }
+}
+
+impl From<String> for WidgetKey {
+    fn from(value: String) -> Self {
+        Self::UniqueId(value)
     }
 }
 
@@ -103,11 +134,18 @@ pub struct WidgetDef<Msg> {
     pub widget: Widget<Msg>,
 }
 
+/// Holds pending messages for any Widget
+#[derive(Debug, Clone, PartialEq)]
+pub enum WidgetMessage<Msg> {
+    Button(Msg),
+    MouseArea(mouse_area::Callbacks<Msg>),
+}
+
 impl<Msg> WidgetDef<Msg> {
     pub(crate) fn collect_messages(
         &self,
-        callbacks: &mut HashMap<WidgetId, Msg>,
-        with_widget: fn(&WidgetDef<Msg>, &mut HashMap<WidgetId, Msg>),
+        callbacks: &mut HashMap<WidgetKey, WidgetMessage<Msg>>,
+        with_widget: fn(&WidgetDef<Msg>, &mut HashMap<WidgetKey, WidgetMessage<Msg>>),
     ) {
         with_widget(self, callbacks);
         match &self.widget {
@@ -135,6 +173,34 @@ impl<Msg> WidgetDef<Msg> {
             Widget::InputRegion(input_region) => {
                 input_region.child.collect_messages(callbacks, with_widget);
             }
+            Widget::MouseArea(mouse_area) => {
+                mouse_area.child.collect_messages(callbacks, with_widget);
+            }
+        }
+    }
+}
+
+impl<Msg: Clone> WidgetDef<Msg> {
+    pub(crate) fn message_collector(&self, callbacks: &mut HashMap<WidgetKey, WidgetMessage<Msg>>) {
+        if let Widget::Button(button) = &self.widget {
+            callbacks.extend(
+                button
+                    .on_press
+                    .iter()
+                    .cloned()
+                    .map(|(id, msg)| (id.into(), WidgetMessage::Button(msg))),
+            );
+        }
+
+        if let Widget::MouseArea(mouse_area) = &self.widget {
+            let key: Option<WidgetKey> = mouse_area
+                .unique_id
+                .clone()
+                .map(From::from)
+                .or(mouse_area.widget_id.map(From::from));
+
+            let kv = key.map(|k| (k, WidgetMessage::MouseArea(mouse_area.callbacks.clone())));
+            callbacks.extend(kv);
         }
     }
 }
@@ -160,6 +226,7 @@ pub enum Widget<Msg> {
     Button(Box<Button<Msg>>),
     Image(Image),
     InputRegion(Box<InputRegion<Msg>>),
+    MouseArea(Box<MouseArea<Msg>>),
 }
 
 impl<Msg, T: Into<Widget<Msg>>> From<T> for WidgetDef<Msg> {
@@ -190,6 +257,9 @@ impl<Msg> From<Widget<Msg>> for widget::v1::widget_def::Widget {
             Widget::Image(image) => widget::v1::widget_def::Widget::Image(image.into()),
             Widget::InputRegion(input_region) => {
                 widget::v1::widget_def::Widget::InputRegion(Box::new((*input_region).into()))
+            }
+            Widget::MouseArea(mouse_area) => {
+                widget::v1::widget_def::Widget::MouseArea(Box::new((*mouse_area).into()))
             }
         }
     }
