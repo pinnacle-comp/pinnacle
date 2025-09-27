@@ -19,7 +19,7 @@ use crate::{
     BlockOnTokio,
     client::Client,
     input::Modifiers,
-    widget::{Program, Widget, WidgetId},
+    widget::{Program, WidgetDef, WidgetId, WidgetKey, WidgetMessage},
 };
 
 // TODO: change to bitflag
@@ -137,15 +137,11 @@ where
     Msg: Clone + Send + 'static,
     P: Program<Message = Msg> + Send + 'static,
 {
-    let mut callbacks = HashMap::<WidgetId, Msg>::new();
+    let mut callbacks = HashMap::<WidgetKey, WidgetMessage<Msg>>::new();
 
     let widget_def = program.view();
 
-    widget_def.collect_messages(&mut callbacks, |def, cbs| {
-        if let Widget::Button(button) = &def.widget {
-            cbs.extend(button.on_press.clone());
-        }
-    });
+    widget_def.collect_messages(&mut callbacks, WidgetDef::message_collector);
 
     let response = Client::layer()
         .new_layer(NewLayerRequest {
@@ -182,7 +178,29 @@ where
 
                     match event {
                         get_widget_events_response::Event::Button(_event) => {
-                            callbacks.get(&id).cloned()
+                            let key = WidgetKey::from(id);
+                            callbacks.get(&key).cloned().map(|f| {
+                                match f {
+                                    WidgetMessage::Button(msg) => msg,
+                                    _ => unreachable!()
+                                }
+                            })
+                        },
+                        get_widget_events_response::Event::MouseArea(event) => {
+                            let unique_id = event.unique_id.clone();
+
+                            let key: WidgetKey = if let Some(unique_id) = unique_id {
+                                unique_id.into()
+                            } else {
+                                id.into()
+                            };
+
+                            callbacks.get(&key).cloned().and_then(|f| {
+                                match f {
+                                    WidgetMessage::MouseArea(callbacks) => callbacks.process_event(event.into()),
+                                    _ => unreachable!()
+                                }
+                            })
                         }
                     }
                 }
@@ -202,11 +220,7 @@ where
 
             callbacks.clear();
 
-            widget_def.collect_messages(&mut callbacks, |def, cbs| {
-                if let Widget::Button(button) = &def.widget {
-                    cbs.extend(button.on_press.clone());
-                }
-            });
+            widget_def.collect_messages(&mut callbacks, WidgetDef::message_collector);
 
             Client::layer()
                 .update_layer(UpdateLayerRequest {
