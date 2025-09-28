@@ -1065,9 +1065,18 @@ impl Udev {
             .connector_saved_states
             .get(&OutputName(output.name()))
         {
-            let ConnectorSavedState { loc, tags, scale } = saved_state;
-            output.with_state_mut(|state| state.tags.clone_from(tags));
-            pinnacle.change_output_state(self, &output, None, None, *scale, Some(*loc));
+            let ConnectorSavedState {
+                loc,
+                tags,
+                scale,
+                powered,
+            } = saved_state.clone();
+
+            output.with_state_mut(|state| state.tags.clone_from(&tags));
+            pinnacle.change_output_state(self, &output, None, None, scale, Some(loc));
+            if let Some(powered) = powered {
+                self.set_output_powered(&output, &pinnacle.loop_handle, powered);
+            }
         } else {
             pinnacle.signal_state.output_connect.signal(&output);
         }
