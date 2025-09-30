@@ -6,8 +6,7 @@
 - Work on `ConnectorSavedState`
 - Keyboard focus in Idea Xwayland is weird when creating a new Java file
 
-Snowcap
-- Add `send_message` for layers
+- Snowcap crashes when a window opens and immediately closes because the foreign toplevel handle is no longer valid
 
 Testing
 - Test layout mode changing and how it interacts with client fullscreen/maximized requests
