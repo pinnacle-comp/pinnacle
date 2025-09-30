@@ -334,6 +334,7 @@ impl Pinnacle {
                     loc: output.current_location(),
                     tags: output.with_state(|state| state.tags.clone()),
                     scale: Some(output.current_scale()),
+                    powered: Some(output.with_state(|state| state.powered)),
                 },
             );
 
@@ -381,6 +382,7 @@ impl Pinnacle {
                 loc: output.current_location(),
                 tags: output.with_state(|state| state.tags.clone()),
                 scale: Some(output.current_scale()),
+                powered: Some(output.with_state(|state| state.powered)),
             },
         );
 

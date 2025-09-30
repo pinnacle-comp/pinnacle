@@ -296,6 +296,8 @@ pub struct ConnectorSavedState {
     pub tags: IndexSet<Tag>,
     /// The output's previous scale
     pub scale: Option<smithay::output::Scale>,
+    /// The output's previous powered state
+    pub powered: Option<bool>,
     // TODO: transform
 }
 
