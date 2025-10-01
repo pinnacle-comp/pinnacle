@@ -47,6 +47,7 @@ pub struct SnowcapSurface {
 
     redraw_scheduled: bool,
     pending_view: Option<ViewFn>,
+    waiting_view: bool,
     pub widgets: SnowcapWidgetProgram,
     clipboard: WaylandClipboard,
 
@@ -134,6 +135,7 @@ impl SnowcapSurface {
             bounds: iced::Size::default(),
             pending_bounds: None,
             pending_view: None,
+            waiting_view: false,
             widgets,
             renderer,
             clipboard,
@@ -241,6 +243,7 @@ impl SnowcapSurface {
         }
         if self.pending_view.is_some() {
             needs_rebuild = true;
+            self.waiting_view = false;
         }
 
         let mut resized = false;
@@ -279,6 +282,10 @@ impl SnowcapSurface {
         };
 
         let mut messages = Vec::new();
+
+        if self.waiting_view {
+            return resized;
+        }
 
         let Some((state, statuses)) = self.widgets.update(
             cursor,
@@ -340,6 +347,7 @@ impl SnowcapSurface {
                 })
                 .collect();
 
+            self.waiting_view = true;
             let _ = sender.send(widget_events);
         }
 
