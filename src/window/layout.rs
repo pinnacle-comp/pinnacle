@@ -7,6 +7,7 @@ use smithay::{
 };
 
 use crate::{
+    api::signal::Signal,
     backend::Backend,
     state::{Pinnacle, WithState},
     util::transaction::{Location, TransactionBuilder},
@@ -216,6 +217,42 @@ impl Pinnacle {
 
         if old_mode != new_mode {
             let need_layout = old_mode.is_tiled() || new_mode.is_tiled() || new_mode.is_spilled();
+
+            match old_mode.current() {
+                crate::window::window_state::LayoutModeKind::Floating => {
+                    self.signal_state.window_unset_floating.signal(window);
+                }
+                crate::window::window_state::LayoutModeKind::Tiled => {
+                    self.signal_state.window_unset_tiled.signal(window);
+                }
+                crate::window::window_state::LayoutModeKind::Maximized => {
+                    self.signal_state.window_unset_maximized.signal(window);
+                }
+                crate::window::window_state::LayoutModeKind::Fullscreen => {
+                    self.signal_state.window_unset_fullscreen.signal(window);
+                }
+                crate::window::window_state::LayoutModeKind::Spilled => {
+                    self.signal_state.window_unset_spilled.signal(window);
+                }
+            }
+
+            match new_mode.current() {
+                crate::window::window_state::LayoutModeKind::Floating => {
+                    self.signal_state.window_set_floating.signal(window);
+                }
+                crate::window::window_state::LayoutModeKind::Tiled => {
+                    self.signal_state.window_set_tiled.signal(window);
+                }
+                crate::window::window_state::LayoutModeKind::Maximized => {
+                    self.signal_state.window_set_maximized.signal(window);
+                }
+                crate::window::window_state::LayoutModeKind::Fullscreen => {
+                    self.signal_state.window_set_fullscreen.signal(window);
+                }
+                crate::window::window_state::LayoutModeKind::Spilled => {
+                    self.signal_state.window_set_spilled.signal(window);
+                }
+            }
 
             window.configure_states();
             self.update_window_geometry(window, need_layout);

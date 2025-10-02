@@ -33,6 +33,7 @@ use tracing::{error, warn};
 use window_state::LayoutModeKind;
 
 use crate::{
+    api::signal::Signal,
     render::util::snapshot::WindowSnapshot,
     state::{Pinnacle, State, WithState},
     tag::Tag,
@@ -833,6 +834,37 @@ impl State {
             &window,
             window.with_state(|state| state.layout_mode.is_tiled()),
         );
+
+        let initial_state = window.with_state(|state| state.layout_mode.current());
+        match initial_state {
+            LayoutModeKind::Floating => {
+                self.pinnacle
+                    .signal_state
+                    .window_set_floating
+                    .signal(&window);
+            }
+            LayoutModeKind::Tiled => {
+                self.pinnacle.signal_state.window_set_tiled.signal(&window);
+            }
+            LayoutModeKind::Maximized => {
+                self.pinnacle
+                    .signal_state
+                    .window_set_maximized
+                    .signal(&window);
+            }
+            LayoutModeKind::Fullscreen => {
+                self.pinnacle
+                    .signal_state
+                    .window_set_fullscreen
+                    .signal(&window);
+            }
+            LayoutModeKind::Spilled => {
+                self.pinnacle
+                    .signal_state
+                    .window_set_spilled
+                    .signal(&window);
+            }
+        }
 
         // TODO: xdg activation
 

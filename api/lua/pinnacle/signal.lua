@@ -97,6 +97,86 @@ local signals = {
         ---@type fun(response: table)
         on_response = nil,
     },
+    WindowSetFloating = {
+        ---@type grpc_client.h2.Stream?
+        sender = nil,
+        ---@type { callback_id: integer, callback: fun(window: pinnacle.window.WindowHandle) }[]
+        callbacks = {},
+        ---@type fun(response: table)
+        on_response = nil,
+    },
+    WindowUnsetFloating = {
+        ---@type grpc_client.h2.Stream?
+        sender = nil,
+        ---@type { callback_id: integer, callback: fun(window: pinnacle.window.WindowHandle) }[]
+        callbacks = {},
+        ---@type fun(response: table)
+        on_response = nil,
+    },
+    WindowSetTiled = {
+        ---@type grpc_client.h2.Stream?
+        sender = nil,
+        ---@type { callback_id: integer, callback: fun(window: pinnacle.window.WindowHandle) }[]
+        callbacks = {},
+        ---@type fun(response: table)
+        on_response = nil,
+    },
+    WindowUnsetTiled = {
+        ---@type grpc_client.h2.Stream?
+        sender = nil,
+        ---@type { callback_id: integer, callback: fun(window: pinnacle.window.WindowHandle) }[]
+        callbacks = {},
+        ---@type fun(response: table)
+        on_response = nil,
+    },
+    WindowSetMaximized = {
+        ---@type grpc_client.h2.Stream?
+        sender = nil,
+        ---@type { callback_id: integer, callback: fun(window: pinnacle.window.WindowHandle) }[]
+        callbacks = {},
+        ---@type fun(response: table)
+        on_response = nil,
+    },
+    WindowUnsetMaximized = {
+        ---@type grpc_client.h2.Stream?
+        sender = nil,
+        ---@type { callback_id: integer, callback: fun(window: pinnacle.window.WindowHandle) }[]
+        callbacks = {},
+        ---@type fun(response: table)
+        on_response = nil,
+    },
+    WindowSetFullscreen = {
+        ---@type grpc_client.h2.Stream?
+        sender = nil,
+        ---@type { callback_id: integer, callback: fun(window: pinnacle.window.WindowHandle) }[]
+        callbacks = {},
+        ---@type fun(response: table)
+        on_response = nil,
+    },
+    WindowUnsetFullscreen = {
+        ---@type grpc_client.h2.Stream?
+        sender = nil,
+        ---@type { callback_id: integer, callback: fun(window: pinnacle.window.WindowHandle) }[]
+        callbacks = {},
+        ---@type fun(response: table)
+        on_response = nil,
+    },
+    WindowSetSpilled = {
+        ---@type grpc_client.h2.Stream?
+        sender = nil,
+        ---@type { callback_id: integer, callback: fun(window: pinnacle.window.WindowHandle) }[]
+        callbacks = {},
+        ---@type fun(response: table)
+        on_response = nil,
+    },
+    WindowUnsetSpilled = {
+        ---@type grpc_client.h2.Stream?
+        sender = nil,
+        ---@type { callback_id: integer, callback: fun(window: pinnacle.window.WindowHandle) }[]
+        callbacks = {},
+        ---@type fun(response: table)
+        on_response = nil,
+    },
     TagActive = {
         ---@type grpc_client.h2.Stream?
         sender = nil,
@@ -263,6 +343,106 @@ signals.WindowTitleChanged.on_response = function(response)
 
     for _, callback in ipairs(callbacks) do
         protected_callback("WindowTitleChanged", callback.callback, window_handle, title)
+    end
+end
+
+signals.WindowSetFloating.on_response = function(response)
+    ---@diagnostic disable-next-line: invisible
+    local window_handle = require("pinnacle.window").handle.new(response.window_id)
+    local callbacks = require("pinnacle.util").deep_copy(signals.WindowSetFloating.callbacks)
+
+    for _, callback in ipairs(callbacks) do
+        protected_callback("WindowSetFloating", callback.callback, window_handle)
+    end
+end
+
+signals.WindowUnsetFloating.on_response = function(response)
+    ---@diagnostic disable-next-line: invisible
+    local window_handle = require("pinnacle.window").handle.new(response.window_id)
+    local callbacks = require("pinnacle.util").deep_copy(signals.WindowUnsetFloating.callbacks)
+
+    for _, callback in ipairs(callbacks) do
+        protected_callback("WindowUnsetFloating", callback.callback, window_handle)
+    end
+end
+
+signals.WindowSetTiled.on_response = function(response)
+    ---@diagnostic disable-next-line: invisible
+    local window_handle = require("pinnacle.window").handle.new(response.window_id)
+    local callbacks = require("pinnacle.util").deep_copy(signals.WindowSetTiled.callbacks)
+
+    for _, callback in ipairs(callbacks) do
+        protected_callback("WindowSetTiled", callback.callback, window_handle)
+    end
+end
+
+signals.WindowUnsetTiled.on_response = function(response)
+    ---@diagnostic disable-next-line: invisible
+    local window_handle = require("pinnacle.window").handle.new(response.window_id)
+    local callbacks = require("pinnacle.util").deep_copy(signals.WindowUnsetTiled.callbacks)
+
+    for _, callback in ipairs(callbacks) do
+        protected_callback("WindowUnsetTiled", callback.callback, window_handle)
+    end
+end
+
+signals.WindowSetMaximized.on_response = function(response)
+    ---@diagnostic disable-next-line: invisible
+    local window_handle = require("pinnacle.window").handle.new(response.window_id)
+    local callbacks = require("pinnacle.util").deep_copy(signals.WindowSetMaximized.callbacks)
+
+    for _, callback in ipairs(callbacks) do
+        protected_callback("WindowSetMaximized", callback.callback, window_handle)
+    end
+end
+
+signals.WindowUnsetMaximized.on_response = function(response)
+    ---@diagnostic disable-next-line: invisible
+    local window_handle = require("pinnacle.window").handle.new(response.window_id)
+    local callbacks = require("pinnacle.util").deep_copy(signals.WindowUnsetMaximized.callbacks)
+
+    for _, callback in ipairs(callbacks) do
+        protected_callback("WindowUnsetMaximized", callback.callback, window_handle)
+    end
+end
+
+signals.WindowSetFullscreen.on_response = function(response)
+    ---@diagnostic disable-next-line: invisible
+    local window_handle = require("pinnacle.window").handle.new(response.window_id)
+    local callbacks = require("pinnacle.util").deep_copy(signals.WindowSetFullscreen.callbacks)
+
+    for _, callback in ipairs(callbacks) do
+        protected_callback("WindowSetFullscreen", callback.callback, window_handle)
+    end
+end
+
+signals.WindowUnsetFullscreen.on_response = function(response)
+    ---@diagnostic disable-next-line: invisible
+    local window_handle = require("pinnacle.window").handle.new(response.window_id)
+    local callbacks = require("pinnacle.util").deep_copy(signals.WindowUnsetFullscreen.callbacks)
+
+    for _, callback in ipairs(callbacks) do
+        protected_callback("WindowUnsetFullscreen", callback.callback, window_handle)
+    end
+end
+
+signals.WindowSetSpilled.on_response = function(response)
+    ---@diagnostic disable-next-line: invisible
+    local window_handle = require("pinnacle.window").handle.new(response.window_id)
+    local callbacks = require("pinnacle.util").deep_copy(signals.WindowSetSpilled.callbacks)
+
+    for _, callback in ipairs(callbacks) do
+        protected_callback("WindowSetSpilled", callback.callback, window_handle)
+    end
+end
+
+signals.WindowUnsetSpilled.on_response = function(response)
+    ---@diagnostic disable-next-line: invisible
+    local window_handle = require("pinnacle.window").handle.new(response.window_id)
+    local callbacks = require("pinnacle.util").deep_copy(signals.WindowUnsetSpilled.callbacks)
+
+    for _, callback in ipairs(callbacks) do
+        protected_callback("WindowUnsetSpilled", callback.callback, window_handle)
     end
 end
 

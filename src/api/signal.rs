@@ -13,8 +13,14 @@ use pinnacle_api_defs::pinnacle::signal::{
         OutputPointerLeaveResponse, OutputResizeRequest, OutputResizeResponse, SignalRequest,
         StreamControl, TagActiveRequest, TagActiveResponse, WindowFocusedRequest,
         WindowFocusedResponse, WindowPointerEnterRequest, WindowPointerEnterResponse,
-        WindowPointerLeaveRequest, WindowPointerLeaveResponse, WindowTitleChangedRequest,
-        WindowTitleChangedResponse,
+        WindowPointerLeaveRequest, WindowPointerLeaveResponse, WindowSetFloatingRequest,
+        WindowSetFloatingResponse, WindowSetFullscreenRequest, WindowSetFullscreenResponse,
+        WindowSetMaximizedRequest, WindowSetMaximizedResponse, WindowSetSpilledRequest,
+        WindowSetSpilledResponse, WindowSetTiledRequest, WindowSetTiledResponse,
+        WindowTitleChangedRequest, WindowTitleChangedResponse, WindowUnsetFloatingRequest,
+        WindowUnsetFloatingResponse, WindowUnsetFullscreenRequest, WindowUnsetFullscreenResponse,
+        WindowUnsetMaximizedRequest, WindowUnsetMaximizedResponse, WindowUnsetSpilledRequest,
+        WindowUnsetSpilledResponse, WindowUnsetTiledRequest, WindowUnsetTiledResponse,
     },
 };
 use smithay::output::Output;
@@ -46,6 +52,16 @@ pub struct SignalState {
     pub window_pointer_leave: WindowPointerLeave,
     pub window_focused: WindowFocused,
     pub window_title_changed: WindowTitleChanged,
+    pub window_set_floating: WindowSetFloating,
+    pub window_unset_floating: WindowUnsetFloating,
+    pub window_set_tiled: WindowSetTiled,
+    pub window_unset_tiled: WindowUnsetTiled,
+    pub window_set_maximized: WindowSetMaximized,
+    pub window_unset_maximized: WindowUnsetMaximized,
+    pub window_set_fullscreen: WindowSetFullscreen,
+    pub window_unset_fullscreen: WindowUnsetFullscreen,
+    pub window_set_spilled: WindowSetSpilled,
+    pub window_unset_spilled: WindowUnsetSpilled,
 
     // Tag
     pub tag_active: TagActive,
@@ -68,6 +84,16 @@ impl SignalState {
         self.window_pointer_leave.clear();
         self.window_focused.clear();
         self.window_title_changed.clear();
+        self.window_set_floating.clear();
+        self.window_unset_floating.clear();
+        self.window_set_tiled.clear();
+        self.window_unset_tiled.clear();
+        self.window_set_maximized.clear();
+        self.window_unset_maximized.clear();
+        self.window_set_fullscreen.clear();
+        self.window_unset_fullscreen.clear();
+        self.window_set_spilled.clear();
+        self.window_unset_spilled.clear();
 
         self.tag_active.clear();
 
@@ -333,6 +359,216 @@ impl Signal for WindowTitleChanged {
 }
 
 #[derive(Debug, Default)]
+pub struct WindowSetFloating {
+    v1: SignalData<signal::v1::WindowSetFloatingResponse>,
+}
+
+impl Signal for WindowSetFloating {
+    type Args<'a> = &'a WindowElement;
+
+    fn signal(&mut self, window: Self::Args<'_>) {
+        self.v1.signal(|buf| {
+            buf.push_back(signal::v1::WindowSetFloatingResponse {
+                window_id: window.with_state(|state| state.id.0),
+            });
+        });
+    }
+
+    fn clear(&mut self) {
+        self.v1.instances.clear();
+    }
+}
+
+#[derive(Debug, Default)]
+pub struct WindowUnsetFloating {
+    v1: SignalData<signal::v1::WindowUnsetFloatingResponse>,
+}
+
+impl Signal for WindowUnsetFloating {
+    type Args<'a> = &'a WindowElement;
+
+    fn signal(&mut self, window: Self::Args<'_>) {
+        self.v1.signal(|buf| {
+            buf.push_back(signal::v1::WindowUnsetFloatingResponse {
+                window_id: window.with_state(|state| state.id.0),
+            });
+        });
+    }
+
+    fn clear(&mut self) {
+        self.v1.instances.clear();
+    }
+}
+
+#[derive(Debug, Default)]
+pub struct WindowSetTiled {
+    v1: SignalData<signal::v1::WindowSetTiledResponse>,
+}
+
+impl Signal for WindowSetTiled {
+    type Args<'a> = &'a WindowElement;
+
+    fn signal(&mut self, window: Self::Args<'_>) {
+        self.v1.signal(|buf| {
+            buf.push_back(signal::v1::WindowSetTiledResponse {
+                window_id: window.with_state(|state| state.id.0),
+            });
+        });
+    }
+
+    fn clear(&mut self) {
+        self.v1.instances.clear();
+    }
+}
+
+#[derive(Debug, Default)]
+pub struct WindowUnsetTiled {
+    v1: SignalData<signal::v1::WindowUnsetTiledResponse>,
+}
+
+impl Signal for WindowUnsetTiled {
+    type Args<'a> = &'a WindowElement;
+
+    fn signal(&mut self, window: Self::Args<'_>) {
+        self.v1.signal(|buf| {
+            buf.push_back(signal::v1::WindowUnsetTiledResponse {
+                window_id: window.with_state(|state| state.id.0),
+            });
+        });
+    }
+
+    fn clear(&mut self) {
+        self.v1.instances.clear();
+    }
+}
+
+#[derive(Debug, Default)]
+pub struct WindowSetMaximized {
+    v1: SignalData<signal::v1::WindowSetMaximizedResponse>,
+}
+
+impl Signal for WindowSetMaximized {
+    type Args<'a> = &'a WindowElement;
+
+    fn signal(&mut self, window: Self::Args<'_>) {
+        self.v1.signal(|buf| {
+            buf.push_back(signal::v1::WindowSetMaximizedResponse {
+                window_id: window.with_state(|state| state.id.0),
+            });
+        });
+    }
+
+    fn clear(&mut self) {
+        self.v1.instances.clear();
+    }
+}
+
+#[derive(Debug, Default)]
+pub struct WindowUnsetMaximized {
+    v1: SignalData<signal::v1::WindowUnsetMaximizedResponse>,
+}
+
+impl Signal for WindowUnsetMaximized {
+    type Args<'a> = &'a WindowElement;
+
+    fn signal(&mut self, window: Self::Args<'_>) {
+        self.v1.signal(|buf| {
+            buf.push_back(signal::v1::WindowUnsetMaximizedResponse {
+                window_id: window.with_state(|state| state.id.0),
+            });
+        });
+    }
+
+    fn clear(&mut self) {
+        self.v1.instances.clear();
+    }
+}
+
+#[derive(Debug, Default)]
+pub struct WindowSetFullscreen {
+    v1: SignalData<signal::v1::WindowSetFullscreenResponse>,
+}
+
+impl Signal for WindowSetFullscreen {
+    type Args<'a> = &'a WindowElement;
+
+    fn signal(&mut self, window: Self::Args<'_>) {
+        self.v1.signal(|buf| {
+            buf.push_back(signal::v1::WindowSetFullscreenResponse {
+                window_id: window.with_state(|state| state.id.0),
+            });
+        });
+    }
+
+    fn clear(&mut self) {
+        self.v1.instances.clear();
+    }
+}
+
+#[derive(Debug, Default)]
+pub struct WindowUnsetFullscreen {
+    v1: SignalData<signal::v1::WindowUnsetFullscreenResponse>,
+}
+
+impl Signal for WindowUnsetFullscreen {
+    type Args<'a> = &'a WindowElement;
+
+    fn signal(&mut self, window: Self::Args<'_>) {
+        self.v1.signal(|buf| {
+            buf.push_back(signal::v1::WindowUnsetFullscreenResponse {
+                window_id: window.with_state(|state| state.id.0),
+            });
+        });
+    }
+
+    fn clear(&mut self) {
+        self.v1.instances.clear();
+    }
+}
+
+#[derive(Debug, Default)]
+pub struct WindowSetSpilled {
+    v1: SignalData<signal::v1::WindowSetSpilledResponse>,
+}
+
+impl Signal for WindowSetSpilled {
+    type Args<'a> = &'a WindowElement;
+
+    fn signal(&mut self, window: Self::Args<'_>) {
+        self.v1.signal(|buf| {
+            buf.push_back(signal::v1::WindowSetSpilledResponse {
+                window_id: window.with_state(|state| state.id.0),
+            });
+        });
+    }
+
+    fn clear(&mut self) {
+        self.v1.instances.clear();
+    }
+}
+
+#[derive(Debug, Default)]
+pub struct WindowUnsetSpilled {
+    v1: SignalData<signal::v1::WindowUnsetSpilledResponse>,
+}
+
+impl Signal for WindowUnsetSpilled {
+    type Args<'a> = &'a WindowElement;
+
+    fn signal(&mut self, window: Self::Args<'_>) {
+        self.v1.signal(|buf| {
+            buf.push_back(signal::v1::WindowUnsetSpilledResponse {
+                window_id: window.with_state(|state| state.id.0),
+            });
+        });
+    }
+
+    fn clear(&mut self) {
+        self.v1.instances.clear();
+    }
+}
+
+#[derive(Debug, Default)]
 pub struct TagActive {
     v1: SignalData<signal::v1::TagActiveResponse>,
 }
@@ -492,6 +728,16 @@ impl signal::v1::signal_service_server::SignalService for SignalService {
     type WindowPointerLeaveStream = ResponseStream<WindowPointerLeaveResponse>;
     type WindowFocusedStream = ResponseStream<WindowFocusedResponse>;
     type WindowTitleChangedStream = ResponseStream<WindowTitleChangedResponse>;
+    type WindowSetTiledStream = ResponseStream<WindowSetTiledResponse>;
+    type WindowUnsetTiledStream = ResponseStream<WindowUnsetTiledResponse>;
+    type WindowSetFloatingStream = ResponseStream<WindowSetFloatingResponse>;
+    type WindowUnsetFloatingStream = ResponseStream<WindowUnsetFloatingResponse>;
+    type WindowSetMaximizedStream = ResponseStream<WindowSetMaximizedResponse>;
+    type WindowUnsetMaximizedStream = ResponseStream<WindowUnsetMaximizedResponse>;
+    type WindowSetFullscreenStream = ResponseStream<WindowSetFullscreenResponse>;
+    type WindowUnsetFullscreenStream = ResponseStream<WindowUnsetFullscreenResponse>;
+    type WindowSetSpilledStream = ResponseStream<WindowSetSpilledResponse>;
+    type WindowUnsetSpilledStream = ResponseStream<WindowUnsetSpilledResponse>;
 
     type TagActiveStream = ResponseStream<TagActiveResponse>;
 
@@ -615,6 +861,116 @@ impl signal::v1::signal_service_server::SignalService for SignalService {
 
         start_signal_stream(self.sender.clone(), in_stream, |state| {
             &mut state.pinnacle.signal_state.window_title_changed.v1
+        })
+    }
+
+    async fn window_set_tiled(
+        &self,
+        request: Request<Streaming<WindowSetTiledRequest>>,
+    ) -> Result<Response<Self::WindowSetTiledStream>, Status> {
+        let in_stream = request.into_inner();
+
+        start_signal_stream(self.sender.clone(), in_stream, |state| {
+            &mut state.pinnacle.signal_state.window_set_tiled.v1
+        })
+    }
+
+    async fn window_unset_tiled(
+        &self,
+        request: Request<Streaming<WindowUnsetTiledRequest>>,
+    ) -> Result<Response<Self::WindowUnsetTiledStream>, Status> {
+        let in_stream = request.into_inner();
+
+        start_signal_stream(self.sender.clone(), in_stream, |state| {
+            &mut state.pinnacle.signal_state.window_unset_tiled.v1
+        })
+    }
+
+    async fn window_set_floating(
+        &self,
+        request: Request<Streaming<WindowSetFloatingRequest>>,
+    ) -> Result<Response<Self::WindowSetFloatingStream>, Status> {
+        let in_stream = request.into_inner();
+
+        start_signal_stream(self.sender.clone(), in_stream, |state| {
+            &mut state.pinnacle.signal_state.window_set_floating.v1
+        })
+    }
+
+    async fn window_unset_floating(
+        &self,
+        request: Request<Streaming<WindowUnsetFloatingRequest>>,
+    ) -> Result<Response<Self::WindowUnsetFloatingStream>, Status> {
+        let in_stream = request.into_inner();
+
+        start_signal_stream(self.sender.clone(), in_stream, |state| {
+            &mut state.pinnacle.signal_state.window_unset_floating.v1
+        })
+    }
+
+    async fn window_set_maximized(
+        &self,
+        request: Request<Streaming<WindowSetMaximizedRequest>>,
+    ) -> Result<Response<Self::WindowSetMaximizedStream>, Status> {
+        let in_stream = request.into_inner();
+
+        start_signal_stream(self.sender.clone(), in_stream, |state| {
+            &mut state.pinnacle.signal_state.window_set_maximized.v1
+        })
+    }
+
+    async fn window_unset_maximized(
+        &self,
+        request: Request<Streaming<WindowUnsetMaximizedRequest>>,
+    ) -> Result<Response<Self::WindowUnsetMaximizedStream>, Status> {
+        let in_stream = request.into_inner();
+
+        start_signal_stream(self.sender.clone(), in_stream, |state| {
+            &mut state.pinnacle.signal_state.window_unset_maximized.v1
+        })
+    }
+
+    async fn window_set_fullscreen(
+        &self,
+        request: Request<Streaming<WindowSetFullscreenRequest>>,
+    ) -> Result<Response<Self::WindowSetFullscreenStream>, Status> {
+        let in_stream = request.into_inner();
+
+        start_signal_stream(self.sender.clone(), in_stream, |state| {
+            &mut state.pinnacle.signal_state.window_set_fullscreen.v1
+        })
+    }
+
+    async fn window_unset_fullscreen(
+        &self,
+        request: Request<Streaming<WindowUnsetFullscreenRequest>>,
+    ) -> Result<Response<Self::WindowUnsetFullscreenStream>, Status> {
+        let in_stream = request.into_inner();
+
+        start_signal_stream(self.sender.clone(), in_stream, |state| {
+            &mut state.pinnacle.signal_state.window_unset_fullscreen.v1
+        })
+    }
+
+    async fn window_set_spilled(
+        &self,
+        request: Request<Streaming<WindowSetSpilledRequest>>,
+    ) -> Result<Response<Self::WindowSetSpilledStream>, Status> {
+        let in_stream = request.into_inner();
+
+        start_signal_stream(self.sender.clone(), in_stream, |state| {
+            &mut state.pinnacle.signal_state.window_set_spilled.v1
+        })
+    }
+
+    async fn window_unset_spilled(
+        &self,
+        request: Request<Streaming<WindowUnsetSpilledRequest>>,
+    ) -> Result<Response<Self::WindowUnsetSpilledStream>, Status> {
+        let in_stream = request.into_inner();
+
+        start_signal_stream(self.sender.clone(), in_stream, |state| {
+            &mut state.pinnacle.signal_state.window_unset_spilled.v1
         })
     }
 

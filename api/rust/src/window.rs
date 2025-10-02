@@ -161,6 +161,16 @@ pub fn connect_signal(signal: WindowSignal) -> SignalHandle {
         WindowSignal::PointerLeave(f) => signal_state.window_pointer_leave.add_callback(f),
         WindowSignal::Focused(f) => signal_state.window_focused.add_callback(f),
         WindowSignal::TitleChanged(f) => signal_state.window_title_changed.add_callback(f),
+        WindowSignal::SetFloating(f) => signal_state.window_set_floating.add_callback(f),
+        WindowSignal::UnsetFloating(f) => signal_state.window_unset_floating.add_callback(f),
+        WindowSignal::SetTiled(f) => signal_state.window_set_tiled.add_callback(f),
+        WindowSignal::UnsetTiled(f) => signal_state.window_unset_tiled.add_callback(f),
+        WindowSignal::SetMaximized(f) => signal_state.window_set_maximized.add_callback(f),
+        WindowSignal::UnsetMaximized(f) => signal_state.window_unset_maximized.add_callback(f),
+        WindowSignal::SetFullscreen(f) => signal_state.window_set_fullscreen.add_callback(f),
+        WindowSignal::UnsetFullscreen(f) => signal_state.window_unset_fullscreen.add_callback(f),
+        WindowSignal::SetSpilled(f) => signal_state.window_set_spilled.add_callback(f),
+        WindowSignal::UnsetSpilled(f) => signal_state.window_unset_spilled.add_callback(f),
     }
 }
 
