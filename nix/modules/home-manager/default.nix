@@ -80,15 +80,28 @@ with lib.options;
           or by setting the package option directly.
 
           please note that if you're running this home-manager module on a non-NixOS distribution and making use of snowcap, you need to wrap
-          the call to your configuration script/executable in `nixGL` to ensure the fallback to software rendering isn't used --
-          see: https://pinnacle-comp.github.io/pinnacle/getting-started/running#from-source. you should not use `nix run` here, however. instead,
-          make sure the `nixGL` and `nixVulkanIntel` packages are available and invoke each:
+          the call to your configuration script/executable in `nixGL` to ensure the fallback to software rendering isn't used  -- see the docs
+          on `wayland.windowManager.pinnacle.config.nixGL.enable` for more information.
+        '';
+      };
+      nixGL = {
+        enable = mkEnableOption ''
+          wrap the pinnacle package with nixGL. this should only be enabled on non-NixOS systems. you will need to configure nixGL within your home-manager config.
 
+          example for intel/amd igpu + nvidia discrete gpu:
           ```nix
-            services.wayland.windowManager.pinnacle.config.execCmd = ["''${pkgs.nixGL}/bin/nixGL" "''${pkgs.nixVulkanIntel}/bin/nixVulkanIntel" "''${pkgs.pinnacle-config}/bin/pinnacle-config"];
+            nixGL = {
+              # assuming your nixGL flake input is called `nixgl`
+              packages = nixgl.packages;
+              defaultWrapper = "mesa";
+              offloadWrapper = "nvidiaPrime";
+              vulkan.enable = true;
+              installScripts = ["mesa" "nvidiaPrime"];
+            };
           ```
         '';
       };
+      xdg-portals.enable = mkEnableOption "set up xdg desktop portals";
     };
 
     systemd = lib.mkOption {
@@ -130,19 +143,29 @@ with lib.options;
   config =
     let
       configFile = settingsFormat.generate "pinnacle.toml" cfg.mergedSettings;
+      package = if cfg.config.nixGL.enable then config.lib.nixGL.wrap cfg.package else cfg.package;
     in
     lib.mkIf cfg.enable {
       home.packages = [
-        cfg.package
+        package
         cfg.clientPackage
         pkgs.protobuf
         pkgs.xwayland
       ];
+      xdg.portal = lib.mkIf cfg.config.xdg-portals.enable {
+        enable = true;
+        configPackages = [ package ];
+        extraPortals = [
+          pkgs.xdg-desktop-portal-wlr
+          pkgs.xdg-desktop-portal-gtk
+          pkgs.gnome-keyring
+        ];
+      };
 
       xdg.configFile."pinnacle/pinnacle.toml" = {
         source = configFile;
         onChange = ''
-          PATH="${pkgs.protobuf}/bin:''${PATH}" ${cfg.package}/bin/pinnacle client -e "Pinnacle.reload_config()"
+          PATH="${pkgs.protobuf}/bin:''${PATH}" ${package}/bin/pinnacle client -e "Pinnacle.reload_config()"
         '';
       };
 
@@ -151,7 +174,7 @@ with lib.options;
           source = "${cfg.package.lua-client-api}/share/pinnacle";
           force = true;
           onChange = ''
-            PATH="${pkgs.protobuf}/bin:''${PATH}" ${cfg.package}/bin/pinnacle client -e "Pinnacle.reload_config()"
+            PATH="${pkgs.protobuf}/bin:''${PATH}" ${package}/bin/pinnacle client -e "Pinnacle.reload_config()"
           '';
         };
       };
@@ -169,11 +192,14 @@ with lib.options;
             "graphical-session.target"
           ]
           ++ lib.optionals cfg.systemd.xdgAutostart [ "xdg-desktop-autostart.target" ];
+          # don't restart every time we update home-manager/nixos -- the user should log out and back in to update to a new pinnacle binary.
+          X-SwitchMethod = "reload";
         };
         Service = {
           Slice = [ "session.slice" ];
           Type = "notify";
-          ExecStart = "${cfg.package}/bin/pinnacle --session";
+          ExecStart = "${package}/bin/pinnacle --session";
+          ExecReload = "${package}/bin/pinnacle client -e 'Pinnacle.reload_config()'";
         };
       };
 
