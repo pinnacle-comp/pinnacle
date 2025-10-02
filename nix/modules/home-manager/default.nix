@@ -80,13 +80,8 @@ with lib.options;
           or by setting the package option directly.
 
           please note that if you're running this home-manager module on a non-NixOS distribution and making use of snowcap, you need to wrap
-          the call to your configuration script/executable in `nixGL` to ensure the fallback to software rendering isn't used --
-          see: https://pinnacle-comp.github.io/pinnacle/getting-started/running#from-source. you should not use `nix run` here, however. instead,
-          make sure the `nixGL` and `nixVulkanIntel` packages are available and invoke each:
-
-          ```nix
-            services.wayland.windowManager.pinnacle.config.execCmd = ["''${pkgs.nixGL}/bin/nixGL" "''${pkgs.nixVulkanIntel}/bin/nixVulkanIntel" "''${pkgs.pinnacle-config}/bin/pinnacle-config"];
-          ```
+          the call to your configuration script/executable in `nixGL` to ensure the fallback to software rendering isn't used  -- see the docs
+          on `wayland.windowManager.pinnacle.config.nixGL.enable` for more information.
         '';
       };
       nixGL = {
