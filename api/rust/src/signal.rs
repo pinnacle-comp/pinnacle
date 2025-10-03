@@ -294,6 +294,156 @@ signals! {
                 }
             },
         }
+        /// A window entered floating mode.
+        ///
+        /// Callbacks receive the window that entered floating mode.
+        WindowSetFloating = {
+            enum_name = SetFloating,
+            callback_type = SingleWindowFn,
+            client_request = window_set_floating,
+            on_response = |response, callbacks| {
+                let handle = WindowHandle { id: response.window_id };
+
+                for callback in callbacks {
+                    callback(&handle);
+                }
+            },
+        }
+        /// A window left floating mode.
+        ///
+        /// Callbacks receive the window that left floating mode.
+        WindowUnsetFloating = {
+            enum_name = UnsetFloating,
+            callback_type = SingleWindowFn,
+            client_request = window_unset_floating,
+            on_response = |response, callbacks| {
+                let handle = WindowHandle { id: response.window_id };
+
+                for callback in callbacks {
+                    callback(&handle);
+                }
+            },
+        }
+        /// A window entered tiled mode.
+        ///
+        /// Callbacks receive the window that entered tiled mode.
+        WindowSetTiled = {
+            enum_name = SetTiled,
+            callback_type = SingleWindowFn,
+            client_request = window_set_tiled,
+            on_response = |response, callbacks| {
+                let handle = WindowHandle { id: response.window_id };
+
+                for callback in callbacks {
+                    callback(&handle);
+                }
+            },
+        }
+        /// A window left tiled mode.
+        ///
+        /// Callbacks receive the window that left tiled mode.
+        WindowUnsetTiled = {
+            enum_name = UnsetTiled,
+            callback_type = SingleWindowFn,
+            client_request = window_unset_tiled,
+            on_response = |response, callbacks| {
+                let handle = WindowHandle { id: response.window_id };
+
+                for callback in callbacks {
+                    callback(&handle);
+                }
+            },
+        }
+        /// A window entered maximized mode.
+        ///
+        /// Callbacks receive the window that entered maximized mode.
+        WindowSetMaximized = {
+            enum_name = SetMaximized,
+            callback_type = SingleWindowFn,
+            client_request = window_set_maximized,
+            on_response = |response, callbacks| {
+                let handle = WindowHandle { id: response.window_id };
+
+                for callback in callbacks {
+                    callback(&handle);
+                }
+            },
+        }
+        /// A window left maximized mode.
+        ///
+        /// Callbacks receive the window that left maximized mode.
+        WindowUnsetMaximized = {
+            enum_name = UnsetMaximized,
+            callback_type = SingleWindowFn,
+            client_request = window_unset_maximized,
+            on_response = |response, callbacks| {
+                let handle = WindowHandle { id: response.window_id };
+
+                for callback in callbacks {
+                    callback(&handle);
+                }
+            },
+        }
+        /// A window entered fullscreen mode.
+        ///
+        /// Callbacks receive the window that entered fullscreen mode.
+        WindowSetFullscreen = {
+            enum_name = SetFullscreen,
+            callback_type = SingleWindowFn,
+            client_request = window_set_fullscreen,
+            on_response = |response, callbacks| {
+                let handle = WindowHandle { id: response.window_id };
+
+                for callback in callbacks {
+                    callback(&handle);
+                }
+            },
+        }
+        /// A window left fullscreen mode.
+        ///
+        /// Callbacks receive the window that left fullscreen mode.
+        WindowUnsetFullscreen = {
+            enum_name = UnsetFullscreen,
+            callback_type = SingleWindowFn,
+            client_request = window_unset_fullscreen,
+            on_response = |response, callbacks| {
+                let handle = WindowHandle { id: response.window_id };
+
+                for callback in callbacks {
+                    callback(&handle);
+                }
+            },
+        }
+        /// A window entered spilled mode.
+        ///
+        /// Callbacks receive the window that entered spilled mode.
+        WindowSetSpilled = {
+            enum_name = SetSpilled,
+            callback_type = SingleWindowFn,
+            client_request = window_set_spilled,
+            on_response = |response, callbacks| {
+                let handle = WindowHandle { id: response.window_id };
+
+                for callback in callbacks {
+                    callback(&handle);
+                }
+            },
+        }
+        /// A window left spilled mode.
+        ///
+        /// Callbacks receive the window that left spilled mode.
+        WindowUnsetSpilled = {
+            enum_name = UnsetSpilled,
+            callback_type = SingleWindowFn,
+            client_request = window_unset_spilled,
+            on_response = |response, callbacks| {
+                let handle = WindowHandle { id: response.window_id };
+
+                for callback in callbacks {
+                    callback(&handle);
+                }
+            },
+        }
     }
     /// Signals relating to tag events.
     TagSignal => {
@@ -345,6 +495,16 @@ pub(crate) struct SignalState {
     pub(crate) window_pointer_leave: SignalData<WindowPointerLeave>,
     pub(crate) window_focused: SignalData<WindowFocused>,
     pub(crate) window_title_changed: SignalData<WindowTitleChanged>,
+    pub(crate) window_set_tiled: SignalData<WindowSetTiled>,
+    pub(crate) window_unset_tiled: SignalData<WindowUnsetTiled>,
+    pub(crate) window_set_floating: SignalData<WindowSetFloating>,
+    pub(crate) window_unset_floating: SignalData<WindowUnsetFloating>,
+    pub(crate) window_set_spilled: SignalData<WindowSetSpilled>,
+    pub(crate) window_unset_spilled: SignalData<WindowUnsetSpilled>,
+    pub(crate) window_set_maximized: SignalData<WindowSetMaximized>,
+    pub(crate) window_unset_maximized: SignalData<WindowUnsetMaximized>,
+    pub(crate) window_set_fullscreen: SignalData<WindowSetFullscreen>,
+    pub(crate) window_unset_fullscreen: SignalData<WindowUnsetFullscreen>,
 
     pub(crate) tag_active: SignalData<TagActive>,
 
@@ -372,6 +532,16 @@ impl SignalState {
             window_pointer_leave: SignalData::new(),
             window_focused: SignalData::new(),
             window_title_changed: SignalData::new(),
+            window_set_tiled: SignalData::new(),
+            window_unset_tiled: SignalData::new(),
+            window_set_floating: SignalData::new(),
+            window_unset_floating: SignalData::new(),
+            window_set_spilled: SignalData::new(),
+            window_unset_spilled: SignalData::new(),
+            window_set_maximized: SignalData::new(),
+            window_unset_maximized: SignalData::new(),
+            window_set_fullscreen: SignalData::new(),
+            window_unset_fullscreen: SignalData::new(),
 
             tag_active: SignalData::new(),
 
@@ -392,6 +562,16 @@ impl SignalState {
         self.window_pointer_leave.reset();
         self.window_focused.reset();
         self.window_title_changed.reset();
+        self.window_set_tiled.reset();
+        self.window_unset_tiled.reset();
+        self.window_set_floating.reset();
+        self.window_unset_floating.reset();
+        self.window_set_spilled.reset();
+        self.window_unset_spilled.reset();
+        self.window_set_maximized.reset();
+        self.window_unset_maximized.reset();
+        self.window_set_fullscreen.reset();
+        self.window_unset_fullscreen.reset();
 
         self.tag_active.reset();
 
