@@ -305,7 +305,7 @@ message MouseArea {
   bool on_move = 11;
   bool on_exit = 12;
   optional Interaction interaction = 13;
-  optional uint32 widget_id = 14;
+  optional uint32 widget_id = 15;
 
   enum Interaction {
     INTERACTION_NONE = 0;
@@ -362,7 +362,7 @@ message MouseArea {
     }
 
     oneof data {
-      Lines line = 1;
+      Lines lines = 1;
       Pixels pixels = 2;
     }
   }
@@ -380,13 +380,17 @@ message GetWidgetEventsRequest {
   }
 }
 
-message GetWidgetEventsResponse {
+message WidgetEvent {
   uint32 widget_id = 1;
 
   oneof event {
     Button.Event button = 2;
     MouseArea.Event mouse_area = 3;
   }
+}
+
+message GetWidgetEventsResponse {
+  repeated WidgetEvent widget_events = 1;
 }
 
 service WidgetService {

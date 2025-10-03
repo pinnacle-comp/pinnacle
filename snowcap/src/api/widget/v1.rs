@@ -5,7 +5,7 @@ use snowcap_api_defs::snowcap::widget::{
     self,
     v1::{
         GetWidgetEventsRequest, GetWidgetEventsResponse, WidgetDef, get_widget_events_request,
-        widget_def, widget_service_server,
+        widget_def, widget_event, widget_service_server,
     },
 };
 use tonic::{Request, Response, Status};
@@ -44,19 +44,22 @@ impl widget_service_server::WidgetService for super::WidgetService {
                     }
                 }
             },
-            |(id, event)| {
+            |events| {
                 Ok(GetWidgetEventsResponse {
-                    widget_id: id.into_inner(),
-                    event: Some(match event {
-                        WidgetEvent::Button => {
-                            widget::v1::get_widget_events_response::Event::Button(
-                                widget::v1::button::Event {},
-                            )
-                        }
-                        WidgetEvent::MouseArea(evt) => {
-                            widget::v1::get_widget_events_response::Event::MouseArea(evt.into())
-                        }
-                    }),
+                    widget_events: events
+                        .into_iter()
+                        .map(|(id, event)| widget::v1::WidgetEvent {
+                            widget_id: id.into_inner(),
+                            event: Some(match event {
+                                WidgetEvent::Button => {
+                                    widget_event::Event::Button(widget::v1::button::Event {})
+                                }
+                                WidgetEvent::MouseArea(evt) => {
+                                    widget_event::Event::MouseArea(evt.into())
+                                }
+                            }),
+                        })
+                        .collect(),
                 })
             },
         )
@@ -629,8 +632,8 @@ pub fn widget_def_to_fn(def: WidgetDef) -> Option<ViewFn> {
                 on_enter,
                 on_move,
                 on_exit,
-                widget_id,
                 interaction,
+                widget_id,
             } = *mouse_area;
 
             let child_widget_fn = child.and_then(|def| widget_def_to_fn(*def));
@@ -1036,7 +1039,7 @@ impl FromApi<iced::mouse::ScrollDelta>
         use snowcap_api_defs::snowcap::widget::v1::mouse_area::{self, scroll_delta};
 
         let inner = match api_type {
-            ScrollDelta::Lines { x, y } => scroll_delta::Data::Line(scroll_delta::Lines { x, y }),
+            ScrollDelta::Lines { x, y } => scroll_delta::Data::Lines(scroll_delta::Lines { x, y }),
             ScrollDelta::Pixels { x, y } => {
                 scroll_delta::Data::Pixels(scroll_delta::Pixels { x, y })
             }

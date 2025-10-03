@@ -906,7 +906,7 @@ local snowcap_layer_v1_Layer = {
 ---@field point snowcap.widget.v1.MouseArea.Point?
 
 ---@class snowcap.widget.v1.MouseArea.ScrollDelta
----@field line snowcap.widget.v1.MouseArea.ScrollDelta.Lines?
+---@field lines snowcap.widget.v1.MouseArea.ScrollDelta.Lines?
 ---@field pixels snowcap.widget.v1.MouseArea.ScrollDelta.Pixels?
 
 ---@class snowcap.widget.v1.MouseArea.ScrollDelta.Lines
@@ -925,10 +925,13 @@ local snowcap_layer_v1_Layer = {
 ---@field layer_id integer?
 ---@field decoration_id integer?
 
----@class snowcap.widget.v1.GetWidgetEventsResponse
+---@class snowcap.widget.v1.WidgetEvent
 ---@field widget_id integer?
 ---@field button snowcap.widget.v1.Button.Event?
 ---@field mouse_area snowcap.widget.v1.MouseArea.Event?
+
+---@class snowcap.widget.v1.GetWidgetEventsResponse
+---@field widget_events snowcap.widget.v1.WidgetEvent[]?
 
 ---@class snowcap.decoration.v1.Bounds
 ---@field left integer?
@@ -1185,6 +1188,7 @@ snowcap.widget.v1.MouseArea.ScrollDelta.Lines = {}
 snowcap.widget.v1.MouseArea.ScrollDelta.Pixels = {}
 snowcap.widget.v1.MouseArea.Point = {}
 snowcap.widget.v1.GetWidgetEventsRequest = {}
+snowcap.widget.v1.WidgetEvent = {}
 snowcap.widget.v1.GetWidgetEventsResponse = {}
 snowcap.decoration = {}
 snowcap.decoration.v1 = {}
