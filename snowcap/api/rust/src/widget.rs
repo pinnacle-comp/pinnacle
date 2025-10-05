@@ -424,6 +424,95 @@ impl From<Radius> for widget::v1::Radius {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum LineHeight {
+    Relative(f32),
+    Absolute(f32),
+}
+
+impl From<LineHeight> for widget::v1::LineHeight {
+    fn from(value: LineHeight) -> Self {
+        let line_height = match value {
+            LineHeight::Relative(v) => widget::v1::line_height::LineHeight::Relative(v),
+            LineHeight::Absolute(v) => widget::v1::line_height::LineHeight::Absolute(v),
+        };
+
+        Self {
+            line_height: Some(line_height),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum Background {
+    Color(Color),
+    Gradient(Gradient),
+}
+
+impl From<Background> for widget::v1::Background {
+    fn from(value: Background) -> Self {
+        let background = match value {
+            Background::Color(c) => widget::v1::background::Background::Color(c.into()),
+            Background::Gradient(g) => widget::v1::background::Background::Gradient(g.into()),
+        };
+
+        Self {
+            background: Some(background),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum Gradient {
+    Linear(Linear),
+}
+
+impl From<Gradient> for widget::v1::Gradient {
+    fn from(value: Gradient) -> Self {
+        let gradient = match value {
+            Gradient::Linear(l) => widget::v1::gradient::Gradient::Linear(l.into()),
+        };
+
+        Self {
+            gradient: Some(gradient),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct Linear {
+    pub radians: f32,
+    pub stops: Vec<ColorStop>,
+}
+
+impl From<Linear> for widget::v1::gradient::Linear {
+    fn from(value: Linear) -> Self {
+        let Linear { radians, stops } = value;
+
+        Self {
+            radians,
+            stops: stops.into_iter().map(From::from).collect(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub struct ColorStop {
+    pub offset: f32,
+    pub color: Color,
+}
+
+impl From<ColorStop> for widget::v1::gradient::ColorStop {
+    fn from(value: ColorStop) -> Self {
+        let ColorStop { offset, color } = value;
+
+        Self {
+            offset,
+            color: Some(color.into()),
+        }
+    }
+}
+
 // INFO: experimentation
 
 pub trait Program {
