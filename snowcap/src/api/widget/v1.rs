@@ -767,12 +767,12 @@ pub fn widget_def_to_fn(def: WidgetDef) -> Option<ViewFn> {
                 on_submit,
                 on_paste,
                 font,
-                icon: _, // TODO
+                icon,
                 width,
                 padding,
-                line_height: _,
+                line_height,
                 horizontal_alignment: _,
-                style: _,
+                style,
                 widget_id,
             } = *text_input;
 
@@ -817,7 +817,9 @@ pub fn widget_def_to_fn(def: WidgetDef) -> Option<ViewFn> {
                     text_input = text_input.font(iced::Font::from_api(font));
                 }
 
-                // TODO icon
+                if let Some(icon) = icon.clone() {
+                    text_input = text_input.icon(iced::widget::text_input::Icon::from_api(icon));
+                }
 
                 if let Some(width) = width {
                     text_input = text_input.width(iced::Length::from_api(width))
@@ -827,7 +829,10 @@ pub fn widget_def_to_fn(def: WidgetDef) -> Option<ViewFn> {
                     text_input = text_input.padding(iced::Padding::from_api(padding));
                 }
 
-                // TODO line_height
+                if let Some(line_height) = line_height {
+                    text_input = text_input
+                        .line_height(iced::widget::text::LineHeight::from_api(line_height))
+                }
 
                 match horizontal_alignment {
                     widget::v1::Alignment::Unspecified => (),
@@ -842,7 +847,49 @@ pub fn widget_def_to_fn(def: WidgetDef) -> Option<ViewFn> {
                     }
                 }
 
-                // TODO Style
+                use iced::widget::text_input;
+
+                let style = style.clone();
+                let style = move |theme: &iced::Theme, status| {
+                    let mut s = <iced::Theme as text_input::Catalog>::default()(theme, status);
+
+                    let style = style.clone();
+                    let inner = match status {
+                        text_input::Status::Active => style.and_then(|s| s.active),
+                        text_input::Status::Hovered => style.and_then(|s| s.hovered),
+                        text_input::Status::Focused { is_hovered } if is_hovered => {
+                            style.and_then(|s| s.hover_focused.or(s.focused))
+                        }
+                        text_input::Status::Focused { .. } => style.and_then(|s| s.focused),
+                        text_input::Status::Disabled => style.and_then(|s| s.disabled),
+                    };
+
+                    if let Some(style) = inner {
+                        if let Some(background) = style.background {
+                            s.background = FromApi::from_api(background);
+                        }
+                        if let Some(border) = style.border {
+                            s.border = FromApi::from_api(border);
+                        }
+
+                        if let Some(icon) = style.icon {
+                            s.icon = FromApi::from_api(icon);
+                        }
+                        if let Some(placeholder) = style.placeholder {
+                            s.placeholder = FromApi::from_api(placeholder);
+                        }
+                        if let Some(value) = style.value {
+                            s.value = FromApi::from_api(value);
+                        }
+                        if let Some(selection) = style.selection {
+                            s.selection = FromApi::from_api(selection);
+                        }
+                    }
+
+                    s
+                };
+
+                text_input = text_input.style(style);
 
                 text_input.into()
             });
@@ -1165,5 +1212,82 @@ impl From<TextInputEvent> for snowcap_api_defs::snowcap::widget::v1::text_input:
         let event_type: i32 = event_type.into();
 
         Self { event_type, data }
+    }
+}
+
+impl FromApi<widget::v1::text_input::Icon> for iced::widget::text_input::Icon<iced::Font> {
+    fn from_api(api_type: widget::v1::text_input::Icon) -> Self {
+        use widget::v1::text_input;
+
+        let text_input::Icon {
+            font,
+            code_point,
+            pixels,
+            spacing,
+            right_side,
+        } = api_type;
+
+        let side = if right_side {
+            iced::widget::text_input::Side::Right
+        } else {
+            iced::widget::text_input::Side::Left
+        };
+
+        Self {
+            font: font.map(iced::Font::from_api).unwrap_or_default(),
+            code_point: char::try_from(code_point).unwrap_or_default(),
+            size: pixels.map(iced::Pixels),
+            spacing,
+            side,
+        }
+    }
+}
+
+impl FromApi<widget::v1::LineHeight> for iced::widget::text::LineHeight {
+    fn from_api(api_type: widget::v1::LineHeight) -> Self {
+        use widget::v1::line_height::LineHeight;
+
+        let line_height = api_type
+            .line_height
+            .expect("LineHeight should not be empty");
+
+        match line_height {
+            LineHeight::Relative(v) => Self::Relative(v),
+            LineHeight::Absolute(v) => Self::Absolute(v.into()),
+        }
+    }
+}
+
+impl FromApi<widget::v1::Background> for iced::Background {
+    fn from_api(api_type: widget::v1::Background) -> Self {
+        use widget::v1::background::Background;
+
+        let background = api_type.background.expect("Background should not be empty");
+
+        match background {
+            Background::Color(color) => Self::Color(iced::Color::from_api(color)),
+            Background::Gradient(gradient) => Self::Gradient(iced::Gradient::from_api(gradient)),
+        }
+    }
+}
+
+impl FromApi<widget::v1::Gradient> for iced::Gradient {
+    fn from_api(api_type: widget::v1::Gradient) -> Self {
+        use widget::v1::gradient::{Gradient, Linear};
+        let gradient = api_type.gradient.expect("Gradient should not be empty");
+
+        match gradient {
+            Gradient::Linear(Linear { radians, stops }) => {
+                let lin =
+                    iced::gradient::Linear::new(radians).add_stops(stops.iter().map(|stop| {
+                        iced::gradient::ColorStop {
+                            offset: stop.offset,
+                            color: iced::Color::from_api(stop.color.unwrap_or_default()),
+                        }
+                    }));
+
+                iced::Gradient::Linear(lin)
+            }
+        }
     }
 }

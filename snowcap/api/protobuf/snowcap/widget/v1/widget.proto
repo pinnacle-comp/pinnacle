@@ -413,28 +413,31 @@ message TextInput {
   optional LineHeight line_height = 12;
   optional Alignment horizontal_alignment = 13;
   optional Style style = 14;
-  optional uint32 widget_id = 15;
-
-  enum Side {
-    SIDE_LEFT = 0;
-    SIDE_RIGHT = 1;
-  }
+  optional uint32 widget_id = 19;
 
   message Icon {
     Font font = 1;
     uint32 code_point = 2;
     optional float pixels = 3;
     float spacing = 4;
-    Side side = 5;
+    bool right_side = 5;
   }
 
   message Style {
-    optional Background background = 1;
-    optional Border border = 2;
-    optional Color icon = 3;
-    optional Color placeholder = 4;
-    optional Color value = 5;
-    optional Color selection = 6;
+    optional Inner active = 1;
+    optional Inner hovered = 2;
+    optional Inner focused = 3;
+    optional Inner hover_focused = 4;
+    optional Inner disabled = 5;
+
+    message Inner {
+      optional Background background = 1;
+      optional Border border = 2;
+      optional Color icon = 3;
+      optional Color placeholder = 4;
+      optional Color value = 5;
+      optional Color selection = 6;
+    }
   }
 
   enum EventType {
