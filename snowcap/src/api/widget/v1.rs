@@ -774,7 +774,7 @@ pub fn widget_def_to_fn(def: WidgetDef) -> Option<ViewFn> {
                 horizontal_alignment: _,
                 style: _,
                 widget_id,
-            } = text_input;
+            } = *text_input;
 
             let f: ViewFn = Box::new(move || {
                 let mut text_input = iced::widget::TextInput::new(&placeholder, &value);
