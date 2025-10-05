@@ -560,6 +560,19 @@ local snowcap_widget_v1_MouseArea_Interaction = {
     INTERACTION_HELP = 17,
 }
 
+---@enum snowcap.widget.v1.TextInput.Side
+local snowcap_widget_v1_TextInput_Side = {
+    SIDE_LEFT = 0,
+    SIDE_RIGHT = 1,
+}
+
+---@enum snowcap.widget.v1.TextInput.EventType
+local snowcap_widget_v1_TextInput_EventType = {
+    EVENT_INPUT = 0,
+    EVENT_SUBMIT = 1,
+    EVENT_PASTE = 2,
+}
+
 ---@enum snowcap.widget.v0alpha1.Alignment
 local snowcap_widget_v0alpha1_Alignment = {
     ALIGNMENT_UNSPECIFIED = 0,
@@ -693,6 +706,25 @@ local snowcap_layer_v1_Layer = {
 ---@field blue number?
 ---@field alpha number?
 
+---@class snowcap.widget.v1.Gradient
+---@field linear snowcap.widget.v1.Gradient.Linear?
+
+---@class snowcap.widget.v1.Gradient.ColorStop
+---@field offset number?
+---@field color snowcap.widget.v1.Color?
+
+---@class snowcap.widget.v1.Gradient.Linear
+---@field radians number?
+---@field stops snowcap.widget.v1.Gradient.ColorStop[]?
+
+---@class snowcap.widget.v1.Background
+---@field color snowcap.widget.v1.Color?
+---@field gradient snowcap.widget.v1.Gradient?
+
+---@class snowcap.widget.v1.LineHeight
+---@field relative number?
+---@field absolute number?
+
 ---@class snowcap.widget.v1.Font
 ---@field family snowcap.widget.v1.Font.Family?
 ---@field weight snowcap.widget.v1.Font.Weight?
@@ -744,6 +776,7 @@ local snowcap_layer_v1_Layer = {
 ---@field image snowcap.widget.v1.Image?
 ---@field input_region snowcap.widget.v1.InputRegion?
 ---@field mouse_area snowcap.widget.v1.MouseArea?
+---@field text_input snowcap.widget.v1.TextInput?
 
 ---@class snowcap.widget.v1.Text
 ---@field text string?
@@ -914,6 +947,42 @@ local snowcap_layer_v1_Layer = {
 ---@field x number?
 ---@field y number?
 
+---@class snowcap.widget.v1.TextInput
+---@field placeholder string?
+---@field value string?
+---@field id string?
+---@field secure boolean?
+---@field on_input boolean?
+---@field on_submit boolean?
+---@field on_paste boolean?
+---@field font snowcap.widget.v1.Font?
+---@field icon snowcap.widget.v1.TextInput.Icon?
+---@field width snowcap.widget.v1.Length?
+---@field padding snowcap.widget.v1.Padding?
+---@field line_height snowcap.widget.v1.LineHeight?
+---@field horizontal_alignment snowcap.widget.v1.Alignment?
+---@field style snowcap.widget.v1.TextInput.Style?
+---@field widget_id integer?
+
+---@class snowcap.widget.v1.TextInput.Icon
+---@field font snowcap.widget.v1.Font?
+---@field code_point integer?
+---@field pixels number?
+---@field spacing number?
+---@field side snowcap.widget.v1.TextInput.Side?
+
+---@class snowcap.widget.v1.TextInput.Style
+---@field background snowcap.widget.v1.Background?
+---@field border snowcap.widget.v1.Border?
+---@field icon snowcap.widget.v1.Color?
+---@field placeholder snowcap.widget.v1.Color?
+---@field value snowcap.widget.v1.Color?
+---@field selection snowcap.widget.v1.Color?
+
+---@class snowcap.widget.v1.TextInput.Event
+---@field event_type snowcap.widget.v1.TextInput.EventType?
+---@field data string?
+
 ---@class snowcap.widget.v1.GetWidgetEventsRequest
 ---@field layer_id integer?
 ---@field decoration_id integer?
@@ -922,6 +991,7 @@ local snowcap_layer_v1_Layer = {
 ---@field widget_id integer?
 ---@field button snowcap.widget.v1.Button.Event?
 ---@field mouse_area snowcap.widget.v1.MouseArea.Event?
+---@field text_input snowcap.widget.v1.TextInput.Event?
 
 ---@class snowcap.widget.v1.GetWidgetEventsResponse
 ---@field widget_events snowcap.widget.v1.WidgetEvent[]?
@@ -1149,6 +1219,11 @@ snowcap.widget.v1 = {}
 snowcap.widget.v1.Padding = {}
 snowcap.widget.v1.Length = {}
 snowcap.widget.v1.Color = {}
+snowcap.widget.v1.Gradient = {}
+snowcap.widget.v1.Gradient.ColorStop = {}
+snowcap.widget.v1.Gradient.Linear = {}
+snowcap.widget.v1.Background = {}
+snowcap.widget.v1.LineHeight = {}
 snowcap.widget.v1.Font = {}
 snowcap.widget.v1.Font.Family = {}
 snowcap.widget.v1.Radius = {}
@@ -1180,6 +1255,10 @@ snowcap.widget.v1.MouseArea.ScrollEvent = {}
 snowcap.widget.v1.MouseArea.ScrollEvent.Lines = {}
 snowcap.widget.v1.MouseArea.ScrollEvent.Pixels = {}
 snowcap.widget.v1.MouseArea.MoveEvent = {}
+snowcap.widget.v1.TextInput = {}
+snowcap.widget.v1.TextInput.Icon = {}
+snowcap.widget.v1.TextInput.Style = {}
+snowcap.widget.v1.TextInput.Event = {}
 snowcap.widget.v1.GetWidgetEventsRequest = {}
 snowcap.widget.v1.WidgetEvent = {}
 snowcap.widget.v1.GetWidgetEventsResponse = {}
@@ -1240,6 +1319,8 @@ snowcap.widget.v1.Font.Stretch = snowcap_widget_v1_Font_Stretch
 snowcap.widget.v1.Font.Style = snowcap_widget_v1_Font_Style
 snowcap.widget.v1.Image.ContentFit = snowcap_widget_v1_Image_ContentFit
 snowcap.widget.v1.MouseArea.Interaction = snowcap_widget_v1_MouseArea_Interaction
+snowcap.widget.v1.TextInput.Side = snowcap_widget_v1_TextInput_Side
+snowcap.widget.v1.TextInput.EventType = snowcap_widget_v1_TextInput_EventType
 snowcap.widget.v0alpha1.Alignment = snowcap_widget_v0alpha1_Alignment
 snowcap.widget.v0alpha1.ScrollableAlignment = snowcap_widget_v0alpha1_ScrollableAlignment
 snowcap.widget.v0alpha1.Font.Weight = snowcap_widget_v0alpha1_Font_Weight
