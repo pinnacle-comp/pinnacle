@@ -4,26 +4,28 @@ use std::sync::Arc;
 
 use snowcap_api_defs::snowcap::widget;
 
-use crate::widget::{Alignment, Length, Padding, font::Font};
+use crate::widget::{
+    Alignment, Background, Border, Color, Length, LineHeight, Padding, font::Font,
+};
 
 use super::{Widget, WidgetId};
 
 /// A field that can be filled with text.
 #[derive(Clone)]
 pub struct TextInput<Msg> {
-    pub(crate) placeholder: String,
-    pub(crate) value: String,
-    pub(crate) id: Option<String>,
-    pub(crate) secure: bool,
-    pub(crate) font: Option<Font>,
-    //pub(crate) icon: Option<Icon>,
-    pub(crate) width: Option<Length>,
-    pub(crate) padding: Option<Padding>,
-    //pub(crate) line_height: Option<LineHeight>,
-    pub(crate) horizontal_alignment: Option<Alignment>,
-    //pub(crate) style: Option<Style>,
-    pub(crate) widget_id: Option<WidgetId>,
+    pub placeholder: String,
+    pub value: String,
+    pub id: Option<String>,
+    pub secure: bool,
+    pub font: Option<Font>,
+    pub icon: Option<Icon>,
+    pub width: Option<Length>,
+    pub padding: Option<Padding>,
+    pub line_height: Option<LineHeight>,
+    pub horizontal_alignment: Option<Alignment>,
+    pub style: Option<Styles>,
     pub(crate) callbacks: Callbacks<Msg>,
+    pub(crate) widget_id: Option<WidgetId>,
 }
 
 impl<Msg> TextInput<Msg> {
@@ -37,12 +39,12 @@ impl<Msg> TextInput<Msg> {
             id: None,
             secure: false,
             font: None,
-            // icon: None,
+            icon: None,
             width: None,
             padding: None,
-            // line_height: None
+            line_height: None,
             horizontal_alignment: None,
-            // style: None,
+            style: None,
             widget_id: None,
             callbacks: Callbacks {
                 on_input: None,
@@ -112,12 +114,12 @@ impl<Msg> TextInput<Msg> {
         }
     }
 
-    //pub fn icon(self, icon: Icon) -> Self {
-    //    Self {
-    //        icon: Some(icon),
-    //        ..self
-    //    }
-    //}
+    pub fn icon(self, icon: Icon) -> Self {
+        Self {
+            icon: Some(icon),
+            ..self
+        }
+    }
 
     pub fn width(self, width: Length) -> Self {
         Self {
@@ -133,12 +135,12 @@ impl<Msg> TextInput<Msg> {
         }
     }
 
-    //pub fn line_height(self, line_height: LineHeight) -> Self {
-    //    Self {
-    //        line_height: Some(line_height),
-    //        ..self
-    //    }
-    //}
+    pub fn line_height(self, line_height: LineHeight) -> Self {
+        Self {
+            line_height: Some(line_height),
+            ..self
+        }
+    }
 
     pub fn horizontal_alignment(self, horizontal_alignment: Alignment) -> Self {
         Self {
@@ -147,12 +149,12 @@ impl<Msg> TextInput<Msg> {
         }
     }
 
-    //pub fn style(self, style: Style) -> Self {
-    //    Self {
-    //        style: Some(style),
-    //        ..self
-    //    }
-    //}
+    pub fn style(self, style: Styles) -> Self {
+        Self {
+            style: Some(style),
+            ..self
+        }
+    }
 }
 
 impl<Msg: std::fmt::Debug> std::fmt::Debug for TextInput<Msg> {
@@ -163,12 +165,12 @@ impl<Msg: std::fmt::Debug> std::fmt::Debug for TextInput<Msg> {
             .field("id", &self.id)
             .field("secure", &self.secure)
             .field("font", &self.font)
-            //.field("icon", &self.icon)
+            .field("icon", &self.icon)
             .field("width", &self.width)
             .field("padding", &self.padding)
-            //.field("line_height", &self.line_height)
+            .field("line_height", &self.line_height)
             .field("horizontal_alignment", &self.horizontal_alignment)
-            //.field("style", &self.field)
+            .field("style", &self.style)
             .field("widget_id", &self.widget_id)
             .field("callbacks", &self.callbacks)
             .finish()
@@ -182,12 +184,12 @@ impl<Msg: PartialEq> PartialEq for TextInput<Msg> {
             && self.id == other.id
             && self.secure == other.secure
             && self.font == other.font
-            //&& self.icon == other.icon
+            && self.icon == other.icon
             && self.width == other.width
             && self.padding == other.padding
-            //&& self.line_height == other.line_height
+            && self.line_height == other.line_height
             && self.horizontal_alignment == other.horizontal_alignment
-            //&& self.style == other.style
+            && self.style == other.style
             && self.widget_id == other.widget_id
             && self.callbacks == other.callbacks
     }
@@ -207,9 +209,12 @@ impl<Msg> From<TextInput<Msg>> for widget::v1::TextInput {
             id,
             secure,
             font,
+            icon,
             width,
             padding,
+            line_height,
             horizontal_alignment,
+            style,
             widget_id,
             callbacks:
                 Callbacks {
@@ -228,12 +233,12 @@ impl<Msg> From<TextInput<Msg>> for widget::v1::TextInput {
             on_submit: on_submit.is_some(),
             on_paste: on_paste.is_some(),
             font: font.map(From::from),
-            icon: None,
+            icon: icon.map(From::from),
             width: width.map(From::from),
             padding: padding.map(From::from),
-            line_height: None,
+            line_height: line_height.map(From::from),
             horizontal_alignment: None,
-            style: None,
+            style: style.map(From::from),
             widget_id: widget_id.map(WidgetId::to_inner),
         };
 
@@ -321,5 +326,194 @@ impl<Msg: PartialEq> PartialEq for Callbacks<Msg> {
         };
 
         on_input_eq && self.on_submit == other.on_submit && on_paste_eq
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub enum Side {
+    Left,
+    Right,
+}
+
+#[derive(Clone, PartialEq, Debug)]
+pub struct Icon {
+    pub font: Font,
+    pub code_point: char,
+    pub pixels: Option<f32>,
+    pub spacing: f32,
+    pub side: Side,
+}
+
+impl From<Icon> for widget::v1::text_input::Icon {
+    fn from(value: Icon) -> Self {
+        let Icon {
+            font,
+            code_point,
+            pixels,
+            spacing,
+            side,
+        } = value;
+
+        Self {
+            font: Some(font.into()),
+            code_point: code_point.into(),
+            pixels,
+            spacing,
+            right_side: matches!(side, Side::Right),
+        }
+    }
+}
+
+#[derive(Clone, PartialEq, Debug, Default)]
+pub struct Styles {
+    pub active: Option<Style>,
+    pub hovered: Option<Style>,
+    pub focused: Option<Style>,
+    pub hover_focused: Option<Style>,
+    pub disabled: Option<Style>,
+}
+
+impl Styles {
+    pub fn new() -> Self {
+        Self {
+            ..Default::default()
+        }
+    }
+
+    pub fn active(self, style: Style) -> Self {
+        Self {
+            active: Some(style),
+            ..self
+        }
+    }
+
+    pub fn hovered(self, style: Style) -> Self {
+        Self {
+            hovered: Some(style),
+            ..self
+        }
+    }
+
+    pub fn focused(self, style: Style) -> Self {
+        Self {
+            focused: Some(style),
+            ..self
+        }
+    }
+
+    pub fn hover_focused(self, style: Style) -> Self {
+        Self {
+            hover_focused: Some(style),
+            ..self
+        }
+    }
+
+    pub fn disabled(self, style: Style) -> Self {
+        Self {
+            disabled: Some(style),
+            ..self
+        }
+    }
+}
+
+impl From<Styles> for widget::v1::text_input::Style {
+    fn from(value: Styles) -> Self {
+        let Styles {
+            active,
+            hovered,
+            focused,
+            hover_focused,
+            disabled,
+        } = value;
+
+        Self {
+            active: active.map(From::from),
+            hovered: hovered.map(From::from),
+            focused: focused.map(From::from),
+            hover_focused: hover_focused.map(From::from),
+            disabled: disabled.map(From::from),
+        }
+    }
+}
+
+#[derive(Clone, PartialEq, Debug, Default)]
+pub struct Style {
+    pub background: Option<Background>,
+    pub border: Option<Border>,
+    pub icon: Option<Color>,
+    pub placeholder: Option<Color>,
+    pub value: Option<Color>,
+    pub selection: Option<Color>,
+}
+
+impl Style {
+    pub fn new() -> Self {
+        Self {
+            ..Default::default()
+        }
+    }
+
+    pub fn background(self, background: Background) -> Self {
+        Self {
+            background: Some(background),
+            ..self
+        }
+    }
+
+    pub fn border(self, border: Border) -> Self {
+        Self {
+            border: Some(border),
+            ..self
+        }
+    }
+
+    pub fn icon(self, color: Color) -> Self {
+        Self {
+            icon: Some(color),
+            ..self
+        }
+    }
+
+    pub fn placeholder(self, color: Color) -> Self {
+        Self {
+            placeholder: Some(color),
+            ..self
+        }
+    }
+
+    pub fn value(self, color: Color) -> Self {
+        Self {
+            value: Some(color),
+            ..self
+        }
+    }
+
+    pub fn selection(self, color: Color) -> Self {
+        Self {
+            selection: Some(color),
+            ..self
+        }
+    }
+}
+
+impl From<Style> for widget::v1::text_input::style::Inner {
+    fn from(value: Style) -> Self {
+        let Style {
+            background,
+            border,
+            icon,
+            placeholder,
+            value,
+            selection,
+        } = value;
+
+        Self {
+            background: background.map(From::from),
+            border: border.map(From::from),
+            icon: icon.map(From::from),
+            placeholder: placeholder.map(From::from),
+            value: value.map(From::from),
+            selection: selection.map(From::from),
+        }
     }
 }
