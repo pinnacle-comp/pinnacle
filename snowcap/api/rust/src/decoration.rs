@@ -129,8 +129,13 @@ where
                                     }
                                 })
                             },
-                            widget_event::Event::TextInput(_event) => {
-                                todo!()
+                            widget_event::Event::TextInput(event) => {
+                                callbacks.get(&id).cloned().and_then(|f| {
+                                    match f {
+                                        WidgetMessage::TextInput(callbacks) => callbacks.process_event(event.into()),
+                                        _ => unreachable!()
+                                    }
+                                })
                             }
                         };
 
