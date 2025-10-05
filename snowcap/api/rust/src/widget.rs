@@ -12,6 +12,8 @@ pub mod mouse_area;
 pub mod row;
 pub mod scrollable;
 pub mod text;
+pub mod text_input;
+pub mod utils;
 
 use std::{
     collections::HashMap,
@@ -27,6 +29,8 @@ use row::Row;
 use scrollable::Scrollable;
 use snowcap_api_defs::snowcap::widget;
 use text::Text;
+use text_input::TextInput;
+pub use utils::{Degrees, Radians};
 
 use crate::widget::input_region::InputRegion;
 
@@ -110,6 +114,7 @@ pub struct WidgetDef<Msg> {
 pub enum WidgetMessage<Msg> {
     Button(Msg),
     MouseArea(mouse_area::Callbacks<Msg>),
+    TextInput(text_input::Callbacks<Msg>),
 }
 
 impl<Msg> WidgetDef<Msg> {
@@ -147,6 +152,7 @@ impl<Msg> WidgetDef<Msg> {
             Widget::MouseArea(mouse_area) => {
                 mouse_area.child.collect_messages(callbacks, with_widget);
             }
+            Widget::TextInput(_) => (),
         }
     }
 }
@@ -167,6 +173,14 @@ impl<Msg: Clone> WidgetDef<Msg> {
                 mouse_area
                     .widget_id
                     .map(|id| (id, WidgetMessage::MouseArea(mouse_area.callbacks.clone()))),
+            );
+        }
+
+        if let Widget::TextInput(text_input) = &self.widget {
+            callbacks.extend(
+                text_input
+                    .widget_id
+                    .map(|id| (id, WidgetMessage::TextInput(text_input.callbacks.clone()))),
             );
         }
     }
@@ -194,6 +208,7 @@ pub enum Widget<Msg> {
     Image(Image),
     InputRegion(Box<InputRegion<Msg>>),
     MouseArea(Box<MouseArea<Msg>>),
+    TextInput(Box<TextInput<Msg>>),
 }
 
 impl<Msg, T: Into<Widget<Msg>>> From<T> for WidgetDef<Msg> {
@@ -227,6 +242,9 @@ impl<Msg> From<Widget<Msg>> for widget::v1::widget_def::Widget {
             }
             Widget::MouseArea(mouse_area) => {
                 widget::v1::widget_def::Widget::MouseArea(Box::new((*mouse_area).into()))
+            }
+            Widget::TextInput(text_input) => {
+                widget::v1::widget_def::Widget::TextInput(Box::new((*text_input).into()))
             }
         }
     }
@@ -404,6 +422,161 @@ impl From<Radius> for widget::v1::Radius {
             top_right: value.top_right,
             bottom_right: value.bottom_right,
             bottom_left: value.bottom_left,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum LineHeight {
+    Relative(f32),
+    Absolute(f32),
+}
+
+impl From<LineHeight> for widget::v1::LineHeight {
+    fn from(value: LineHeight) -> Self {
+        let line_height = match value {
+            LineHeight::Relative(v) => widget::v1::line_height::LineHeight::Relative(v),
+            LineHeight::Absolute(v) => widget::v1::line_height::LineHeight::Absolute(v),
+        };
+
+        Self {
+            line_height: Some(line_height),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum Background {
+    Color(Color),
+    Gradient(Gradient),
+}
+
+impl From<Color> for Background {
+    fn from(color: Color) -> Self {
+        Self::Color(color)
+    }
+}
+
+impl From<Gradient> for Background {
+    fn from(gradient: Gradient) -> Self {
+        Self::Gradient(gradient)
+    }
+}
+
+impl From<Linear> for Background {
+    fn from(linear: Linear) -> Self {
+        Self::Gradient(Gradient::Linear(linear))
+    }
+}
+
+impl From<Background> for widget::v1::Background {
+    fn from(value: Background) -> Self {
+        let background = match value {
+            Background::Color(c) => widget::v1::background::Background::Color(c.into()),
+            Background::Gradient(g) => widget::v1::background::Background::Gradient(g.into()),
+        };
+
+        Self {
+            background: Some(background),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum Gradient {
+    Linear(Linear),
+}
+
+impl From<Gradient> for widget::v1::Gradient {
+    fn from(value: Gradient) -> Self {
+        let gradient = match value {
+            Gradient::Linear(l) => widget::v1::gradient::Gradient::Linear(l.into()),
+        };
+
+        Self {
+            gradient: Some(gradient),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Linear {
+    pub radians: Radians,
+    pub stops: Vec<ColorStop>,
+}
+
+impl Linear {
+    pub fn new(angle: impl Into<Radians>) -> Self {
+        Self {
+            radians: angle.into(),
+            stops: Default::default(),
+        }
+    }
+
+    pub fn add_stop(self, offset: f32, color: Color) -> Self {
+        let Self { radians, mut stops } = self;
+
+        if offset.is_finite() && (0.0..=1.0).contains(&offset) {
+            let search = stops.binary_search_by(|stop| {
+                if (stop.offset - offset).abs() <= f32::EPSILON {
+                    std::cmp::Ordering::Equal
+                } else {
+                    stop.offset.partial_cmp(&offset).unwrap()
+                }
+            });
+
+            let stop = ColorStop { offset, color };
+
+            match search {
+                Ok(pos) => stops[pos] = stop,
+                Err(pos) => {
+                    if stops.len() < 8 {
+                        stops.insert(pos, stop)
+                    } else {
+                        tracing::warn!("Linear::stops is full. Ignoring {stop:?}");
+                    }
+                }
+            }
+        } else {
+            tracing::warn!("Offset should be in the range 0.0..=1.0");
+        }
+
+        Self { radians, stops }
+    }
+
+    pub fn add_stops(mut self, stops: impl IntoIterator<Item = ColorStop>) -> Self {
+        for ColorStop { offset, color } in stops {
+            self = self.add_stop(offset, color);
+        }
+
+        self
+    }
+}
+
+impl From<Linear> for widget::v1::gradient::Linear {
+    fn from(value: Linear) -> Self {
+        let Linear { radians, stops } = value;
+
+        Self {
+            radians: radians.0,
+            stops: stops.into_iter().map(From::from).collect(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub struct ColorStop {
+    pub offset: f32,
+    pub color: Color,
+}
+
+impl From<ColorStop> for widget::v1::gradient::ColorStop {
+    fn from(value: ColorStop) -> Self {
+        let ColorStop { offset, color } = value;
+
+        Self {
+            offset,
+            color: Some(color.into()),
         }
     }
 }
