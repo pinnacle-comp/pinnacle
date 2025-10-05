@@ -134,6 +134,9 @@ where
             WidgetMessage::MouseArea(callbacks) => callbacks.process_event(event.into()),
             _ => unreachable!(),
         }),
+        Event::TextInput(_event) => {
+            todo!()
+        }
     }
 }
 

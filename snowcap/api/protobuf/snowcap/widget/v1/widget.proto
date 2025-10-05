@@ -57,6 +57,13 @@ message Background {
   }
 }
 
+message LineHeight {
+  oneof line_height {
+    float relative = 1;
+    float absolute = 2;
+  }
+}
+
 message Font {
   message Family {
     oneof family {
@@ -152,6 +159,7 @@ message WidgetDef {
     Image image = 8;
     InputRegion input_region = 9;
     MouseArea mouse_area = 10;
+    TextInput text_input = 11;
   }
 }
 
@@ -394,6 +402,57 @@ message MouseArea {
   }
 }
 
+message TextInput {
+  string placeholder = 1;
+  string value = 2;
+  optional string id = 3;
+  bool secure = 4;
+  bool on_input = 5;
+  bool on_submit = 6;
+  bool on_paste = 7;
+  optional Font font = 8;
+  optional Icon icon = 9;
+  optional Length width = 10;
+  optional Padding padding = 11;
+  optional LineHeight line_height = 12;
+  optional Alignment horizontal_alignment = 13;
+  optional Style style = 14;
+  optional uint32 widget_id = 19;
+
+  message Icon {
+    Font font = 1;
+    uint32 code_point = 2;
+    optional float pixels = 3;
+    float spacing = 4;
+    bool right_side = 5;
+  }
+
+  message Style {
+    optional Inner active = 1;
+    optional Inner hovered = 2;
+    optional Inner focused = 3;
+    optional Inner hover_focused = 4;
+    optional Inner disabled = 5;
+
+    message Inner {
+      optional Background background = 1;
+      optional Border border = 2;
+      optional Color icon = 3;
+      optional Color placeholder = 4;
+      optional Color value = 5;
+      optional Color selection = 6;
+    }
+  }
+
+  message Event {
+    oneof data {
+      string input = 1;
+      google.protobuf.Empty submit = 2;
+      string paste = 3;
+    }
+  }
+}
+
 message GetWidgetEventsRequest {
   oneof id {
     uint32 layer_id = 1;
@@ -407,6 +466,7 @@ message WidgetEvent {
   oneof event {
     Button.Event button = 2;
     MouseArea.Event mouse_area = 3;
+    TextInput.Event text_input = 4;
   }
 }
 
