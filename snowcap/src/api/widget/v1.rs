@@ -15,7 +15,7 @@ use crate::{
     decoration::DecorationId,
     layer::LayerId,
     util::convert::FromApi,
-    widget::{MouseAreaEvent, ViewFn, WidgetEvent, WidgetId},
+    widget::{MouseAreaEvent, TextInputEvent, ViewFn, WidgetEvent, WidgetId},
 };
 
 #[tonic::async_trait]
@@ -56,6 +56,9 @@ impl widget_service_server::WidgetService for super::WidgetService {
                                 }
                                 WidgetEvent::MouseArea(evt) => {
                                     widget_event::Event::MouseArea(evt.into())
+                                }
+                                WidgetEvent::TextInput(evt) => {
+                                    widget_event::Event::TextInput(evt.into())
                                 }
                             }),
                         })
@@ -752,6 +755,100 @@ pub fn widget_def_to_fn(def: WidgetDef) -> Option<ViewFn> {
 
             Some(f)
         }
+        widget_def::Widget::TextInput(text_input) => {
+            let horizontal_alignment = text_input.horizontal_alignment();
+
+            let widget::v1::TextInput {
+                placeholder,
+                value,
+                id,
+                secure,
+                on_input,
+                on_submit,
+                on_paste,
+                font,
+                icon: _, // TODO
+                width,
+                padding,
+                line_height: _,
+                horizontal_alignment: _,
+                style: _,
+                widget_id,
+            } = text_input;
+
+            let f: ViewFn = Box::new(move || {
+                let mut text_input = iced::widget::TextInput::new(&placeholder, &value);
+
+                if let Some(id) = id.clone() {
+                    text_input = text_input.id(id);
+                }
+
+                text_input = text_input.secure(secure);
+
+                if let Some(widget_id) = widget_id {
+                    if on_input {
+                        text_input = text_input.on_input(move |value| {
+                            crate::widget::SnowcapMessage::WidgetEvent(
+                                WidgetId(widget_id),
+                                WidgetEvent::TextInput(TextInputEvent::Input(value)),
+                            )
+                        })
+                    }
+
+                    if on_submit {
+                        text_input =
+                            text_input.on_submit(crate::widget::SnowcapMessage::WidgetEvent(
+                                WidgetId(widget_id),
+                                WidgetEvent::TextInput(TextInputEvent::Submit),
+                            ));
+                    }
+
+                    if on_paste {
+                        text_input = text_input.on_paste(move |value| {
+                            crate::widget::SnowcapMessage::WidgetEvent(
+                                WidgetId(widget_id),
+                                WidgetEvent::TextInput(TextInputEvent::Paste(value)),
+                            )
+                        })
+                    }
+                }
+
+                if let Some(font) = font.clone() {
+                    text_input = text_input.font(iced::Font::from_api(font));
+                }
+
+                // TODO icon
+
+                if let Some(width) = width {
+                    text_input = text_input.width(iced::Length::from_api(width))
+                }
+
+                if let Some(padding) = padding {
+                    text_input = text_input.padding(iced::Padding::from_api(padding));
+                }
+
+                // TODO line_height
+
+                match horizontal_alignment {
+                    widget::v1::Alignment::Unspecified => (),
+                    widget::v1::Alignment::Start => {
+                        text_input = text_input.align_x(iced::alignment::Horizontal::Left)
+                    }
+                    widget::v1::Alignment::Center => {
+                        text_input = text_input.align_x(iced::alignment::Horizontal::Center)
+                    }
+                    widget::v1::Alignment::End => {
+                        text_input = text_input.align_x(iced::alignment::Horizontal::Right)
+                    }
+                }
+
+                // TODO Style
+
+                text_input.into()
+            });
+
+            Some(f)
+        }
     }
 }
 
@@ -1052,5 +1149,21 @@ impl FromApi<iced::Point> for snowcap_api_defs::snowcap::widget::v1::mouse_area:
         let iced::Point { x, y } = api_type;
 
         Self { x, y }
+    }
+}
+
+impl From<TextInputEvent> for snowcap_api_defs::snowcap::widget::v1::text_input::Event {
+    fn from(value: TextInputEvent) -> Self {
+        use snowcap_api_defs::snowcap::widget::v1::text_input::EventType;
+
+        let (event_type, data) = match value {
+            TextInputEvent::Input(data) => (EventType::EventInput, Some(data)),
+            TextInputEvent::Submit => (EventType::EventSubmit, None),
+            TextInputEvent::Paste(data) => (EventType::EventPaste, Some(data)),
+        };
+
+        let event_type: i32 = event_type.into();
+
+        Self { event_type, data }
     }
 }
