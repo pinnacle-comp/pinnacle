@@ -20,6 +20,7 @@ fn main() {
 
     tonic_build::configure()
         .file_descriptor_set_path(descriptor_path)
+        .boxed(".snowcap.widget.v1.WidgetDef.widget.text_input")
         .compile_protos(&proto_paths, &[protobuf_defs_path])
         .unwrap();
 }
