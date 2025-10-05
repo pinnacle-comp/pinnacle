@@ -204,6 +204,7 @@ pub enum SnowcapMessage {
 pub enum WidgetEvent {
     Button,
     MouseArea(MouseAreaEvent),
+    TextInput(TextInputEvent),
 }
 
 #[derive(Debug, Clone)]
@@ -219,4 +220,11 @@ pub enum MouseAreaEvent {
     Enter,
     Move(iced::Point),
     Exit,
+}
+
+#[derive(Debug, Clone)]
+pub enum TextInputEvent {
+    Input(String),
+    Submit,
+    Paste(String),
 }
