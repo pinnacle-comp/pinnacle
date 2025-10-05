@@ -63,7 +63,18 @@ impl SeatHandler for State {
         capability: Capability,
     ) {
         if capability == Capability::Keyboard && self.keyboard.is_none() {
-            let keyboard = self.seat_state.get_keyboard(qh, &seat, None).unwrap();
+            // When Smithay gets support for wl_keyboard v10, we can switch to get_keyboard().
+            let keyboard = self
+                .seat_state
+                .get_keyboard_with_repeat(
+                    qh,
+                    &seat,
+                    None,
+                    self.loop_handle.clone(),
+                    Box::new(State::on_key_repeat),
+                )
+                .unwrap();
+
             self.keyboard = Some(keyboard);
         }
 
