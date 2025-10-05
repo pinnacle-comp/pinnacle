@@ -12,6 +12,7 @@ pub mod mouse_area;
 pub mod row;
 pub mod scrollable;
 pub mod text;
+pub mod text_input;
 pub mod utils;
 
 use std::{
@@ -28,6 +29,7 @@ use row::Row;
 use scrollable::Scrollable;
 use snowcap_api_defs::snowcap::widget;
 use text::Text;
+use text_input::TextInput;
 
 use crate::widget::{input_region::InputRegion, utils::Radians};
 
@@ -111,6 +113,7 @@ pub struct WidgetDef<Msg> {
 pub enum WidgetMessage<Msg> {
     Button(Msg),
     MouseArea(mouse_area::Callbacks<Msg>),
+    TextInput(text_input::Callbacks<Msg>),
 }
 
 pub fn message_from_event<Msg>(
@@ -134,9 +137,10 @@ where
             WidgetMessage::MouseArea(callbacks) => callbacks.process_event(event.into()),
             _ => unreachable!(),
         }),
-        Event::TextInput(_event) => {
-            todo!()
-        }
+        Event::TextInput(event) => callbacks.get(&id).cloned().and_then(|f| match f {
+            WidgetMessage::TextInput(callbacks) => callbacks.process_event(event.into()),
+            _ => unreachable!(),
+        }),
     }
 }
 
@@ -175,6 +179,7 @@ impl<Msg> WidgetDef<Msg> {
             Widget::MouseArea(mouse_area) => {
                 mouse_area.child.collect_messages(callbacks, with_widget);
             }
+            Widget::TextInput(_) => (),
         }
     }
 }
@@ -195,6 +200,14 @@ impl<Msg: Clone> WidgetDef<Msg> {
                 mouse_area
                     .widget_id
                     .map(|id| (id, WidgetMessage::MouseArea(mouse_area.callbacks.clone()))),
+            );
+        }
+
+        if let Widget::TextInput(text_input) = &self.widget {
+            callbacks.extend(
+                text_input
+                    .widget_id
+                    .map(|id| (id, WidgetMessage::TextInput(text_input.callbacks.clone()))),
             );
         }
     }
@@ -222,6 +235,7 @@ pub enum Widget<Msg> {
     Image(Image),
     InputRegion(Box<InputRegion<Msg>>),
     MouseArea(Box<MouseArea<Msg>>),
+    TextInput(Box<TextInput<Msg>>),
 }
 
 impl<Msg, T: Into<Widget<Msg>>> From<T> for WidgetDef<Msg> {
@@ -255,6 +269,9 @@ impl<Msg> From<Widget<Msg>> for widget::v1::widget_def::Widget {
             }
             Widget::MouseArea(mouse_area) => {
                 widget::v1::widget_def::Widget::MouseArea(Box::new((*mouse_area).into()))
+            }
+            Widget::TextInput(text_input) => {
+                widget::v1::widget_def::Widget::TextInput(Box::new((*text_input).into()))
             }
         }
     }
@@ -565,6 +582,28 @@ impl From<ColorStop> for widget::v1::gradient::ColorStop {
         Self {
             offset,
             color: Some(color.into()),
+        }
+    }
+}
+
+/// The height of a line of text in a paragraph.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum LineHeight {
+    /// A factor of the size of the text.
+    Relative(f32),
+    /// An absolute height in logical pixels.
+    Absolute(f32),
+}
+
+impl From<LineHeight> for widget::v1::LineHeight {
+    fn from(value: LineHeight) -> Self {
+        let line_height = match value {
+            LineHeight::Relative(v) => widget::v1::line_height::LineHeight::Relative(v),
+            LineHeight::Absolute(v) => widget::v1::line_height::LineHeight::Absolute(v),
+        };
+
+        Self {
+            line_height: Some(line_height),
         }
     }
 }
