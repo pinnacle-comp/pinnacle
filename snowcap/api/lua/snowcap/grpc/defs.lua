@@ -575,12 +575,6 @@ local snowcap_widget_v1_MouseArea_EventType = {
     EVENT_EXIT = 10,
 }
 
----@enum snowcap.widget.v1.TextInput.Side
-local snowcap_widget_v1_TextInput_Side = {
-    SIDE_LEFT = 0,
-    SIDE_RIGHT = 1,
-}
-
 ---@enum snowcap.widget.v1.TextInput.EventType
 local snowcap_widget_v1_TextInput_EventType = {
     EVENT_INPUT = 0,
@@ -976,9 +970,16 @@ local snowcap_layer_v1_Layer = {
 ---@field code_point integer?
 ---@field pixels number?
 ---@field spacing number?
----@field side snowcap.widget.v1.TextInput.Side?
+---@field right_side boolean?
 
 ---@class snowcap.widget.v1.TextInput.Style
+---@field active snowcap.widget.v1.TextInput.Style.Inner?
+---@field hovered snowcap.widget.v1.TextInput.Style.Inner?
+---@field focused snowcap.widget.v1.TextInput.Style.Inner?
+---@field hover_focused snowcap.widget.v1.TextInput.Style.Inner?
+---@field disabled snowcap.widget.v1.TextInput.Style.Inner?
+
+---@class snowcap.widget.v1.TextInput.Style.Inner
 ---@field background snowcap.widget.v1.Background?
 ---@field border snowcap.widget.v1.Border?
 ---@field icon snowcap.widget.v1.Color?
@@ -1265,6 +1266,7 @@ snowcap.widget.v1.MouseArea.Point = {}
 snowcap.widget.v1.TextInput = {}
 snowcap.widget.v1.TextInput.Icon = {}
 snowcap.widget.v1.TextInput.Style = {}
+snowcap.widget.v1.TextInput.Style.Inner = {}
 snowcap.widget.v1.TextInput.Event = {}
 snowcap.widget.v1.GetWidgetEventsRequest = {}
 snowcap.widget.v1.WidgetEvent = {}
@@ -1327,7 +1329,6 @@ snowcap.widget.v1.Font.Style = snowcap_widget_v1_Font_Style
 snowcap.widget.v1.Image.ContentFit = snowcap_widget_v1_Image_ContentFit
 snowcap.widget.v1.MouseArea.Interaction = snowcap_widget_v1_MouseArea_Interaction
 snowcap.widget.v1.MouseArea.EventType = snowcap_widget_v1_MouseArea_EventType
-snowcap.widget.v1.TextInput.Side = snowcap_widget_v1_TextInput_Side
 snowcap.widget.v1.TextInput.EventType = snowcap_widget_v1_TextInput_EventType
 snowcap.widget.v0alpha1.Alignment = snowcap_widget_v0alpha1_Alignment
 snowcap.widget.v0alpha1.ScrollableAlignment = snowcap_widget_v0alpha1_ScrollableAlignment
