@@ -34,6 +34,36 @@ message Color {
   float alpha = 4;
 }
 
+message Gradient {
+  message ColorStop {
+    float offset = 1;
+    Color color = 2;
+  }
+
+  message Linear {
+    float radians = 1;
+    repeated ColorStop stops = 2;
+  }
+
+  oneof gradient {
+    Linear linear = 1;
+  }
+}
+
+message Background {
+  oneof background {
+    Color color = 1;
+    Gradient gradient = 2;
+  }
+}
+
+message LineHeight {
+  oneof line_height {
+    float relative = 1;
+    float absolute = 2;
+  }
+}
+
 message Font {
   message Family {
     oneof family {
@@ -129,6 +159,7 @@ message WidgetDef {
     Image image = 8;
     InputRegion input_region = 9;
     MouseArea mouse_area = 10;
+    TextInput text_input = 11;
   }
 }
 
@@ -367,6 +398,57 @@ message MouseArea {
   }
 }
 
+message TextInput {
+  string placeholder = 1;
+  string value = 2;
+  optional string id = 3;
+  bool secure = 4;
+  bool on_input = 5;
+  bool on_submit = 6;
+  bool on_paste = 7;
+  optional Font font = 8;
+  optional Icon icon = 9;
+  optional Length width = 10;
+  optional Padding padding = 11;
+  optional LineHeight line_height = 12;
+  optional Alignment horizontal_alignment = 13;
+  optional Style style = 14;
+  optional uint32 widget_id = 15;
+
+  enum Side {
+    SIDE_LEFT = 0;
+    SIDE_RIGHT = 1;
+  }
+
+  message Icon {
+    Font font = 1;
+    uint32 code_point = 2;
+    optional float pixels = 3;
+    float spacing = 4;
+    Side side = 5;
+  }
+
+  message Style {
+    optional Background background = 1;
+    optional Border border = 2;
+    optional Color icon = 3;
+    optional Color placeholder = 4;
+    optional Color value = 5;
+    optional Color selection = 6;
+  }
+
+  enum EventType {
+    EVENT_INPUT = 0;
+    EVENT_SUBMIT = 1;
+    EVENT_PASTE = 2;
+  }
+
+  message Event {
+    EventType event_type = 1;
+    optional string data = 2;
+  }
+}
+
 message GetWidgetEventsRequest {
   oneof id {
     uint32 layer_id = 1;
@@ -380,6 +462,7 @@ message WidgetEvent {
   oneof event {
     Button.Event button = 2;
     MouseArea.Event mouse_area = 3;
+    TextInput.Event text_input = 4;
   }
 }
 
