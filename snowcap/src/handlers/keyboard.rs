@@ -18,6 +18,46 @@ pub struct KeyboardKey {
     pub pressed: bool,
 }
 
+impl State {
+    pub(crate) fn on_key_press(&mut self, _keyboard: &WlKeyboard, event: KeyEvent) {
+        let Some(KeyboardFocus::Layer(layer)) = self.keyboard_focus.as_ref() else {
+            return;
+        };
+
+        let Some(snowcap_layer) = self.layers.iter_mut().find(|sn_l| &sn_l.layer == layer) else {
+            return;
+        };
+
+        let (key, location) = keysym_to_iced_key_and_loc(event.keysym);
+
+        let mut modifiers = iced::keyboard::Modifiers::empty();
+        if self.keyboard_modifiers.ctrl {
+            modifiers |= iced::keyboard::Modifiers::CTRL;
+        }
+        if self.keyboard_modifiers.alt {
+            modifiers |= iced::keyboard::Modifiers::ALT;
+        }
+        if self.keyboard_modifiers.shift {
+            modifiers |= iced::keyboard::Modifiers::SHIFT;
+        }
+        if self.keyboard_modifiers.logo {
+            modifiers |= iced::keyboard::Modifiers::LOGO;
+        }
+
+        snowcap_layer
+            .surface
+            .widgets
+            .queue_event(iced::Event::Keyboard(iced::keyboard::Event::KeyPressed {
+                key: key.clone(),
+                location,
+                modifiers,
+                text: event.utf8.map(Into::into),
+                modified_key: key, // TODO:
+                physical_key: Physical::Unidentified(NativeCode::Xkb(event.keysym.raw())),
+            }));
+    }
+}
+
 impl KeyboardHandler for State {
     fn enter(
         &mut self,
@@ -61,46 +101,7 @@ impl KeyboardHandler for State {
         _serial: u32,
         event: KeyEvent,
     ) {
-        let Some(KeyboardFocus::Layer(layer)) = self.keyboard_focus.as_ref() else {
-            return;
-        };
-
-        let Some(snowcap_layer) = self.layers.iter_mut().find(|sn_l| &sn_l.layer == layer) else {
-            return;
-        };
-
-        let (key, location) = keysym_to_iced_key_and_loc(event.keysym);
-
-        let mut modifiers = iced::keyboard::Modifiers::empty();
-        if self.keyboard_modifiers.ctrl {
-            modifiers |= iced::keyboard::Modifiers::CTRL;
-        }
-        if self.keyboard_modifiers.alt {
-            modifiers |= iced::keyboard::Modifiers::ALT;
-        }
-        if self.keyboard_modifiers.shift {
-            modifiers |= iced::keyboard::Modifiers::SHIFT;
-        }
-        if self.keyboard_modifiers.logo {
-            modifiers |= iced::keyboard::Modifiers::LOGO;
-        }
-
-        let text = match &key {
-            iced::keyboard::Key::Character(c) => Some(c.clone()),
-            _ => None,
-        };
-
-        snowcap_layer
-            .surface
-            .widgets
-            .queue_event(iced::Event::Keyboard(iced::keyboard::Event::KeyPressed {
-                key: key.clone(),
-                location,
-                modifiers,
-                text,
-                modified_key: key, // TODO:
-                physical_key: Physical::Unidentified(NativeCode::Xkb(event.keysym.raw())),
-            }));
+        self.on_key_press(_keyboard, event)
     }
 
     fn release_key(
