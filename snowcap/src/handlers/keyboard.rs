@@ -85,6 +85,11 @@ impl KeyboardHandler for State {
             modifiers |= iced::keyboard::Modifiers::LOGO;
         }
 
+        let text = match &key {
+            iced::keyboard::Key::Character(c) => Some(c.clone()),
+            _ => None,
+        };
+
         snowcap_layer
             .surface
             .widgets
@@ -92,7 +97,7 @@ impl KeyboardHandler for State {
                 key: key.clone(),
                 location,
                 modifiers,
-                text: None,
+                text,
                 modified_key: key, // TODO:
                 physical_key: Physical::Unidentified(NativeCode::Xkb(event.keysym.raw())),
             }));
