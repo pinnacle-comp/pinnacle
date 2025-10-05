@@ -164,8 +164,37 @@ impl KeyboardHandler for State {
         _raw_modifiers: RawModifiers,
         _layout: u32,
     ) {
-        // TODO: per wl_keyboard
         self.keyboard_modifiers = modifiers;
+
+        // TODO: Should we check if the modifiers actually changed ?
+        let Some(KeyboardFocus::Layer(layer)) = self.keyboard_focus.as_ref() else {
+            return;
+        };
+
+        let Some(snowcap_layer) = self.layers.iter_mut().find(|sn_l| &sn_l.layer == layer) else {
+            return;
+        };
+
+        let mut modifiers = iced::keyboard::Modifiers::empty();
+        if self.keyboard_modifiers.ctrl {
+            modifiers |= iced::keyboard::Modifiers::CTRL;
+        }
+        if self.keyboard_modifiers.alt {
+            modifiers |= iced::keyboard::Modifiers::ALT;
+        }
+        if self.keyboard_modifiers.shift {
+            modifiers |= iced::keyboard::Modifiers::SHIFT;
+        }
+        if self.keyboard_modifiers.logo {
+            modifiers |= iced::keyboard::Modifiers::LOGO;
+        }
+
+        snowcap_layer
+            .surface
+            .widgets
+            .queue_event(iced::Event::Keyboard(
+                iced::keyboard::Event::ModifiersChanged(modifiers),
+            ));
     }
 
     fn repeat_key(
