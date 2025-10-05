@@ -128,6 +128,9 @@ where
                                         _ => unreachable!()
                                     }
                                 })
+                            },
+                            widget_event::Event::TextInput(_event) => {
+                                todo!()
                             }
                         };
 
