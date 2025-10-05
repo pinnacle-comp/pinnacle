@@ -125,6 +125,9 @@ where
         Event::Button(_event) => callbacks.get(&id).cloned().map(|f| match f {
             WidgetMessage::Button(msg) => msg,
         }),
+        Event::TextInput(_event) => {
+            todo!()
+        }
     }
 }
 
