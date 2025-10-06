@@ -13,6 +13,7 @@ pub mod row;
 pub mod scrollable;
 pub mod text;
 pub mod text_input;
+pub mod utils;
 
 use std::{
     collections::HashMap,
@@ -29,6 +30,7 @@ use scrollable::Scrollable;
 use snowcap_api_defs::snowcap::widget;
 use text::Text;
 use text_input::TextInput;
+pub use utils::{Degrees, Radians};
 
 use crate::widget::input_region::InputRegion;
 
@@ -449,6 +451,24 @@ pub enum Background {
     Gradient(Gradient),
 }
 
+impl From<Color> for Background {
+    fn from(color: Color) -> Self {
+        Self::Color(color)
+    }
+}
+
+impl From<Gradient> for Background {
+    fn from(gradient: Gradient) -> Self {
+        Self::Gradient(gradient)
+    }
+}
+
+impl From<Linear> for Background {
+    fn from(linear: Linear) -> Self {
+        Self::Gradient(Gradient::Linear(linear))
+    }
+}
+
 impl From<Background> for widget::v1::Background {
     fn from(value: Background) -> Self {
         let background = match value {
@@ -479,10 +499,58 @@ impl From<Gradient> for widget::v1::Gradient {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Default)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Linear {
-    pub radians: f32,
+    pub radians: Radians,
     pub stops: Vec<ColorStop>,
+}
+
+impl Linear {
+    pub fn new(angle: impl Into<Radians>) -> Self {
+        Self {
+            radians: angle.into(),
+            stops: Default::default(),
+        }
+    }
+
+    pub fn add_stop(self, offset: f32, color: Color) -> Self {
+        let Self { radians, mut stops } = self;
+
+        if offset.is_finite() && (0.0..=1.0).contains(&offset) {
+            let search = stops.binary_search_by(|stop| {
+                if (stop.offset - offset).abs() <= f32::EPSILON {
+                    std::cmp::Ordering::Equal
+                } else {
+                    stop.offset.partial_cmp(&offset).unwrap()
+                }
+            });
+
+            let stop = ColorStop { offset, color };
+
+            match search {
+                Ok(pos) => stops[pos] = stop,
+                Err(pos) => {
+                    if stops.len() < 8 {
+                        stops.insert(pos, stop)
+                    } else {
+                        tracing::warn!("Linear::stops is full. Ignoring {stop:?}");
+                    }
+                }
+            }
+        } else {
+            tracing::warn!("Offset should be in the range 0.0..=1.0");
+        }
+
+        Self { radians, stops }
+    }
+
+    pub fn add_stops(mut self, stops: impl IntoIterator<Item = ColorStop>) -> Self {
+        for ColorStop { offset, color } in stops {
+            self = self.add_stop(offset, color);
+        }
+
+        self
+    }
 }
 
 impl From<Linear> for widget::v1::gradient::Linear {
@@ -490,7 +558,7 @@ impl From<Linear> for widget::v1::gradient::Linear {
         let Linear { radians, stops } = value;
 
         Self {
-            radians,
+            radians: radians.0,
             stops: stops.into_iter().map(From::from).collect(),
         }
     }
