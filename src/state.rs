@@ -21,6 +21,7 @@ use crate::{
     process::ProcessState,
     protocol::{
         drm::WlDrmState,
+        ext_workspace::{self, ExtWorkspaceManagerState},
         foreign_toplevel::{self, ForeignToplevelManagerState},
         gamma_control::GammaControlManagerState,
         output_management::OutputManagementManagerState,
@@ -171,6 +172,7 @@ pub struct Pinnacle {
     pub pointer_gestures_state: PointerGesturesState,
     pub single_pixel_buffer_state: SinglePixelBufferState,
     pub foreign_toplevel_list_state: ForeignToplevelListState,
+    pub ext_workspace_state: ExtWorkspaceManagerState,
     #[cfg(feature = "snowcap")]
     pub snowcap_decoration_state: SnowcapDecorationState,
     pub wl_drm_state: WlDrmState,
@@ -261,6 +263,7 @@ impl State {
         self.pinnacle.popup_manager.cleanup();
         self.update_pointer_focus();
         foreign_toplevel::refresh(self);
+        ext_workspace::refresh(self);
         self.pinnacle.refresh_idle_inhibit();
 
         self.backend.render_scheduled_outputs(&mut self.pinnacle);
@@ -462,6 +465,10 @@ impl Pinnacle {
             pointer_gestures_state: PointerGesturesState::new::<State>(&display_handle),
             single_pixel_buffer_state: SinglePixelBufferState::new::<State>(&display_handle),
             foreign_toplevel_list_state: ForeignToplevelListState::new::<State>(&display_handle),
+            ext_workspace_state: ExtWorkspaceManagerState::new::<State, _>(
+                &display_handle,
+                filter_restricted_client,
+            ),
             #[cfg(feature = "snowcap")]
             snowcap_decoration_state: SnowcapDecorationState::new::<State>(&display_handle),
             wl_drm_state: WlDrmState,
