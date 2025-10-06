@@ -847,49 +847,58 @@ pub fn widget_def_to_fn(def: WidgetDef) -> Option<ViewFn> {
                     }
                 }
 
-                use iced::widget::text_input;
+                if let Some(style) = style.clone() {
+                    let style = move |theme: &iced::Theme, status| {
+                        use iced::widget::text_input;
+                        let mut s = <iced::Theme as text_input::Catalog>::default()(theme, status);
 
-                let style = style.clone();
-                let style = move |theme: &iced::Theme, status| {
-                    let mut s = <iced::Theme as text_input::Catalog>::default()(theme, status);
+                        let widget::v1::text_input::Style {
+                            active,
+                            hovered,
+                            focused,
+                            hover_focused,
+                            disabled,
+                        } = style.clone();
 
-                    let style = style.clone();
-                    let inner = match status {
-                        text_input::Status::Active => style.and_then(|s| s.active),
-                        text_input::Status::Hovered => style.and_then(|s| s.hovered),
-                        text_input::Status::Focused { is_hovered } if is_hovered => {
-                            style.and_then(|s| s.hover_focused.or(s.focused))
+                        let inner = match status {
+                            text_input::Status::Active => active,
+                            text_input::Status::Hovered => hovered.or(active),
+                            text_input::Status::Focused { is_hovered } => {
+                                let inner =
+                                    if is_hovered { hover_focused.or(hovered) } else { None };
+
+                                inner.or(focused).or(active)
+                            }
+                            text_input::Status::Disabled => disabled,
+                        };
+
+                        if let Some(style) = inner {
+                            if let Some(background) = style.background {
+                                s.background = FromApi::from_api(background);
+                            }
+                            if let Some(border) = style.border {
+                                s.border = FromApi::from_api(border);
+                            }
+
+                            if let Some(icon) = style.icon {
+                                s.icon = FromApi::from_api(icon);
+                            }
+                            if let Some(placeholder) = style.placeholder {
+                                s.placeholder = FromApi::from_api(placeholder);
+                            }
+                            if let Some(value) = style.value {
+                                s.value = FromApi::from_api(value);
+                            }
+                            if let Some(selection) = style.selection {
+                                s.selection = FromApi::from_api(selection);
+                            }
                         }
-                        text_input::Status::Focused { .. } => style.and_then(|s| s.focused),
-                        text_input::Status::Disabled => style.and_then(|s| s.disabled),
+
+                        s
                     };
 
-                    if let Some(style) = inner {
-                        if let Some(background) = style.background {
-                            s.background = FromApi::from_api(background);
-                        }
-                        if let Some(border) = style.border {
-                            s.border = FromApi::from_api(border);
-                        }
-
-                        if let Some(icon) = style.icon {
-                            s.icon = FromApi::from_api(icon);
-                        }
-                        if let Some(placeholder) = style.placeholder {
-                            s.placeholder = FromApi::from_api(placeholder);
-                        }
-                        if let Some(value) = style.value {
-                            s.value = FromApi::from_api(value);
-                        }
-                        if let Some(selection) = style.selection {
-                            s.selection = FromApi::from_api(selection);
-                        }
-                    }
-
-                    s
-                };
-
-                text_input = text_input.style(style);
+                    text_input = text_input.style(style);
+                }
 
                 text_input.into()
             });
