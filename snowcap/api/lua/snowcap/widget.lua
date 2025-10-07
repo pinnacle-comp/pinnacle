@@ -31,6 +31,7 @@
 ---@field image snowcap.widget.Image?
 ---@field input_region snowcap.widget.InputRegion?
 ---@field mouse_area snowcap.widget.MouseArea?
+---@field text_input snowcap.widget.TextInput?
 
 ---@class snowcap.widget.Border
 ---@field color snowcap.widget.Color?
@@ -271,6 +272,61 @@ local mouse = {
     },
 }
 
+---@class snowcap.widget.TextInput
+---@field placeholder string
+---@field value string
+---@field id string?
+---@field secure boolean?
+---@field on_input (fun(data:string): any)?
+---@field on_submit any?
+---@field on_paste (fun(data:string): any)?
+---@field font snowcap.widget.Font?
+---@field icon snowcap.widget.text_input.Icon?
+---@field width snowcap.widget.Length?
+---@field padding snowcap.widget.Padding?
+---@field line_height snowcap.widget.LineHeight?
+---@field horizontal_alignment snowcap.widget.Alignment?
+---@field style snowcap.widget.text_input.Styles?
+---@field widget_id integer?
+
+---@class snowcap.widget.text_input.Callbacks
+---@field on_input any?
+---@field on_submit any?
+---@field on_paste any?
+
+---@class snowcap.widget.text_input.Icon
+---@field font snowcap.widget.Font?
+---@field code_point integer?
+---@field pixels number?
+---@field spacing number?
+---@field right_side boolean?
+
+---@class snowcap.widget.text_input.Styles
+---@field active snowcap.widget.text_input.Style?
+---@field hovered snowcap.widget.text_input.Style?
+---@field focused snowcap.widget.text_input.Style?
+---@field hover_focused snowcap.widget.text_input.Style?
+---@field disabled snowcap.widget.text_input.Style?
+
+---@class snowcap.widget.text_input.Style
+---@field background snowcap.widget.Background?
+---@field border snowcap.widget.Border?
+---@field icon snowcap.widget.Color?
+---@field placeholder snowcap.widget.Color?
+---@field value snowcap.widget.Color?
+---@field selection snowcap.widget.Color?
+
+---@class snowcap.widget.text_input.Event
+---@field event_type snowcap.widget.text_input.event.Type?
+---@field data string?
+
+---@enum snowcap.widget.text_input.event.Type
+local text_input_event_type = {
+    INPUT = "input",
+    SUBMIT = "submit",
+    PASTE = "press",
+}
+
 ---@class snowcap.widget.Length
 ---@field fill {}?
 ---@field fill_portion integer?
@@ -297,6 +353,57 @@ local alignment = {
     START = 1,
     CENTER = 2,
     END = 3,
+}
+
+---@class snowcap.widget.LineHeight
+---@field relative number?
+---@field absolute number?
+
+local line_height = {
+    ---@type fun(size: number): snowcap.widget.LineHeight
+    Relative = function(size)
+        return { relative = size }
+    end,
+    ---@type fun(size: number): snowcap.widget.LineHeight
+    Absolute = function(size)
+        return { absolute = size }
+    end,
+}
+
+---@class snowcap.widget.Gradient
+---@field linear snowcap.widget.gradient.Linear?
+
+---@class snowcap.widget.gradient.Linear
+---@field radians number
+---@field stops snowcap.widget.gradient.ColorStop[]
+
+---@class snowcap.widget.gradient.ColorStop
+---@field offset number
+---@field color snowcap.widget.Color
+
+---@class snowcap.widget.Background
+---@field color snowcap.widget.Color?
+---@field gradient snowcap.widget.Gradient?
+
+local background = {
+    ---@type fun(color: snowcap.widget.Color): snowcap.widget.Background
+    Color = function(color)
+        return { color = color }
+    end,
+    ---@type fun(gradient: snowcap.widget.Gradient): snowcap.widget.Background
+    Gradient = function(gradient)
+        return { gradient = gradient }
+    end,
+    ---@type fun(radians: number, stops: snowcap.widget.gradient.ColorStop[]): snowcap.widget.Background
+    Linear = function(radians, stops)
+        ---@type snowcap.widget.gradient.Linear
+        local linear = { radians = radians, stops = stops or {} }
+
+        ---@type snowcap.widget.Gradient
+        local gradient = { linear = linear }
+
+        return { gradient = gradient }
+    end,
 }
 
 ---@class snowcap.widget.Color
@@ -397,6 +504,7 @@ local font = {
 ---@class snowcap.widget.Callback
 ---@field button fun(widget: snowcap.widget.WidgetDef)?
 ---@field mouse_area fun(widget: snowcap.widget.WidgetDef)?
+---@field text_input fun(widget: snowcap.widget.WidgetDef)?
 
 local widget = {
     length = length,
@@ -407,6 +515,8 @@ local widget = {
         content_fit = content_fit,
     },
     mouse = mouse,
+    line_height = line_height,
+    background = background,
 }
 
 local widget_id_counter = 0
@@ -564,6 +674,29 @@ local function mouse_area_into_api(def)
     }
 end
 
+---@param def snowcap.widget.TextInput
+---@return snowcap.widget.v1.TextInput
+local function text_input_into_api(def)
+    ---@type snowcap.widget.v1.TextInput
+    return {
+        placeholder = def.placeholder,
+        value = def.value,
+        id = def.id,
+        secure = def.secure,
+        on_input = def.on_input ~= nil,
+        on_submit = def.on_submit ~= nil,
+        on_paste = def.on_paste ~= nil,
+        font = def.font --[[@as snowcap.widget.v1.Font]],
+        icon = def.icon --[[@as snowcap.widget.v1.TextInput.Icon]],
+        width = def.width --[[@as snowcap.widget.v1.Length]],
+        padding = def.padding --[[@as snowcap.widget.v1.Padding]],
+        line_height = def.line_height --[[@as snowcap.widget.v1.LineHeight]],
+        horizontal_alignment = def.horizontal_alignment --[[@as snowcap.widget.v1.Alignment]],
+        style = def.style --[[@as snowcap.widget.v1.TextInput.Style]],
+        widget_id = def.widget_id,
+    }
+end
+
 ---@param def snowcap.widget.WidgetDef
 ---@return snowcap.widget.v1.WidgetDef
 function widget.widget_def_into_api(def)
@@ -593,6 +726,9 @@ function widget.widget_def_into_api(def)
     end
     if def.mouse_area then
         def.mouse_area = mouse_area_into_api(def.mouse_area)
+    end
+    if def.text_input then
+        def.text_input = text_input_into_api(def.text_input)
     end
 
     return def --[[@as snowcap.widget.v1.WidgetDef]]
@@ -708,6 +844,28 @@ function widget.mouse_area(mouse_area)
     }
 end
 
+---Create a new TextInput widget.
+---@param text_input snowcap.widget.TextInput
+---
+---@return snowcap.widget.WidgetDef
+function widget.text_input(text_input)
+    local has_cb = false
+
+    has_cb = has_cb or text_input.on_input ~= nil
+    has_cb = has_cb or text_input.on_submit ~= nil
+    has_cb = has_cb or text_input.on_paste ~= nil
+
+    if has_cb then
+        text_input.widget_id = widget_id_counter
+        widget_id_counter = widget_id_counter + 1
+    end
+
+    ---@type snowcap.widget.WidgetDef
+    return {
+        text_input = text_input,
+    }
+end
+
 ---@private
 ---@lcat nodoc
 ---@param wgt snowcap.widget.WidgetDef
@@ -758,6 +916,16 @@ local function collect_mouse_area_callbacks(mouse_area)
     }
 end
 
+---@param text_input snowcap.widget.TextInput
+---@return snowcap.widget.text_input.Callbacks
+local function collect_text_input_callbacks(text_input)
+    return {
+        on_input = text_input.on_input,
+        on_submit = text_input.on_submit,
+        on_paste = text_input.on_paste,
+    }
+end
+
 ---@private
 ---@lcat nodoc
 ---@param callbacks any[]
@@ -769,6 +937,10 @@ function widget._collect_callbacks(callbacks, wgt)
 
     if wgt.mouse_area and wgt.mouse_area.widget_id then
         callbacks[wgt.mouse_area.widget_id] = collect_mouse_area_callbacks(wgt.mouse_area)
+    end
+
+    if wgt.text_input and wgt.text_input.widget_id then
+        callbacks[wgt.text_input.widget_id] = collect_text_input_callbacks(wgt.text_input)
     end
 end
 
@@ -829,6 +1001,53 @@ function widget._mouse_area_process_event(callbacks, event)
         end
     else
         msg = cb
+    end
+
+    return msg
+end
+
+---@private
+---lcat nodoc
+---@param callbacks snowcap.widget.text_input.Callbacks
+---@param event snowcap.widget.text_input.Event
+---@return any?
+function widget._text_input_process_event(callbacks, event)
+    callbacks = callbacks or {}
+
+    local translate = {
+        [text_input_event_type.INPUT] = "on_input",
+        [text_input_event_type.SUBMIT] = "on_submit",
+        [text_input_event_type.PASTE] = "on_paste",
+    }
+
+    local event_type = nil
+    local cb = nil
+
+    for k, v in pairs(translate) do
+        if event[k] ~= nil then
+            event_type = k
+            cb = callbacks[v]
+
+            break
+        end
+    end
+
+    if cb == nil then
+        return nil
+    end
+
+    local msg = nil
+
+    if event_type == text_input_event_type.SUBMIT then
+        msg = cb
+    else
+        local ok, val = pcall(cb, event[event_type])
+
+        if not ok then
+            require("snowcap.log").error(val)
+        else
+            msg = val
+        end
     end
 
     return msg
