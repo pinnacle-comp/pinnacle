@@ -5,7 +5,9 @@ use std::collections::HashMap;
 use snowcap_api_defs::snowcap::{
     decoration::{
         self,
-        v1::{CloseRequest, NewDecorationRequest, UpdateDecorationRequest},
+        v1::{
+            CloseRequest, NewDecorationRequest, OperateDecorationRequest, UpdateDecorationRequest,
+        },
     },
     widget::v1::{GetWidgetEventsRequest, get_widget_events_request, widget_event},
 };
@@ -16,7 +18,7 @@ use tracing::error;
 use crate::{
     BlockOnTokio,
     client::Client,
-    widget::{Program, WidgetDef, WidgetId, WidgetMessage},
+    widget::{self, Program, WidgetDef, WidgetId, WidgetMessage},
 };
 
 /// The bounds of a window or decoration.
@@ -209,6 +211,21 @@ impl<Msg> DecorationHandle<Msg> {
     /// Sends a message to this decoration's [`Program`].
     pub fn send_message(&self, message: Msg) {
         let _ = self.msg_sender.send(message);
+    }
+
+    /// Sends an [`Operation`] to this Decoration.
+    ///
+    /// [`Operation`]: widget::operation::Operation
+    pub fn operate(&self, operation: widget::operation::Operation) {
+        if let Err(status) = Client::decoration()
+            .operate_decoration(OperateDecorationRequest {
+                decoration_id: self.id.to_inner(),
+                operation: Some(operation.into()),
+            })
+            .block_on_tokio()
+        {
+            error!("Failed to send FocusWidget to {self:?}: {status}");
+        }
     }
 
     /// Sets the z-index that this decoration will render at.
