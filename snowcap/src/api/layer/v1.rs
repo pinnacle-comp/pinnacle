@@ -4,8 +4,8 @@ use smithay_client_toolkit::shell::wlr_layer;
 use snowcap_api_defs::snowcap::layer::{
     self,
     v1::{
-        CloseRequest, NewLayerRequest, NewLayerResponse, UpdateLayerRequest, UpdateLayerResponse,
-        layer_service_server,
+        CloseRequest, NewLayerRequest, NewLayerResponse, OperateLayerRequest, OperateLayerResponse,
+        UpdateLayerRequest, UpdateLayerResponse, layer_service_server,
     },
 };
 use tonic::{Request, Response, Status};
@@ -13,6 +13,7 @@ use tonic::{Request, Response, Status};
 use crate::{
     api::{run_unary, run_unary_no_response, widget::v1::widget_def_to_fn},
     layer::{ExclusiveZone, LayerId, SnowcapLayer},
+    util::convert::FromApi,
 };
 
 #[tonic::async_trait]
@@ -174,6 +175,32 @@ impl layer_service_server::LayerService for super::LayerService {
             );
 
             Ok(UpdateLayerResponse {})
+        })
+        .await
+    }
+
+    async fn operate_layer(
+        &self,
+        request: Request<OperateLayerRequest>,
+    ) -> Result<Response<OperateLayerResponse>, Status> {
+        let OperateLayerRequest {
+            layer_id,
+            operation,
+        } = request.into_inner();
+
+        let id = LayerId(layer_id);
+
+        run_unary(&self.sender, move |state| {
+            let Some(layer) = state.layers.iter_mut().find(|layer| layer.layer_id == id) else {
+                return Ok(OperateLayerResponse {});
+            };
+            let Some(operation) = operation else {
+                return Ok(OperateLayerResponse {});
+            };
+
+            layer.operate(FromApi::from_api(operation));
+
+            Ok(OperateLayerResponse {})
         })
         .await
     }
