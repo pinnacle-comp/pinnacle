@@ -8,6 +8,7 @@ pub mod container;
 pub mod font;
 pub mod image;
 pub mod input_region;
+pub mod operation;
 pub mod row;
 pub mod scrollable;
 pub mod text;
