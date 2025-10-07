@@ -131,6 +131,10 @@ function layer.new_widget(args)
                 if callbacks[widget_id] ~= nil then
                     msg = widget._mouse_area_process_event(callbacks[widget_id], event.mouse_area)
                 end
+            elseif event.text_input then
+                if callbacks[widget_id] ~= nil then
+                    msg = widget._text_input_process_event(callbacks[widget_id], event.text_input)
+                end
             end
 
             if msg then
