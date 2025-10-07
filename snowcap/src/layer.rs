@@ -1,5 +1,6 @@
 use std::num::NonZeroU32;
 
+use iced_runtime::core::widget;
 use smithay_client_toolkit::{
     reexports::client::protocol::wl_output::WlOutput,
     shell::{
@@ -169,6 +170,10 @@ impl SnowcapLayer {
 
     pub fn draw_if_scheduled(&mut self) {
         self.surface.draw_if_scheduled();
+    }
+
+    pub fn operate(&mut self, operation: &mut dyn widget::Operation) {
+        self.surface.operate(operation)
     }
 
     pub fn update(

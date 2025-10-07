@@ -2,7 +2,7 @@ pub mod input_region;
 
 use iced::{Color, Theme, event::Status};
 use iced_graphics::Viewport;
-use iced_wgpu::core::{Clipboard, layout::Limits};
+use iced_wgpu::core::{Clipboard, layout::Limits, widget};
 use smithay_client_toolkit::reexports::client::{QueueHandle, protocol::wl_surface::WlSurface};
 
 use crate::{handlers::keyboard::KeyboardKey, state::State, widget::input_region::Collect};
@@ -144,6 +144,17 @@ impl SnowcapWidgetProgram {
             clipboard,
             messages,
         ))
+    }
+
+    pub fn operate(
+        &mut self,
+        renderer: &mut iced_renderer::Renderer,
+        operation: &mut dyn widget::Operation,
+    ) {
+        self.user_interface
+            .as_mut()
+            .unwrap()
+            .operate(renderer, operation);
     }
 
     pub fn queue_event(&mut self, event: iced::Event) {

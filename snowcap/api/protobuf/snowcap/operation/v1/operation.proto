@@ -1,0 +1,49 @@
+syntax = "proto3";
+
+package snowcap.operation.v1;
+
+message Focusable {
+  message Focus {
+    string id = 1;
+  }
+  message Unfocus {}
+  message FocusNext {}
+  message FocusPrev {}
+
+  oneof op {
+    Focus focus = 1;
+    Unfocus unfocus = 2;
+    FocusNext focus_next = 3;
+    FocusPrev focus_prev = 4;
+  }
+}
+
+message TextInput {
+  message MoveCursor {
+    string id = 1;
+    uint64 position = 2;
+  }
+  message MoveCursorFront {
+    string id = 1;
+  }
+  message MoveCursorEnd {
+    string id = 1;
+  }
+  message SelectAll {
+    string id = 1;
+  }
+
+  oneof op {
+    MoveCursor move_cursor = 1;
+    MoveCursorFront move_cursor_front = 2;
+    MoveCursorEnd move_cursor_end = 3;
+    SelectAll select_all = 4;
+  }
+}
+
+message Operation {
+  oneof target {
+    Focusable focusable = 1;
+    TextInput text_input = 2;
+  }
+}

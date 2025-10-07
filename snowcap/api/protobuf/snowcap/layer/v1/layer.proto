@@ -4,6 +4,7 @@ package snowcap.layer.v1;
 
 import "google/protobuf/empty.proto";
 import "snowcap/widget/v1/widget.proto";
+import "snowcap/operation/v1/operation.proto";
 
 enum Anchor {
   ANCHOR_UNSPECIFIED = 0;
@@ -49,6 +50,12 @@ message CloseRequest {
   uint32 layer_id = 2;
 }
 
+message OperateLayerRequest {
+  uint32 layer_id = 1;
+  snowcap.operation.v1.Operation operation = 2;
+}
+message OperateLayerResponse {}
+
 message UpdateLayerRequest {
   uint32 layer_id = 1;
   optional snowcap.widget.v1.WidgetDef widget_def = 2;
@@ -67,6 +74,7 @@ message ViewResponse {}
 service LayerService {
   rpc NewLayer(NewLayerRequest) returns (NewLayerResponse);
   rpc Close(CloseRequest) returns (google.protobuf.Empty);
+  rpc OperateLayer(OperateLayerRequest) returns (OperateLayerResponse);
   rpc UpdateLayer(UpdateLayerRequest) returns (UpdateLayerResponse);
   rpc RequestView(ViewRequest) returns (ViewResponse);
 }

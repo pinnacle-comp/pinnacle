@@ -995,6 +995,44 @@ local snowcap_layer_v1_Layer = {
 ---@class snowcap.widget.v1.GetWidgetEventsResponse
 ---@field widget_events snowcap.widget.v1.WidgetEvent[]?
 
+---@class snowcap.operation.v1.Focusable
+---@field focus snowcap.operation.v1.Focusable.Focus?
+---@field unfocus snowcap.operation.v1.Focusable.Unfocus?
+---@field focus_next snowcap.operation.v1.Focusable.FocusNext?
+---@field focus_prev snowcap.operation.v1.Focusable.FocusPrev?
+
+---@class snowcap.operation.v1.Focusable.Focus
+---@field id string?
+
+---@class snowcap.operation.v1.Focusable.Unfocus
+
+---@class snowcap.operation.v1.Focusable.FocusNext
+
+---@class snowcap.operation.v1.Focusable.FocusPrev
+
+---@class snowcap.operation.v1.TextInput
+---@field move_cursor snowcap.operation.v1.TextInput.MoveCursor?
+---@field move_cursor_front snowcap.operation.v1.TextInput.MoveCursorFront?
+---@field move_cursor_end snowcap.operation.v1.TextInput.MoveCursorEnd?
+---@field select_all snowcap.operation.v1.TextInput.SelectAll?
+
+---@class snowcap.operation.v1.TextInput.MoveCursor
+---@field id string?
+---@field position integer?
+
+---@class snowcap.operation.v1.TextInput.MoveCursorFront
+---@field id string?
+
+---@class snowcap.operation.v1.TextInput.MoveCursorEnd
+---@field id string?
+
+---@class snowcap.operation.v1.TextInput.SelectAll
+---@field id string?
+
+---@class snowcap.operation.v1.Operation
+---@field focusable snowcap.operation.v1.Focusable?
+---@field text_input snowcap.operation.v1.TextInput?
+
 ---@class snowcap.decoration.v1.Bounds
 ---@field left integer?
 ---@field right integer?
@@ -1015,6 +1053,12 @@ local snowcap_layer_v1_Layer = {
 ---@field decoration_id integer?
 
 ---@class snowcap.decoration.v1.CloseResponse
+
+---@class snowcap.decoration.v1.OperateDecorationRequest
+---@field decoration_id integer?
+---@field operation snowcap.operation.v1.Operation?
+
+---@class snowcap.decoration.v1.OperateDecorationResponse
 
 ---@class snowcap.decoration.v1.UpdateDecorationRequest
 ---@field decoration_id integer?
@@ -1202,6 +1246,12 @@ local snowcap_layer_v1_Layer = {
 ---@class snowcap.layer.v1.CloseRequest
 ---@field layer_id integer?
 
+---@class snowcap.layer.v1.OperateLayerRequest
+---@field layer_id integer?
+---@field operation snowcap.operation.v1.Operation?
+
+---@class snowcap.layer.v1.OperateLayerResponse
+
 ---@class snowcap.layer.v1.UpdateLayerRequest
 ---@field layer_id integer?
 ---@field widget_def snowcap.widget.v1.WidgetDef?
@@ -1274,6 +1324,19 @@ snowcap.widget.v1.TextInput.Event = {}
 snowcap.widget.v1.GetWidgetEventsRequest = {}
 snowcap.widget.v1.WidgetEvent = {}
 snowcap.widget.v1.GetWidgetEventsResponse = {}
+snowcap.operation = {}
+snowcap.operation.v1 = {}
+snowcap.operation.v1.Focusable = {}
+snowcap.operation.v1.Focusable.Focus = {}
+snowcap.operation.v1.Focusable.Unfocus = {}
+snowcap.operation.v1.Focusable.FocusNext = {}
+snowcap.operation.v1.Focusable.FocusPrev = {}
+snowcap.operation.v1.TextInput = {}
+snowcap.operation.v1.TextInput.MoveCursor = {}
+snowcap.operation.v1.TextInput.MoveCursorFront = {}
+snowcap.operation.v1.TextInput.MoveCursorEnd = {}
+snowcap.operation.v1.TextInput.SelectAll = {}
+snowcap.operation.v1.Operation = {}
 snowcap.decoration = {}
 snowcap.decoration.v1 = {}
 snowcap.decoration.v1.Bounds = {}
@@ -1281,6 +1344,8 @@ snowcap.decoration.v1.NewDecorationRequest = {}
 snowcap.decoration.v1.NewDecorationResponse = {}
 snowcap.decoration.v1.CloseRequest = {}
 snowcap.decoration.v1.CloseResponse = {}
+snowcap.decoration.v1.OperateDecorationRequest = {}
+snowcap.decoration.v1.OperateDecorationResponse = {}
 snowcap.decoration.v1.UpdateDecorationRequest = {}
 snowcap.decoration.v1.UpdateDecorationResponse = {}
 snowcap.decoration.v1.ViewRequest = {}
@@ -1321,6 +1386,8 @@ snowcap.layer.v1 = {}
 snowcap.layer.v1.NewLayerRequest = {}
 snowcap.layer.v1.NewLayerResponse = {}
 snowcap.layer.v1.CloseRequest = {}
+snowcap.layer.v1.OperateLayerRequest = {}
+snowcap.layer.v1.OperateLayerResponse = {}
 snowcap.layer.v1.UpdateLayerRequest = {}
 snowcap.layer.v1.UpdateLayerResponse = {}
 snowcap.layer.v1.ViewRequest = {}
@@ -1401,6 +1468,23 @@ snowcap.decoration.v1.DecorationService.Close.response = ".snowcap.decoration.v1
 ---@return string | nil error An error string, if any
 function Client:snowcap_decoration_v1_DecorationService_Close(data)
     return self:unary_request(snowcap.decoration.v1.DecorationService.Close, data)
+end
+snowcap.decoration.v1.DecorationService.OperateDecoration = {}
+snowcap.decoration.v1.DecorationService.OperateDecoration.service = "snowcap.decoration.v1.DecorationService"
+snowcap.decoration.v1.DecorationService.OperateDecoration.method = "OperateDecoration"
+snowcap.decoration.v1.DecorationService.OperateDecoration.request = ".snowcap.decoration.v1.OperateDecorationRequest"
+snowcap.decoration.v1.DecorationService.OperateDecoration.response = ".snowcap.decoration.v1.OperateDecorationResponse"
+
+---Performs a unary request.
+---
+---@nodiscard
+---
+---@param data snowcap.decoration.v1.OperateDecorationRequest
+---
+---@return snowcap.decoration.v1.OperateDecorationResponse | nil response
+---@return string | nil error An error string, if any
+function Client:snowcap_decoration_v1_DecorationService_OperateDecoration(data)
+    return self:unary_request(snowcap.decoration.v1.DecorationService.OperateDecoration, data)
 end
 snowcap.decoration.v1.DecorationService.UpdateDecoration = {}
 snowcap.decoration.v1.DecorationService.UpdateDecoration.service = "snowcap.decoration.v1.DecorationService"
@@ -1583,6 +1667,23 @@ snowcap.layer.v1.LayerService.Close.response = ".google.protobuf.Empty"
 ---@return string | nil error An error string, if any
 function Client:snowcap_layer_v1_LayerService_Close(data)
     return self:unary_request(snowcap.layer.v1.LayerService.Close, data)
+end
+snowcap.layer.v1.LayerService.OperateLayer = {}
+snowcap.layer.v1.LayerService.OperateLayer.service = "snowcap.layer.v1.LayerService"
+snowcap.layer.v1.LayerService.OperateLayer.method = "OperateLayer"
+snowcap.layer.v1.LayerService.OperateLayer.request = ".snowcap.layer.v1.OperateLayerRequest"
+snowcap.layer.v1.LayerService.OperateLayer.response = ".snowcap.layer.v1.OperateLayerResponse"
+
+---Performs a unary request.
+---
+---@nodiscard
+---
+---@param data snowcap.layer.v1.OperateLayerRequest
+---
+---@return snowcap.layer.v1.OperateLayerResponse | nil response
+---@return string | nil error An error string, if any
+function Client:snowcap_layer_v1_LayerService_OperateLayer(data)
+    return self:unary_request(snowcap.layer.v1.LayerService.OperateLayer, data)
 end
 snowcap.layer.v1.LayerService.UpdateLayer = {}
 snowcap.layer.v1.LayerService.UpdateLayer.service = "snowcap.layer.v1.LayerService"
