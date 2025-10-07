@@ -1,11 +1,12 @@
 use std::num::NonZeroU32;
 
+use anyhow::Context;
 use smithay_client_toolkit::shell::wlr_layer;
 use snowcap_api_defs::snowcap::layer::{
     self,
     v1::{
-        CloseRequest, NewLayerRequest, NewLayerResponse, UpdateLayerRequest, UpdateLayerResponse,
-        ViewRequest, ViewResponse, layer_service_server,
+        CloseRequest, NewLayerRequest, NewLayerResponse, OperateLayerRequest, OperateLayerResponse,
+        UpdateLayerRequest, UpdateLayerResponse, ViewRequest, ViewResponse, layer_service_server,
     },
 };
 use tonic::{Request, Response, Status};
@@ -13,6 +14,7 @@ use tonic::{Request, Response, Status};
 use crate::{
     api::{run_unary, run_unary_no_response, widget::v1::widget_def_to_fn},
     layer::{ExclusiveZone, LayerId, SnowcapLayer},
+    util::convert::TryFromApi,
 };
 
 #[tonic::async_trait]
@@ -102,6 +104,42 @@ impl layer_service_server::LayerService for super::LayerService {
 
         run_unary_no_response(&self.sender, move |state| {
             state.layers.retain(|sn_layer| sn_layer.layer_id != id);
+        })
+        .await
+    }
+
+    async fn operate_layer(
+        &self,
+        request: Request<OperateLayerRequest>,
+    ) -> Result<Response<OperateLayerResponse>, Status> {
+        let OperateLayerRequest {
+            layer_id,
+            operation,
+        } = request.into_inner();
+
+        let id = LayerId(layer_id);
+
+        run_unary(&self.sender, move |state| {
+            let Some(layer) = state.layers.iter_mut().find(|layer| layer.layer_id == id) else {
+                return Ok(OperateLayerResponse {});
+            };
+            let Some(operation) = operation else {
+                return Ok(OperateLayerResponse {});
+            };
+
+            let operation =
+                Box::try_from_api(operation).context("While processing OperateLayerRequest");
+            let mut operation = match operation {
+                Err(e) => {
+                    tracing::error!("{e:?}");
+                    return Ok(OperateLayerResponse {});
+                }
+                Ok(o) => o,
+            };
+
+            layer.operate(&mut operation);
+
+            Ok(OperateLayerResponse {})
         })
         .await
     }
