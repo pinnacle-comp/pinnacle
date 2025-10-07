@@ -6,7 +6,7 @@ use snowcap_api_defs::snowcap::{
     input::v1::KeyboardKeyRequest,
     layer::{
         self,
-        v1::{CloseRequest, NewLayerRequest, UpdateLayerRequest, ViewRequest},
+        v1::{CloseRequest, NewLayerRequest, OperateLayerRequest, UpdateLayerRequest, ViewRequest},
     },
     widget::v1::{GetWidgetEventsRequest, get_widget_events_request},
 };
@@ -325,6 +325,21 @@ where
     /// Sends a message to this Layer [`Program`].
     pub fn send_message(&self, message: Msg) {
         let _ = self.msg_sender.send(message);
+    }
+
+    /// Sends an [`Operation`] to this Layer.
+    ///
+    /// [`Operation`]: widget::operation::Operation
+    pub fn operate(&self, operation: widget::operation::Operation) {
+        if let Err(status) = Client::layer()
+            .operate_layer(OperateLayerRequest {
+                layer_id: self.id.to_inner(),
+                operation: Some(operation.into()),
+            })
+            .block_on_tokio()
+        {
+            error!("Failed to send operation to {self:?}: {status}");
+        }
     }
 
     /// Do something when a key event is received
