@@ -145,6 +145,7 @@ impl WindowElement {
         location: Point<i32, Logical>,
         scale: Scale<f64>,
         alpha: f32,
+        include_decorations: bool,
     ) -> SplitRenderElements<WaylandSurfaceRenderElement<R>> {
         let _span = tracy_client::span!("WindowElement::render_elements");
 
@@ -157,7 +158,13 @@ impl WindowElement {
         #[cfg(not(feature = "snowcap"))]
         let offset = Point::default();
 
-        let window_location = (location - self.geometry().loc).to_physical_precise_round(scale);
+        let window_location = if include_decorations {
+            self.geometry().loc
+        } else {
+            (**self).geometry().loc
+        };
+
+        let window_location = (location - window_location).to_physical_precise_round(scale);
 
         // Popups render relative to the actual window, so offset by the decoration offset.
         let surface_location = (location + offset).to_physical_precise_round(scale);
@@ -169,7 +176,7 @@ impl WindowElement {
 
                 use crate::decoration::DecorationSurface;
 
-                if self.should_not_have_ssd() {
+                if self.should_not_have_ssd() || !include_decorations {
                     (Vec::new(), Vec::new())
                 } else {
                     let max_bounds = state.max_decoration_bounds();
@@ -527,7 +534,7 @@ fn window_render_elements<R: PRenderer + AsGlesRenderer>(
                 let SplitRenderElements {
                     surface_elements,
                     popup_elements,
-                } = win.render_elements(renderer, loc, scale, 1.0);
+                } = win.render_elements(renderer, loc, scale, 1.0, true);
 
                 popups.extend(popup_elements.into_iter().map(OutputRenderElement::from));
 
