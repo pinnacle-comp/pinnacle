@@ -42,6 +42,8 @@ impl Drop for Frame {
             self.data().frame_state = FrameState::Failed;
             self.frame.failed(FailureReason::Unknown);
         }
+
+        self.buffer().release();
     }
 }
 

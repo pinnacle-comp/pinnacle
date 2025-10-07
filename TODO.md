@@ -7,6 +7,7 @@
 - Keyboard focus in Idea Xwayland is weird when creating a new Java file
 
 - Snowcap crashes when a window opens and immediately closes because the foreign toplevel handle is no longer valid
+- Cursor position when scaled is wrong
 
 Testing
 - Test layout mode changing and how it interacts with client fullscreen/maximized requests

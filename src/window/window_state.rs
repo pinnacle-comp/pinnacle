@@ -20,7 +20,7 @@ use tracing::warn;
 use crate::{decoration::DecorationSurface, protocol::snowcap_decoration::Bounds};
 use crate::{
     handlers::image_copy_capture::SessionDamageTrackers,
-    protocol::image_copy_capture::session::Session,
+    protocol::image_copy_capture::session::{CursorSession, Session},
     render::util::snapshot::WindowSnapshot,
     state::{Pinnacle, WithState},
     tag::Tag,
@@ -408,6 +408,7 @@ pub struct WindowElementState {
     pub vrr_demand: Option<VrrDemand>,
 
     pub capture_sessions: HashMap<Session, SessionDamageTrackers>,
+    pub cursor_sessions: Vec<CursorSession>,
 }
 
 impl WindowElement {
@@ -671,6 +672,7 @@ impl WindowElementState {
             decoration_surfaces: Vec::new(),
             vrr_demand: None,
             capture_sessions: Default::default(),
+            cursor_sessions: Default::default(),
         }
     }
 

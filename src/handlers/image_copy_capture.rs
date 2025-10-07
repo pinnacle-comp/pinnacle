@@ -12,7 +12,7 @@ use smithay::{
     },
     output::Output,
     reexports::wayland_server::protocol::wl_shm,
-    utils::{Buffer, Rectangle, Size, Transform},
+    utils::{Buffer, Physical, Point, Rectangle, Size, Transform},
     wayland::{
         compositor,
         dmabuf::get_dmabuf,
@@ -47,13 +47,11 @@ impl ImageCopyCaptureHandler for State {
     }
 
     fn new_session(&mut self, session: Session) {
-        let Some((buffer_size, scale)) = self
+        // FIXME: better tracking of no cursor vs no output/window or something
+        let (buffer_size, scale) = self
             .pinnacle
-            .source_buffer_size_and_scale(&session.source())
-        else {
-            session.stopped();
-            return;
-        };
+            .buffer_size_and_scale_for_session(&session)
+            .unwrap_or(((1, 1).into(), 1.0));
 
         session.resized(buffer_size);
         let trackers = SessionDamageTrackers::new(buffer_size, scale);
@@ -96,8 +94,42 @@ impl ImageCopyCaptureHandler for State {
         }
     }
 
-    fn new_cursor_session(&mut self, _cursor_session: CursorSession) {
-        // TODO:
+    fn new_cursor_session(&mut self, cursor_session: CursorSession) {
+        match cursor_session.source() {
+            Source::Output(wl_output) => {
+                let Some(output) = Output::from_resource(wl_output) else {
+                    return;
+                };
+
+                output.with_state_mut(|state| state.cursor_sessions.push(cursor_session));
+            }
+            Source::ForeignToplevel(ext_foreign_toplevel_handle_v1) => {
+                let Some(window) = self
+                    .pinnacle
+                    .windows
+                    .iter()
+                    .find(|win| {
+                        win.with_state(|state| {
+                            state
+                                .foreign_toplevel_list_handle
+                                .as_ref()
+                                .is_some_and(|fth| {
+                                    Some(fth.identifier())
+                                        == ForeignToplevelHandle::from_resource(
+                                            ext_foreign_toplevel_handle_v1,
+                                        )
+                                        .map(|fth| fth.identifier())
+                                })
+                        })
+                    })
+                    .cloned()
+                else {
+                    return;
+                };
+
+                window.with_state_mut(|state| state.cursor_sessions.push(cursor_session));
+            }
+        }
     }
 
     fn session_destroyed(&mut self, session: Session) {
@@ -107,6 +139,24 @@ impl ImageCopyCaptureHandler for State {
 
         for win in self.pinnacle.windows.iter() {
             win.with_state_mut(|state| state.capture_sessions.remove(&session));
+        }
+    }
+
+    fn cursor_session_destroyed(&mut self, cursor_session: CursorSession) {
+        for output in self.pinnacle.outputs.iter() {
+            output.with_state_mut(|state| {
+                state
+                    .cursor_sessions
+                    .retain(|session| *session != cursor_session)
+            });
+        }
+
+        for win in self.pinnacle.windows.iter() {
+            win.with_state_mut(|state| {
+                state
+                    .cursor_sessions
+                    .retain(|session| *session != cursor_session)
+            });
         }
     }
 }
@@ -148,9 +198,7 @@ impl State {
 
             let mut sessions = win.with_state_mut(|state| mem::take(&mut state.capture_sessions));
             for (session, trackers) in sessions.iter_mut() {
-                let Some((size, scale)) = self
-                    .pinnacle
-                    .source_buffer_size_and_scale(&session.source())
+                let Some((size, scale)) = self.pinnacle.buffer_size_and_scale_for_session(session)
                 else {
                     // TODO: stop stream or something idk
                     continue;
@@ -188,11 +236,18 @@ impl State {
                         .with_renderer(|renderer| {
                             let win_loc = self.pinnacle.space.element_location(&win);
                             let pointer_elements = if let Some(win_loc) = win_loc {
+                                let (_, hotspot) = self
+                                    .pinnacle
+                                    .cursor_state
+                                    .cursor_geometry_and_hotspot(self.pinnacle.clock.now(), scale)
+                                    .unwrap_or_default();
+
                                 let pointer_loc =
                                     self.pinnacle.seat.get_pointer().unwrap().current_location()
                                         - win_loc.to_f64();
                                 let (pointer_elements, _) = pointer_render_elements(
-                                    pointer_loc.to_physical_precise_round(scale),
+                                    pointer_loc.to_physical_precise_round(scale)
+                                        - Point::new(hotspot.x, hotspot.y),
                                     fractional_scale,
                                     renderer,
                                     &mut self.pinnacle.cursor_state,
@@ -222,35 +277,26 @@ impl State {
                             elements
                         })
                         .unwrap(),
-                    Cursor::Standalone { pointer: _ } => {
-                        let Some(output) = win.output(&self.pinnacle) else {
-                            continue;
-                        };
-                        let Some(win_loc) = self.pinnacle.space.element_location(&win) else {
-                            continue;
-                        };
-                        let pointer_loc =
-                            self.pinnacle.seat.get_pointer().unwrap().current_location()
-                                - win_loc.to_f64();
-                        let scale = output.current_scale().fractional_scale();
-                        self.backend
-                            .with_renderer(|renderer| {
-                                let (pointer_elements, _) = pointer_render_elements(
-                                    pointer_loc.to_physical_precise_round(scale),
-                                    scale,
-                                    renderer,
-                                    &mut self.pinnacle.cursor_state,
-                                    self.pinnacle.dnd_icon.as_ref(),
-                                    &self.pinnacle.clock,
-                                );
-                                pointer_elements
-                                    .into_iter()
-                                    .map(OutputRenderElement::from)
-                                    .collect()
-                            })
-                            .unwrap()
-                    }
+                    Cursor::Standalone { pointer: _ } => self
+                        .backend
+                        .with_renderer(|renderer| {
+                            let (pointer_elements, _) = pointer_render_elements(
+                                (0, 0).into(),
+                                fractional_scale,
+                                renderer,
+                                &mut self.pinnacle.cursor_state,
+                                self.pinnacle.dnd_icon.as_ref(),
+                                &self.pinnacle.clock,
+                            );
+                            pointer_elements
+                                .into_iter()
+                                .map(OutputRenderElement::from)
+                                .collect()
+                        })
+                        .unwrap(),
                 };
+
+                // TODO: handle cursor session frames
 
                 self.handle_frame(frame, &elements, trackers);
             }
@@ -261,9 +307,7 @@ impl State {
             let mut sessions =
                 output.with_state_mut(|state| mem::take(&mut state.capture_sessions));
             for (session, trackers) in sessions.iter_mut() {
-                let Some((size, scale)) = self
-                    .pinnacle
-                    .source_buffer_size_and_scale(&session.source())
+                let Some((size, scale)) = self.pinnacle.buffer_size_and_scale_for_session(session)
                 else {
                     // TODO: stop stream or something idk
                     continue;
@@ -325,17 +369,11 @@ impl State {
                             .unwrap()
                     }
                     Cursor::Standalone { pointer: _ } => {
-                        let Some(output_geo) = self.pinnacle.space.output_geometry(&output) else {
-                            continue;
-                        };
-                        let pointer_loc =
-                            self.pinnacle.seat.get_pointer().unwrap().current_location()
-                                - output_geo.loc.to_f64();
                         let scale = output.current_scale().fractional_scale();
                         self.backend
                             .with_renderer(|renderer| {
                                 let (pointer_elements, _) = pointer_render_elements(
-                                    pointer_loc.to_physical_precise_round(scale),
+                                    (0, 0).into(),
                                     scale,
                                     renderer,
                                     &mut self.pinnacle.cursor_state,
@@ -355,6 +393,102 @@ impl State {
             }
 
             output.with_state_mut(|state| state.capture_sessions = sessions);
+        }
+    }
+
+    pub fn update_cursor_capture_positions(&mut self) {
+        let cursor_loc = self.pinnacle.seat.get_pointer().unwrap().current_location();
+
+        for output in self.pinnacle.outputs.iter() {
+            let sessions = output.with_state(|state| state.cursor_sessions.clone());
+
+            if sessions.is_empty() {
+                continue;
+            }
+
+            let cursor_loc: Point<i32, Physical> = (cursor_loc
+                - output.current_location().to_f64())
+            .to_physical_precise_round(output.current_scale().fractional_scale());
+            let cursor_loc: Point<i32, Buffer> = (cursor_loc.x, cursor_loc.y).into();
+
+            let Some((mut cursor_geo, _)) = self.pinnacle.cursor_state.cursor_geometry_and_hotspot(
+                self.pinnacle.clock.now(),
+                output.current_scale().fractional_scale(),
+            ) else {
+                continue;
+            };
+
+            cursor_geo.loc += cursor_loc;
+
+            let mode_size = output
+                .current_mode()
+                .map(|mode| mode.size)
+                .unwrap_or_default();
+            let mode_rect: Rectangle<i32, Buffer> =
+                Rectangle::from_size((mode_size.w, mode_size.h).into());
+
+            let position = if cursor_geo.overlaps(mode_rect) {
+                Some(cursor_loc)
+            } else {
+                None
+            };
+
+            for session in sessions {
+                session.set_position(position);
+            }
+        }
+
+        for window in self.pinnacle.windows.iter() {
+            let sessions = window.with_state(|state| state.cursor_sessions.clone());
+
+            if sessions.is_empty() {
+                continue;
+            }
+
+            let Some(window_loc) = self.pinnacle.space.element_location(window) else {
+                continue;
+            };
+
+            let Some(surface) = window.wl_surface() else {
+                continue;
+            };
+
+            let fractional_scale = compositor::with_states(&surface, |data| {
+                with_fractional_scale(data, |scale| scale.preferred_scale())
+            })
+            .unwrap_or(1.0);
+
+            let cursor_loc: Point<i32, Physical> =
+                (cursor_loc - window_loc.to_f64()).to_physical_precise_round(fractional_scale);
+            let cursor_loc: Point<i32, Buffer> = (cursor_loc.x, cursor_loc.y).into();
+
+            let Some((mut cursor_geo, _)) = self
+                .pinnacle
+                .cursor_state
+                .cursor_geometry_and_hotspot(self.pinnacle.clock.now(), fractional_scale)
+            else {
+                continue;
+            };
+
+            cursor_geo.loc += cursor_loc;
+
+            let buffer_size: Size<i32, Physical> = window
+                .geometry()
+                .size
+                .to_f64()
+                .to_physical_precise_round(fractional_scale);
+            let buffer_geo: Rectangle<i32, Buffer> =
+                Rectangle::from_size((buffer_size.w, buffer_size.h).into());
+
+            let position = if cursor_geo.overlaps(buffer_geo) {
+                Some(cursor_loc)
+            } else {
+                None
+            };
+
+            for session in sessions {
+                session.set_position(position);
+            }
         }
     }
 
@@ -456,13 +590,24 @@ impl State {
 }
 
 impl Pinnacle {
-    fn source_buffer_size_and_scale(&self, source: &Source) -> Option<(Size<i32, Buffer>, f64)> {
-        match source {
+    fn buffer_size_and_scale_for_session(
+        &mut self,
+        session: &Session,
+    ) -> Option<(Size<i32, Buffer>, f64)> {
+        match session.source() {
             Source::Output(wl_output) => {
-                let output = Output::from_resource(wl_output)?;
-                let size = output.current_mode()?.size;
+                let output = Output::from_resource(&wl_output)?;
                 let scale = output.current_scale().fractional_scale();
-                Some(((size.w, size.h).into(), scale))
+
+                if matches!(session.cursor(), Cursor::Standalone { .. }) {
+                    let (geo, _) = self
+                        .cursor_state
+                        .cursor_geometry_and_hotspot(self.clock.now(), scale)?;
+                    Some((geo.size, scale))
+                } else {
+                    let size = output.current_mode()?.size;
+                    Some(((size.w, size.h).into(), scale))
+                }
             }
             Source::ForeignToplevel(ext_foreign_toplevel_handle_v1) => {
                 let window = self
@@ -476,7 +621,7 @@ impl Pinnacle {
                                 .is_some_and(|fth| {
                                     Some(fth.identifier())
                                         == ForeignToplevelHandle::from_resource(
-                                            ext_foreign_toplevel_handle_v1,
+                                            &ext_foreign_toplevel_handle_v1,
                                         )
                                         .map(|fth| fth.identifier())
                                 })
@@ -490,14 +635,22 @@ impl Pinnacle {
                     with_fractional_scale(data, |scale| scale.preferred_scale())
                 })?;
 
-                let size = window
-                    .geometry()
-                    .size
-                    .to_f64()
-                    .to_buffer(fractional_scale, Transform::Normal)
-                    .to_i32_round();
+                if matches!(session.cursor(), Cursor::Standalone { .. }) {
+                    let (geo, hotspot) = self
+                        .cursor_state
+                        .cursor_geometry_and_hotspot(self.clock.now(), fractional_scale)?;
+                    self.image_copy_capture_state.set_cursor_hotspot(hotspot);
+                    Some((geo.size, fractional_scale))
+                } else {
+                    let size = window
+                        .geometry()
+                        .size
+                        .to_f64()
+                        .to_buffer(fractional_scale, Transform::Normal)
+                        .to_i32_round();
 
-                Some((size, fractional_scale))
+                    Some((size, fractional_scale))
+                }
             }
         }
     }

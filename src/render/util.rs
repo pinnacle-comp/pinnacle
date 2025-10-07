@@ -276,7 +276,7 @@ pub fn blit(
         anyhow::bail!("src_rect does not overlap src buffer");
     };
 
-    with_buffer_contents_mut(dst, |dst, len, data| {
+    with_buffer_contents_mut(dst, |mut dst, len, data| {
         if Size::new(data.width, data.height) != src_size {
             anyhow::bail!("src_size is different from dst size");
         }
@@ -285,9 +285,15 @@ pub fn blit(
             anyhow::bail!("dst is not argb8888");
         }
 
-        if src.len() != len {
-            anyhow::bail!("src and dst are different lens");
+        if src.len() != (data.stride * data.height) as usize {
+            anyhow::bail!(
+                "src and dst are different lens (src = {}, dst = {})",
+                src.len(),
+                len
+            );
         }
+
+        dst = dst.wrapping_offset(data.offset as isize);
 
         let stride = data.stride;
 

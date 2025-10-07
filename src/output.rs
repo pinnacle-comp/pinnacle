@@ -18,7 +18,10 @@ use crate::{
     backend::BackendData,
     config::ConnectorSavedState,
     handlers::image_copy_capture::SessionDamageTrackers,
-    protocol::{image_copy_capture::session::Session, screencopy::Screencopy},
+    protocol::{
+        image_copy_capture::session::{CursorSession, Session},
+        screencopy::Screencopy,
+    },
     state::{Pinnacle, State, WithState},
     tag::Tag,
     util::centered_loc,
@@ -79,6 +82,7 @@ pub struct OutputState {
     pub is_vrr_on_demand: bool,
 
     pub capture_sessions: HashMap<Session, SessionDamageTrackers>,
+    pub cursor_sessions: Vec<CursorSession>,
 }
 
 impl Default for OutputState {
@@ -99,6 +103,7 @@ impl Default for OutputState {
             is_vrr_on: false,
             is_vrr_on_demand: false,
             capture_sessions: Default::default(),
+            cursor_sessions: Default::default(),
         }
     }
 }

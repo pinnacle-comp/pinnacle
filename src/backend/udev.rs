@@ -63,7 +63,7 @@ use smithay::{
             protocol::{wl_shm, wl_surface::WlSurface},
         },
     },
-    utils::{DeviceFd, Rectangle, Transform},
+    utils::{DeviceFd, Point, Rectangle, Transform},
     wayland::{
         dmabuf::{self, DmabufFeedback, DmabufFeedbackBuilder, DmabufGlobal},
         presentation::Refresh,
@@ -1426,8 +1426,14 @@ impl Udev {
 
         let scale = output.current_scale().fractional_scale();
 
+        let (_, cursor_hotspot) = pinnacle
+            .cursor_state
+            .cursor_geometry_and_hotspot(pinnacle.clock.now(), scale)
+            .unwrap_or_default();
+
         let (pointer_render_elements, cursor_ids) = pointer_render_elements(
-            (pointer_location - output_geo.loc.to_f64()).to_physical_precise_round(scale),
+            (pointer_location - output_geo.loc.to_f64()).to_physical_precise_round(scale)
+                - Point::new(cursor_hotspot.x, cursor_hotspot.y),
             scale,
             &mut renderer,
             &mut pinnacle.cursor_state,

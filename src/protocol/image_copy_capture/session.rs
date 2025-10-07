@@ -1,6 +1,9 @@
 use std::{
     collections::HashMap,
-    sync::{Mutex, MutexGuard},
+    sync::{
+        Mutex, MutexGuard,
+        atomic::{AtomicBool, AtomicI32, Ordering},
+    },
 };
 
 use smithay::{
@@ -25,8 +28,9 @@ use smithay::{
             protocol::{wl_pointer::WlPointer, wl_shm},
         },
     },
-    utils::{Buffer, Size},
+    utils::{Buffer, Point, Size},
 };
+use wayland_backend::server::ClientId;
 
 use crate::protocol::{
     image_capture_source::Source,
@@ -39,7 +43,7 @@ use crate::protocol::{
 /// An active capture session.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Session {
-    pub(super) session: ExtImageCopyCaptureSessionV1,
+    session: ExtImageCopyCaptureSessionV1,
 }
 
 impl Session {
@@ -65,6 +69,10 @@ impl Session {
         self.session
             .buffer_size(new_size.w as u32, new_size.h as u32);
         self.send_buffer_constraints();
+    }
+
+    pub(super) fn new(session: ExtImageCopyCaptureSessionV1) -> Self {
+        Self { session }
     }
 
     pub(super) fn set_buffer_constraints(
@@ -133,6 +141,23 @@ impl Session {
     /// the attached buffer is the same size as the provided size.
     /// If the sizes are different, the frame fails.
     pub fn get_pending_frame(&self, size: Size<i32, Buffer>) -> Option<Frame> {
+        if self
+            .data()
+            .cursor_session
+            .as_ref()
+            .is_some_and(|cursor_session| {
+                !cursor_session
+                    .data::<CursorSessionData>()
+                    .unwrap()
+                    .cursor_entered
+                    .load(Ordering::Relaxed)
+            })
+        {
+            // This is a cursor capture session and the cursor is not entered
+            // (i.e. is not over the source).
+            return None;
+        }
+
         self.data()
             .frame
             .clone()
@@ -171,12 +196,34 @@ impl Session {
 }
 
 pub struct SessionData {
-    pub(super) source: ExtImageCaptureSourceV1,
-    pub(super) cursor: Cursor,
-    pub(super) frame: Option<ExtImageCopyCaptureFrameV1>,
-    pub(super) shm_formats: Vec<wl_shm::Format>,
-    pub(super) dmabuf_formats: HashMap<DrmFourcc, Vec<DrmModifier>>,
-    pub(super) dmabuf_device: Option<DrmNode>,
+    source: ExtImageCaptureSourceV1,
+    cursor: Cursor,
+    frame: Option<ExtImageCopyCaptureFrameV1>,
+    shm_formats: Vec<wl_shm::Format>,
+    dmabuf_formats: HashMap<DrmFourcc, Vec<DrmModifier>>,
+    dmabuf_device: Option<DrmNode>,
+    cursor_session: Option<ExtImageCopyCaptureCursorSessionV1>,
+}
+
+impl SessionData {
+    pub(super) fn new(
+        source: ExtImageCaptureSourceV1,
+        cursor: Cursor,
+        shm_formats: Vec<wl_shm::Format>,
+        dmabuf_formats: HashMap<DrmFourcc, Vec<DrmModifier>>,
+        dmabuf_device: Option<DrmNode>,
+        cursor_session: Option<ExtImageCopyCaptureCursorSessionV1>,
+    ) -> Self {
+        Self {
+            source,
+            cursor,
+            frame: None,
+            shm_formats,
+            dmabuf_formats,
+            dmabuf_device,
+            cursor_session,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -190,29 +237,95 @@ pub enum Cursor {
     Standalone { pointer: WlPointer },
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// An active cursor capture session.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct CursorSession {
-    pub(super) session: ExtImageCopyCaptureCursorSessionV1,
+    session: ExtImageCopyCaptureCursorSessionV1,
 }
 
 impl CursorSession {
+    /// The source for this cursor session.
     pub fn source(&self) -> &Source {
-        self.session
-            .data::<CursorSessionData>()
-            .unwrap()
-            .source
-            .data::<Source>()
-            .unwrap()
+        self.data().source.data::<Source>().unwrap()
     }
 
+    /// The pointer that this cursor session is capturing.
     pub fn pointer(&self) -> &WlPointer {
-        &self.session.data::<CursorSessionData>().unwrap().pointer
+        &self.data().pointer
+    }
+
+    pub fn set_hotspot(&self, hotspot: Point<i32, Buffer>) {
+        if self.data().hotspot() == hotspot {
+            return;
+        }
+
+        self.data().set_hotspot(hotspot);
+
+        if self.data().cursor_entered.load(Ordering::Relaxed) {
+            self.session.hotspot(hotspot.x, hotspot.y);
+        }
+    }
+
+    pub fn set_position(&self, position: Option<Point<i32, Buffer>>) {
+        let cursor_entered = self.data().cursor_entered.load(Ordering::Relaxed);
+        if cursor_entered != position.is_some() {
+            self.data()
+                .cursor_entered
+                .store(position.is_some(), Ordering::Relaxed);
+            if position.is_some() {
+                self.session.enter();
+                let hotspot = self.data().hotspot();
+                self.session.hotspot(hotspot.x, hotspot.y);
+            } else {
+                self.session.leave();
+            }
+        }
+
+        if let Some(position) = position {
+            self.session.position(position.x, position.y);
+        }
+    }
+
+    pub(super) fn new(session: ExtImageCopyCaptureCursorSessionV1) -> Self {
+        Self { session }
+    }
+
+    fn data(&self) -> &CursorSessionData {
+        self.session.data::<CursorSessionData>().unwrap()
     }
 }
 
 pub struct CursorSessionData {
-    pub(super) source: ExtImageCaptureSourceV1,
-    pub(super) pointer: WlPointer,
+    source: ExtImageCaptureSourceV1,
+    pointer: WlPointer,
+    capture_session_retrieved: AtomicBool,
+    current_hotspot: (AtomicI32, AtomicI32),
+    cursor_entered: AtomicBool,
+}
+
+impl CursorSessionData {
+    pub(super) fn new(source: ExtImageCaptureSourceV1, pointer: WlPointer) -> Self {
+        Self {
+            source,
+            pointer,
+            capture_session_retrieved: Default::default(),
+            current_hotspot: Default::default(),
+            cursor_entered: Default::default(),
+        }
+    }
+
+    fn hotspot(&self) -> Point<i32, Buffer> {
+        (
+            self.current_hotspot.0.load(Ordering::Relaxed),
+            self.current_hotspot.1.load(Ordering::Relaxed),
+        )
+            .into()
+    }
+
+    fn set_hotspot(&self, hotspot: Point<i32, Buffer>) {
+        self.current_hotspot.0.store(hotspot.x, Ordering::Relaxed);
+        self.current_hotspot.1.store(hotspot.y, Ordering::Relaxed);
+    }
 }
 
 impl<D> Dispatch<ExtImageCopyCaptureSessionV1, Mutex<SessionData>, D> for ImageCopyCaptureState
@@ -248,7 +361,7 @@ where
 
     fn destroyed(
         state: &mut D,
-        _client: wayland_backend::server::ClientId,
+        _client: ClientId,
         resource: &ExtImageCopyCaptureSessionV1,
         _data: &Mutex<SessionData>,
     ) {
@@ -270,7 +383,7 @@ where
     fn request(
         state: &mut D,
         _client: &Client,
-        _resource: &ExtImageCopyCaptureCursorSessionV1,
+        resource: &ExtImageCopyCaptureCursorSessionV1,
         request: <ExtImageCopyCaptureCursorSessionV1 as Resource>::Request,
         data: &CursorSessionData,
         _dhandle: &DisplayHandle,
@@ -279,6 +392,17 @@ where
         match request {
             ext_image_copy_capture_cursor_session_v1::Request::Destroy => (),
             ext_image_copy_capture_cursor_session_v1::Request::GetCaptureSession { session } => {
+                if data.capture_session_retrieved.load(Ordering::Relaxed) {
+                    resource.post_error(
+                        ext_image_copy_capture_cursor_session_v1::Error::DuplicateSession,
+                        "get_capture_session already sent",
+                    );
+                    return;
+                }
+
+                data.capture_session_retrieved
+                    .store(true, Ordering::Relaxed);
+
                 let source = data.source.clone();
                 let cursor = Cursor::Standalone {
                     pointer: data.pointer.clone(),
@@ -297,6 +421,7 @@ where
                         shm_formats,
                         dmabuf_formats,
                         dmabuf_device,
+                        cursor_session: Some(resource.clone()),
                     }),
                 );
                 let session = Session { session };
@@ -308,16 +433,23 @@ where
 
                 state.new_session(session);
             }
-            _ => todo!(),
+            _ => (),
         }
     }
 
     fn destroyed(
-        _state: &mut D,
-        _client: wayland_backend::server::ClientId,
-        _resource: &ExtImageCopyCaptureCursorSessionV1,
+        state: &mut D,
+        _client: ClientId,
+        resource: &ExtImageCopyCaptureCursorSessionV1,
         _data: &CursorSessionData,
     ) {
-        todo!()
+        state
+            .image_copy_capture_state()
+            .cursor_sessions
+            .retain(|session| session.session != *resource);
+
+        state.cursor_session_destroyed(CursorSession {
+            session: resource.clone(),
+        });
     }
 }

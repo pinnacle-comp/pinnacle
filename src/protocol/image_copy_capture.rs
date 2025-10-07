@@ -16,6 +16,7 @@ use smithay::{
             protocol::wl_shm,
         },
     },
+    utils::{Buffer, Point},
 };
 
 use crate::protocol::image_copy_capture::session::{
@@ -30,7 +31,7 @@ const VERSION: u32 = 1;
 #[derive(Debug)]
 pub struct ImageCopyCaptureState {
     sessions: Vec<Session>,
-    cursor_sessions: Vec<ExtImageCopyCaptureCursorSessionV1>,
+    cursor_sessions: Vec<CursorSession>,
     shm_formats: Vec<wl_shm::Format>,
     dmabuf_formats: HashMap<DrmFourcc, Vec<DrmModifier>>,
     dmabuf_device: Option<DrmNode>,
@@ -87,6 +88,12 @@ impl ImageCopyCaptureState {
             );
         }
     }
+
+    pub fn set_cursor_hotspot(&self, hotspot: Point<i32, Buffer>) {
+        for session in self.cursor_sessions.iter() {
+            session.set_hotspot(hotspot);
+        }
+    }
 }
 
 pub trait ImageCopyCaptureHandler {
@@ -94,6 +101,7 @@ pub trait ImageCopyCaptureHandler {
     fn new_session(&mut self, session: Session);
     fn new_cursor_session(&mut self, cursor_session: CursorSession);
     fn session_destroyed(&mut self, session: Session);
+    fn cursor_session_destroyed(&mut self, cursor_session: CursorSession);
 }
 
 impl<D> GlobalDispatch<ExtImageCopyCaptureManagerV1, ImageCopyCaptureGlobalData, D>
@@ -153,16 +161,16 @@ where
 
                     let session = data_init.init(
                         session,
-                        Mutex::new(SessionData {
+                        Mutex::new(SessionData::new(
                             source,
                             cursor,
-                            frame: Default::default(),
                             shm_formats,
                             dmabuf_formats,
                             dmabuf_device,
-                        }),
+                            None,
+                        )),
                     );
-                    let session = Session { session };
+                    let session = Session::new(session);
 
                     state
                         .image_copy_capture_state()
@@ -174,14 +182,14 @@ where
                 Err(err) => {
                     data_init.init(
                         session,
-                        Mutex::new(SessionData {
+                        Mutex::new(SessionData::new(
                             source,
-                            cursor: Cursor::Hidden,
-                            frame: Default::default(),
-                            shm_formats: Default::default(),
-                            dmabuf_formats: Default::default(),
-                            dmabuf_device: Default::default(),
-                        }),
+                            Cursor::Hidden,
+                            Default::default(),
+                            Default::default(),
+                            Default::default(),
+                            None,
+                        )),
                     );
                     resource.post_error(
                         ext_image_copy_capture_manager_v1::Error::InvalidOption,
@@ -194,11 +202,10 @@ where
                 source,
                 pointer,
             } => {
-                let session = data_init.init(session, CursorSessionData { source, pointer });
+                let session = data_init.init(session, CursorSessionData::new(source, pointer));
+                let session = CursorSession::new(session);
 
-                state.new_cursor_session(CursorSession {
-                    session: session.clone(),
-                });
+                state.new_cursor_session(session.clone());
 
                 state
                     .image_copy_capture_state()

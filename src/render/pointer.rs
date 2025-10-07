@@ -11,11 +11,9 @@ use smithay::{
             surface::{WaylandSurfaceRenderElement, render_elements_from_surface_tree},
         },
     },
-    input::pointer::CursorImageSurfaceData,
     reexports::wayland_server::protocol::wl_surface::WlSurface,
     render_elements,
     utils::{Clock, Monotonic, Physical, Point},
-    wayland::compositor,
 };
 
 use crate::cursor::{CursorState, XCursor};
@@ -54,11 +52,10 @@ pub fn pointer_render_elements<R: PRenderer>(
         PointerElement::Hidden => vec![],
         PointerElement::Named { cursor, size } => {
             let image = cursor.image(clock.now().into(), *size * integer_scale as u32);
-            let hotspot = (image.xhot as i32, image.yhot as i32);
             let buffer = cursor_state.buffer_for_image(image, integer_scale);
             let elem = MemoryRenderBufferRenderElement::from_buffer(
                 renderer,
-                (location - Point::from(hotspot).downscale(integer_scale)).to_f64(),
+                location.to_f64(),
                 &buffer,
                 None,
                 None,
@@ -70,20 +67,10 @@ pub fn pointer_render_elements<R: PRenderer>(
                 .unwrap_or_default()
         }
         PointerElement::Surface { surface } => {
-            let hotspot = compositor::with_states(surface, |states| {
-                states
-                    .data_map
-                    .get::<CursorImageSurfaceData>()
-                    .unwrap()
-                    .lock()
-                    .unwrap()
-                    .hotspot
-            });
-
             let elems = render_elements_from_surface_tree(
                 renderer,
                 surface,
-                location - hotspot.to_physical_precise_round(scale),
+                location,
                 scale,
                 1.0,
                 element::Kind::Cursor,
