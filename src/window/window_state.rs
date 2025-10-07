@@ -411,6 +411,14 @@ pub struct WindowElementState {
     pub cursor_sessions: Vec<CursorSession>,
 }
 
+impl Drop for WindowElementState {
+    fn drop(&mut self) {
+        for session in self.capture_sessions.keys() {
+            session.stopped();
+        }
+    }
+}
+
 impl WindowElement {
     /// Unsets maximized and fullscreen states for both wayland and xwayland windows
     /// and unsets tiled states for wayland windows.

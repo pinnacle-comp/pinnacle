@@ -376,6 +376,12 @@ impl Pinnacle {
             self.signal_state.output_focused.signal(new_focused_output);
         }
 
+        output.with_state(|state| {
+            for session in state.capture_sessions.keys() {
+                session.stopped();
+            }
+        });
+
         self.gamma_control_manager_state.output_removed(output);
 
         self.output_power_management_state.output_removed(output);
