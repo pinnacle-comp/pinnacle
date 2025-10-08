@@ -153,16 +153,9 @@ impl State {
     }
 
     pub fn process_capture_sessions(&mut self) {
+        let _span = tracy_client::span!();
+
         for win in self.pinnacle.windows.clone() {
-            let Some(surface) = win.wl_surface() else {
-                continue;
-            };
-
-            let fractional_scale = compositor::with_states(&surface, |data| {
-                with_fractional_scale(data, |scale| scale.preferred_scale())
-            })
-            .unwrap_or(1.0);
-
             let mut sessions = win.with_state_mut(|state| mem::take(&mut state.capture_sessions));
             for (session, trackers) in sessions.iter_mut() {
                 let Some((size, scale)) = self.pinnacle.buffer_size_and_scale_for_session(session)
@@ -186,17 +179,20 @@ impl State {
                     Cursor::Hidden => self
                         .backend
                         .with_renderer(|renderer| {
-                            win.render_elements(
+                            let elements = win.render_elements(
                                 renderer,
                                 (0, 0).into(),
-                                fractional_scale.into(),
+                                scale.into(),
                                 1.0,
                                 false,
-                            )
-                            .surface_elements
-                            .into_iter()
-                            .map(OutputRenderElement::from)
-                            .collect::<Vec<_>>()
+                            );
+
+                            elements
+                                .popup_elements
+                                .into_iter()
+                                .chain(elements.surface_elements)
+                                .map(OutputRenderElement::from)
+                                .collect::<Vec<_>>()
                         })
                         .unwrap(),
                     Cursor::Composited => self
@@ -220,7 +216,7 @@ impl State {
                                 let (pointer_elements, _) = pointer_render_elements(
                                     pointer_loc.to_physical_precise_round(scale)
                                         - Point::new(hotspot.x, hotspot.y),
-                                    fractional_scale,
+                                    scale,
                                     renderer,
                                     &mut self.pinnacle.cursor_state,
                                     self.pinnacle.dnd_icon.as_ref(),
@@ -233,7 +229,7 @@ impl State {
                             let elements = win.render_elements(
                                 renderer,
                                 (0, 0).into(),
-                                fractional_scale.into(),
+                                scale.into(),
                                 1.0,
                                 false,
                             );
@@ -242,8 +238,9 @@ impl State {
                                 .map(OutputRenderElement::from)
                                 .chain(
                                     elements
-                                        .surface_elements
+                                        .popup_elements
                                         .into_iter()
+                                        .chain(elements.surface_elements)
                                         .map(OutputRenderElement::from),
                                 )
                                 .collect::<Vec<_>>();
@@ -255,7 +252,7 @@ impl State {
                         .with_renderer(|renderer| {
                             let (pointer_elements, _) = pointer_render_elements(
                                 (0, 0).into(),
-                                fractional_scale,
+                                scale,
                                 renderer,
                                 &mut self.pinnacle.cursor_state,
                                 self.pinnacle.dnd_icon.as_ref(),
@@ -378,6 +375,8 @@ impl State {
     }
 
     pub fn update_cursor_capture_positions(&mut self) {
+        let _span = tracy_client::span!();
+
         let cursor_loc = self.pinnacle.seat.get_pointer().unwrap().current_location();
 
         for output in self.pinnacle.outputs.iter() {

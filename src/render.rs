@@ -151,7 +151,11 @@ impl WindowElement {
     ) -> SplitRenderElements<WaylandSurfaceRenderElement<R>> {
         let _span = tracy_client::span!("WindowElement::render_elements");
 
-        let total_deco_offset = self.with_state(|state| state.total_decoration_offset());
+        let total_deco_offset = if include_decorations {
+            self.with_state(|state| state.total_decoration_offset())
+        } else {
+            Default::default()
+        };
 
         let window_location = if include_decorations {
             self.geometry().loc
