@@ -1,3 +1,6 @@
+//! Utility types & function for widgets.
+
+/// Represents an angle in degrees.
 #[derive(Default, Clone, Copy, Debug, PartialEq, PartialOrd)]
 pub struct Degrees(pub f32);
 
@@ -13,6 +16,7 @@ impl From<Radians> for Degrees {
     }
 }
 
+/// Represents an angle expressed in radians.
 #[derive(Default, Clone, Copy, Debug, PartialEq, PartialOrd)]
 pub struct Radians(pub f32);
 
