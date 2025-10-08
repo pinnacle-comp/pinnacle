@@ -272,48 +272,157 @@ local mouse = {
     },
 }
 
+---A field that can be filled with text.
+---
+---## Example
+---Create a simple Layer with an automatically focused `TextInput`:
+---
+---```lua
+---local Layer = require("snowcap.layer")
+---local Operation = require("snowcap.widget.operation")
+---local Widget = require("snowcap.widget")
+---
+---local TextInputProgram = {
+---    INPUT_ID = "prompt",
+---}
+---
+---function TextInputProgram:view()
+---    return Widget.text_input({
+---        placeholder = "placeholder:",
+---        value = self.input_value or "",
+---        id = self.INPUT_ID,
+---        on_input = function(data) return { content_changed = data } end,
+---        on_submit = { submit = {} },
+---        width = Widget.length.Fixed(500.0)
+---    })
+---end
+---
+---function TextInputProgram:update(msg)
+---    if msg.content_changed then
+---        self.input_value = msg.content_changed
+---    elseif msg.submit then
+---        -- do something with the input.
+---        self.input_value = ""
+---    end
+---end
+---
+---function TextInputProgram:show()
+---    local handle = Layer.new_widget({
+---        program = self,
+---        anchor = nil,
+---        keyboard_interactivity = Layer.keyboard_interactivity.EXCLUSIVE,
+---        exclusive_zone = "respect",
+---        layer = Layer.zlayer.OVERLAY,
+---    })
+---    if not handle then return end
+---
+---    -- Focus the input
+---    handle:operate(Operation.focusable.Focus(self.INPUT_ID))
+---    handle:on_key_press(function(_, key)
+---        local Keys = require("snowcap.input.keys")
+---        if key == Keys.Escape then handle:close() end
+---        if key == Keys.i then
+---            handle:operate(Operation.focusable.Focus(self.INPUT_ID))
+---        end
+---    end)
+---end
+---
+---function text_input_program()
+---    local instance = {
+---        INPUT_ID = TextInputProgram.INPUT_ID,
+---        input_value = "",
+---    }
+---    setmetatable(instance, { __index = TextInputProgram })
+---    return instance
+---end
+---```
 ---@class snowcap.widget.TextInput
+---Text to display when the field is empty.
 ---@field placeholder string
+---TextInput content.
 ---@field value string
+---Set the TextInput Id.
+---
+---This id can then be used to target this widget with `Operation`s.
 ---@field id string?
+---Convert the `TextInput` into a secure password input.
 ---@field secure boolean?
+---Sets the message that should be produced when some text is typed into the `TextInput`.
+---
+---If the field is not set, the `TextInput` will be disabled.
 ---@field on_input (fun(data:string): any)?
+---Sets the message that should be produced when the `TextInput` is focused and the enter
+---key is pressed.
 ---@field on_submit any?
+---Sets the message that should be produced when some text is pasted into the `TextInput`.
 ---@field on_paste (fun(data:string): any)?
+---Sets the `Font` of the `TextInput`.
 ---@field font snowcap.widget.Font?
+---Sets the `Icon` of the `TextInput`.
 ---@field icon snowcap.widget.text_input.Icon?
+---Sets the width of the `TextInput`.
 ---@field width snowcap.widget.Length?
+---Sets the `Padding` of the `TextInput`.
 ---@field padding snowcap.widget.Padding?
+---Sets the `LineHeight` of the `TextInput`.
 ---@field line_height snowcap.widget.LineHeight?
+---Sets the horizontal `Alignment` of the `TextInput`.
 ---@field horizontal_alignment snowcap.widget.Alignment?
+---Sets the style of the `TextInput`.
 ---@field style snowcap.widget.text_input.Styles?
----@field widget_id integer?
+---@field package widget_id integer?
 
+---The `TextInput` callbacks.
 ---@class snowcap.widget.text_input.Callbacks
----@field on_input any?
+---Sets the message that should be produced when some text is typed into the `TextInput`.
+---
+---If the field is not set, the `TextInput` will be disabled.
+---@field on_input (fun(data:string): any)?
+---Sets the message that should be produced when the `TextInput` is focused and the enter
+---key is pressed.
 ---@field on_submit any?
----@field on_paste any?
+---Sets the message that should be produced when some text is pasted into the `TextInput`.
+---@field on_paste (fun(data:string): any)?
 
+---The content of the `Icon`.
 ---@class snowcap.widget.text_input.Icon
+---The `Font` that will be used to display the `code_point`.
 ---@field font snowcap.widget.Font?
+---The unicode code point that will be used as the icon.
 ---@field code_point integer?
+---The font size of the content.
 ---@field pixels number?
+---The spacing between the `Icon` and the text in a `TextInput`.
 ---@field spacing number?
+---Whether the icon should be displayed on the right side of the `TextInput`.
 ---@field right_side boolean?
 
+---Styles to apply to the `TextInput`.
 ---@class snowcap.widget.text_input.Styles
+---Style to use when the `TextInput` is active.
 ---@field active snowcap.widget.text_input.Style?
+---Style to use when the `TextInput` is hovered.
 ---@field hovered snowcap.widget.text_input.Style?
+---Style to use when the `TextInput` is focused.
 ---@field focused snowcap.widget.text_input.Style?
+---Style to use when the `TextInput` is focused & hovered.
 ---@field hover_focused snowcap.widget.text_input.Style?
+---Style to use when the `TextInput` is disabled.
 ---@field disabled snowcap.widget.text_input.Style?
 
+---Appearance of a `TextInput`.
 ---@class snowcap.widget.text_input.Style
+---The `Background` of the `TextInput`.
 ---@field background snowcap.widget.Background?
+---The `Border` of the `TextInput`.
 ---@field border snowcap.widget.Border?
+---The `Color` of the `Icon`.
 ---@field icon snowcap.widget.Color?
+---The `Color` of the placeholder.
 ---@field placeholder snowcap.widget.Color?
+---The `Color` of the content.
 ---@field value snowcap.widget.Color?
+---The `Color` to use for the selection's highlight.
 ---@field selection snowcap.widget.Color?
 
 ---@class snowcap.widget.text_input.Event
@@ -355,10 +464,19 @@ local alignment = {
     END = 3,
 }
 
+---The height of a line of text in a paragraph.
 ---@class snowcap.widget.LineHeight
+---A factor of the size of the text.
 ---@field relative number?
+---An absolute height in logical pixels.
 ---@field absolute number?
 
+---Builders for `LineHeight`
+---@class snowcap.widget.line_height
+---Builds a relative `LineHeight`.
+---@field Relative fun(size: number): snowcap.widget.LineHeight
+---Builds an absolute `LineHeight`.
+---@field Absolute fun(size: number): snowcap.widget.LineHeight
 local line_height = {
     ---@type fun(size: number): snowcap.widget.LineHeight
     Relative = function(size)
@@ -370,21 +488,44 @@ local line_height = {
     end,
 }
 
+---A fill which transitions colors progressively.
 ---@class snowcap.widget.Gradient
+---A linear gradient that interpolates colors along a direction at a specific angle.
 ---@field linear snowcap.widget.gradient.Linear?
 
+---A linear gradient.
 ---@class snowcap.widget.gradient.Linear
+---How the `Gradient` is angled.
 ---@field radians number
+---`ColorStop` to interpolates.
+---
+---ColorStops should be sorted by increasing offsets.
+---ColorStops offsets should be in the range 0.0..=1.0.
+---Up to 8 ColorStops are supported.
 ---@field stops snowcap.widget.gradient.ColorStop[]
 
+---A point along a gradient vector where the specified `Color` is unmixed.
 ---@class snowcap.widget.gradient.ColorStop
+---Offset along the gradient vector.
 ---@field offset number
+---The color of the gradient at the specified `offset`.
 ---@field color snowcap.widget.Color
 
+---The background of some element.
 ---@class snowcap.widget.Background
+---A solid color.
 ---@field color snowcap.widget.Color?
+---Interpolate between several colors.
 ---@field gradient snowcap.widget.Gradient?
 
+---Builders for `Background`.
+---@class snowcap.widget.background
+---Builds a `Background` from a solid `Color`.
+---@field Color fun(color: snowcap.widget.Color): snowcap.widget.Background
+---Builds a `Background` from a generic `Gradient`.
+---@field Gradient fun(gradient: snowcap.widget.Gradient): snowcap.widget.Background
+---Builds a `Background` from a `Linear` gradient.
+---@field Linear fun(radians: number, stops: snowcap.widget.gradient.ColorStop[]): snowcap.widget.Background
 local background = {
     ---@type fun(color: snowcap.widget.Color): snowcap.widget.Background
     Color = function(color)
@@ -916,6 +1057,10 @@ local function collect_mouse_area_callbacks(mouse_area)
     }
 end
 
+---@package
+---@lcat nodoc
+---
+---Collect event callbacks from a `snowcap.widget.TextInput`
 ---@param text_input snowcap.widget.TextInput
 ---@return snowcap.widget.text_input.Callbacks
 local function collect_text_input_callbacks(text_input)
@@ -1007,7 +1152,7 @@ function widget._mouse_area_process_event(callbacks, event)
 end
 
 ---@private
----lcat nodoc
+---@lcat nodoc
 ---@param callbacks snowcap.widget.text_input.Callbacks
 ---@param event snowcap.widget.text_input.Event
 ---@return any?

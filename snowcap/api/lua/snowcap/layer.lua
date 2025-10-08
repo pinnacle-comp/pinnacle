@@ -244,6 +244,7 @@ function LayerHandle:send_message(message)
     self._update(message)
 end
 
+---Sends an `Operation` to this layer.
 ---@param operation snowcap.widget.operation.Operation
 function LayerHandle:operate(operation)
     local _, err = client:snowcap_layer_v1_LayerService_OperateLayer({
