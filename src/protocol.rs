@@ -7,5 +7,4 @@ pub mod image_copy_capture;
 pub mod output_management;
 pub mod output_power_management;
 pub mod screencopy;
-#[cfg(feature = "snowcap")]
 pub mod snowcap_decoration;

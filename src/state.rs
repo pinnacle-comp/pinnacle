@@ -1,7 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-#[cfg(feature = "snowcap")]
-use crate::protocol::snowcap_decoration::SnowcapDecorationState;
 use crate::{
     api::signal::SignalState,
     backend::{
@@ -29,6 +27,7 @@ use crate::{
         output_management::OutputManagementManagerState,
         output_power_management::OutputPowerManagementState,
         screencopy::ScreencopyManagerState,
+        snowcap_decoration::SnowcapDecorationState,
     },
     window::{Unmapped, WindowElement, ZIndexElement, rules::WindowRuleState},
 };
@@ -175,7 +174,6 @@ pub struct Pinnacle {
     pub single_pixel_buffer_state: SinglePixelBufferState,
     pub foreign_toplevel_list_state: ForeignToplevelListState,
     pub ext_workspace_state: ExtWorkspaceManagerState,
-    #[cfg(feature = "snowcap")]
     pub snowcap_decoration_state: SnowcapDecorationState,
     pub wl_drm_state: WlDrmState,
     pub image_capture_source_state: ImageCaptureSourceState,
@@ -478,7 +476,6 @@ impl Pinnacle {
                 &display_handle,
                 filter_restricted_client,
             ),
-            #[cfg(feature = "snowcap")]
             snowcap_decoration_state: SnowcapDecorationState::new::<State>(&display_handle),
             wl_drm_state: WlDrmState,
             image_capture_source_state: ImageCaptureSourceState::new::<State, _>(
@@ -635,7 +632,6 @@ impl Pinnacle {
         for window in self.space.elements_for_output(output) {
             window.send_frame(output, now, FRAME_CALLBACK_THROTTLE, should_send);
 
-            #[cfg(feature = "snowcap")]
             window.with_state(|state| {
                 for deco in state.decoration_surfaces.iter() {
                     deco.send_frame(output, now, FRAME_CALLBACK_THROTTLE, should_send);
@@ -725,7 +721,6 @@ impl Pinnacle {
                 }
             });
 
-            #[cfg(feature = "snowcap")]
             window.with_state(|state| {
                 for deco in state.decoration_surfaces.iter() {
                     deco.with_surfaces(|surface, states| {
@@ -847,7 +842,6 @@ impl Pinnacle {
                 );
 
                 // FIXME: get the actual overlap
-                #[cfg(feature = "snowcap")]
                 window.with_state(|state| {
                     for deco in state.decoration_surfaces.iter() {
                         deco.send_dmabuf_feedback(

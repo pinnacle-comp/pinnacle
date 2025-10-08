@@ -243,18 +243,12 @@ impl State {
                                     .cursor_geometry_and_hotspot(self.pinnacle.clock.now(), scale)
                                     .unwrap_or_default();
 
-                                #[cfg(feature = "snowcap")]
                                 let pointer_loc =
                                     self.pinnacle.seat.get_pointer().unwrap().current_location()
                                         - win_loc.to_f64()
-                                        - win.with_state(|state| {
-                                            let bounds = state.max_decoration_bounds();
-                                            Point::new(bounds.left as f64, bounds.top as f64)
-                                        });
-                                #[cfg(not(feature = "snowcap"))]
-                                let pointer_loc =
-                                    self.pinnacle.seat.get_pointer().unwrap().current_location()
-                                        - win_loc.to_f64();
+                                        - win
+                                            .with_state(|state| state.total_decoration_offset())
+                                            .to_f64();
 
                                 let (pointer_elements, _) = pointer_render_elements(
                                     pointer_loc.to_physical_precise_round(scale)
@@ -478,15 +472,11 @@ impl State {
             })
             .unwrap_or(1.0);
 
-            #[cfg(feature = "snowcap")]
             let cursor_loc = cursor_loc
                 - window_loc.to_f64()
-                - window.with_state(|state| {
-                    let bounds = state.max_decoration_bounds();
-                    Point::new(bounds.left as f64, bounds.top as f64)
-                });
-            #[cfg(not(feature = "snowcap"))]
-            let cursor_loc = cursor_loc - window_loc.to_f64();
+                - window
+                    .with_state(|state| state.total_decoration_offset())
+                    .to_f64();
 
             let cursor_loc: Point<i32, Physical> =
                 cursor_loc.to_physical_precise_round(fractional_scale);

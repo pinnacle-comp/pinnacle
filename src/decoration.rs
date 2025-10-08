@@ -130,6 +130,11 @@ impl DecorationSurface {
         self.cached_state().z_index
     }
 
+    pub fn offset(&self) -> Point<i32, Logical> {
+        let bounds = self.bounds();
+        Point::new(bounds.left as i32, bounds.top as i32)
+    }
+
     pub fn bbox(&self) -> Rectangle<i32, Logical> {
         bbox_from_surface_tree(self.0.surface.wl_surface(), (0, 0))
     }

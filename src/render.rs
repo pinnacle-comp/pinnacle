@@ -5,6 +5,7 @@ pub mod render_elements;
 pub mod texture;
 pub mod util;
 
+use itertools::Itertools;
 use smithay::{
     backend::renderer::{
         ImportAll, ImportMem, Renderer, RendererSuper, Texture,
@@ -31,6 +32,7 @@ use util::{snapshot::SnapshotRenderElement, surface::WlSurfaceTextureRenderEleme
 
 use crate::{
     backend::{Backend, udev::UdevRenderer},
+    decoration::DecorationSurface,
     pinnacle_render_elements,
     state::{State, WithState},
     window::{WindowElement, ZIndexElement},
@@ -149,14 +151,7 @@ impl WindowElement {
     ) -> SplitRenderElements<WaylandSurfaceRenderElement<R>> {
         let _span = tracy_client::span!("WindowElement::render_elements");
 
-        #[cfg(feature = "snowcap")]
-        let offset = self.with_state(|state| {
-            let bounds = state.max_decoration_bounds();
-            Point::new(bounds.left as i32, bounds.top as i32)
-        });
-
-        #[cfg(not(feature = "snowcap"))]
-        let offset = Point::default();
+        let total_deco_offset = self.with_state(|state| state.total_decoration_offset());
 
         let window_location = if include_decorations {
             self.geometry().loc
@@ -167,29 +162,21 @@ impl WindowElement {
         let window_location = (location - window_location).to_physical_precise_round(scale);
 
         // Popups render relative to the actual window, so offset by the decoration offset.
-        let surface_location = (location + offset).to_physical_precise_round(scale);
+        let surface_location = (location + total_deco_offset).to_physical_precise_round(scale);
 
-        let (deco_elems_under, deco_elems_over) = self.with_state(|state| {
-            #[cfg(feature = "snowcap")]
-            {
-                use itertools::Itertools;
-
-                use crate::decoration::DecorationSurface;
-
-                if self.should_not_have_ssd() || !include_decorations {
-                    (Vec::new(), Vec::new())
-                } else {
-                    let max_bounds = state.max_decoration_bounds();
-
+        let (deco_elems_under, deco_elems_over) =
+            if self.should_not_have_ssd() || !include_decorations {
+                (Vec::new(), Vec::new())
+            } else {
+                self.with_state(|state| {
                     let mut surfaces = state.decoration_surfaces.iter().collect::<Vec<_>>();
                     surfaces.sort_by_key(|deco| deco.z_index());
                     let mut surfaces = surfaces.into_iter().rev().peekable();
 
                     let mut deco_to_elems = |deco: &DecorationSurface| {
                         let deco_location = {
-                            let mut deco_loc = location + deco.location();
-                            deco_loc.x += (max_bounds.left - deco.bounds().left) as i32;
-                            deco_loc.y += (max_bounds.top - deco.bounds().top) as i32;
+                            let deco_loc =
+                                location + deco.location() + total_deco_offset - deco.offset();
                             deco_loc.to_physical_precise_round(scale)
                         };
 
@@ -213,15 +200,8 @@ impl WindowElement {
                     let deco_elems_under = surfaces.flat_map(deco_to_elems).collect::<Vec<_>>();
 
                     (deco_elems_under, deco_elems_over)
-                }
-            }
-
-            #[cfg(not(feature = "snowcap"))]
-            {
-                let _ = state;
-                (Vec::new(), Vec::new())
-            }
-        });
+                })
+            };
 
         match self.underlying_surface() {
             WindowSurface::Wayland(toplevel) => {
@@ -281,57 +261,43 @@ impl WindowElement {
         let popup_location = location.to_physical_precise_round(scale);
         let window_location = (location - self.geometry().loc).to_physical_precise_round(scale);
 
-        let (deco_elems_under, deco_elems_over) = self.with_state(|state| {
-            #[cfg(feature = "snowcap")]
-            {
-                use itertools::Itertools;
+        let (deco_elems_under, deco_elems_over) = if self.should_not_have_ssd() {
+            (Vec::new(), Vec::new())
+        } else {
+            self.with_state(|state| {
+                let total_deco_offset = state.total_decoration_offset();
 
-                use crate::decoration::DecorationSurface;
+                let mut surfaces = state.decoration_surfaces.iter().collect::<Vec<_>>();
+                surfaces.sort_by_key(|deco| deco.z_index());
+                let mut surfaces = surfaces.into_iter().rev().peekable();
 
-                if self.should_not_have_ssd() {
-                    (Vec::new(), Vec::new())
-                } else {
-                    let max_bounds = self.with_state(|state| state.max_decoration_bounds());
-
-                    let mut surfaces = state.decoration_surfaces.iter().collect::<Vec<_>>();
-                    surfaces.sort_by_key(|deco| deco.z_index());
-                    let mut surfaces = surfaces.into_iter().rev().peekable();
-
-                    let mut deco_to_elems = |deco: &DecorationSurface| {
-                        let deco_location = {
-                            let mut deco_loc = location + deco.location();
-                            deco_loc.x += (max_bounds.left - deco.bounds().left) as i32;
-                            deco_loc.y += (max_bounds.top - deco.bounds().top) as i32;
-                            deco_loc.to_physical_precise_round(scale)
-                        };
-
-                        let surface_elements = texture_render_elements_from_surface_tree(
-                            renderer.as_gles_renderer(),
-                            deco.wl_surface(),
-                            deco_location,
-                            scale,
-                            alpha,
-                        );
-                        surface_elements
+                let mut deco_to_elems = |deco: &DecorationSurface| {
+                    let deco_location = {
+                        let deco_loc =
+                            location + deco.location() + total_deco_offset - deco.offset();
+                        deco_loc.to_physical_precise_round(scale)
                     };
 
-                    let deco_elems_over = surfaces
-                        .peeking_take_while(|deco| deco.z_index() >= 0)
-                        .flat_map(&mut deco_to_elems)
-                        .collect::<Vec<_>>();
+                    let surface_elements = texture_render_elements_from_surface_tree(
+                        renderer.as_gles_renderer(),
+                        deco.wl_surface(),
+                        deco_location,
+                        scale,
+                        alpha,
+                    );
+                    surface_elements
+                };
 
-                    let deco_elems_under = surfaces.flat_map(deco_to_elems).collect::<Vec<_>>();
+                let deco_elems_over = surfaces
+                    .peeking_take_while(|deco| deco.z_index() >= 0)
+                    .flat_map(&mut deco_to_elems)
+                    .collect::<Vec<_>>();
 
-                    (deco_elems_under, deco_elems_over)
-                }
-            }
+                let deco_elems_under = surfaces.flat_map(deco_to_elems).collect::<Vec<_>>();
 
-            #[cfg(not(feature = "snowcap"))]
-            {
-                let _ = state;
-                (Vec::new(), Vec::new())
-            }
-        });
+                (deco_elems_under, deco_elems_over)
+            })
+        };
 
         match self.underlying_surface() {
             WindowSurface::Wayland(toplevel) => {

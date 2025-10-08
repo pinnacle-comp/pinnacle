@@ -3,7 +3,6 @@ pub mod backend;
 pub mod cli;
 pub mod config;
 pub mod cursor;
-#[cfg(feature = "snowcap")]
 pub mod decoration;
 pub mod focus;
 pub mod grab;

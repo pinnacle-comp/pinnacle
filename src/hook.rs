@@ -1,10 +1,10 @@
 use smithay::{
-    backend::renderer::utils::SurfaceView,
+    backend::renderer::{buffer_dimensions, utils::SurfaceView},
     reexports::{
         calloop::Interest,
         wayland_server::{Resource, protocol::wl_surface::WlSurface},
     },
-    utils::{HookId, Logical, Point, Rectangle},
+    utils::{HookId, Logical, Point, Rectangle, Serial},
     wayland::{
         compositor::{
             self, BufferAssignment, CompositorHandler, SubsurfaceCachedState, SurfaceAttributes,
@@ -12,13 +12,16 @@ use smithay::{
         },
         dmabuf,
         shell::xdg::{ToplevelSurface, XdgToplevelSurfaceData},
+        viewporter::ViewportCachedState,
     },
 };
 use tracing::{error, field::Empty, trace, trace_span};
 
-use crate::state::{Pinnacle, State, WithState};
+use crate::{
+    state::{Pinnacle, State, WithState},
+    util::transaction::TransactionBuilder,
+};
 
-#[cfg(feature = "snowcap")]
 pub fn add_decoration_pre_commit_hook(deco: &crate::decoration::DecorationSurface) -> HookId {
     let wl_surface = deco.wl_surface();
     let deco = deco.downgrade();
@@ -156,28 +159,24 @@ pub fn add_mapped_toplevel_pre_commit_hook(toplevel: &ToplevelSurface) -> HookId
                     (got_unmapped, dmabuf, role.configure_serial)
                 });
 
-            #[cfg(feature = "snowcap")]
             let mut deco_serials = Vec::new();
 
-            #[cfg(feature = "snowcap")]
-            {
-                let size = compositor::with_states(surface, |states| {
-                    let mut guard = states
-                        .cached_state
-                        .get::<smithay::wayland::shell::xdg::SurfaceCachedState>();
-                    guard.pending().geometry.map(|geo| geo.size)
-                })
-                .unwrap_or_else(|| pending_bbox(surface).size);
+            let size = compositor::with_states(surface, |states| {
+                let mut guard = states
+                    .cached_state
+                    .get::<smithay::wayland::shell::xdg::SurfaceCachedState>();
+                guard.pending().geometry.map(|geo| geo.size)
+            })
+            .unwrap_or_else(|| pending_bbox(surface).size);
 
-                window.with_state(|state| {
-                    for deco in state.decoration_surfaces.iter() {
-                        deco.decoration_surface().with_pending_state(|state| {
-                            state.toplevel_size = Some(size);
-                        });
-                        deco_serials.push(deco.decoration_surface().send_pending_configure());
-                    }
-                });
-            }
+            window.with_state(|state| {
+                for deco in state.decoration_surfaces.iter() {
+                    deco.decoration_surface().with_pending_state(|state| {
+                        state.toplevel_size = Some(size);
+                    });
+                    deco_serials.push(deco.decoration_surface().send_pending_configure());
+                }
+            });
 
             let mut transaction_for_dmabuf = None;
             if let Some(serial) = commit_serial {
@@ -185,14 +184,9 @@ pub fn add_mapped_toplevel_pre_commit_hook(toplevel: &ToplevelSurface) -> HookId
                     span.record("serial", format!("{serial:?}"));
                 }
 
-                #[cfg(feature = "snowcap")]
                 let mut already_txned_deco = false;
 
-                #[cfg(feature = "snowcap")]
                 if window.with_state(|state| state.pending_transactions.is_empty()) {
-                    use crate::util::transaction::TransactionBuilder;
-                    use smithay::utils::Serial;
-
                     let txn_builder = TransactionBuilder::new();
                     let txn = txn_builder.get_transaction(&state.pinnacle.loop_handle);
                     window.with_state_mut(|state| {
@@ -215,7 +209,6 @@ pub fn add_mapped_toplevel_pre_commit_hook(toplevel: &ToplevelSurface) -> HookId
 
                 trace!("taking pending transaction");
                 if let Some(transaction) = window.take_pending_transaction(serial) {
-                    #[cfg(feature = "snowcap")]
                     if !already_txned_deco {
                         window.with_state(|state| {
                             for (deco, serial) in state.decoration_surfaces.iter().zip(deco_serials)
@@ -357,16 +350,11 @@ impl Pinnacle {
     }
 }
 
-#[cfg(feature = "snowcap")]
 fn pending_surface_view(states: &SurfaceData) -> Option<SurfaceView> {
     let mut guard = states.cached_state.get::<SurfaceAttributes>();
     let attrs = guard.pending();
     match attrs.buffer.as_ref() {
         Some(BufferAssignment::NewBuffer(buffer)) => {
-            use smithay::{
-                backend::renderer::buffer_dimensions, wayland::viewporter::ViewportCachedState,
-            };
-
             let dimens = buffer_dimensions(buffer)?;
             let surface_size = dimens.to_logical(attrs.buffer_scale, attrs.buffer_transform.into());
             let dst = states
@@ -400,7 +388,6 @@ fn pending_surface_view(states: &SurfaceData) -> Option<SurfaceView> {
     }
 }
 
-#[cfg(feature = "snowcap")]
 fn pending_bbox(surface: &WlSurface) -> Rectangle<i32, Logical> {
     let _span = tracy_client::span!("crate::hook::pending_bbox");
 
