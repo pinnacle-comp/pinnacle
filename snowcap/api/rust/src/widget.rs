@@ -427,9 +427,12 @@ impl From<Radius> for widget::v1::Radius {
     }
 }
 
+/// The height of a line of text in a paragraph.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum LineHeight {
+    /// A factor of the size of the text.
     Relative(f32),
+    /// An absolute height in logical pixels.
     Absolute(f32),
 }
 
@@ -446,9 +449,12 @@ impl From<LineHeight> for widget::v1::LineHeight {
     }
 }
 
+/// The background of some element.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Background {
+    /// A solid color.
     Color(Color),
+    /// Interpolate between several colors.
     Gradient(Gradient),
 }
 
@@ -483,8 +489,10 @@ impl From<Background> for widget::v1::Background {
     }
 }
 
+/// A fill which transitions colors progressively.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Gradient {
+    /// A linear gradient that interpolates colors along a direction at a specific angle.
     Linear(Linear),
 }
 
@@ -500,13 +508,17 @@ impl From<Gradient> for widget::v1::Gradient {
     }
 }
 
+/// A linear gradient
 #[derive(Debug, Clone, PartialEq)]
 pub struct Linear {
+    /// How the [`Gradient`] is angled.
     pub radians: Radians,
+    /// [`ColorStop`] to interpolates.
     pub stops: Vec<ColorStop>,
 }
 
 impl Linear {
+    /// Create a new [`Linear`] gradient with the given angle in [`Radians`].
     pub fn new(angle: impl Into<Radians>) -> Self {
         Self {
             radians: angle.into(),
@@ -514,6 +526,13 @@ impl Linear {
         }
     }
 
+    /// Adds a new [`ColorStop`], defined by an offset and a color.
+    ///
+    /// `offset`s not within the 0.0..=1.0 range will be ignored.
+    /// Any stop added after the 8th will be ignored.
+    ///
+    /// If a new stop with an equivalent offset is added, it will replace the previous one.
+    /// Equivalence is defined by `||old - new|| <= f32::EPSILON`
     pub fn add_stop(self, offset: f32, color: Color) -> Self {
         let Self { radians, mut stops } = self;
 
@@ -545,6 +564,7 @@ impl Linear {
         Self { radians, stops }
     }
 
+    /// Adds multiple [`ColorStop`] to the gradient.
     pub fn add_stops(mut self, stops: impl IntoIterator<Item = ColorStop>) -> Self {
         for ColorStop { offset, color } in stops {
             self = self.add_stop(offset, color);
@@ -565,9 +585,12 @@ impl From<Linear> for widget::v1::gradient::Linear {
     }
 }
 
+/// A point along a gradient vector where the specified [`Color`] is unmixed.
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct ColorStop {
+    /// Offset along the gradient vector.
     pub offset: f32,
+    /// The color of the gradient at the specified `offset`.
     pub color: Color,
 }
 
