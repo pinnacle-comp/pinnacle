@@ -15,11 +15,14 @@ use smithay::{
     },
     output::{Output, WeakOutput},
     reexports::{
-        wayland_protocols::xdg::{
-            decoration::zv1::server::zxdg_toplevel_decoration_v1,
-            shell::server::{
-                xdg_positioner::{Anchor, ConstraintAdjustment, Gravity},
-                xdg_toplevel,
+        wayland_protocols::{
+            ext::foreign_toplevel_list::v1::server::ext_foreign_toplevel_handle_v1::ExtForeignToplevelHandleV1,
+            xdg::{
+                decoration::zv1::server::zxdg_toplevel_decoration_v1,
+                shell::server::{
+                    xdg_positioner::{Anchor, ConstraintAdjustment, Gravity},
+                    xdg_toplevel,
+                },
             },
         },
         wayland_server::protocol::wl_surface::WlSurface,
@@ -27,6 +30,7 @@ use smithay::{
     utils::{IsAlive, Logical, Point, Rectangle, Serial, Size},
     wayland::{
         compositor,
+        foreign_toplevel_list::ForeignToplevelHandle,
         seat::WaylandFocus,
         shell::xdg::{PositionerState, SurfaceCachedState, XdgToplevelSurfaceData},
         xdg_activation::XdgActivationTokenData,
@@ -519,6 +523,30 @@ impl Pinnacle {
                 .wl_surface()
                 .is_some_and(|surf| &*surf == surface)
         })
+    }
+
+    pub fn window_for_foreign_toplevel_handle(
+        &self,
+        handle: &ExtForeignToplevelHandleV1,
+    ) -> Option<&WindowElement> {
+        let handle = ForeignToplevelHandle::from_resource(handle)?;
+
+        self.windows
+            .iter()
+            .chain(
+                self.unmapped_windows
+                    .iter()
+                    .map(|unmapped| &unmapped.window),
+            )
+            .find(|win| {
+                win.with_state(|state| {
+                    state
+                        .foreign_toplevel_list_handle
+                        .as_ref()
+                        .map(|handle| handle.identifier())
+                        == Some(handle.identifier())
+                })
+            })
     }
 
     /// Removes a window from the main window vec, z_index stack, and focus stacks.

@@ -16,7 +16,6 @@ use smithay::{
     wayland::{
         compositor,
         dmabuf::get_dmabuf,
-        foreign_toplevel_list::ForeignToplevelHandle,
         fractional_scale::with_fractional_scale,
         seat::WaylandFocus,
         shm::{shm_format_to_fourcc, with_buffer_contents},
@@ -68,23 +67,7 @@ impl ImageCopyCaptureHandler for State {
             Source::ForeignToplevel(ext_foreign_toplevel_handle_v1) => {
                 let Some(window) = self
                     .pinnacle
-                    .windows
-                    .iter()
-                    .find(|win| {
-                        win.with_state(|state| {
-                            state
-                                .foreign_toplevel_list_handle
-                                .as_ref()
-                                .is_some_and(|fth| {
-                                    Some(fth.identifier())
-                                        == ForeignToplevelHandle::from_resource(
-                                            &ext_foreign_toplevel_handle_v1,
-                                        )
-                                        .map(|fth| fth.identifier())
-                                })
-                        })
-                    })
-                    .cloned()
+                    .window_for_foreign_toplevel_handle(&ext_foreign_toplevel_handle_v1)
                 else {
                     return;
                 };
@@ -106,23 +89,7 @@ impl ImageCopyCaptureHandler for State {
             Source::ForeignToplevel(ext_foreign_toplevel_handle_v1) => {
                 let Some(window) = self
                     .pinnacle
-                    .windows
-                    .iter()
-                    .find(|win| {
-                        win.with_state(|state| {
-                            state
-                                .foreign_toplevel_list_handle
-                                .as_ref()
-                                .is_some_and(|fth| {
-                                    Some(fth.identifier())
-                                        == ForeignToplevelHandle::from_resource(
-                                            ext_foreign_toplevel_handle_v1,
-                                        )
-                                        .map(|fth| fth.identifier())
-                                })
-                        })
-                    })
-                    .cloned()
+                    .window_for_foreign_toplevel_handle(ext_foreign_toplevel_handle_v1)
                 else {
                     return;
                 };
@@ -631,24 +598,8 @@ impl Pinnacle {
                 }
             }
             Source::ForeignToplevel(ext_foreign_toplevel_handle_v1) => {
-                let window = self
-                    .windows
-                    .iter()
-                    .find(|win| {
-                        win.with_state(|state| {
-                            state
-                                .foreign_toplevel_list_handle
-                                .as_ref()
-                                .is_some_and(|fth| {
-                                    Some(fth.identifier())
-                                        == ForeignToplevelHandle::from_resource(
-                                            &ext_foreign_toplevel_handle_v1,
-                                        )
-                                        .map(|fth| fth.identifier())
-                                })
-                        })
-                    })
-                    .cloned()?;
+                let window =
+                    self.window_for_foreign_toplevel_handle(&ext_foreign_toplevel_handle_v1)?;
 
                 let surface = window.wl_surface()?;
 
