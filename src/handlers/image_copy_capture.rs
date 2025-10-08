@@ -352,6 +352,13 @@ impl State {
                         let Some(output_geo) = self.pinnacle.space.output_geometry(&output) else {
                             continue;
                         };
+
+                        let (_, hotspot) = self
+                            .pinnacle
+                            .cursor_state
+                            .cursor_geometry_and_hotspot(self.pinnacle.clock.now(), scale)
+                            .unwrap_or_default();
+
                         let pointer_loc =
                             self.pinnacle.seat.get_pointer().unwrap().current_location()
                                 - output_geo.loc.to_f64();
@@ -359,7 +366,8 @@ impl State {
                         self.backend
                             .with_renderer(|renderer| {
                                 let (pointer_elements, _) = pointer_render_elements(
-                                    pointer_loc.to_physical_precise_round(scale),
+                                    pointer_loc.to_physical_precise_round(scale)
+                                        - Point::new(hotspot.x, hotspot.y),
                                     scale,
                                     renderer,
                                     &mut self.pinnacle.cursor_state,
@@ -622,9 +630,10 @@ impl Pinnacle {
                 let scale = output.current_scale().fractional_scale();
 
                 if matches!(session.cursor(), Cursor::Standalone { .. }) {
-                    let (geo, _) = self
+                    let (geo, hotspot) = self
                         .cursor_state
                         .cursor_geometry_and_hotspot(self.clock.now(), scale)?;
+                    self.image_copy_capture_state.set_cursor_hotspot(hotspot);
                     Some((geo.size, scale))
                 } else {
                     let size = output.current_mode()?.size;
