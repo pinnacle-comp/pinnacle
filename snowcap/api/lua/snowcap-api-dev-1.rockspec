@@ -25,6 +25,7 @@ build = {
         ["snowcap.input"] = "snowcap/input.lua",
         ["snowcap.input.keys"] = "snowcap/input/keys.lua",
         ["snowcap.widget"] = "snowcap/widget.lua",
+        ["snowcap.widget.operation"] = "snowcap/widget/operation.lua",
         ["snowcap.layer"] = "snowcap/layer.lua",
         ["snowcap.decoration"] = "snowcap/decoration.lua",
         ["snowcap.util"] = "snowcap/util.lua",

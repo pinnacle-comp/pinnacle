@@ -1217,4 +1217,6 @@ function widget._message_from_event(callbacks, event)
     return msg
 end
 
+widget.operation = require("snowcap.widget.operation")
+
 return widget
