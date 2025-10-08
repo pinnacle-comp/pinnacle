@@ -1,4 +1,89 @@
-//! TextInput widget
+//! TextInput display fields that can be filled with text.
+//!
+//! # Example
+//!
+//! Create a simple Layer with an automatically focused [`TextInput`]:
+//!
+//! ```
+//! use snowcap_api::{
+//!     layer,
+//!     widget::{self, container::Container, operation, text_input::TextInput, Length, Program}
+//! };
+//!
+//! /// Example Program for [`TextInput`]
+//! #[derive(Default)]
+//! pub struct TextInputProgram {
+//!     input_value: String
+//! }
+//!
+//! /// Messages for [`TextInputProgram`]
+//! #[derive(Debug, Clone)]
+//! pub enum Message {
+//!     /// Something was input or paste in the [`TextInput`].
+//!     ContentChanged(String),
+//!     /// [`TextInput`] was submitted.
+//!     Submit,
+//! }
+//!
+//! impl TextInputProgram {
+//!     const INPUT_ID: &str = "prompt";
+//!
+//!     /// Create a new [`TextInputProgram`].
+//!     pub fn new() -> Self {
+//!         Default::default()
+//!     }
+//!
+//!     /// Display the [`TextInputProgram`] on a new layer.
+//!     pub fn show(self) {
+//!         let layer = layer::new_widget(
+//!             self,
+//!             None,
+//!             layer::KeyboardInteractivity::Exclusive,
+//!             layer::ExclusiveZone::Respect,
+//!             layer::ZLayer::Overlay,
+//!         ).unwrap();
+//!
+//!         /// Focus the input
+//!         layer.operate(operation::focusable::focus(Self::INPUT_ID));
+//!         layer.on_key_press(|handle, key, _mods| {
+//!             use xkbcommon::xkb::Keysym;
+//!
+//!             if key == Keysym::Escape {
+//!                 handle.close();
+//!             }
+//!
+//!             if key == Keysym::i {
+//!                 handle.operate(operation::focusable::focus(Self::INPUT_ID));
+//!             }
+//!         });
+//!
+//!     }
+//! }
+//!
+//! impl Program for TextInputProgram {
+//!     type Message = Message;
+//!
+//!     fn update(&mut self, msg: Self::Message) {
+//!         match msg {
+//!             Message::ContentChanged(data) => self.input_value = data,
+//!             Message::Submit => {
+//!                 // do something with the input_value
+//!                 self.input_value.clear();
+//!             },
+//!         }
+//!     }
+//!
+//!     fn view(&self) -> widget::WidgetDef<Self::Message> {
+//!         let widget = TextInput::new("placeholder:", &self.input_value.clone())
+//!             .id(Self::INPUT_ID)
+//!             .on_input(Message::ContentChanged)
+//!             .on_submit(Message::Submit)
+//!             .width(Length::Fixed(220.0));
+//!
+//!         widget.into()
+//!     }
+//! }
+//! ```
 
 use std::sync::Arc;
 
@@ -29,6 +114,11 @@ pub struct TextInput<Msg> {
 }
 
 impl<Msg> TextInput<Msg> {
+    /// Create a new TextInput Widget.
+    ///
+    /// # Parameters
+    /// - `placeholder`: Text to display when the field is empty.
+    /// - `value`: TextInput content.
     pub fn new(placeholder: &str, value: &str) -> Self {
         let placeholder = placeholder.into();
         let value = value.into();
@@ -54,6 +144,11 @@ impl<Msg> TextInput<Msg> {
         }
     }
 
+    /// Set the TextInput Id.
+    ///
+    /// This id can then be used to target this widget with [`Operations`].
+    ///
+    /// [`Operations`]: crate::widget::operation::Operation
     pub fn id(self, id: impl Into<String>) -> Self {
         Self {
             id: Some(id.into()),
@@ -61,6 +156,7 @@ impl<Msg> TextInput<Msg> {
         }
     }
 
+    /// Convert the [`TextInput`] into a secure password input
     pub fn secure(self, is_secure: bool) -> Self {
         Self {
             secure: is_secure,
@@ -68,6 +164,9 @@ impl<Msg> TextInput<Msg> {
         }
     }
 
+    /// Sets the message that should be produced when some text is typed into the [`TextInput`].
+    ///
+    /// If the method is not called, the TextInput will be disabled.
     pub fn on_input<F>(self, on_input: F) -> Self
     where
         F: Fn(String) -> Msg + Sync + Send + 'static,
@@ -82,6 +181,8 @@ impl<Msg> TextInput<Msg> {
         }
     }
 
+    /// Sets the message that should be produced when the [`TextInput`] is focused and the enter
+    /// key is pressed.
     pub fn on_submit(self, on_submit: Msg) -> Self {
         Self {
             widget_id: self.widget_id.or_else(|| Some(WidgetId::next())),
@@ -93,6 +194,7 @@ impl<Msg> TextInput<Msg> {
         }
     }
 
+    /// Sets the message that should be produced when some text is pasted into the [`TextInput`].
     pub fn on_paste<F>(self, on_paste: F) -> Self
     where
         F: Fn(String) -> Msg + Sync + Send + 'static,
@@ -107,6 +209,7 @@ impl<Msg> TextInput<Msg> {
         }
     }
 
+    /// Sets the [`Font`] of the [`TextInput`].
     pub fn font(self, font: Font) -> Self {
         Self {
             font: Some(font),
@@ -114,6 +217,7 @@ impl<Msg> TextInput<Msg> {
         }
     }
 
+    /// Sets the [`Icon`] of the [`TextInput`].
     pub fn icon(self, icon: Icon) -> Self {
         Self {
             icon: Some(icon),
@@ -121,6 +225,7 @@ impl<Msg> TextInput<Msg> {
         }
     }
 
+    /// Sets the width of the [`TextInput`].
     pub fn width(self, width: Length) -> Self {
         Self {
             width: Some(width),
@@ -128,6 +233,7 @@ impl<Msg> TextInput<Msg> {
         }
     }
 
+    /// Sets the [`Padding`] of the [`TextInput`].
     pub fn padding(self, padding: Padding) -> Self {
         Self {
             padding: Some(padding),
@@ -135,6 +241,7 @@ impl<Msg> TextInput<Msg> {
         }
     }
 
+    /// Sets the [`LineHeight`] of the [`TextInput`].
     pub fn line_height(self, line_height: LineHeight) -> Self {
         Self {
             line_height: Some(line_height),
@@ -142,6 +249,7 @@ impl<Msg> TextInput<Msg> {
         }
     }
 
+    /// Sets the horizontal [`Alignment`] of the [`TextInput`].
     pub fn horizontal_alignment(self, horizontal_alignment: Alignment) -> Self {
         Self {
             horizontal_alignment: Some(horizontal_alignment),
@@ -149,6 +257,7 @@ impl<Msg> TextInput<Msg> {
         }
     }
 
+    /// Sets the style of the [`TextInput`]
     pub fn style(self, style: Styles) -> Self {
         Self {
             style: Some(style),
@@ -272,10 +381,14 @@ impl From<widget::v1::text_input::Event> for Event {
     }
 }
 
+/// The [`TextInput`] callbacks.
 #[derive(Clone)]
 pub struct Callbacks<Msg> {
+    /// Message to be sent when some text is typed in the [`TextInput`]
     pub(crate) on_input: Option<Arc<dyn Fn(String) -> Msg + Sync + Send>>,
+    /// Message to be sent when enter is pressed while the [`TextInput`] is focused.
     pub(crate) on_submit: Option<Msg>,
+    /// Message to be sent when some text is pasted in the [`TextInput`]
     pub(crate) on_paste: Option<Arc<dyn Fn(String) -> Msg + Sync + Send>>,
 }
 
@@ -329,18 +442,27 @@ impl<Msg: PartialEq> PartialEq for Callbacks<Msg> {
     }
 }
 
+/// The side of a [`TextInput`]
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum Side {
+    /// The left side of a [`TextInput`],
     Left,
+    /// The right side of a [`TextInput`],
     Right,
 }
 
+/// The content of the [`Icon`].
 #[derive(Clone, PartialEq, Debug)]
 pub struct Icon {
+    /// The [`Font`] that will be used to display the `code_point`.
     pub font: Font,
+    /// The unicode code point that will be used as the icon.
     pub code_point: char,
+    /// The font size of the content.
     pub pixels: Option<f32>,
+    /// The spacing between the [`Icon`] and the text in a [`TextInput`]
     pub spacing: f32,
+    /// The side of a [`TextInput`] the [`Icon`] should be displayed.
     pub side: Side,
 }
 
@@ -364,22 +486,30 @@ impl From<Icon> for widget::v1::text_input::Icon {
     }
 }
 
+/// Styles to apply to the [`TextInput`].
 #[derive(Clone, PartialEq, Debug, Default)]
 pub struct Styles {
+    /// Style to use when the [`TextInput`] is active.
     pub active: Option<Style>,
+    /// Style to use when the [`TextInput`] is hovered.
     pub hovered: Option<Style>,
+    /// Style to use when the [`TextInput`] is focused.
     pub focused: Option<Style>,
+    /// Style to use when the [`TextInput`] is focused & hovered.
     pub hover_focused: Option<Style>,
+    /// Style to use when the [`TextInput`] is disabled.
     pub disabled: Option<Style>,
 }
 
 impl Styles {
+    /// Create a new [`Styles`] that doesn't set anything.
     pub fn new() -> Self {
         Self {
             ..Default::default()
         }
     }
 
+    /// [`Style`] to apply when the [`TextInput`] is active.
     pub fn active(self, style: Style) -> Self {
         Self {
             active: Some(style),
@@ -387,6 +517,7 @@ impl Styles {
         }
     }
 
+    /// [`Style`] to apply when the [`TextInput`] is hovered.
     pub fn hovered(self, style: Style) -> Self {
         Self {
             hovered: Some(style),
@@ -394,6 +525,7 @@ impl Styles {
         }
     }
 
+    /// [`Style`] to apply when the [`TextInput`] is focused.
     pub fn focused(self, style: Style) -> Self {
         Self {
             focused: Some(style),
@@ -401,6 +533,7 @@ impl Styles {
         }
     }
 
+    /// [`Style`] to apply when the [`TextInput`] is focused & hovered.
     pub fn hover_focused(self, style: Style) -> Self {
         Self {
             hover_focused: Some(style),
@@ -408,6 +541,7 @@ impl Styles {
         }
     }
 
+    /// [`Style`] to apply when the [`TextInput`] is disabled.
     pub fn disabled(self, style: Style) -> Self {
         Self {
             disabled: Some(style),
@@ -436,23 +570,32 @@ impl From<Styles> for widget::v1::text_input::Style {
     }
 }
 
+/// Appearance of a [`TextInput`].
 #[derive(Clone, PartialEq, Debug, Default)]
 pub struct Style {
+    /// The [`Background`] of the [`TextInput`].
     pub background: Option<Background>,
+    /// The [`Border`] of the [`TextInput`].
     pub border: Option<Border>,
+    /// The [`Color`] of the [`Icon`].
     pub icon: Option<Color>,
+    /// The [`Color`] of the placeholder.
     pub placeholder: Option<Color>,
+    /// The [`Color`] of the content.
     pub value: Option<Color>,
+    /// The [`Color`] to use for the selection's highlight.
     pub selection: Option<Color>,
 }
 
 impl Style {
+    /// Create a [`Style`] with default values.
     pub fn new() -> Self {
         Self {
             ..Default::default()
         }
     }
 
+    /// The [`Background`] of the [`TextInput`].
     pub fn background(self, background: Background) -> Self {
         Self {
             background: Some(background),
@@ -460,6 +603,7 @@ impl Style {
         }
     }
 
+    /// The [`Border`] of the [`TextInput`].
     pub fn border(self, border: Border) -> Self {
         Self {
             border: Some(border),
@@ -467,6 +611,7 @@ impl Style {
         }
     }
 
+    /// The [`Color`] of the [`Icon`].
     pub fn icon(self, color: Color) -> Self {
         Self {
             icon: Some(color),
@@ -474,6 +619,7 @@ impl Style {
         }
     }
 
+    /// The [`Color`] of the placeholder.
     pub fn placeholder(self, color: Color) -> Self {
         Self {
             placeholder: Some(color),
@@ -481,6 +627,7 @@ impl Style {
         }
     }
 
+    /// The [`Color`] of the content.
     pub fn value(self, color: Color) -> Self {
         Self {
             value: Some(color),
@@ -488,6 +635,7 @@ impl Style {
         }
     }
 
+    /// The [`Color`] to use for the selection's highlight.
     pub fn selection(self, color: Color) -> Self {
         Self {
             selection: Some(color),
