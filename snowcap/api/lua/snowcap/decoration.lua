@@ -140,6 +140,19 @@ function DecorationHandle:send_message(message)
     self.update(message)
 end
 
+---Sends an `Operation` to this decoration.
+---@param operation snowcap.widget.operation.Operation
+function DecorationHandle:operate(operation)
+    local _, err = client:snowcap_decoration_v1_DecorationService_OperateDecoration({
+        decoration_id = self.id,
+        operation = require("snowcap.widget.operation")._to_api(operation),
+    })
+
+    if err then
+        log.error(err)
+    end
+end
+
 ---Sets the z-index at which this decoration will render.
 ---
 ---@param z_index integer
