@@ -1,9 +1,49 @@
-//! Widget operation
-//!
 //! Update internal state for some widgets.
+//!
+//! [`Operations`] can be passed to [`LayerHandle::operate`] and [`DecorationHandle::operate`] to
+//! act on their widgets states.
+//!
+//! # Example
+//! Focus a given widget:
+//! ```no_run
+//! use snowcap_api::layer::LayerHandle;
+//! use snowcap_api::widget::operation;
+//!
+//! #[derive(Clone, Default)]
+//! pub struct ProgramMsg {
+//!     // [...]
+//! };
+//!
+//! fn focus_widget(handle: LayerHandle<ProgramMsg>, widget_id: impl Into<String>) {
+//!     handle.operate(operation::focusable::focus(widget_id));
+//! }
+//! ```
+//!
+//! Focus a widget and move the cursor to the beginning of the field:
+//! ```no_run
+//! use snowcap_api::layer::LayerHandle;
+//! use snowcap_api::widget::operation;
+//!
+//! #[derive(Clone, Default)]
+//! pub struct ProgramMsg {
+//!     // [...]
+//! };
+//!
+//! fn prepend_to_widget(handle: LayerHandle<ProgramMsg>, widget_id: impl Into<String>) {
+//!     let widget_id = widget_id.into();
+//!
+//!     handle.operate(operation::focusable::focus(&widget_id));
+//!     handle.operate(operation::text_input::move_cursor_front(&widget_id));
+//! }
+//! ```
+//!
+//! [`Operations`]: Operation
+//! [`LayerHandle::operate`]: crate::layer::LayerHandle::operate
+//! [`DecorationHandle::operate`]: crate::decoration::DecorationHandle::operate
 
 use snowcap_api_defs::snowcap::operation;
 
+/// Update widgets' internal state.
 #[derive(Debug, Clone, PartialEq)]
 #[non_exhaustive]
 pub enum Operation {
@@ -11,10 +51,14 @@ pub enum Operation {
     TextInput(text_input::TextInput),
 }
 
+/// Create [`Operations`] acting on widget that can be focused.
+///
+/// [`Operations`]: Operation
 pub mod focusable {
     use super::Operation;
     use snowcap_api_defs::snowcap::operation::v1;
 
+    /// [`Operation`] acting on widget that can be focused.
     #[derive(Debug, Clone, PartialEq)]
     #[non_exhaustive]
     pub enum Focusable {
@@ -24,18 +68,22 @@ pub mod focusable {
         FocusPrev,
     }
 
+    /// Creates an [`Operation`] to focus a specific widget.
     pub fn focus(widget_id: impl Into<String>) -> Operation {
         Focusable::Focus(widget_id.into()).into()
     }
 
+    /// Creates an [`Operation`] to remove focus from any widgets.
     pub fn unfocus() -> Operation {
         Focusable::Unfocus.into()
     }
 
+    /// Creates an [`Operation`] to focus the next widget in the tree, or the first one.
     pub fn focus_next() -> Operation {
         Focusable::FocusNext.into()
     }
 
+    /// Creates an [`Operation`] to focus the previous widget in the tree, or the last one.
     pub fn focus_previous() -> Operation {
         Focusable::FocusPrev.into()
     }
@@ -68,11 +116,13 @@ pub mod focusable {
     }
 }
 
+/// [`Operation`] acting on widget that have a text input.
 pub mod text_input {
     use snowcap_api_defs::snowcap::operation::v1;
 
     use super::Operation;
 
+    /// [`Operation`] acting on widget that have a text input.
     #[derive(Debug, Clone, PartialEq)]
     #[non_exhaustive]
     pub enum TextInput {
@@ -82,6 +132,7 @@ pub mod text_input {
         SelectAll(String),
     }
 
+    /// Creates an [`Operation`] that set the position of the widget's cursor.
     pub fn move_cursor(widget_id: impl Into<String>, position: usize) -> Operation {
         TextInput::MoveCursor {
             id: widget_id.into(),
@@ -90,14 +141,17 @@ pub mod text_input {
         .into()
     }
 
+    /// Creates an [`Operation`] that sets the widget's cursor to the beginning of the field.
     pub fn move_cursor_front(widget_id: impl Into<String>) -> Operation {
         TextInput::MoveCursorFront(widget_id.into()).into()
     }
 
+    /// Creates an [`Operation`] that sets the widget's cursor to the end of the field.
     pub fn move_cursor_end(widget_id: impl Into<String>) -> Operation {
         TextInput::MoveCursorEnd(widget_id.into()).into()
     }
 
+    /// Creates an [`Operation`] that select the widget's content.
     pub fn select_all(widget_id: impl Into<String>) -> Operation {
         TextInput::SelectAll(widget_id.into()).into()
     }
