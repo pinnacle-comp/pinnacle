@@ -217,6 +217,18 @@ function LayerHandle:send_message(message)
     self.update(message)
 end
 
+---@param operation snowcap.widget.operation.Operation
+function LayerHandle:operate(operation)
+    local _, err = client:snowcap_layer_v1_LayerService_OperateLayer({
+        layer_id = self.id,
+        operation = require("snowcap.widget.operation")._to_api(operation),
+    })
+
+    if err then
+        log.error(err)
+    end
+end
+
 layer.anchor = anchor
 layer.keyboard_interactivity = keyboard_interactivity
 layer.zlayer = zlayer

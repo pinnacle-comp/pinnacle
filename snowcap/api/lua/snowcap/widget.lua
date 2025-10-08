@@ -1036,4 +1036,6 @@ function widget._text_input_process_event(callbacks, event)
     return msg
 end
 
+widget.operation = require("snowcap.widget.operation")
+
 return widget
