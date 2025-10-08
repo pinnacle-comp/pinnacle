@@ -152,6 +152,7 @@ function DecorationHandle:send_message(message)
     self.update(message)
 end
 
+---Sends an `Operation` to this decoration.
 ---@param operation snowcap.widget.operation.Operation
 function DecorationHandle:operate(operation)
     local _, err = client:snowcap_decoration_v1_DecorationService_OperateDecoration({
