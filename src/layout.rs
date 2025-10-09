@@ -412,17 +412,20 @@ impl State {
                 }
             }
 
-            for (window, mut loc) in locs {
+            for (window, loc) in locs {
                 if let Some(surface) = window.x11_surface() {
+                    let mut configure_loc = loc;
+
                     // FIXME: Don't do this here
                     // `loc` includes bounds but we need to configure the x11 surface
                     // with its actual location
                     if !window.should_not_have_ssd() {
                         let deco_offset =
                             window.with_state(|state| state.total_decoration_offset());
-                        loc += deco_offset;
+                        configure_loc += deco_offset;
                     }
-                    let _ = surface.configure(Rectangle::new(loc, surface.geometry().size));
+                    let _ =
+                        surface.configure(Rectangle::new(configure_loc, surface.geometry().size));
                 }
 
                 // if the window moved out of an output, we want to get it first.
