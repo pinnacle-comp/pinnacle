@@ -140,6 +140,8 @@ end
 local signal_name_to_SignalName = {
     connect = "OutputConnect",
     disconnect = "OutputDisconnect",
+    enable = "OutputEnable",
+    disable = "OutputDisable",
     resize = "OutputResize",
     move = "OutputMove",
     pointer_enter = "OutputPointerEnter",
@@ -148,8 +150,10 @@ local signal_name_to_SignalName = {
 }
 
 ---@class pinnacle.output.OutputSignal Signals related to output events.
----@field connect fun(output: pinnacle.output.OutputHandle)? An output was connected. FIXME: This currently does not fire for outputs that have been previously connected and disconnected.
+---@field connect fun(output: pinnacle.output.OutputHandle)? An output was connected for the first time.
 ---@field disconnect fun(output: pinnacle.output.OutputHandle)? An output was disconnected.
+---@field enable fun(output: pinnacle.output.OutputHandle)? An output was enabled.
+---@field disable fun(output: pinnacle.output.OutputHandle)? An output was disabled.
 ---@field resize fun(output: pinnacle.output.OutputHandle, logical_width: integer, logical_height: integer)? An output's logical size changed.
 ---@field move fun(output: pinnacle.output.OutputHandle, x: integer, y: integer)? An output moved.
 ---@field pointer_enter fun(output: pinnacle.output.OutputHandle)? The pointer entered an output.

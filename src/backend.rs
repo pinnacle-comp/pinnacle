@@ -18,6 +18,7 @@ use tracing::{error, warn};
 use wayland_backend::server::GlobalId;
 
 use crate::{
+    api::signal::Signal,
     output::OutputMode,
     state::{Pinnacle, State, WithState},
 };
@@ -187,6 +188,12 @@ impl State {
         self.pinnacle
             .output_power_management_state
             .mode_set(output, powered);
+
+        if powered {
+            self.pinnacle.signal_state.output_enable.signal(output);
+        } else {
+            self.pinnacle.signal_state.output_disable.signal(output);
+        }
     }
 }
 
