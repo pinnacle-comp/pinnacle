@@ -39,7 +39,7 @@ use smithay::{
     input::{
         Seat, SeatHandler, SeatState,
         keyboard::LedState,
-        pointer::{CursorImageStatus, CursorImageSurfaceData, PointerHandle},
+        pointer::{CursorImageStatus, PointerHandle},
     },
     output::{Mode, Output, Scale},
     reexports::{
@@ -55,9 +55,7 @@ use smithay::{
     utils::{Logical, Point, Rectangle},
     wayland::{
         buffer::BufferHandler,
-        compositor::{
-            self, CompositorClientState, CompositorHandler, CompositorState, SurfaceAttributes,
-        },
+        compositor::{self, CompositorClientState, CompositorHandler, CompositorState},
         fractional_scale::{self, FractionalScaleHandler},
         keyboard_shortcuts_inhibit::{
             KeyboardShortcutsInhibitHandler, KeyboardShortcutsInhibitState,
@@ -259,11 +257,15 @@ impl CompositorHandler for State {
             }
         }
 
-        let outputs = if let Some(window) = self.pinnacle.window_for_surface(surface) {
-            self.pinnacle.space.outputs_for_element(window) // surface is a window
-        } else if let Some(window) = self.pinnacle.window_for_surface(&root) {
-            self.pinnacle.space.outputs_for_element(window) // surface's root is a window
-        } else if let Some(ref popup @ PopupKind::Xdg(ref surf)) =
+        if let Some(window) = self.pinnacle.window_for_surface(&root) {
+            for output in self.pinnacle.space.outputs_for_element(window) {
+                self.schedule_render(&output);
+            }
+
+            return;
+        }
+
+        if let Some(ref popup @ PopupKind::Xdg(ref surf)) =
             self.pinnacle.popup_manager.find_popup(surface)
         {
             if !surf.is_initial_configure_sent() {
@@ -277,7 +279,7 @@ impl CompositorHandler for State {
                 .and_then(|surf| self.pinnacle.window_for_surface(&surf))
                 .and_then(|win| self.pinnacle.space.element_location(win));
 
-            if let Some(loc) = loc {
+            let outputs = if let Some(loc) = loc {
                 let geo = Rectangle::new(loc, size);
                 let outputs = self
                     .pinnacle
@@ -302,8 +304,17 @@ impl CompositorHandler for State {
                     })
                     .cloned();
                 layer_output.map(|op| vec![op]).unwrap_or_default()
+            };
+
+            for output in outputs {
+                self.schedule_render(&output);
             }
-        } else if let Some((output, layer)) = {
+
+            return;
+        }
+
+        // This is a layer surface
+        if let Some((output, layer)) = {
             // Holy borrow checker
             let mut outputs = self.pinnacle.space.outputs();
             outputs.find_map(|op| {
@@ -326,52 +337,42 @@ impl CompositorHandler for State {
                 self.pinnacle.request_layout(&output);
             }
 
-            vec![output] // surface is a layer surface
-        } else if matches!(self.pinnacle.cursor_state.cursor_image(), CursorImageStatus::Surface(s) if s == surface)
-        {
-            // This is a cursor surface
+            self.schedule_render(&output);
 
-            // Update the hotspot if the buffer moved
-            compositor::with_states(surface, |states| {
-                let cursor_image_attributes = states.data_map.get::<CursorImageSurfaceData>();
+            return;
+        }
 
-                if let Some(mut cursor_image_attributes) =
-                    cursor_image_attributes.map(|attrs| attrs.lock().unwrap())
-                {
-                    let buffer_delta = states
-                        .cached_state
-                        .get::<SurfaceAttributes>()
-                        .current()
-                        .buffer_delta
-                        .take();
-                    if let Some(buffer_delta) = buffer_delta {
-                        cursor_image_attributes.hotspot -= buffer_delta;
-                    }
-                }
-            });
-
+        // This is either a cursor or dnd surface
+        if self.pinnacle.cursor_state.handle_commit(surface, &root) {
             // TODO: granular
-            self.pinnacle.space.outputs().cloned().collect()
-        } else if self.pinnacle.dnd_icon.as_ref() == Some(surface) {
-            // This is a dnd icon
-            // TODO: granular
-            self.pinnacle.space.outputs().cloned().collect()
-        } else if let Some(output) = self
-            .pinnacle
-            .space
-            .outputs()
-            .find(|op| {
-                op.with_state(|state| {
-                    state
-                        .lock_surface
-                        .as_ref()
-                        .is_some_and(|lock| lock.wl_surface() == surface)
+            for output in self.pinnacle.space.outputs().cloned().collect::<Vec<_>>() {
+                self.schedule_render(&output);
+            }
+            return;
+        }
+
+        // This is a lock surface
+        if let Some(output) = {
+            // Holy borrow checker
+            self.pinnacle
+                .space
+                .outputs()
+                .find(|op| {
+                    op.with_state(|state| {
+                        state
+                            .lock_surface
+                            .as_ref()
+                            .is_some_and(|lock| lock.wl_surface() == surface)
+                    })
                 })
-            })
-            .cloned()
-        {
-            vec![output] // surface is a lock surface
-        } else if let Some((win, deco)) = self.pinnacle.windows.iter().find_map(|win| {
+                .cloned()
+        } {
+            self.schedule_render(&output);
+            return;
+        }
+
+        // This is a decoration surface
+        if let Some((win, deco)) = self.pinnacle.windows.iter().find_map(|win| {
             let deco = win
                 .with_state(|state| {
                     state
@@ -393,14 +394,10 @@ impl CompositorHandler for State {
                 }
             }
 
-            // FIXME: granular
-            self.pinnacle.space.outputs().cloned().collect()
-        } else {
-            return;
-        };
-
-        for output in outputs {
-            self.schedule_render(&output);
+            // TODO: granular
+            for output in self.pinnacle.space.outputs().cloned().collect::<Vec<_>>() {
+                self.schedule_render(&output);
+            }
         }
     }
 
@@ -465,11 +462,11 @@ impl ClientDndGrabHandler for State {
         icon: Option<WlSurface>,
         _seat: Seat<Self>,
     ) {
-        self.pinnacle.dnd_icon = icon;
+        self.pinnacle.cursor_state.set_dnd_icon(icon);
     }
 
     fn dropped(&mut self, _target: Option<WlSurface>, _validated: bool, _seat: Seat<Self>) {
-        self.pinnacle.dnd_icon = None;
+        self.pinnacle.cursor_state.set_dnd_icon(None);
     }
 }
 

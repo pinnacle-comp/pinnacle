@@ -192,8 +192,6 @@ pub struct Pinnacle {
 
     pub popup_manager: PopupManager,
 
-    pub dnd_icon: Option<WlSurface>,
-
     /// The main window vec
     pub windows: Vec<WindowElement>,
     /// Windows with no buffer attached
@@ -498,8 +496,6 @@ impl Pinnacle {
 
             seat,
 
-            dnd_icon: None,
-
             popup_manager: PopupManager::default(),
 
             windows: Vec::new(),
@@ -653,8 +649,14 @@ impl Pinnacle {
             );
         }
 
-        if let Some(dnd) = self.dnd_icon.as_ref() {
-            send_frames_surface_tree(dnd, output, now, FRAME_CALLBACK_THROTTLE, should_send);
+        if let Some(dnd) = self.cursor_state.dnd_icon() {
+            send_frames_surface_tree(
+                &dnd.surface,
+                output,
+                now,
+                FRAME_CALLBACK_THROTTLE,
+                should_send,
+            );
         }
 
         if let CursorImageStatus::Surface(surface) = self.cursor_state.cursor_image() {
@@ -781,9 +783,9 @@ impl Pinnacle {
             );
         }
 
-        if let Some(dnd) = self.dnd_icon.as_ref() {
+        if let Some(dnd) = self.cursor_state.dnd_icon() {
             with_surface_tree_downward(
-                dnd,
+                &dnd.surface,
                 (),
                 |_, _, _| compositor::TraversalAction::DoChildren(()),
                 |surface, states, _| {
@@ -893,9 +895,9 @@ impl Pinnacle {
             );
         }
 
-        if let Some(dnd) = self.dnd_icon.as_ref() {
+        if let Some(dnd) = self.cursor_state.dnd_icon() {
             send_dmabuf_feedback_surface_tree(
-                dnd,
+                &dnd.surface,
                 output,
                 surface_primary_scanout_output,
                 |surface, _| {

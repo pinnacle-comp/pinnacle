@@ -232,7 +232,6 @@ impl State {
                                     scale,
                                     renderer,
                                     &mut self.pinnacle.cursor_state,
-                                    self.pinnacle.dnd_icon.as_ref(),
                                     &self.pinnacle.clock,
                                 );
                                 pointer_elements
@@ -268,7 +267,6 @@ impl State {
                                 scale,
                                 renderer,
                                 &mut self.pinnacle.cursor_state,
-                                self.pinnacle.dnd_icon.as_ref(),
                                 &self.pinnacle.clock,
                             );
                             pointer_elements
@@ -350,7 +348,6 @@ impl State {
                                     scale,
                                     renderer,
                                     &mut self.pinnacle.cursor_state,
-                                    self.pinnacle.dnd_icon.as_ref(),
                                     &self.pinnacle.clock,
                                 );
                                 let elements = output_render_elements(
@@ -376,7 +373,6 @@ impl State {
                                     scale,
                                     renderer,
                                     &mut self.pinnacle.cursor_state,
-                                    self.pinnacle.dnd_icon.as_ref(),
                                     &self.pinnacle.clock,
                                 );
                                 pointer_elements

@@ -41,7 +41,6 @@ pub fn pointer_render_elements<R: PRenderer>(
     scale: f64,
     renderer: &mut R,
     cursor_state: &mut CursorState,
-    dnd_icon: Option<&WlSurface>,
     clock: &Clock<Monotonic>,
 ) -> (Vec<PointerRenderElement<R>>, Vec<Id>) {
     let integer_scale = scale.ceil() as i32;
@@ -80,21 +79,29 @@ pub fn pointer_render_elements<R: PRenderer>(
         }
     };
 
+    let hotspot = cursor_state
+        .cursor_hotspot(clock.now(), scale)
+        .unwrap_or_default();
+
+    if let Some(dnd_icon) = cursor_state.dnd_icon() {
+        pointer_elements.extend(AsRenderElements::render_elements(
+            &smithay::desktop::space::SurfaceTree::from_surface(&dnd_icon.surface),
+            renderer,
+            // FIXME: We round the location and the offset separately, which will lead
+            // to pixel imperfections
+            location
+                + dnd_icon.offset.to_f64().to_physical_precise_round(scale)
+                + Point::new(hotspot.x, hotspot.y),
+            scale.into(),
+            1.0,
+        ));
+    }
+
     let cursor_ids = pointer_elements
         .iter()
         .map(|elem| elem.id())
         .cloned()
         .collect();
-
-    if let Some(dnd_icon) = dnd_icon {
-        pointer_elements.extend(AsRenderElements::render_elements(
-            &smithay::desktop::space::SurfaceTree::from_surface(dnd_icon),
-            renderer,
-            location,
-            scale.into(),
-            1.0,
-        ));
-    }
 
     (pointer_elements, cursor_ids)
 }

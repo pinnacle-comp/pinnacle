@@ -7,8 +7,9 @@ use anyhow::Context;
 use smithay::backend::allocator::Fourcc;
 use smithay::desktop::utils::bbox_from_surface_tree;
 use smithay::input::pointer::CursorImageSurfaceData;
-use smithay::utils::{Buffer, IsAlive, Monotonic, Point, Rectangle, Time};
-use smithay::wayland::compositor;
+use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
+use smithay::utils::{Buffer, IsAlive, Logical, Monotonic, Point, Rectangle, Time};
+use smithay::wayland::compositor::{self, SurfaceAttributes};
 use smithay::{
     backend::renderer::element::memory::MemoryRenderBuffer,
     input::pointer::{CursorIcon, CursorImageStatus},
@@ -30,6 +31,12 @@ pub struct CursorState {
     mem_buffer_cache: Vec<(Image, MemoryRenderBuffer)>,
     /// A map of cursor icons to loaded images
     loaded_images: HashMap<CursorIcon, Option<Rc<XCursor>>>,
+    dnd_icon: Option<DndIcon>,
+}
+
+pub struct DndIcon {
+    pub surface: WlSurface,
+    pub offset: Point<i32, Logical>,
 }
 
 impl CursorState {
@@ -48,6 +55,7 @@ impl CursorState {
             size,
             mem_buffer_cache: Default::default(),
             loaded_images: Default::default(),
+            dnd_icon: Default::default(),
         }
     }
 
@@ -224,6 +232,82 @@ impl CursorState {
             }
             CursorImageStatus::Surface(_) => false,
         }
+    }
+
+    pub fn set_dnd_icon(&mut self, surface: Option<WlSurface>) {
+        self.dnd_icon = surface.map(|surface| {
+            let offset = compositor::with_states(&surface, |states| {
+                let buffer_delta = states
+                    .cached_state
+                    .get::<SurfaceAttributes>()
+                    .current()
+                    .buffer_delta
+                    .take()
+                    .unwrap_or_default();
+                buffer_delta
+            });
+            DndIcon { surface, offset }
+        });
+    }
+
+    pub fn dnd_icon(&self) -> Option<&DndIcon> {
+        self.dnd_icon.as_ref()
+    }
+
+    /// Handles a commit on a possible cursor or dnd surface.
+    ///
+    /// This requires the committed surface along with its root surface.
+    ///
+    /// Returns whether a render should be scheduled in response.
+    pub fn handle_commit(&mut self, surface: &WlSurface, root: &WlSurface) -> bool {
+        // This is a cursor surface
+        if matches!(self.cursor_image(), CursorImageStatus::Surface(s) if s == root) {
+            if surface == root {
+                // Update the hotspot if the buffer moved
+                compositor::with_states(surface, |states| {
+                    let cursor_image_attributes = states.data_map.get::<CursorImageSurfaceData>();
+
+                    if let Some(mut cursor_image_attributes) =
+                        cursor_image_attributes.map(|attrs| attrs.lock().unwrap())
+                    {
+                        let buffer_delta = states
+                            .cached_state
+                            .get::<SurfaceAttributes>()
+                            .current()
+                            .buffer_delta
+                            .take();
+                        if let Some(buffer_delta) = buffer_delta {
+                            cursor_image_attributes.hotspot -= buffer_delta;
+                        }
+                    }
+                });
+            }
+
+            return true;
+        }
+
+        // This is a dnd surface
+        if let Some(dnd_icon) = self.dnd_icon.as_mut()
+            && dnd_icon.surface == *root
+        {
+            if surface == root {
+                // Update any offsets the client has made to the root dnd surface.
+                compositor::with_states(surface, |states| {
+                    let buffer_delta = states
+                        .cached_state
+                        .get::<SurfaceAttributes>()
+                        .current()
+                        .buffer_delta
+                        .take()
+                        .unwrap_or_default();
+                    dnd_icon.offset += buffer_delta;
+                });
+            }
+
+            return true;
+        }
+
+        false
     }
 
     /// Cleans up the current cursor if it is a dead WlSurface.

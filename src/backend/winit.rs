@@ -257,7 +257,6 @@ impl Winit {
                 scale,
                 self.backend.renderer(),
                 &mut pinnacle.cursor_state,
-                pinnacle.dnd_icon.as_ref(),
                 &pinnacle.clock,
             );
             output_render_elements.extend(
