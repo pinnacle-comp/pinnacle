@@ -182,6 +182,10 @@ impl Session {
             .map(Frame::new)
     }
 
+    pub fn cursor_session(&self) -> Option<CursorSession> {
+        self.data().cursor_session.clone().map(CursorSession::new)
+    }
+
     pub(super) fn frame(&self) -> Option<ExtImageCopyCaptureFrameV1> {
         self.data().frame.clone()
     }

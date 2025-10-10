@@ -175,6 +175,15 @@ impl State {
                     continue;
                 };
 
+                if let Some(cursor_session) = session.cursor_session() {
+                    let hotspot = self
+                        .pinnacle
+                        .cursor_state
+                        .cursor_hotspot(self.pinnacle.clock.now(), scale)
+                        .unwrap_or_default();
+                    cursor_session.set_hotspot(hotspot);
+                }
+
                 let elements = match session.cursor() {
                     Cursor::Hidden => self
                         .backend
@@ -293,6 +302,15 @@ impl State {
                 let Some(frame) = session.get_pending_frame(size) else {
                     continue;
                 };
+
+                if let Some(cursor_session) = session.cursor_session() {
+                    let hotspot = self
+                        .pinnacle
+                        .cursor_state
+                        .cursor_hotspot(self.pinnacle.clock.now(), scale)
+                        .unwrap_or_default();
+                    cursor_session.set_hotspot(hotspot);
+                }
 
                 let elements = match session.cursor() {
                     Cursor::Hidden => self

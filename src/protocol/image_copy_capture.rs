@@ -16,7 +16,6 @@ use smithay::{
             protocol::wl_shm,
         },
     },
-    utils::{Buffer, Point},
 };
 
 use crate::protocol::image_copy_capture::session::{
@@ -86,12 +85,6 @@ impl ImageCopyCaptureState {
                 self.dmabuf_device,
                 self.dmabuf_formats.clone(),
             );
-        }
-    }
-
-    pub fn set_cursor_hotspot(&self, hotspot: Point<i32, Buffer>) {
-        for session in self.cursor_sessions.iter() {
-            session.set_hotspot(hotspot);
         }
     }
 }
