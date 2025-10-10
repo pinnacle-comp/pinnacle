@@ -267,7 +267,7 @@ impl State {
         foreign_toplevel::refresh(self);
         ext_workspace::refresh(self);
         self.pinnacle.refresh_idle_inhibit();
-        self.update_cursor_capture_positions();
+        self.process_capture_sessions();
 
         self.backend.render_scheduled_outputs(&mut self.pinnacle);
 

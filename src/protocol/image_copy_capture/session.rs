@@ -139,20 +139,12 @@ impl Session {
     ///
     /// This returns a [`Frame`] when the client has requested capture and
     /// the attached buffer is the same size as the provided size.
+    ///
     /// If the sizes are different, the frame fails.
     pub fn get_pending_frame(&self, size: Size<i32, Buffer>) -> Option<Frame> {
-        if self
-            .data()
-            .cursor_session
-            .as_ref()
-            .is_some_and(|cursor_session| {
-                !cursor_session
-                    .data::<CursorSessionData>()
-                    .unwrap()
-                    .cursor_entered
-                    .load(Ordering::Relaxed)
-            })
-        {
+        if self.cursor_session().is_some_and(|cursor_session| {
+            !cursor_session.data().cursor_entered.load(Ordering::Relaxed)
+        }) {
             // This is a cursor capture session and the cursor is not entered
             // (i.e. is not over the source).
             return None;
@@ -182,6 +174,7 @@ impl Session {
             .map(Frame::new)
     }
 
+    /// If this session is for a cursor session, returns the [`CursorSession`].
     pub fn cursor_session(&self) -> Option<CursorSession> {
         self.data().cursor_session.clone().map(CursorSession::new)
     }
@@ -258,6 +251,7 @@ impl CursorSession {
         &self.data().pointer
     }
 
+    /// Sets this cursor session's hotspot.
     pub fn set_hotspot(&self, hotspot: Point<i32, Buffer>) {
         if self.data().hotspot() == hotspot {
             return;
@@ -270,6 +264,9 @@ impl CursorSession {
         }
     }
 
+    /// Sets the position of the cursor hotspot relative to the source buffer.
+    ///
+    /// If `None`, this will send the leave event to the client.
     pub fn set_position(&self, position: Option<Point<i32, Buffer>>) {
         let cursor_entered = self.data().cursor_entered.load(Ordering::Relaxed);
         if cursor_entered != position.is_some() {
@@ -447,13 +444,19 @@ where
         resource: &ExtImageCopyCaptureCursorSessionV1,
         _data: &CursorSessionData,
     ) {
-        state
-            .image_copy_capture_state()
-            .cursor_sessions
-            .retain(|session| session.session != *resource);
-
         state.cursor_session_destroyed(CursorSession {
             session: resource.clone(),
         });
+
+        for session in state.image_copy_capture_state().sessions.iter() {
+            if session
+                .data()
+                .cursor_session
+                .take_if(|session| session == resource)
+                .is_some()
+            {
+                break;
+            }
+        }
     }
 }

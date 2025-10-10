@@ -382,10 +382,6 @@ impl Winit {
                         &render_output_result,
                         &pinnacle.loop_handle,
                     );
-
-                    pinnacle.loop_handle.insert_idle(|state| {
-                        state.process_capture_sessions();
-                    });
                 }
 
                 let now = pinnacle.clock.now();

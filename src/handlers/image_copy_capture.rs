@@ -46,11 +46,11 @@ impl ImageCopyCaptureHandler for State {
     }
 
     fn new_session(&mut self, session: Session) {
-        // FIXME: better tracking of no cursor vs no output/window or something
-        let (buffer_size, scale) = self
-            .pinnacle
-            .buffer_size_and_scale_for_session(&session)
-            .unwrap_or(((1, 1).into(), 1.0));
+        let Some((buffer_size, scale)) = self.pinnacle.buffer_size_and_scale_for_session(&session)
+        else {
+            session.stopped();
+            return;
+        };
 
         session.resized(buffer_size);
         let trackers = SessionDamageTrackers::new(buffer_size, scale);
@@ -69,6 +69,7 @@ impl ImageCopyCaptureHandler for State {
                     .pinnacle
                     .window_for_foreign_toplevel_handle(&ext_foreign_toplevel_handle_v1)
                 else {
+                    session.stopped();
                     return;
                 };
 
@@ -130,6 +131,7 @@ impl ImageCopyCaptureHandler for State {
 delegate_image_copy_capture!(State);
 
 impl State {
+    /// Sets buffer constraints for all [`Session`]s globally.
     pub fn set_copy_capture_buffer_constraints(&mut self) {
         let shm_formats = [wl_shm::Format::Argb8888];
 
@@ -152,15 +154,19 @@ impl State {
             .set_buffer_constraints(shm_formats, dmabuf_device, dmabuf_formats);
     }
 
+    /// Processes all active [`Session`]s by updating cursor positions and
+    /// rendering pending frames.
     pub fn process_capture_sessions(&mut self) {
         let _span = tracy_client::span!();
+
+        self.update_cursor_capture_positions();
 
         for win in self.pinnacle.windows.clone() {
             let mut sessions = win.with_state_mut(|state| mem::take(&mut state.capture_sessions));
             for (session, trackers) in sessions.iter_mut() {
                 let Some((size, scale)) = self.pinnacle.buffer_size_and_scale_for_session(session)
                 else {
-                    // TODO: stop stream or something idk
+                    session.stopped();
                     continue;
                 };
 
@@ -275,8 +281,6 @@ impl State {
                         .unwrap(),
                 };
 
-                // TODO: handle cursor session frames
-
                 self.handle_frame(frame, &elements, trackers);
             }
             win.with_state_mut(|state| state.capture_sessions = sessions);
@@ -288,7 +292,7 @@ impl State {
             for (session, trackers) in sessions.iter_mut() {
                 let Some((size, scale)) = self.pinnacle.buffer_size_and_scale_for_session(session)
                 else {
-                    // TODO: stop stream or something idk
+                    session.stopped();
                     continue;
                 };
 
@@ -393,7 +397,8 @@ impl State {
         }
     }
 
-    pub fn update_cursor_capture_positions(&mut self) {
+    /// Sends copy-capture clients updated cursor positions relative to their source.
+    fn update_cursor_capture_positions(&mut self) {
         let _span = tracy_client::span!();
 
         let cursor_loc = self.pinnacle.seat.get_pointer().unwrap().current_location();
@@ -497,12 +502,20 @@ impl State {
         }
     }
 
+    /// Renders elements to a [`Frame`] if they caused damage, then notifies the client.
     fn handle_frame(
         &mut self,
         frame: Frame,
         elements: &[impl RenderElement<GlesRenderer>],
         trackers: &mut SessionDamageTrackers,
     ) {
+        let (damage, _) = trackers.damage.damage_output(1, elements).unwrap();
+        let damage = damage.map(|damage| damage.as_slice()).unwrap_or_default();
+        if damage.is_empty() {
+            frame.submit(Transform::Normal, []);
+            return;
+        }
+
         let buffer = frame.buffer();
         let buffer_size = buffer_dimensions(&buffer).expect("this buffer is handled");
 
@@ -529,13 +542,6 @@ impl State {
             } else {
                 panic!("captured frame that doesn't have a shm or dma buffer");
             };
-
-            let (damage, _) = trackers.damage.damage_output(1, elements).unwrap();
-            let damage = damage.cloned().unwrap_or_default();
-            if damage.is_empty() {
-                frame.submit(Transform::Normal, []);
-                return;
-            }
 
             let elements = client_damage
                 .iter()
@@ -583,7 +589,7 @@ impl State {
 
             frame.submit(
                 Transform::Normal,
-                damage.into_iter().map(|rect| {
+                damage.iter().map(|rect| {
                     Rectangle::new(
                         (rect.loc.x, rect.loc.y).into(),
                         (rect.size.w, rect.size.h).into(),
@@ -595,6 +601,9 @@ impl State {
 }
 
 impl Pinnacle {
+    /// Returns the target buffer size and scale for a [`Session`].
+    ///
+    /// Returns `None` if the source doesn't exist.
     fn buffer_size_and_scale_for_session(
         &mut self,
         session: &Session,
@@ -605,7 +614,10 @@ impl Pinnacle {
                 let scale = output.current_scale().fractional_scale();
 
                 if matches!(session.cursor(), Cursor::Standalone { .. }) {
-                    let geo = self.cursor_state.cursor_geometry(self.clock.now(), scale)?;
+                    let geo = self
+                        .cursor_state
+                        .cursor_geometry(self.clock.now(), scale)
+                        .unwrap_or(Rectangle::from_size((1, 1).into()));
                     Some((geo.size, scale))
                 } else {
                     let size = output.current_mode()?.size;
@@ -625,7 +637,8 @@ impl Pinnacle {
                 if matches!(session.cursor(), Cursor::Standalone { .. }) {
                     let geo = self
                         .cursor_state
-                        .cursor_geometry(self.clock.now(), fractional_scale)?;
+                        .cursor_geometry(self.clock.now(), fractional_scale)
+                        .unwrap_or(Rectangle::from_size((1, 1).into()));
                     Some((geo.size, fractional_scale))
                 } else {
                     let size = (*window)
@@ -642,26 +655,38 @@ impl Pinnacle {
     }
 }
 
+/// Damage trackers for copy-capture sessions.
 #[derive(Debug)]
 pub struct SessionDamageTrackers {
+    /// The "something has changed on-screen" damage tracker.
+    ///
+    /// This tracks actual screen damage to see if a new frame
+    /// should be rendered.
     damage: OutputDamageTracker,
+    /// The rendering damage tracker.
+    ///
+    /// This is used to render to session buffers, and the returned damage
+    /// is used to optimize blitting into said buffers.
     render: OutputDamageTracker,
 }
 
 impl SessionDamageTrackers {
-    pub fn new(size: Size<i32, Buffer>, scale: f64) -> Self {
+    /// Creates a new set of damage trackers for handling copy-capture sessions.
+    fn new(size: Size<i32, Buffer>, scale: f64) -> Self {
         Self {
             damage: OutputDamageTracker::new((size.w, size.h), scale, Transform::Normal),
             render: OutputDamageTracker::new((size.w, size.h), scale, Transform::Normal),
         }
     }
 
-    pub fn size(&self) -> Size<i32, Buffer> {
+    /// Returns the current buffer size of these trackers.
+    fn size(&self) -> Size<i32, Buffer> {
         let (size, _, _) = self.render.mode().try_into().unwrap();
         (size.w, size.h).into()
     }
 
-    pub fn scale(&self) -> f64 {
+    /// Returns the current scale of these trackers.
+    fn scale(&self) -> f64 {
         let (_, scale, _) = self.render.mode().try_into().unwrap();
         scale.x
     }

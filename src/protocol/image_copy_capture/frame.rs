@@ -43,6 +43,9 @@ impl Drop for Frame {
             self.frame.failed(FailureReason::Unknown);
         }
 
+        // This is not strictly necessary, but sctk shm buffer handling
+        // will prevent access to any buffer while it's not released. I was working
+        // on a copy-capture test client which is why this is here.
         self.buffer().release();
     }
 }
@@ -115,7 +118,7 @@ impl Frame {
 #[derive(Debug, Default)]
 pub struct FrameData {
     pub(super) frame_state: FrameState,
-    pub(super) client_buffer_damage: Vec<Rectangle<i32, Buffer>>,
+    client_buffer_damage: Vec<Rectangle<i32, Buffer>>,
     pub(super) buffer: Option<WlBuffer>,
 }
 

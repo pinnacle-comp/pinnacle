@@ -1573,10 +1573,6 @@ impl Udev {
                         &pinnacle.loop_handle,
                         cursor_ids,
                     );
-
-                    pinnacle.loop_handle.insert_idle(|state| {
-                        state.process_capture_sessions();
-                    });
                 }
 
                 pinnacle.update_primary_scanout_output(output, &res.states);

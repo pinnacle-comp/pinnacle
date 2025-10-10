@@ -766,7 +766,7 @@ impl State {
     pub fn map_new_window(&mut self, unmapped: Unmapped) {
         let _span = tracy_client::span!("State::map_new_window");
 
-        let (window, attempt_float_on_map, focus) = if true {
+        let (window, attempt_float_on_map, focus) = if cfg!(feature = "wlcs") {
             // bruh
             // Relax the requirement that the window should've been configured first
             // for wlcs

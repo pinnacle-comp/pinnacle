@@ -30,7 +30,6 @@ const VERSION: u32 = 1;
 #[derive(Debug)]
 pub struct ImageCopyCaptureState {
     sessions: Vec<Session>,
-    cursor_sessions: Vec<CursorSession>,
     shm_formats: Vec<wl_shm::Format>,
     dmabuf_formats: HashMap<DrmFourcc, Vec<DrmModifier>>,
     dmabuf_device: Option<DrmNode>,
@@ -53,7 +52,6 @@ impl ImageCopyCaptureState {
 
         Self {
             sessions: Vec::new(),
-            cursor_sessions: Vec::new(),
             shm_formats: Vec::new(),
             dmabuf_formats: HashMap::new(),
             dmabuf_device: None,
@@ -199,11 +197,6 @@ where
                 let session = CursorSession::new(session);
 
                 state.new_cursor_session(session.clone());
-
-                state
-                    .image_copy_capture_state()
-                    .cursor_sessions
-                    .push(session);
             }
             ext_image_copy_capture_manager_v1::Request::Destroy => (),
             _ => (),
