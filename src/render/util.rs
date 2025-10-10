@@ -1,5 +1,6 @@
 //! Render utilities.
 
+pub mod damage;
 pub mod snapshot;
 pub mod surface;
 
@@ -11,7 +12,10 @@ use smithay::backend::renderer::element::utils::{Relocate, RelocateRenderElement
 use smithay::backend::renderer::element::{self, Element, Id};
 use smithay::backend::renderer::utils::CommitCounter;
 use smithay::backend::renderer::{Bind, Color32F, Frame, Offscreen, Renderer, RendererSuper};
-use smithay::utils::{Point, Rectangle};
+use smithay::reexports::wayland_server::protocol::wl_buffer::WlBuffer;
+use smithay::reexports::wayland_server::protocol::wl_shm;
+use smithay::utils::{Buffer, Point, Rectangle};
+use smithay::wayland::shm::with_buffer_contents_mut;
 use smithay::{
     backend::renderer::{
         element::RenderElement,
@@ -249,5 +253,137 @@ pub fn render_opaque_regions<R: PRenderer>(
             elements.insert(i - 1, OutputRenderElement::SolidColor(color));
             i += 1;
         }
+    }
+}
+
+/// Blits a rectangle of pixels from a source byte buffer into a shm wl buffer.
+///
+/// Fails if the provided wl buffer is not shm or either the src or dst are not Argb8888.
+///
+/// This function requires the src and dst to be in Argb8888 format.
+pub fn blit(
+    src: &[u8],
+    src_size: Size<i32, Buffer>,
+    src_rect: Rectangle<i32, Buffer>,
+
+    dst: &WlBuffer,
+) -> anyhow::Result<()> {
+    if src.len() != (src_size.w * src_size.h * 4) as usize {
+        anyhow::bail!("src was not correct len");
+    }
+
+    let Some(src_rect) = Rectangle::from_size(src_size).intersection(src_rect) else {
+        anyhow::bail!("src_rect does not overlap src buffer");
+    };
+
+    with_buffer_contents_mut(dst, |mut dst, len, data| {
+        if Size::new(data.width, data.height) != src_size {
+            anyhow::bail!("src_size is different from dst size");
+        }
+
+        if data.format != wl_shm::Format::Argb8888 {
+            anyhow::bail!("dst is not argb8888");
+        }
+
+        if src.len() != (data.stride * data.height) as usize {
+            anyhow::bail!(
+                "src and dst are different lens (src = {}, dst = {})",
+                src.len(),
+                len
+            );
+        }
+
+        dst = dst.wrapping_offset(data.offset as isize);
+
+        let stride = data.stride;
+
+        for row_num in src_rect.loc.y..(src_rect.loc.y + src_rect.size.h) {
+            let src_row = src[(stride * row_num) as usize..].as_ptr();
+            // SAFETY:
+            // - stride * row_num is always less than len so this is always within the allocation
+            // - count * size_of::<u8>() always fits in an isize
+            let dst_row = unsafe { dst.offset((stride * row_num) as isize) };
+
+            unsafe {
+                std::ptr::copy_nonoverlapping(
+                    src_row.offset((src_rect.loc.x * 4) as isize),
+                    dst_row.offset((src_rect.loc.x * 4) as isize),
+                    (src_rect.size.w * 4) as usize,
+                );
+            }
+        }
+
+        Ok(())
+    })
+    .context("not a shm buffer")?
+}
+
+pub struct DynElement<'a, R: Renderer>(&'a dyn RenderElement<R>);
+
+impl<'a, R: Renderer> DynElement<'a, R> {
+    pub fn new(elem: &'a impl RenderElement<R>) -> Self {
+        Self(elem as _)
+    }
+}
+
+impl<'a, R: Renderer> Element for DynElement<'a, R> {
+    fn id(&self) -> &Id {
+        self.0.id()
+    }
+
+    fn current_commit(&self) -> CommitCounter {
+        self.0.current_commit()
+    }
+
+    fn src(&self) -> Rectangle<f64, Buffer> {
+        self.0.src()
+    }
+
+    fn geometry(&self, scale: Scale<f64>) -> Rectangle<i32, Physical> {
+        self.0.geometry(scale)
+    }
+
+    fn location(&self, scale: Scale<f64>) -> Point<i32, Physical> {
+        self.0.location(scale)
+    }
+
+    fn transform(&self) -> Transform {
+        self.0.transform()
+    }
+
+    fn damage_since(
+        &self,
+        scale: Scale<f64>,
+        commit: Option<CommitCounter>,
+    ) -> smithay::backend::renderer::utils::DamageSet<i32, Physical> {
+        self.0.damage_since(scale, commit)
+    }
+
+    fn opaque_regions(
+        &self,
+        scale: Scale<f64>,
+    ) -> smithay::backend::renderer::utils::OpaqueRegions<i32, Physical> {
+        self.0.opaque_regions(scale)
+    }
+
+    fn alpha(&self) -> f32 {
+        self.0.alpha()
+    }
+
+    fn kind(&self) -> element::Kind {
+        self.0.kind()
+    }
+}
+
+impl<'a, R: Renderer> RenderElement<R> for DynElement<'a, R> {
+    fn draw(
+        &self,
+        frame: &mut <R>::Frame<'_, '_>,
+        src: Rectangle<f64, Buffer>,
+        dst: Rectangle<i32, Physical>,
+        damage: &[Rectangle<i32, Physical>],
+        opaque_regions: &[Rectangle<i32, Physical>],
+    ) -> Result<(), <R>::Error> {
+        self.0.draw(frame, src, dst, damage, opaque_regions)
     }
 }

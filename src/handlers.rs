@@ -6,14 +6,19 @@ pub mod ext_workspace;
 mod foreign_toplevel;
 pub mod foreign_toplevel_list;
 pub mod idle;
+mod image_capture_source;
+pub mod image_copy_capture;
 pub mod session_lock;
-#[cfg(feature = "snowcap")]
 pub mod snowcap_decoration;
 pub mod xdg_activation;
 mod xdg_shell;
 pub mod xwayland;
 
-use std::{collections::HashMap, os::fd::OwnedFd, sync::Arc};
+use std::{
+    collections::HashMap,
+    os::fd::OwnedFd,
+    sync::{Arc, atomic::Ordering},
+};
 
 use anyhow::Context;
 use smithay::{
@@ -215,9 +220,7 @@ impl CompositorHandler for State {
             }
 
             // Window surface commit
-            if let Some(window) = self.pinnacle.window_for_surface(surface).cloned()
-                && window.is_wayland()
-            {
+            if let Some(window) = self.pinnacle.window_for_surface(surface).cloned() {
                 let Some(is_mapped) =
                     with_renderer_surface_state(surface, |state| state.buffer().is_some())
                 else {
@@ -226,28 +229,30 @@ impl CompositorHandler for State {
 
                 window.on_commit();
 
-                // Toplevel has become unmapped,
-                // see https://wayland.app/protocols/xdg-shell#xdg_toplevel
-                if !is_mapped {
-                    self.pinnacle.remove_window(&window, true);
+                if window.is_wayland() {
+                    // Toplevel has become unmapped,
+                    // see https://wayland.app/protocols/xdg-shell#xdg_toplevel
+                    if !is_mapped {
+                        self.pinnacle.remove_window(&window, true);
 
-                    let output = window.output(&self.pinnacle);
+                        let output = window.output(&self.pinnacle);
 
-                    if let Some(output) = output {
-                        self.pinnacle.request_layout(&output);
-                    }
-                }
-
-                // Update reactive popups
-                for (popup, _) in PopupManager::popups_for_surface(surface) {
-                    if let PopupKind::Xdg(popup) = popup
-                        && popup.with_pending_state(|state| state.positioner.reactive)
-                    {
-                        if let Err(err) = self.pinnacle.position_popup(&popup) {
-                            debug!("Failed to position reactive popup: {err}");
+                        if let Some(output) = output {
+                            self.pinnacle.request_layout(&output);
                         }
-                        if let Err(err) = popup.send_configure() {
-                            warn!("Failed to configure reactive popup: {err}");
+                    }
+
+                    // Update reactive popups
+                    for (popup, _) in PopupManager::popups_for_surface(surface) {
+                        if let PopupKind::Xdg(popup) = popup
+                            && popup.with_pending_state(|state| state.positioner.reactive)
+                        {
+                            if let Err(err) = self.pinnacle.position_popup(&popup) {
+                                debug!("Failed to position reactive popup: {err}");
+                            }
+                            if let Err(err) = popup.send_configure() {
+                                warn!("Failed to configure reactive popup: {err}");
+                            }
                         }
                     }
                 }
@@ -366,40 +371,31 @@ impl CompositorHandler for State {
             .cloned()
         {
             vec![output] // surface is a lock surface
-        } else {
-            #[cfg(feature = "snowcap")]
-            if let Some((win, deco)) = self.pinnacle.windows.iter().find_map(|win| {
-                let deco = win
-                    .with_state(|state| {
-                        state
-                            .decoration_surfaces
-                            .iter()
-                            .find(|deco| deco.wl_surface() == surface || deco.wl_surface() == &root)
-                            .cloned()
-                    })
-                    .map(|deco| (win.clone(), deco));
-                deco
-            }) {
-                use std::sync::atomic::Ordering;
-
-                if deco.with_state(|state| state.bounds_changed.fetch_and(false, Ordering::Relaxed))
+        } else if let Some((win, deco)) = self.pinnacle.windows.iter().find_map(|win| {
+            let deco = win
+                .with_state(|state| {
+                    state
+                        .decoration_surfaces
+                        .iter()
+                        .find(|deco| deco.wl_surface() == surface || deco.wl_surface() == &root)
+                        .cloned()
+                })
+                .map(|deco| (win.clone(), deco));
+            deco
+        }) {
+            if deco.with_state(|state| state.bounds_changed.fetch_and(false, Ordering::Relaxed)) {
+                if win.with_state(|state| state.layout_mode.is_tiled())
+                    && let Some(output) = win.output(&self.pinnacle)
                 {
-                    if win.with_state(|state| state.layout_mode.is_tiled())
-                        && let Some(output) = win.output(&self.pinnacle)
-                    {
-                        self.pinnacle.request_layout(&output);
-                    } else {
-                        self.pinnacle.update_window_geometry(&win, false);
-                    }
+                    self.pinnacle.request_layout(&output);
+                } else {
+                    self.pinnacle.update_window_geometry(&win, false);
                 }
-
-                // FIXME: granular
-                self.pinnacle.space.outputs().cloned().collect()
-            } else {
-                return;
             }
 
-            #[cfg(not(feature = "snowcap"))]
+            // FIXME: granular
+            self.pinnacle.space.outputs().cloned().collect()
+        } else {
             return;
         };
 
@@ -1032,90 +1028,67 @@ impl Pinnacle {
             unreachable!("popup has a root surface and therefore a parent");
         };
 
-        let popup_geo = {
-            if parent == root {
-                // Slide toplevel popup x's instead of flipping; this mimics Awesome
-                positioner
-                    .constraint_adjustment
-                    .remove(ConstraintAdjustment::FlipX);
-            }
+        let deco_offset = self
+            .window_for_surface(&root)
+            .map(|win| win.total_decoration_offset())
+            .unwrap_or_default();
 
-            #[cfg(feature = "snowcap")]
-            {
-                // The anchor rectangle is relative to the window's wl surface.
-                // If there is a decoration, we need to offset the anchor rect
-                // by the decoration offset.
+        if parent == root {
+            // Slide toplevel popup x's instead of flipping; this mimics Awesome
+            positioner
+                .constraint_adjustment
+                .remove(ConstraintAdjustment::FlipX);
+        }
 
-                let offset = if let Some(win) = self.window_for_surface(&root) {
-                    win.with_state(|state| {
-                        let bounds = state.max_decoration_bounds();
-                        Point::new(bounds.left as i32, bounds.top as i32)
-                    })
-                } else {
-                    Default::default()
-                };
+        // The anchor rectangle is relative to the window's wl surface.
+        // If there is a decoration, we need to offset the anchor rect
+        // by the decoration offset.
+        positioner.anchor_rect.loc += deco_offset;
 
-                positioner.anchor_rect.loc += offset;
-            }
-
-            let (root_global_loc, output) = if let Some(win) = self.window_for_surface(&root) {
-                let win_geo = self
-                    .space
-                    .element_geometry(win)
-                    .context("window was not mapped")?;
-
-                (
-                    win_geo.loc,
-                    self.focused_output().context("no focused output")?.clone(),
-                )
-            } else {
-                self.space
-                    .outputs()
-                    .find_map(|op| {
-                        let layer_map = layer_map_for_output(op);
-                        let layer =
-                            layer_map.layer_for_surface(&root, WindowSurfaceType::TOPLEVEL)?;
-                        let output_loc = self.space.output_geometry(op)?.loc;
-                        Some((
-                            layer_map.layer_geometry(layer)?.loc + output_loc,
-                            op.clone(),
-                        ))
-                    })
-                    .context("no valid parent")?
-            };
-
-            let parent_global_loc = if root == parent {
-                root_global_loc
-            } else {
-                root_global_loc + get_popup_toplevel_coords(&PopupKind::Xdg(popup.clone()))
-            };
-
-            let mut output_geo = self
+        let (root_global_loc, output) = if let Some(win) = self.window_for_surface(&root) {
+            let win_geo = self
                 .space
-                .output_geometry(&output)
-                .context("output was not mapped")?;
+                .element_geometry(win)
+                .context("window was not mapped")?;
 
-            // Make local to parent
-            output_geo.loc -= parent_global_loc;
-            positioner.get_unconstrained_geometry(output_geo)
-        };
-
-        #[cfg(feature = "snowcap")]
-        let popup_geo = {
-            // Make the popup location relative to the wl surface
-            // by "undoing" the offset above.
-
-            let offset = if let Some(win) = self.window_for_surface(&root) {
-                win.with_state(|state| {
-                    let bounds = state.max_decoration_bounds();
-                    Point::new(bounds.left as i32, bounds.top as i32)
+            (
+                win_geo.loc,
+                self.focused_output().context("no focused output")?.clone(),
+            )
+        } else {
+            self.space
+                .outputs()
+                .find_map(|op| {
+                    let layer_map = layer_map_for_output(op);
+                    let layer = layer_map.layer_for_surface(&root, WindowSurfaceType::TOPLEVEL)?;
+                    let output_loc = self.space.output_geometry(op)?.loc;
+                    Some((
+                        layer_map.layer_geometry(layer)?.loc + output_loc,
+                        op.clone(),
+                    ))
                 })
-            } else {
-                Default::default()
-            };
-
-            Rectangle::new(popup_geo.loc - offset, popup_geo.size)
+                .context("no valid parent")?
         };
+
+        let parent_global_loc = if root == parent {
+            root_global_loc
+        } else {
+            root_global_loc + get_popup_toplevel_coords(&PopupKind::Xdg(popup.clone()))
+        };
+
+        let mut output_geo = self
+            .space
+            .output_geometry(&output)
+            .context("output was not mapped")?;
+
+        // Make local to parent
+        output_geo.loc -= parent_global_loc;
+
+        let mut popup_geo = positioner.get_unconstrained_geometry(output_geo);
+
+        // Make the popup location relative to the wl surface
+        // by "undoing" the offset above.
+        popup_geo.loc -= deco_offset;
 
         popup.with_pending_state(|state| {
             state.geometry = popup_geo;

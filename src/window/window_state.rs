@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use std::sync::atomic::{AtomicU32, Ordering};
+use std::{
+    collections::HashMap,
+    sync::atomic::{AtomicU32, Ordering},
+};
 
 use indexmap::IndexSet;
 use smithay::{
@@ -13,9 +16,13 @@ use smithay::{
 };
 use tracing::warn;
 
-#[cfg(feature = "snowcap")]
-use crate::{decoration::DecorationSurface, protocol::snowcap_decoration::Bounds};
 use crate::{
+    decoration::DecorationSurface,
+    handlers::image_copy_capture::SessionDamageTrackers,
+    protocol::{
+        image_copy_capture::session::{CursorSession, Session},
+        snowcap_decoration::Bounds,
+    },
     render::util::snapshot::WindowSnapshot,
     state::{Pinnacle, WithState},
     tag::Tag,
@@ -397,10 +404,20 @@ pub struct WindowElementState {
     pub snapshot: Option<WindowSnapshot>,
     pub mapped_hook_id: Option<HookId>,
     pub foreign_toplevel_list_handle: Option<ForeignToplevelHandle>,
-    #[cfg(feature = "snowcap")]
     pub decoration_surfaces: Vec<DecorationSurface>,
 
     pub vrr_demand: Option<VrrDemand>,
+
+    pub capture_sessions: HashMap<Session, SessionDamageTrackers>,
+    pub cursor_sessions: Vec<CursorSession>,
+}
+
+impl Drop for WindowElementState {
+    fn drop(&mut self) {
+        for session in self.capture_sessions.keys() {
+            session.stopped();
+        }
+    }
 }
 
 impl WindowElement {
@@ -528,6 +545,14 @@ impl WindowElement {
         } else {
             self.toplevel()
                 .and_then(|toplevel| toplevel.send_pending_configure())
+        }
+    }
+
+    pub fn total_decoration_offset(&self) -> Point<i32, Logical> {
+        if self.should_not_have_ssd() {
+            Default::default()
+        } else {
+            self.with_state(|state| state.total_decoration_offset())
         }
     }
 }
@@ -660,9 +685,10 @@ impl WindowElementState {
             pending_transactions: Default::default(),
             layout_node: None,
             foreign_toplevel_list_handle: None,
-            #[cfg(feature = "snowcap")]
             decoration_surfaces: Vec::new(),
             vrr_demand: None,
+            capture_sessions: Default::default(),
+            cursor_sessions: Default::default(),
         }
     }
 
@@ -680,7 +706,6 @@ impl WindowElementState {
         self.floating_y = loc.map(|loc| loc.y);
     }
 
-    #[cfg(feature = "snowcap")]
     pub fn max_decoration_bounds(&self) -> Bounds {
         let mut max_bounds = Bounds::default();
         for deco in self.decoration_surfaces.iter() {
@@ -693,6 +718,13 @@ impl WindowElementState {
             };
         }
         max_bounds
+    }
+
+    fn total_decoration_offset(&self) -> Point<i32, Logical> {
+        Point::new(
+            self.max_decoration_bounds().left as i32,
+            self.max_decoration_bounds().top as i32,
+        )
     }
 }
 

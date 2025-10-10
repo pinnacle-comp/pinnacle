@@ -1,7 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-#[cfg(feature = "snowcap")]
-use crate::protocol::snowcap_decoration::SnowcapDecorationState;
 use crate::{
     api::signal::SignalState,
     backend::{
@@ -24,9 +22,12 @@ use crate::{
         ext_workspace::{self, ExtWorkspaceManagerState},
         foreign_toplevel::{self, ForeignToplevelManagerState},
         gamma_control::GammaControlManagerState,
+        image_capture_source::ImageCaptureSourceState,
+        image_copy_capture::ImageCopyCaptureState,
         output_management::OutputManagementManagerState,
         output_power_management::OutputPowerManagementState,
         screencopy::ScreencopyManagerState,
+        snowcap_decoration::SnowcapDecorationState,
     },
     window::{Unmapped, WindowElement, ZIndexElement, rules::WindowRuleState},
 };
@@ -173,9 +174,10 @@ pub struct Pinnacle {
     pub single_pixel_buffer_state: SinglePixelBufferState,
     pub foreign_toplevel_list_state: ForeignToplevelListState,
     pub ext_workspace_state: ExtWorkspaceManagerState,
-    #[cfg(feature = "snowcap")]
     pub snowcap_decoration_state: SnowcapDecorationState,
     pub wl_drm_state: WlDrmState,
+    pub image_capture_source_state: ImageCaptureSourceState,
+    pub image_copy_capture_state: ImageCopyCaptureState,
 
     pub lock_state: LockState,
 
@@ -265,6 +267,7 @@ impl State {
         foreign_toplevel::refresh(self);
         ext_workspace::refresh(self);
         self.pinnacle.refresh_idle_inhibit();
+        self.process_capture_sessions();
 
         self.backend.render_scheduled_outputs(&mut self.pinnacle);
 
@@ -387,6 +390,10 @@ impl Pinnacle {
 
         let (blocker_cleared_tx, blocker_cleared_rx) = std::sync::mpsc::channel();
 
+        loop_handle.insert_idle(|state| {
+            state.set_copy_capture_buffer_constraints();
+        });
+
         let pinnacle = Pinnacle {
             loop_signal,
             loop_handle: loop_handle.clone(),
@@ -469,9 +476,16 @@ impl Pinnacle {
                 &display_handle,
                 filter_restricted_client,
             ),
-            #[cfg(feature = "snowcap")]
             snowcap_decoration_state: SnowcapDecorationState::new::<State>(&display_handle),
             wl_drm_state: WlDrmState,
+            image_capture_source_state: ImageCaptureSourceState::new::<State, _>(
+                &display_handle,
+                filter_restricted_client,
+            ),
+            image_copy_capture_state: ImageCopyCaptureState::new::<State, _>(
+                &display_handle,
+                filter_restricted_client,
+            ),
 
             lock_state: LockState::default(),
 
@@ -618,7 +632,6 @@ impl Pinnacle {
         for window in self.space.elements_for_output(output) {
             window.send_frame(output, now, FRAME_CALLBACK_THROTTLE, should_send);
 
-            #[cfg(feature = "snowcap")]
             window.with_state(|state| {
                 for deco in state.decoration_surfaces.iter() {
                     deco.send_frame(output, now, FRAME_CALLBACK_THROTTLE, should_send);
@@ -708,7 +721,6 @@ impl Pinnacle {
                 }
             });
 
-            #[cfg(feature = "snowcap")]
             window.with_state(|state| {
                 for deco in state.decoration_surfaces.iter() {
                     deco.with_surfaces(|surface, states| {
@@ -830,7 +842,6 @@ impl Pinnacle {
                 );
 
                 // FIXME: get the actual overlap
-                #[cfg(feature = "snowcap")]
                 window.with_state(|state| {
                     for deco in state.decoration_surfaces.iter() {
                         deco.send_dmabuf_feedback(

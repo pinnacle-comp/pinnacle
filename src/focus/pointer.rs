@@ -49,7 +49,6 @@ impl PointerFocusTarget {
                         });
                     }
 
-                    #[cfg(feature = "snowcap")]
                     if !found {
                         win.with_state(|state| {
                             for deco in state.decoration_surfaces.iter() {

@@ -227,7 +227,6 @@ impl XwmHandler for State {
             "XwmHandler::configure_notify"
         );
 
-        #[cfg(feature = "snowcap")]
         if let Some(win) = self.pinnacle.window_for_x11_surface(&surface) {
             win.with_state(|state| {
                 for deco in state.decoration_surfaces.iter() {

@@ -63,7 +63,7 @@ use smithay::{
             protocol::{wl_shm, wl_surface::WlSurface},
         },
     },
-    utils::{DeviceFd, Rectangle, Transform},
+    utils::{DeviceFd, Point, Rectangle, Transform},
     wayland::{
         dmabuf::{self, DmabufFeedback, DmabufFeedbackBuilder, DmabufGlobal},
         presentation::Refresh,
@@ -121,7 +121,7 @@ pub struct Udev {
     pub session: LibSeatSession,
     udev_dispatcher: Dispatcher<'static, UdevBackend, State>,
     display_handle: DisplayHandle,
-    pub(super) primary_gpu: DrmNode,
+    pub primary_gpu: DrmNode,
     pub(super) gpu_manager: GpuManager<GbmGlesBackend<GlesRenderer, DrmDeviceFd>>,
     devices: HashMap<DrmNode, Device>,
     /// The global corresponding to the primary gpu
@@ -1384,6 +1384,11 @@ impl Udev {
             return;
         }
 
+        let Some(output_geo) = pinnacle.space.output_geometry(output) else {
+            make_idle(&mut surface.render_state, &pinnacle.loop_handle);
+            return;
+        };
+
         assert_matches!(
             surface.render_state,
             RenderState::Scheduled | RenderState::WaitingForEstimatedVblankAndScheduled(_)
@@ -1419,12 +1424,19 @@ impl Udev {
             || (pinnacle.lock_state.is_locked()
                 && output.with_state(|state| state.lock_surface.is_none()));
 
+        let scale = output.current_scale().fractional_scale();
+
+        let cursor_hotspot = pinnacle
+            .cursor_state
+            .cursor_hotspot(pinnacle.clock.now(), scale)
+            .unwrap_or_default();
+
         let (pointer_render_elements, cursor_ids) = pointer_render_elements(
-            output,
+            (pointer_location - output_geo.loc.to_f64()).to_physical_precise_round(scale)
+                - Point::new(cursor_hotspot.x, cursor_hotspot.y),
+            scale,
             &mut renderer,
             &mut pinnacle.cursor_state,
-            &pinnacle.space,
-            pointer_location,
             pinnacle.dnd_icon.as_ref(),
             &pinnacle.clock,
         );

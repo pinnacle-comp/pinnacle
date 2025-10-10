@@ -6,16 +6,23 @@ pub mod rules;
 use std::{cell::RefCell, collections::HashMap, ops::Deref, rc::Rc};
 
 use indexmap::IndexSet;
+use itertools::Itertools;
 use rules::{ClientRequests, WindowRules};
 use smithay::{
-    desktop::{Window, WindowSurface, WindowSurfaceType, space::SpaceElement},
+    desktop::{
+        PopupManager, Window, WindowSurface, WindowSurfaceType, space::SpaceElement,
+        utils::under_from_surface_tree,
+    },
     output::{Output, WeakOutput},
     reexports::{
-        wayland_protocols::xdg::{
-            decoration::zv1::server::zxdg_toplevel_decoration_v1,
-            shell::server::{
-                xdg_positioner::{Anchor, ConstraintAdjustment, Gravity},
-                xdg_toplevel,
+        wayland_protocols::{
+            ext::foreign_toplevel_list::v1::server::ext_foreign_toplevel_handle_v1::ExtForeignToplevelHandleV1,
+            xdg::{
+                decoration::zv1::server::zxdg_toplevel_decoration_v1,
+                shell::server::{
+                    xdg_positioner::{Anchor, ConstraintAdjustment, Gravity},
+                    xdg_toplevel,
+                },
             },
         },
         wayland_server::protocol::wl_surface::WlSurface,
@@ -23,6 +30,7 @@ use smithay::{
     utils::{IsAlive, Logical, Point, Rectangle, Serial, Size},
     wayland::{
         compositor,
+        foreign_toplevel_list::ForeignToplevelHandle,
         seat::WaylandFocus,
         shell::xdg::{PositionerState, SurfaceCachedState, XdgToplevelSurfaceData},
         xdg_activation::XdgActivationTokenData,
@@ -182,34 +190,27 @@ impl WindowElement {
 
     pub fn set_pending_geo(&self, size: Size<i32, Logical>, loc: Option<Point<i32, Logical>>) {
         let (mut size, loc) = {
-            #[cfg(feature = "snowcap")]
+            // Not `should_not_have_ssd`, we need the calculation done beforehand
+            if self.with_state(|state| {
+                state.layout_mode.is_fullscreen()
+                    || state.decoration_mode == Some(zxdg_toplevel_decoration_v1::Mode::ClientSide)
+            }) || self
+                .x11_surface()
+                .is_some_and(|surface| surface.is_decorated())
             {
-                // Not `should_not_have_ssd`, we need the calculation done beforehand
-                if self.with_state(|state| {
-                    state.layout_mode.is_fullscreen()
-                        || state.decoration_mode
-                            == Some(zxdg_toplevel_decoration_v1::Mode::ClientSide)
-                }) || self
-                    .x11_surface()
-                    .is_some_and(|surface| surface.is_decorated())
-                {
-                    (size, loc)
-                } else {
-                    let mut size = size;
-                    let mut loc = loc;
-                    let max_bounds = self.with_state(|state| state.max_decoration_bounds());
-                    if let Some(loc) = loc.as_mut() {
-                        loc.x += max_bounds.left as i32;
-                        loc.y += max_bounds.top as i32;
-                    }
-                    size.w = i32::max(1, size.w - max_bounds.left as i32 - max_bounds.right as i32);
-                    size.h = i32::max(1, size.h - max_bounds.top as i32 - max_bounds.bottom as i32);
-                    (size, loc)
+                (size, loc)
+            } else {
+                let mut size = size;
+                let mut loc = loc;
+                let max_bounds = self.with_state(|state| state.max_decoration_bounds());
+                if let Some(loc) = loc.as_mut() {
+                    loc.x += max_bounds.left as i32;
+                    loc.y += max_bounds.top as i32;
                 }
+                size.w = i32::max(1, size.w - max_bounds.left as i32 - max_bounds.right as i32);
+                size.h = i32::max(1, size.h - max_bounds.top as i32 - max_bounds.bottom as i32);
+                (size, loc)
             }
-
-            #[cfg(not(feature = "snowcap"))]
-            (size, loc)
         };
 
         size.w = size.w.max(1);
@@ -230,27 +231,26 @@ impl WindowElement {
         }
     }
 
-    /// Gets this window's geometry *taking into account bounds*.
+    /// Gets this window's geometry *taking into account decoration bounds*.
     pub fn geometry(&self) -> Rectangle<i32, Logical> {
-        #[cfg(feature = "snowcap")]
-        {
-            let mut geometry = self.0.geometry();
+        let mut geometry = self.0.geometry();
 
-            if self.should_not_have_ssd() {
-                return geometry;
-            }
-
-            let max_bounds = self.with_state(|state| state.max_decoration_bounds());
-
-            geometry.size.w += (max_bounds.left + max_bounds.right) as i32;
-            geometry.size.h += (max_bounds.top + max_bounds.bottom) as i32;
-            geometry.loc.x -= max_bounds.left as i32;
-            geometry.loc.y -= max_bounds.top as i32;
-
-            geometry
+        if self.should_not_have_ssd() {
+            return geometry;
         }
 
-        #[cfg(not(feature = "snowcap"))]
+        let max_bounds = self.with_state(|state| state.max_decoration_bounds());
+
+        geometry.size.w += (max_bounds.left + max_bounds.right) as i32;
+        geometry.size.h += (max_bounds.top + max_bounds.bottom) as i32;
+        geometry.loc.x -= max_bounds.left as i32;
+        geometry.loc.y -= max_bounds.top as i32;
+
+        geometry
+    }
+
+    /// Gets this window's geometry ignoring decoration bounds.
+    pub fn geometry_without_decorations(&self) -> Rectangle<i32, Logical> {
         self.0.geometry()
     }
 
@@ -261,97 +261,79 @@ impl WindowElement {
         point: P,
         surface_type: WindowSurfaceType,
     ) -> Option<(WlSurface, Point<i32, Logical>)> {
-        #[cfg(feature = "snowcap")]
-        {
-            use itertools::Itertools;
-            use smithay::desktop::PopupManager;
-            use smithay::desktop::utils::under_from_surface_tree;
-
-            if self.should_not_have_ssd() {
-                return self.0.surface_under(point, surface_type);
-            }
-
-            let point = point.into();
-
-            let max_bounds = self.with_state(|state| state.max_decoration_bounds());
-
-            // Check for popups.
-            if let Some(surface) = self.wl_surface()
-                && surface_type.contains(WindowSurfaceType::POPUP)
-            {
-                // Popups are located relative to the actual window,
-                // so offset by the decoration offset.
-                let bounds_offset = Point::new(max_bounds.left as i32, max_bounds.top as i32);
-
-                for (popup, location) in PopupManager::popups_for_surface(&surface) {
-                    let offset = self.geometry().loc + location - popup.geometry().loc;
-                    let surf = under_from_surface_tree(
-                        popup.wl_surface(),
-                        point,
-                        offset + bounds_offset,
-                        surface_type,
-                    );
-                    if surf.is_some() {
-                        return surf;
-                    }
-                }
-            }
-
-            if !surface_type.contains(WindowSurfaceType::TOPLEVEL) {
-                return None;
-            }
-
-            let mut decos = self.with_state(|state| state.decoration_surfaces.clone());
-            decos.sort_by_key(|deco| deco.z_index());
-            let mut decos = decos.into_iter().rev().peekable();
-
-            // Check for decoration surfaces above the window.
-            for deco in decos.peeking_take_while(|deco| deco.z_index() >= 0) {
-                let bounds_offset = Point::new(
-                    (max_bounds.left - deco.bounds().left) as i32,
-                    (max_bounds.top - deco.bounds().top) as i32,
-                );
-                let surf = under_from_surface_tree(
-                    deco.wl_surface(),
-                    point,
-                    deco.location() + self.geometry().loc + bounds_offset,
-                    surface_type,
-                );
-                if surf.is_some() {
-                    return surf;
-                }
-            }
-
-            // Check for the window itself.
-            if let Some(surface) = self.wl_surface() {
-                let surf = under_from_surface_tree(&surface, point, (0, 0), surface_type);
-                if surf.is_some() {
-                    return surf;
-                }
-            }
-
-            // Check for decoration surfaces below the window.
-            for deco in decos {
-                let bounds_offset = Point::new(
-                    (max_bounds.left - deco.bounds().left) as i32,
-                    (max_bounds.top - deco.bounds().top) as i32,
-                );
-                let surf = under_from_surface_tree(
-                    deco.wl_surface(),
-                    point,
-                    deco.location() + self.geometry().loc + bounds_offset,
-                    surface_type,
-                );
-                if surf.is_some() {
-                    return surf;
-                }
-            }
-
-            None
+        if self.should_not_have_ssd() {
+            return self.0.surface_under(point, surface_type);
         }
 
-        #[cfg(not(feature = "snowcap"))]
-        self.0.surface_under(point, surface_type)
+        let point = point.into();
+
+        // Popups are located relative to the actual window,
+        // so offset by the decoration offset.
+        let total_deco_offset = self.total_decoration_offset();
+
+        // Check for popups.
+        if let Some(surface) = self.wl_surface()
+            && surface_type.contains(WindowSurfaceType::POPUP)
+        {
+            for (popup, location) in PopupManager::popups_for_surface(&surface) {
+                let offset = self.geometry().loc + location - popup.geometry().loc;
+                let surf = under_from_surface_tree(
+                    popup.wl_surface(),
+                    point,
+                    offset + total_deco_offset,
+                    surface_type,
+                );
+                if surf.is_some() {
+                    return surf;
+                }
+            }
+        }
+
+        if !surface_type.contains(WindowSurfaceType::TOPLEVEL) {
+            return None;
+        }
+
+        let mut decos = self.with_state(|state| state.decoration_surfaces.clone());
+        decos.sort_by_key(|deco| deco.z_index());
+        let mut decos = decos.into_iter().rev().peekable();
+
+        // Check for decoration surfaces above the window.
+        for deco in decos.peeking_take_while(|deco| deco.z_index() >= 0) {
+            let offset = total_deco_offset - deco.offset();
+            let surf = under_from_surface_tree(
+                deco.wl_surface(),
+                point,
+                deco.location() + self.geometry().loc + offset,
+                surface_type,
+            );
+            if surf.is_some() {
+                return surf;
+            }
+        }
+
+        // Check for the window itself.
+        if let Some(surface) = self.wl_surface() {
+            let surf = under_from_surface_tree(&surface, point, (0, 0), surface_type);
+            if surf.is_some() {
+                return surf;
+            }
+        }
+
+        // Check for decoration surfaces below the window.
+        for deco in decos {
+            let offset = total_deco_offset - deco.offset();
+            let surf = under_from_surface_tree(
+                deco.wl_surface(),
+                point,
+                deco.location() + self.geometry().loc + offset,
+                surface_type,
+            );
+            if surf.is_some() {
+                return surf;
+            }
+        }
+
+        None
     }
 
     pub fn should_not_have_ssd(&self) -> bool {
@@ -390,52 +372,38 @@ impl SpaceElement for WindowElement {
     }
 
     fn bbox(&self) -> Rectangle<i32, Logical> {
-        #[cfg(feature = "snowcap")]
-        {
-            if self.should_not_have_ssd() {
-                return self.0.bbox();
-            }
-
-            let mut bbox = self.0.bbox();
-            self.with_state(|state| {
-                for deco in state.decoration_surfaces.iter() {
-                    // FIXME: verify this
-                    bbox = bbox.merge(deco.bbox());
-                }
-            });
-            bbox
+        if self.should_not_have_ssd() {
+            return self.0.bbox();
         }
 
-        #[cfg(not(feature = "snowcap"))]
-        self.0.bbox()
+        let mut bbox = self.0.bbox();
+        self.with_state(|state| {
+            for deco in state.decoration_surfaces.iter() {
+                // FIXME: verify this
+                bbox = bbox.merge(deco.bbox());
+            }
+        });
+        bbox
     }
 
     fn is_in_input_region(&self, point: &Point<f64, Logical>) -> bool {
-        #[cfg(feature = "snowcap")]
-        {
-            use itertools::Itertools;
-
-            if self.should_not_have_ssd() {
-                return self.0.is_in_input_region(point);
-            }
-
-            let mut decos = self.with_state(|state| state.decoration_surfaces.clone());
-            decos.sort_by_key(|deco| deco.z_index());
-            let mut decos = decos.into_iter().rev().peekable();
-
-            let max_bounds = self.with_state(|state| state.max_decoration_bounds());
-
-            decos
-                .peeking_take_while(|deco| deco.z_index() >= 0)
-                .any(|deco| deco.surface_under(*point, WindowSurfaceType::ALL).is_some())
-                || self.0.is_in_input_region(
-                    &(*point - Point::new(max_bounds.left as f64, max_bounds.top as f64)),
-                )
-                || decos.any(|deco| deco.surface_under(*point, WindowSurfaceType::ALL).is_some())
+        if self.should_not_have_ssd() {
+            return self.0.is_in_input_region(point);
         }
 
-        #[cfg(not(feature = "snowcap"))]
-        self.0.is_in_input_region(point)
+        let point = *point;
+
+        let mut decos = self.with_state(|state| state.decoration_surfaces.clone());
+        decos.sort_by_key(|deco| deco.z_index());
+        let mut decos = decos.into_iter().rev().peekable();
+
+        let deco_offset = self.total_decoration_offset();
+
+        decos
+            .peeking_take_while(|deco| deco.z_index() >= 0)
+            .any(|deco| deco.surface_under(point, WindowSurfaceType::ALL).is_some())
+            || self.0.is_in_input_region(&(point - deco_offset.to_f64()))
+            || decos.any(|deco| deco.surface_under(point, WindowSurfaceType::ALL).is_some())
     }
 
     fn set_activate(&self, activated: bool) {
@@ -560,6 +528,30 @@ impl Pinnacle {
                 .wl_surface()
                 .is_some_and(|surf| &*surf == surface)
         })
+    }
+
+    pub fn window_for_foreign_toplevel_handle(
+        &self,
+        handle: &ExtForeignToplevelHandleV1,
+    ) -> Option<&WindowElement> {
+        let handle = ForeignToplevelHandle::from_resource(handle)?;
+
+        self.windows
+            .iter()
+            .chain(
+                self.unmapped_windows
+                    .iter()
+                    .map(|unmapped| &unmapped.window),
+            )
+            .find(|win| {
+                win.with_state(|state| {
+                    state
+                        .foreign_toplevel_list_handle
+                        .as_ref()
+                        .map(|handle| handle.identifier())
+                        == Some(handle.identifier())
+                })
+            })
     }
 
     /// Removes a window from the main window vec, z_index stack, and focus stacks.

@@ -5,7 +5,10 @@ use std::{collections::HashMap, rc::Rc};
 
 use anyhow::Context;
 use smithay::backend::allocator::Fourcc;
-use smithay::utils::IsAlive;
+use smithay::desktop::utils::bbox_from_surface_tree;
+use smithay::input::pointer::CursorImageSurfaceData;
+use smithay::utils::{Buffer, IsAlive, Monotonic, Point, Rectangle, Time};
+use smithay::wayland::compositor;
 use smithay::{
     backend::renderer::element::memory::MemoryRenderBuffer,
     input::pointer::{CursorIcon, CursorImageStatus},
@@ -140,6 +143,62 @@ impl CursorState {
             CursorImageStatus::Surface(surface) => PointerElement::Surface {
                 surface: surface.clone(),
             },
+        }
+    }
+
+    pub fn cursor_geometry(
+        &mut self,
+        time: Time<Monotonic>,
+        scale: f64,
+    ) -> Option<Rectangle<i32, Buffer>> {
+        match self.pointer_element() {
+            PointerElement::Hidden => None,
+            PointerElement::Named { cursor, size } => {
+                let image = cursor.image(time.into(), size * scale.ceil() as u32);
+                let geo = Rectangle::from_size((image.width as i32, image.height as i32).into());
+                Some(geo)
+            }
+            PointerElement::Surface { surface } => {
+                let geo = bbox_from_surface_tree(&surface, (0, 0));
+                let buffer_geo = Rectangle::new(
+                    (geo.loc.x, geo.loc.y).into(),
+                    geo.size
+                        .to_f64()
+                        .to_buffer(scale, Transform::Normal)
+                        .to_i32_round(),
+                );
+                Some(buffer_geo)
+            }
+        }
+    }
+
+    pub fn cursor_hotspot(
+        &mut self,
+        time: Time<Monotonic>,
+        scale: f64,
+    ) -> Option<Point<i32, Buffer>> {
+        match self.pointer_element() {
+            PointerElement::Hidden => None,
+            PointerElement::Named { cursor, size } => {
+                let image = cursor.image(time.into(), size * scale.ceil() as u32);
+                let hotspot = (image.xhot as i32, image.yhot as i32);
+                Some(Point::from(hotspot).downscale(scale.ceil() as i32))
+            }
+            PointerElement::Surface { surface } => {
+                let hotspot: Point<i32, _> = compositor::with_states(&surface, |states| {
+                    states
+                        .data_map
+                        .get::<CursorImageSurfaceData>()
+                        .unwrap()
+                        .lock()
+                        .unwrap()
+                        .hotspot
+                })
+                .to_f64()
+                .upscale(scale)
+                .to_i32_round();
+                Some((hotspot.x, hotspot.y).into())
+            }
         }
     }
 
