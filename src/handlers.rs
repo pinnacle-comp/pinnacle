@@ -1030,7 +1030,7 @@ impl Pinnacle {
 
         let deco_offset = self
             .window_for_surface(&root)
-            .map(|win| win.with_state(|state| state.total_decoration_offset()))
+            .map(|win| win.total_decoration_offset())
             .unwrap_or_default();
 
         if parent == root {

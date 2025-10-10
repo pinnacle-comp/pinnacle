@@ -264,7 +264,7 @@ impl WindowElement {
 
         // Popups are located relative to the actual window,
         // so offset by the decoration offset.
-        let total_deco_offset = self.with_state(|state| state.total_decoration_offset());
+        let total_deco_offset = self.total_decoration_offset();
 
         // Check for popups.
         if let Some(surface) = self.wl_surface()
@@ -392,7 +392,7 @@ impl SpaceElement for WindowElement {
         decos.sort_by_key(|deco| deco.z_index());
         let mut decos = decos.into_iter().rev().peekable();
 
-        let deco_offset = self.with_state(|state| state.total_decoration_offset());
+        let deco_offset = self.total_decoration_offset();
 
         decos
             .peeking_take_while(|deco| deco.z_index() >= 0)

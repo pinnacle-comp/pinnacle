@@ -547,6 +547,14 @@ impl WindowElement {
                 .and_then(|toplevel| toplevel.send_pending_configure())
         }
     }
+
+    pub fn total_decoration_offset(&self) -> Point<i32, Logical> {
+        if self.should_not_have_ssd() {
+            Default::default()
+        } else {
+            self.with_state(|state| state.total_decoration_offset())
+        }
+    }
 }
 
 impl Pinnacle {
@@ -712,7 +720,7 @@ impl WindowElementState {
         max_bounds
     }
 
-    pub fn total_decoration_offset(&self) -> Point<i32, Logical> {
+    fn total_decoration_offset(&self) -> Point<i32, Logical> {
         Point::new(
             self.max_decoration_bounds().left as i32,
             self.max_decoration_bounds().top as i32,

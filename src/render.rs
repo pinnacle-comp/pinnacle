@@ -152,7 +152,7 @@ impl WindowElement {
         let _span = tracy_client::span!("WindowElement::render_elements");
 
         let total_deco_offset = if include_decorations {
-            self.with_state(|state| state.total_decoration_offset())
+            self.total_decoration_offset()
         } else {
             Default::default()
         };
@@ -268,9 +268,8 @@ impl WindowElement {
         let (deco_elems_under, deco_elems_over) = if self.should_not_have_ssd() {
             (Vec::new(), Vec::new())
         } else {
+            let total_deco_offset = self.total_decoration_offset();
             self.with_state(|state| {
-                let total_deco_offset = state.total_decoration_offset();
-
                 let mut surfaces = state.decoration_surfaces.iter().collect::<Vec<_>>();
                 surfaces.sort_by_key(|deco| deco.z_index());
                 let mut surfaces = surfaces.into_iter().rev().peekable();

@@ -224,9 +224,7 @@ impl State {
                                 let pointer_loc =
                                     self.pinnacle.seat.get_pointer().unwrap().current_location()
                                         - win_loc.to_f64()
-                                        - win
-                                            .with_state(|state| state.total_decoration_offset())
-                                            .to_f64();
+                                        - win.total_decoration_offset().to_f64();
 
                                 let (pointer_elements, _) = pointer_render_elements(
                                     pointer_loc.to_physical_precise_round(scale)
@@ -464,11 +462,8 @@ impl State {
             })
             .unwrap_or(1.0);
 
-            let cursor_loc = cursor_loc
-                - window_loc.to_f64()
-                - window
-                    .with_state(|state| state.total_decoration_offset())
-                    .to_f64();
+            let cursor_loc =
+                cursor_loc - window_loc.to_f64() - window.total_decoration_offset().to_f64();
 
             let cursor_loc: Point<i32, Physical> =
                 cursor_loc.to_physical_precise_round(fractional_scale);

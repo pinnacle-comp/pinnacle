@@ -419,11 +419,8 @@ impl State {
                     // FIXME: Don't do this here
                     // `loc` includes bounds but we need to configure the x11 surface
                     // with its actual location
-                    if !window.should_not_have_ssd() {
-                        let deco_offset =
-                            window.with_state(|state| state.total_decoration_offset());
-                        configure_loc += deco_offset;
-                    }
+                    configure_loc += window.total_decoration_offset();
+
                     let _ =
                         surface.configure(Rectangle::new(configure_loc, surface.geometry().size));
                 }
