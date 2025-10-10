@@ -153,6 +153,16 @@ local signal_name_to_SignalName = {
     pointer_leave = "WindowPointerLeave",
     focused = "WindowFocused",
     title_changed = "WindowTitleChanged",
+    set_floating = "WindowSetFloating",
+    unset_floating = "WindowUnsetFloating",
+    set_tiled = "WindowSetTiled",
+    unset_tiled = "WindowUnsetTiled",
+    set_maximized = "WindowSetMaximized",
+    unset_maximized = "WindowUnsetMaximized",
+    set_fullscreen = "WindowSetFullscreen",
+    unset_fullscreen = "WindowUnsetFullscreen",
+    set_spilled = "WindowSetSpilled",
+    unset_spilled = "WindowUnsetSpilled",
 }
 
 ---@class pinnacle.window.WindowSignal Signals related to compositor events.
@@ -160,6 +170,16 @@ local signal_name_to_SignalName = {
 ---@field pointer_leave fun(window: pinnacle.window.WindowHandle)? The pointer left a window.
 ---@field focused fun(window: pinnacle.window.WindowHandle)? The window got keyboard focus.
 ---@field title_changed fun(window: pinnacle.window.WindowHandle, title: string)? A window's title changed.
+---@field set_floating fun(window: pinnacle.window.WindowHandle)? A window entered floating mode.
+---@field unset_floating fun(window: pinnacle.window.WindowHandle)? A window left floating mode.
+---@field set_tiled fun(window: pinnacle.window.WindowHandle)? A window entered tiled mode.
+---@field unset_tiled fun(window: pinnacle.window.WindowHandle)? A window left tiled mode.
+---@field set_maximized fun(window: pinnacle.window.WindowHandle)? A window entered maximized mode.
+---@field unset_maximized fun(window: pinnacle.window.WindowHandle)? A window left maximized mode.
+---@field set_fullscreen fun(window: pinnacle.window.WindowHandle)? A window entered fullscreen mode.
+---@field unset_fullscreen fun(window: pinnacle.window.WindowHandle)? A window left fullscreen mode.
+---@field set_spilled fun(window: pinnacle.window.WindowHandle)? A window entered spilled mode.
+---@field unset_spilled fun(window: pinnacle.window.WindowHandle)? A window left spilled mode.
 
 ---Connects to a window signal.
 ---

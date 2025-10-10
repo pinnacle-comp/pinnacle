@@ -73,6 +73,16 @@ pub mod pinnacle {
                 WindowPointerLeaveRequest,
                 WindowFocusedRequest,
                 WindowTitleChangedRequest,
+                WindowSetFloatingRequest,
+                WindowUnsetFloatingRequest,
+                WindowSetTiledRequest,
+                WindowUnsetTiledRequest,
+                WindowSetMaximizedRequest,
+                WindowUnsetMaximizedRequest,
+                WindowSetFullscreenRequest,
+                WindowUnsetFullscreenRequest,
+                WindowSetSpilledRequest,
+                WindowUnsetSpilledRequest,
                 TagActiveRequest,
                 InputDeviceAddedRequest
             );
