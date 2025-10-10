@@ -477,8 +477,8 @@ impl State {
 
             cursor_geo.loc += cursor_loc;
 
-            let buffer_size: Size<i32, Physical> = (**window)
-                .geometry()
+            let buffer_size: Size<i32, Physical> = window
+                .geometry_without_decorations()
                 .size
                 .to_f64()
                 .to_physical_precise_round(fractional_scale);
@@ -636,8 +636,8 @@ impl Pinnacle {
                         .unwrap_or(Rectangle::from_size((1, 1).into()));
                     Some((geo.size, fractional_scale))
                 } else {
-                    let size = (*window)
-                        .geometry()
+                    let size = window
+                        .geometry_without_decorations()
                         .size
                         .to_f64()
                         .to_buffer(fractional_scale, Transform::Normal)

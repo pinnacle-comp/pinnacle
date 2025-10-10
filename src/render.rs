@@ -160,7 +160,7 @@ impl WindowElement {
         let window_location = if include_decorations {
             self.geometry().loc
         } else {
-            (**self).geometry().loc
+            self.geometry_without_decorations().loc
         };
 
         let window_location = (location - window_location).to_physical_precise_round(scale);

@@ -231,7 +231,7 @@ impl WindowElement {
         }
     }
 
-    /// Gets this window's geometry *taking into account bounds*.
+    /// Gets this window's geometry *taking into account decoration bounds*.
     pub fn geometry(&self) -> Rectangle<i32, Logical> {
         let mut geometry = self.0.geometry();
 
@@ -247,6 +247,11 @@ impl WindowElement {
         geometry.loc.y -= max_bounds.top as i32;
 
         geometry
+    }
+
+    /// Gets this window's geometry ignoring decoration bounds.
+    pub fn geometry_without_decorations(&self) -> Rectangle<i32, Logical> {
+        self.0.geometry()
     }
 
     /// Returns the surface under the given point relative to
