@@ -200,10 +200,10 @@ impl State {
                         .with_renderer(|renderer| {
                             let win_loc = self.pinnacle.space.element_location(&win);
                             let pointer_elements = if let Some(win_loc) = win_loc {
-                                let (_, hotspot) = self
+                                let hotspot = self
                                     .pinnacle
                                     .cursor_state
-                                    .cursor_geometry_and_hotspot(self.pinnacle.clock.now(), scale)
+                                    .cursor_hotspot(self.pinnacle.clock.now(), scale)
                                     .unwrap_or_default();
 
                                 let pointer_loc =
@@ -311,16 +311,17 @@ impl State {
                             continue;
                         };
 
-                        let (_, hotspot) = self
+                        let hotspot = self
                             .pinnacle
                             .cursor_state
-                            .cursor_geometry_and_hotspot(self.pinnacle.clock.now(), scale)
+                            .cursor_hotspot(self.pinnacle.clock.now(), scale)
                             .unwrap_or_default();
 
                         let pointer_loc =
                             self.pinnacle.seat.get_pointer().unwrap().current_location()
                                 - output_geo.loc.to_f64();
                         let scale = output.current_scale().fractional_scale();
+
                         self.backend
                             .with_renderer(|renderer| {
                                 let (pointer_elements, _) = pointer_render_elements(
@@ -391,12 +392,14 @@ impl State {
             .to_physical_precise_round(output.current_scale().fractional_scale());
             let cursor_loc: Point<i32, Buffer> = (cursor_loc.x, cursor_loc.y).into();
 
-            let Some((mut cursor_geo, _)) = self.pinnacle.cursor_state.cursor_geometry_and_hotspot(
-                self.pinnacle.clock.now(),
-                output.current_scale().fractional_scale(),
-            ) else {
-                continue;
-            };
+            let mut cursor_geo = self
+                .pinnacle
+                .cursor_state
+                .cursor_geometry(
+                    self.pinnacle.clock.now(),
+                    output.current_scale().fractional_scale(),
+                )
+                .unwrap_or_default();
 
             cursor_geo.loc += cursor_loc;
 
@@ -448,13 +451,11 @@ impl State {
                 cursor_loc.to_physical_precise_round(fractional_scale);
             let cursor_loc: Point<i32, Buffer> = (cursor_loc.x, cursor_loc.y).into();
 
-            let Some((mut cursor_geo, _)) = self
+            let mut cursor_geo = self
                 .pinnacle
                 .cursor_state
-                .cursor_geometry_and_hotspot(self.pinnacle.clock.now(), fractional_scale)
-            else {
-                continue;
-            };
+                .cursor_geometry(self.pinnacle.clock.now(), fractional_scale)
+                .unwrap_or_default();
 
             cursor_geo.loc += cursor_loc;
 
@@ -586,10 +587,7 @@ impl Pinnacle {
                 let scale = output.current_scale().fractional_scale();
 
                 if matches!(session.cursor(), Cursor::Standalone { .. }) {
-                    let (geo, hotspot) = self
-                        .cursor_state
-                        .cursor_geometry_and_hotspot(self.clock.now(), scale)?;
-                    self.image_copy_capture_state.set_cursor_hotspot(hotspot);
+                    let geo = self.cursor_state.cursor_geometry(self.clock.now(), scale)?;
                     Some((geo.size, scale))
                 } else {
                     let size = output.current_mode()?.size;
@@ -607,10 +605,9 @@ impl Pinnacle {
                 })?;
 
                 if matches!(session.cursor(), Cursor::Standalone { .. }) {
-                    let (geo, hotspot) = self
+                    let geo = self
                         .cursor_state
-                        .cursor_geometry_and_hotspot(self.clock.now(), fractional_scale)?;
-                    self.image_copy_capture_state.set_cursor_hotspot(hotspot);
+                        .cursor_geometry(self.clock.now(), fractional_scale)?;
                     Some((geo.size, fractional_scale))
                 } else {
                     let size = (*window)

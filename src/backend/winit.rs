@@ -246,9 +246,9 @@ impl Winit {
             let output_loc = pinnacle.space.output_geometry(&self.output).unwrap().loc;
             let scale = self.output.current_scale().fractional_scale();
 
-            let (_, cursor_hotspot) = pinnacle
+            let cursor_hotspot = pinnacle
                 .cursor_state
-                .cursor_geometry_and_hotspot(pinnacle.clock.now(), scale)
+                .cursor_hotspot(pinnacle.clock.now(), scale)
                 .unwrap_or_default();
 
             let (pointer_render_elements, _cursor_ids) = pointer_render_elements(

@@ -146,18 +146,43 @@ impl CursorState {
         }
     }
 
-    pub fn cursor_geometry_and_hotspot(
+    pub fn cursor_geometry(
         &mut self,
         time: Time<Monotonic>,
         scale: f64,
-    ) -> Option<(Rectangle<i32, Buffer>, Point<i32, Buffer>)> {
+    ) -> Option<Rectangle<i32, Buffer>> {
+        match self.pointer_element() {
+            PointerElement::Hidden => None,
+            PointerElement::Named { cursor, size } => {
+                let image = cursor.image(time.into(), size * scale.ceil() as u32);
+                let geo = Rectangle::from_size((image.width as i32, image.height as i32).into());
+                Some(geo)
+            }
+            PointerElement::Surface { surface } => {
+                let geo = bbox_from_surface_tree(&surface, (0, 0));
+                let buffer_geo = Rectangle::new(
+                    (geo.loc.x, geo.loc.y).into(),
+                    geo.size
+                        .to_f64()
+                        .to_buffer(scale, Transform::Normal)
+                        .to_i32_round(),
+                );
+                Some(buffer_geo)
+            }
+        }
+    }
+
+    pub fn cursor_hotspot(
+        &mut self,
+        time: Time<Monotonic>,
+        scale: f64,
+    ) -> Option<Point<i32, Buffer>> {
         match self.pointer_element() {
             PointerElement::Hidden => None,
             PointerElement::Named { cursor, size } => {
                 let image = cursor.image(time.into(), size * scale.ceil() as u32);
                 let hotspot = (image.xhot as i32, image.yhot as i32);
-                let geo = Rectangle::from_size((image.width as i32, image.height as i32).into());
-                Some((geo, Point::from(hotspot).downscale(scale.ceil() as i32)))
+                Some(Point::from(hotspot).downscale(scale.ceil() as i32))
             }
             PointerElement::Surface { surface } => {
                 let hotspot: Point<i32, _> = compositor::with_states(&surface, |states| {
@@ -172,15 +197,7 @@ impl CursorState {
                 .to_f64()
                 .upscale(scale)
                 .to_i32_round();
-                let geo = bbox_from_surface_tree(&surface, (0, 0));
-                let buffer_geo = Rectangle::new(
-                    (geo.loc.x, geo.loc.y).into(),
-                    geo.size
-                        .to_f64()
-                        .to_buffer(scale, Transform::Normal)
-                        .to_i32_round(),
-                );
-                Some((buffer_geo, (hotspot.x, hotspot.y).into()))
+                Some((hotspot.x, hotspot.y).into())
             }
         }
     }

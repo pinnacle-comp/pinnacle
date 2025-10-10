@@ -1426,9 +1426,9 @@ impl Udev {
 
         let scale = output.current_scale().fractional_scale();
 
-        let (_, cursor_hotspot) = pinnacle
+        let cursor_hotspot = pinnacle
             .cursor_state
-            .cursor_geometry_and_hotspot(pinnacle.clock.now(), scale)
+            .cursor_hotspot(pinnacle.clock.now(), scale)
             .unwrap_or_default();
 
         let (pointer_render_elements, cursor_ids) = pointer_render_elements(
