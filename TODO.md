@@ -8,6 +8,7 @@
 
 - Snowcap crashes when a window opens and immediately closes because the foreign toplevel handle is no longer valid
 - Cursor position when scaled is wrong
+- Add DND surfaces to cursor captures
 
 Testing
 - Test layout mode changing and how it interacts with client fullscreen/maximized requests

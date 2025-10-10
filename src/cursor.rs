@@ -181,8 +181,12 @@ impl CursorState {
             PointerElement::Hidden => None,
             PointerElement::Named { cursor, size } => {
                 let image = cursor.image(time.into(), size * scale.ceil() as u32);
-                let hotspot = (image.xhot as i32, image.yhot as i32);
-                Some(Point::from(hotspot).downscale(scale.ceil() as i32))
+                let hotspot = Point::new(image.xhot as i32, image.yhot as i32)
+                    .downscale(scale.ceil() as i32)
+                    .to_f64()
+                    .upscale(scale)
+                    .to_i32_round();
+                Some(hotspot)
             }
             PointerElement::Surface { surface } => {
                 let hotspot: Point<i32, _> = compositor::with_states(&surface, |states| {
