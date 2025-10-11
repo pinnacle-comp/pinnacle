@@ -1,3 +1,4 @@
+use anyhow::Context;
 use snowcap_api_defs::snowcap::decoration::v1::{
     CloseRequest, CloseResponse, NewDecorationRequest, NewDecorationResponse,
     OperateDecorationRequest, OperateDecorationResponse, UpdateDecorationRequest,
@@ -9,7 +10,7 @@ use tracing::warn;
 use crate::{
     api::{run_unary, widget::v1::widget_def_to_fn},
     decoration::{DecorationId, SnowcapDecoration},
-    util::convert::FromApi,
+    util::convert::TryFromApi,
 };
 
 #[tonic::async_trait]
@@ -151,7 +152,17 @@ impl decoration_service_server::DecorationService for super::DecorationService {
                 return Ok(OperateDecorationResponse {});
             };
 
-            decoration.operate(FromApi::from_api(operation));
+            let operation =
+                TryFromApi::try_from_api(operation).context("While processing OperateLayerRequest");
+            let operation = match operation {
+                Err(e) => {
+                    tracing::error!("{e:?}");
+                    return Ok(OperateDecorationResponse {});
+                }
+                Ok(o) => o,
+            };
+
+            decoration.operate(operation);
 
             Ok(OperateDecorationResponse {})
         })

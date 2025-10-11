@@ -1,38 +1,51 @@
 //! Widget operations
 
+use anyhow::Context;
 use iced_runtime::core::widget;
 use snowcap_api_defs::snowcap::operation;
 
-use crate::util::convert::FromApi;
+use crate::util::convert::{FromApi, TryFromApi};
 
-impl FromApi<operation::v1::Operation> for Box<dyn widget::Operation + 'static> {
-    fn from_api(api_type: operation::v1::Operation) -> Self {
-        // FIXME remove expect
-        api_type
-            .target
-            .map(FromApi::from_api)
-            .expect("Operations should have a target")
+impl TryFromApi<operation::v1::Operation> for Box<dyn widget::Operation + 'static> {
+    type Error = anyhow::Error;
+
+    fn try_from_api(api_type: operation::v1::Operation) -> Result<Self, Self::Error> {
+        const MESSAGE: &str = "snowcap.operation.v1.Operation";
+        const FIELD: &str = "target";
+
+        let Some(target) = api_type.target else {
+            anyhow::bail!("While converting {MESSAGE}: missing field '{FIELD}")
+        };
+
+        TryFromApi::try_from_api(target)
+            .with_context(|| format!("While converting {MESSAGE}.{FIELD}"))
     }
 }
 
-impl FromApi<operation::v1::operation::Target> for Box<dyn widget::Operation + 'static> {
-    fn from_api(api_type: operation::v1::operation::Target) -> Self {
+impl TryFromApi<operation::v1::operation::Target> for Box<dyn widget::Operation + 'static> {
+    type Error = anyhow::Error;
+
+    fn try_from_api(api_type: operation::v1::operation::Target) -> Result<Self, Self::Error> {
         use operation::v1::operation::Target;
 
         match api_type {
-            Target::Focusable(focusable) => FromApi::from_api(focusable),
-            Target::TextInput(text_input) => FromApi::from_api(text_input),
+            Target::Focusable(focusable) => TryFromApi::try_from_api(focusable),
+            Target::TextInput(text_input) => TryFromApi::try_from_api(text_input),
         }
     }
 }
 
-impl FromApi<operation::v1::Focusable> for Box<dyn widget::Operation + 'static> {
-    fn from_api(api_type: operation::v1::Focusable) -> Self {
-        // FIXME remove expect
-        api_type
-            .op
-            .map(FromApi::from_api)
-            .expect("Focusable should have an operation")
+impl TryFromApi<operation::v1::Focusable> for Box<dyn widget::Operation + 'static> {
+    type Error = anyhow::Error;
+
+    fn try_from_api(api_type: operation::v1::Focusable) -> Result<Self, Self::Error> {
+        const MESSAGE: &str = "snowcap.operation.v1.Focusable";
+
+        let Some(op) = api_type.op else {
+            anyhow::bail!("While converting {MESSAGE}: missing field 'op'")
+        };
+
+        Ok(FromApi::from_api(op))
     }
 }
 
@@ -51,13 +64,17 @@ impl FromApi<operation::v1::focusable::Op> for Box<dyn widget::Operation + 'stat
     }
 }
 
-impl FromApi<operation::v1::TextInput> for Box<dyn widget::Operation + 'static> {
-    fn from_api(api_type: operation::v1::TextInput) -> Self {
-        // FIXME remove expect
-        api_type
-            .op
-            .map(FromApi::from_api)
-            .expect("TextInput should have an operation")
+impl TryFromApi<operation::v1::TextInput> for Box<dyn widget::Operation + 'static> {
+    type Error = anyhow::Error;
+
+    fn try_from_api(api_type: operation::v1::TextInput) -> Result<Self, Self::Error> {
+        const MESSAGE: &str = "snowcap.operation.v1.TextInput";
+
+        let Some(op) = api_type.op else {
+            anyhow::bail!("While converting {MESSAGE}: missing field 'op");
+        };
+
+        Ok(FromApi::from_api(op))
     }
 }
 
