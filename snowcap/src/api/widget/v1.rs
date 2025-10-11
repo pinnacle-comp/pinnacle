@@ -1,3 +1,4 @@
+use anyhow::Context;
 use iced::widget::{
     Column, Container, Row, Scrollable, button, image::FilterMethod, scrollable::Scrollbar,
 };
@@ -14,7 +15,7 @@ use crate::{
     api::{ResponseStream, run_server_streaming_mapped},
     decoration::DecorationId,
     layer::LayerId,
-    util::convert::FromApi,
+    util::convert::{FromApi, TryFromApi},
     widget::{MouseAreaEvent, TextInputEvent, ViewFn, WidgetEvent, WidgetId},
 };
 
@@ -848,11 +849,14 @@ pub fn widget_def_to_fn(def: WidgetDef) -> Option<ViewFn> {
                 }
 
                 if let Some(style) = style.clone() {
+                    use crate::widget::text_input::{Style, Styles};
+
+                    let style = Styles::from_api(style);
                     let style = move |theme: &iced::Theme, status| {
                         use iced::widget::text_input;
-                        let mut s = <iced::Theme as text_input::Catalog>::default()(theme, status);
+                        let s = <iced::Theme as text_input::Catalog>::default()(theme, status);
 
-                        let widget::v1::text_input::Style {
+                        let crate::widget::text_input::Styles {
                             active,
                             hovered,
                             focused,
@@ -864,37 +868,34 @@ pub fn widget_def_to_fn(def: WidgetDef) -> Option<ViewFn> {
                             text_input::Status::Active => active,
                             text_input::Status::Hovered => hovered.or(active),
                             text_input::Status::Focused { is_hovered } => {
-                                let inner =
+                                let hover =
                                     if is_hovered { hover_focused.or(hovered) } else { None };
 
-                                inner.or(focused).or(active)
+                                hover.or(focused).or(active)
                             }
                             text_input::Status::Disabled => disabled,
                         };
 
-                        if let Some(style) = inner {
-                            if let Some(background) = style.background {
-                                s.background = FromApi::from_api(background);
+                        if let Some(Style {
+                            background,
+                            border,
+                            icon,
+                            placeholder,
+                            value,
+                            selection,
+                        }) = inner
+                        {
+                            iced::widget::text_input::Style {
+                                background: background.unwrap_or(s.background),
+                                border: border.unwrap_or(s.border),
+                                icon: icon.unwrap_or(s.icon),
+                                placeholder: placeholder.unwrap_or(s.placeholder),
+                                value: value.unwrap_or(s.value),
+                                selection: selection.unwrap_or(s.selection),
                             }
-                            if let Some(border) = style.border {
-                                s.border = FromApi::from_api(border);
-                            }
-
-                            if let Some(icon) = style.icon {
-                                s.icon = FromApi::from_api(icon);
-                            }
-                            if let Some(placeholder) = style.placeholder {
-                                s.placeholder = FromApi::from_api(placeholder);
-                            }
-                            if let Some(value) = style.value {
-                                s.value = FromApi::from_api(value);
-                            }
-                            if let Some(selection) = style.selection {
-                                s.selection = FromApi::from_api(selection);
-                            }
+                        } else {
+                            s
                         }
-
-                        s
                     };
 
                     text_input = text_input.style(style);
@@ -1256,34 +1257,50 @@ impl FromApi<widget::v1::LineHeight> for iced::widget::text::LineHeight {
     fn from_api(api_type: widget::v1::LineHeight) -> Self {
         use widget::v1::line_height::LineHeight;
 
-        let line_height = api_type
-            .line_height
-            .expect("LineHeight should not be empty");
-
-        match line_height {
+        let line_height = api_type.line_height.map(|lh| match lh {
             LineHeight::Relative(v) => Self::Relative(v),
             LineHeight::Absolute(v) => Self::Absolute(v.into()),
+        });
+
+        if line_height.is_none() {
+            tracing::warn!("Invalid snowcap.widget.v1.LineHeight. Using default value");
         }
+
+        line_height.unwrap_or_default()
     }
 }
 
-impl FromApi<widget::v1::Background> for iced::Background {
-    fn from_api(api_type: widget::v1::Background) -> Self {
+impl TryFromApi<widget::v1::Background> for iced::Background {
+    type Error = anyhow::Error;
+
+    fn try_from_api(api_type: widget::v1::Background) -> Result<Self, Self::Error> {
         use widget::v1::background::Background;
 
-        let background = api_type.background.expect("Background should not be empty");
+        const MESSAGE: &str = "snowcap.widget.v1.Background";
+        const FIELD: &str = "background";
 
-        match background {
-            Background::Color(color) => Self::Color(iced::Color::from_api(color)),
-            Background::Gradient(gradient) => Self::Gradient(iced::Gradient::from_api(gradient)),
-        }
+        let Some(background) = api_type.background else {
+            anyhow::bail!("While converting {MESSAGE}: missing field 'FIELD'")
+        };
+
+        let background = match background {
+            Background::Color(color) => Ok(Self::Color(iced::Color::from_api(color))),
+            Background::Gradient(gradient) => {
+                iced::Gradient::try_from_api(gradient).map(Self::Gradient)
+            }
+        };
+
+        background.with_context(|| format!("While converting {MESSAGE}.{FIELD}"))
     }
 }
 
-impl FromApi<widget::v1::Gradient> for iced::Gradient {
-    fn from_api(api_type: widget::v1::Gradient) -> Self {
+impl TryFromApi<widget::v1::Gradient> for iced::Gradient {
+    type Error = anyhow::Error;
+    fn try_from_api(api_type: widget::v1::Gradient) -> Result<Self, Self::Error> {
         use widget::v1::gradient::{Gradient, Linear};
-        let gradient = api_type.gradient.expect("Gradient should not be empty");
+        let Some(gradient) = api_type.gradient else {
+            anyhow::bail!("Missing field 'gradient'")
+        };
 
         match gradient {
             Gradient::Linear(Linear { radians, stops }) => {
@@ -1295,8 +1312,66 @@ impl FromApi<widget::v1::Gradient> for iced::Gradient {
                         }
                     }));
 
-                iced::Gradient::Linear(lin)
+                Ok(iced::Gradient::Linear(lin))
             }
+        }
+    }
+}
+
+impl FromApi<widget::v1::text_input::Style> for crate::widget::text_input::Styles {
+    fn from_api(api_type: widget::v1::text_input::Style) -> Self {
+        use crate::widget::text_input::Style;
+        use widget::v1::text_input::style::Inner;
+
+        fn convert_inner(name: &str, inner: widget::v1::text_input::style::Inner) -> Style {
+            let Inner {
+                background,
+                border,
+                icon,
+                placeholder,
+                value,
+                selection,
+            } = inner;
+
+            let background = if let Some(background) = background {
+                let from_api = TryFromApi::try_from_api(background).with_context(|| {
+                    format!("While converting 'snowcap.widget.v1.text_input.Style.{name}'")
+                });
+                match from_api {
+                    Err(e) => {
+                        tracing::error!("{e:?}");
+                        None
+                    }
+                    Ok(b) => Some(b),
+                }
+            } else {
+                None
+            };
+
+            Style {
+                background,
+                border: border.map(FromApi::from_api),
+                icon: icon.map(FromApi::from_api),
+                placeholder: placeholder.map(FromApi::from_api),
+                value: value.map(FromApi::from_api),
+                selection: selection.map(FromApi::from_api),
+            }
+        }
+
+        let widget::v1::text_input::Style {
+            active,
+            hovered,
+            focused,
+            hover_focused,
+            disabled,
+        } = api_type;
+
+        Self {
+            active: active.map(|inner| convert_inner("active", inner)),
+            hovered: hovered.map(|inner| convert_inner("hovered", inner)),
+            focused: focused.map(|inner| convert_inner("focused", inner)),
+            hover_focused: hover_focused.map(|inner| convert_inner("hover_focused", inner)),
+            disabled: disabled.map(|inner| convert_inner("disabled", inner)),
         }
     }
 }

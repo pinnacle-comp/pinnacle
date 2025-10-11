@@ -249,3 +249,24 @@ pub enum TextInputEvent {
     Submit,
     Paste(String),
 }
+
+pub(crate) mod text_input {
+    #[derive(Debug, Default, Clone)]
+    pub(crate) struct Styles {
+        pub(crate) active: Option<Style>,
+        pub(crate) hovered: Option<Style>,
+        pub(crate) focused: Option<Style>,
+        pub(crate) hover_focused: Option<Style>,
+        pub(crate) disabled: Option<Style>,
+    }
+
+    #[derive(Debug, Default, Clone)]
+    pub(crate) struct Style {
+        pub(crate) background: Option<iced::Background>,
+        pub(crate) border: Option<iced::Border>,
+        pub(crate) icon: Option<iced::Color>,
+        pub(crate) placeholder: Option<iced::Color>,
+        pub(crate) value: Option<iced::Color>,
+        pub(crate) selection: Option<iced::Color>,
+    }
+}
