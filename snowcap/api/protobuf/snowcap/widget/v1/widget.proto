@@ -128,6 +128,7 @@ message WidgetDef {
     Button button = 7;
     Image image = 8;
     InputRegion input_region = 9;
+    MouseArea mouse_area = 10;
   }
 }
 
@@ -290,6 +291,88 @@ message Image {
   }
 }
 
+message MouseArea {
+  WidgetDef child = 1;
+  bool on_press = 2;
+  bool on_release = 3;
+  bool on_double_click = 4;
+  bool on_right_press = 5;
+  bool on_right_release = 6;
+  bool on_middle_press = 7;
+  bool on_middle_release = 8;
+  bool on_scroll = 9;
+  bool on_enter = 10;
+  bool on_move = 11;
+  bool on_exit = 12;
+  optional Interaction interaction = 13;
+  optional uint32 widget_id = 15;
+
+  enum Interaction {
+    INTERACTION_NONE = 0;
+    INTERACTION_IDLE = 1;
+    INTERACTION_POINTER = 2;
+    INTERACTION_GRAB = 3;
+    INTERACTION_TEXT = 4;
+    INTERACTION_CROSSHAIR = 5;
+    INTERACTION_GRABBING = 6;
+    INTERACTION_RESIZE_HORIZONTAL = 7;
+    INTERACTION_RESIZE_VERTICAL = 8;
+    INTERACTION_RESIZE_DIAGONAL_UP = 9;
+    INTERACTION_RESIZE_DIAGONAL_DOWN = 10;
+    INTERACTION_NOT_ALLOWED = 11;
+    INTERACTION_ZOOM_IN = 12;
+    INTERACTION_ZOOM_OUT = 13;
+    INTERACTION_CELL = 14;
+    INTERACTION_MOVE = 15;
+    INTERACTION_COPY = 16;
+    INTERACTION_HELP = 17;
+  }
+
+  enum EventType {
+    EVENT_PRESS = 0;
+    EVENT_RELEASE = 1;
+    EVENT_DOUBLE_CLICK = 2;
+    EVENT_RIGHT_PRESS = 3;
+    EVENT_RIGHT_RELEASE = 4;
+    EVENT_MIDDLE_PRESS = 5;
+    EVENT_MIDDLE_RELEASE = 6;
+    EVENT_SCROLL = 7;
+    EVENT_ENTER = 8;
+    EVENT_MOVE = 9;
+    EVENT_EXIT = 10;
+  }
+
+  message Event {
+    EventType event_type = 1;
+    oneof data {
+      ScrollDelta scroll_delta = 2;
+      Point point = 3;
+    }
+  }
+
+  message ScrollDelta {
+    message Lines {
+      float x = 1;
+      float y = 2;
+    }
+
+    message Pixels {
+      float x = 1;
+      float y = 2;
+    }
+
+    oneof data {
+      Lines lines = 1;
+      Pixels pixels = 2;
+    }
+  }
+
+  message Point {
+    float x = 1;
+    float y = 2;
+  }
+}
+
 message GetWidgetEventsRequest {
   oneof id {
     uint32 layer_id = 1;
@@ -297,12 +380,17 @@ message GetWidgetEventsRequest {
   }
 }
 
-message GetWidgetEventsResponse {
+message WidgetEvent {
   uint32 widget_id = 1;
 
   oneof event {
     Button.Event button = 2;
+    MouseArea.Event mouse_area = 3;
   }
+}
+
+message GetWidgetEventsResponse {
+  repeated WidgetEvent widget_events = 1;
 }
 
 service WidgetService {
