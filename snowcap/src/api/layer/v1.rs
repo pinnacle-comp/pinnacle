@@ -1,5 +1,6 @@
 use std::num::NonZeroU32;
 
+use anyhow::Context;
 use smithay_client_toolkit::shell::wlr_layer;
 use snowcap_api_defs::snowcap::layer::{
     self,
@@ -13,7 +14,7 @@ use tonic::{Request, Response, Status};
 use crate::{
     api::{run_unary, run_unary_no_response, widget::v1::widget_def_to_fn},
     layer::{ExclusiveZone, LayerId, SnowcapLayer},
-    util::convert::FromApi,
+    util::convert::TryFromApi,
 };
 
 #[tonic::async_trait]
@@ -198,7 +199,17 @@ impl layer_service_server::LayerService for super::LayerService {
                 return Ok(OperateLayerResponse {});
             };
 
-            layer.operate(FromApi::from_api(operation));
+            let operation =
+                TryFromApi::try_from_api(operation).context("While processing OperateLayerRequest");
+            let operation = match operation {
+                Err(e) => {
+                    tracing::error!("{e:?}");
+                    return Ok(OperateLayerResponse {});
+                }
+                Ok(o) => o,
+            };
+
+            layer.operate(operation);
 
             Ok(OperateLayerResponse {})
         })
