@@ -440,9 +440,18 @@ impl XdgShellHandler for State {
     }
 
     fn app_id_changed(&mut self, surface: ToplevelSurface) {
-        let Some(window) = self.pinnacle.window_for_surface(surface.wl_surface()) else {
+        let Some(window) = self
+            .pinnacle
+            .window_for_surface(surface.wl_surface())
+            .or_else(|| {
+                self.pinnacle
+                    .unmapped_window_for_surface(surface.wl_surface())
+                    .map(|unmapped| &unmapped.window)
+            })
+        else {
             return;
         };
+
         let app_id = window.class().unwrap_or_default();
         window.with_state(|state| {
             if let Some(handle) = state.foreign_toplevel_list_handle.as_ref() {
@@ -456,6 +465,11 @@ impl XdgShellHandler for State {
         let Some(window) = self
             .pinnacle
             .window_for_surface(surface.wl_surface())
+            .or_else(|| {
+                self.pinnacle
+                    .unmapped_window_for_surface(surface.wl_surface())
+                    .map(|unmapped| &unmapped.window)
+            })
             .cloned()
         else {
             return;

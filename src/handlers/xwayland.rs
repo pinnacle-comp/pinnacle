@@ -503,9 +503,19 @@ impl XwmHandler for State {
     }
 
     fn property_notify(&mut self, _xwm: XwmId, window: X11Surface, property: WmWindowProperty) {
-        let Some(window) = self.pinnacle.window_for_x11_surface(&window).cloned() else {
+        let Some(window) = self
+            .pinnacle
+            .window_for_x11_surface(&window)
+            .or_else(|| {
+                self.pinnacle
+                    .unmapped_window_for_x11_surface(&window)
+                    .map(|unmapped| &unmapped.window)
+            })
+            .cloned()
+        else {
             return;
         };
+
         match property {
             WmWindowProperty::Title => {
                 self.pinnacle
@@ -761,6 +771,12 @@ impl Pinnacle {
         self.windows
             .iter()
             .find(|win| win.x11_surface() == Some(surface))
+    }
+
+    fn unmapped_window_for_x11_surface(&self, surface: &X11Surface) -> Option<&Unmapped> {
+        self.unmapped_windows
+            .iter()
+            .find(|unmapped| unmapped.window.x11_surface() == Some(surface))
     }
 
     fn unmapped_window_for_x11_surface_mut(
