@@ -74,6 +74,8 @@ pub mod pinnacle {
                 WindowFocusedRequest,
                 WindowTitleChangedRequest,
                 TagActiveRequest,
+                TagCreatedRequest,
+                TagRemovedRequest,
                 InputDeviceAddedRequest
             );
         }
