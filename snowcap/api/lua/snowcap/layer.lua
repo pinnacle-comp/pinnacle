@@ -91,15 +91,7 @@ function layer.new_widget(args)
 
     local widget_def = args.program:view()
 
-    require("snowcap.widget")._traverse_widget_tree(
-        widget_def,
-        callbacks,
-        function(callbacks, widget)
-            if widget.button and widget.button.on_press then
-                callbacks[widget.button.widget_id] = widget.button.on_press
-            end
-        end
-    )
+    widget._traverse_widget_tree(widget_def, callbacks, widget._collect_callbacks)
 
     ---@type snowcap.layer.v1.NewLayerRequest
     local request = {
@@ -129,48 +121,50 @@ function layer.new_widget(args)
     local err = client:snowcap_widget_v1_WidgetService_GetWidgetEvents({
         layer_id = layer_id,
     }, function(response)
-        local widget_id = response.widget_id or 0
-        if response.button then
-            if callbacks[widget_id] then
-                args.program:update(callbacks[widget_id])
-                local widget_def = args.program:view()
-                callbacks = {}
+        for _, event in ipairs(response.widget_events) do
+            local widget_id = event.widget_id or 0
+            local msg = nil
 
-                require("snowcap.widget")._traverse_widget_tree(
-                    widget_def,
-                    callbacks,
-                    function(callbacks, widget)
-                        if widget.button and widget.button.on_press then
-                            callbacks[widget.button.widget_id] = widget.button.on_press
-                        end
-                    end
-                )
+            if event.button then
+                msg = callbacks[widget_id]
+            elseif event.mouse_area then
+                if callbacks[widget_id] ~= nil then
+                    msg = widget._mouse_area_process_event(callbacks[widget_id], event.mouse_area)
+                end
+            elseif event.text_input then
+                if callbacks[widget_id] ~= nil then
+                    msg = widget._text_input_process_event(callbacks[widget_id], event.text_input)
+                end
+            end
 
-                local _, err = client:snowcap_layer_v1_LayerService_UpdateLayer({
-                    layer_id = layer_id,
-                    widget_def = widget.widget_def_into_api(widget_def),
-                })
+            if msg then
+                local ok, update_err = pcall(function()
+                    args.program:update(msg)
+                end)
+                if not ok then
+                    log.error(update_err)
+                end
             end
         end
-    end)
-
-    return layer_handle.new(layer_id, function(msg)
-        pcall(function()
-            args.program:update(msg)
-        end)
 
         local widget_def = args.program:view()
         callbacks = {}
 
-        require("snowcap.widget")._traverse_widget_tree(
-            widget_def,
-            callbacks,
-            function(callbacks, widget)
-                if widget.button and widget.button.on_press then
-                    callbacks[widget.button.widget_id] = widget.button.on_press
-                end
-            end
-        )
+        widget._traverse_widget_tree(widget_def, callbacks, widget._collect_callbacks)
+
+        local _, err = client:snowcap_layer_v1_LayerService_UpdateLayer({
+            layer_id = layer_id,
+            widget_def = widget.widget_def_into_api(widget_def),
+        })
+    end)
+
+    return layer_handle.new(layer_id, function(msg)
+        args.program:update(msg)
+
+        local widget_def = args.program:view()
+        callbacks = {}
+
+        widget._traverse_widget_tree(widget_def, callbacks, widget._collect_callbacks)
 
         local _, err = client:snowcap_layer_v1_LayerService_UpdateLayer({
             layer_id = layer_id,
@@ -221,6 +215,19 @@ end
 
 function LayerHandle:send_message(message)
     self.update(message)
+end
+
+---Sends an `Operation` to this layer.
+---@param operation snowcap.widget.operation.Operation
+function LayerHandle:operate(operation)
+    local _, err = client:snowcap_layer_v1_LayerService_OperateLayer({
+        layer_id = self.id,
+        operation = require("snowcap.widget.operation")._to_api(operation),
+    })
+
+    if err then
+        log.error(err)
+    end
 end
 
 layer.anchor = anchor
