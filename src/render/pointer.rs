@@ -13,7 +13,7 @@ use smithay::{
     },
     reexports::wayland_server::protocol::wl_surface::WlSurface,
     render_elements,
-    utils::{Clock, Monotonic, Physical, Point},
+    utils::{Clock, Logical, Monotonic, Point},
 };
 
 use crate::cursor::{CursorState, XCursor};
@@ -33,11 +33,13 @@ render_elements! {
     Memory = MemoryRenderBufferRenderElement<R>,
 }
 
-/// Render pointer elements.
+/// Creates render elements for the pointer, including the actual cursor and any dnd icons.
+///
+/// This will create render elements such that the hotspot of the cursor will be at `location`.
 ///
 /// Additionally returns the ids of cursor elements for use in screencopy.
 pub fn pointer_render_elements<R: PRenderer>(
-    location: Point<i32, Physical>,
+    location: Point<f64, Logical>,
     scale: f64,
     renderer: &mut R,
     cursor_state: &mut CursorState,
@@ -47,6 +49,10 @@ pub fn pointer_render_elements<R: PRenderer>(
 
     let pointer_elem = cursor_state.pointer_element();
 
+    let hotspot = cursor_state
+        .cursor_hotspot(clock.now(), scale)
+        .unwrap_or_default();
+
     let mut pointer_elements = match &pointer_elem {
         PointerElement::Hidden => vec![],
         PointerElement::Named { cursor, size } => {
@@ -54,7 +60,7 @@ pub fn pointer_render_elements<R: PRenderer>(
             let buffer = cursor_state.buffer_for_image(image, integer_scale);
             let elem = MemoryRenderBufferRenderElement::from_buffer(
                 renderer,
-                location.to_f64(),
+                location.to_physical(scale) - Point::new(hotspot.x, hotspot.y).to_f64(),
                 &buffer,
                 None,
                 None,
@@ -69,7 +75,7 @@ pub fn pointer_render_elements<R: PRenderer>(
             let elems = render_elements_from_surface_tree(
                 renderer,
                 surface,
-                location,
+                location.to_physical_precise_round(scale) - Point::new(hotspot.x, hotspot.y),
                 scale,
                 1.0,
                 element::Kind::Cursor,
@@ -79,19 +85,11 @@ pub fn pointer_render_elements<R: PRenderer>(
         }
     };
 
-    let hotspot = cursor_state
-        .cursor_hotspot(clock.now(), scale)
-        .unwrap_or_default();
-
     if let Some(dnd_icon) = cursor_state.dnd_icon() {
         pointer_elements.extend(AsRenderElements::render_elements(
             &smithay::desktop::space::SurfaceTree::from_surface(&dnd_icon.surface),
             renderer,
-            // FIXME: We round the location and the offset separately, which will lead
-            // to pixel imperfections
-            location
-                + dnd_icon.offset.to_f64().to_physical_precise_round(scale)
-                + Point::new(hotspot.x, hotspot.y),
+            (location + dnd_icon.offset.to_f64()).to_physical_precise_round(scale),
             scale.into(),
             1.0,
         ));

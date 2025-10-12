@@ -318,37 +318,81 @@ pub fn blit(
     .context("not a shm buffer")?
 }
 
-pub struct DynElement<'a, R: Renderer>(&'a dyn RenderElement<R>);
+/// Returns elements translated to their local coordinate space.
+///
+/// This will translate every element such that a rectangle with location (0, 0)
+/// will include all elements.
+pub fn to_local_coord_space<E: Element>(
+    elements: Vec<E>,
+    scale: f64,
+) -> Vec<RelocateRenderElement<E>> {
+    let encompassing_geo = elements
+        .iter()
+        .map(|elem| elem.geometry(scale.into()))
+        .reduce(|first, second| first.merge(second));
+
+    let Some(encompassing_geo) = encompassing_geo else {
+        return Vec::new();
+    };
+
+    elements
+        .into_iter()
+        .map(|elem| {
+            RelocateRenderElement::from_element(
+                elem,
+                (-encompassing_geo.loc.x, -encompassing_geo.loc.y),
+                Relocate::Relative,
+            )
+        })
+        .collect()
+}
+
+/// A type-erased render element.
+pub enum DynElement<'a, R: Renderer> {
+    Owned(Box<dyn RenderElement<R> + 'a>),
+    Borrowed(&'a dyn RenderElement<R>),
+}
 
 impl<'a, R: Renderer> DynElement<'a, R> {
-    pub fn new(elem: &'a impl RenderElement<R>) -> Self {
-        Self(elem as _)
+    pub fn borrowed(elem: &'a impl RenderElement<R>) -> Self {
+        Self::Borrowed(elem as _)
+    }
+
+    pub fn owned(elem: impl RenderElement<R> + 'a) -> Self {
+        Self::Owned(Box::new(elem))
+    }
+
+    fn get_ref(&self) -> &dyn RenderElement<R> {
+        match self {
+            DynElement::Owned(render_element) => render_element.as_ref(),
+            DynElement::Borrowed(render_element) => *render_element,
+        }
     }
 }
 
 impl<'a, R: Renderer> Element for DynElement<'a, R> {
     fn id(&self) -> &Id {
-        self.0.id()
+        self.get_ref().id()
     }
 
     fn current_commit(&self) -> CommitCounter {
-        self.0.current_commit()
+        self.get_ref().current_commit()
     }
 
     fn src(&self) -> Rectangle<f64, Buffer> {
-        self.0.src()
+        self.get_ref().src()
     }
 
     fn geometry(&self, scale: Scale<f64>) -> Rectangle<i32, Physical> {
-        self.0.geometry(scale)
+        self.get_ref().geometry(scale)
     }
 
     fn location(&self, scale: Scale<f64>) -> Point<i32, Physical> {
-        self.0.location(scale)
+        self.get_ref().location(scale)
     }
 
     fn transform(&self) -> Transform {
-        self.0.transform()
+        self.get_ref().transform()
     }
 
     fn damage_since(
@@ -356,22 +400,22 @@ impl<'a, R: Renderer> Element for DynElement<'a, R> {
         scale: Scale<f64>,
         commit: Option<CommitCounter>,
     ) -> smithay::backend::renderer::utils::DamageSet<i32, Physical> {
-        self.0.damage_since(scale, commit)
+        self.get_ref().damage_since(scale, commit)
     }
 
     fn opaque_regions(
         &self,
         scale: Scale<f64>,
     ) -> smithay::backend::renderer::utils::OpaqueRegions<i32, Physical> {
-        self.0.opaque_regions(scale)
+        self.get_ref().opaque_regions(scale)
     }
 
     fn alpha(&self) -> f32 {
-        self.0.alpha()
+        self.get_ref().alpha()
     }
 
     fn kind(&self) -> element::Kind {
-        self.0.kind()
+        self.get_ref().kind()
     }
 }
 
@@ -384,6 +428,6 @@ impl<'a, R: Renderer> RenderElement<R> for DynElement<'a, R> {
         damage: &[Rectangle<i32, Physical>],
         opaque_regions: &[Rectangle<i32, Physical>],
     ) -> Result<(), <R>::Error> {
-        self.0.draw(frame, src, dst, damage, opaque_regions)
+        self.get_ref().draw(frame, src, dst, damage, opaque_regions)
     }
 }

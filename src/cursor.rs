@@ -154,12 +154,13 @@ impl CursorState {
         }
     }
 
+    /// Returns the cursor's buffer geometry with the current hotspot centered at (0, 0).
     pub fn cursor_geometry(
         &mut self,
         time: Time<Monotonic>,
         scale: f64,
     ) -> Option<Rectangle<i32, Buffer>> {
-        match self.pointer_element() {
+        let mut geo = match self.pointer_element() {
             PointerElement::Hidden => None,
             PointerElement::Named { cursor, size } => {
                 let image = cursor.image(time.into(), size * scale.ceil() as u32);
@@ -168,8 +169,9 @@ impl CursorState {
             }
             PointerElement::Surface { surface } => {
                 let geo = bbox_from_surface_tree(&surface, (0, 0));
+                let loc: Point<i32, _> = geo.loc.to_f64().to_physical_precise_round(scale);
                 let buffer_geo = Rectangle::new(
-                    (geo.loc.x, geo.loc.y).into(),
+                    (loc.x, loc.y).into(),
                     geo.size
                         .to_f64()
                         .to_buffer(scale, Transform::Normal)
@@ -178,8 +180,31 @@ impl CursorState {
                 Some(buffer_geo)
             }
         }
+        .unwrap_or_default();
+
+        geo.loc -= self.cursor_hotspot(time, scale).unwrap_or_default();
+
+        let (dnd_geo, offset) = self
+            .dnd_icon()
+            .map(|dnd| (bbox_from_surface_tree(&dnd.surface, (0, 0)), dnd.offset))
+            .unwrap_or_default();
+        let loc: Point<i32, _> = (dnd_geo.loc + offset)
+            .to_f64()
+            .to_physical_precise_round(scale);
+        let dnd_geo: Rectangle<i32, Buffer> = Rectangle::new(
+            (loc.x, loc.y).into(),
+            dnd_geo
+                .size
+                .to_f64()
+                .to_buffer(scale, Transform::Normal)
+                .to_i32_round(),
+        );
+
+        let geo = geo.merge(dnd_geo);
+        if geo.is_empty() { None } else { Some(geo) }
     }
 
+    /// Returns the cursor's hotspot in buffer coordinates.
     pub fn cursor_hotspot(
         &mut self,
         time: Time<Monotonic>,

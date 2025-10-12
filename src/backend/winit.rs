@@ -28,7 +28,7 @@ use smithay::{
             window::{Icon, WindowAttributes},
         },
     },
-    utils::{Point, Rectangle, Transform},
+    utils::{Rectangle, Transform},
     wayland::{dmabuf, presentation::Refresh},
 };
 use tracing::{debug, error, info, trace, warn};
@@ -246,14 +246,8 @@ impl Winit {
             let output_loc = pinnacle.space.output_geometry(&self.output).unwrap().loc;
             let scale = self.output.current_scale().fractional_scale();
 
-            let cursor_hotspot = pinnacle
-                .cursor_state
-                .cursor_hotspot(pinnacle.clock.now(), scale)
-                .unwrap_or_default();
-
             let (pointer_render_elements, _cursor_ids) = pointer_render_elements(
-                (pointer_location - output_loc.to_f64()).to_physical_precise_round(scale)
-                    - Point::new(cursor_hotspot.x, cursor_hotspot.y),
+                pointer_location - output_loc.to_f64(),
                 scale,
                 self.backend.renderer(),
                 &mut pinnacle.cursor_state,

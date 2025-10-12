@@ -33,7 +33,7 @@ use crate::{
         },
     },
     render::{
-        OutputRenderElement, output_render_elements,
+        output_render_elements,
         pointer::pointer_render_elements,
         util::{DynElement, damage::BufferDamageElement},
     },
@@ -182,12 +182,14 @@ impl State {
                 };
 
                 if let Some(cursor_session) = session.cursor_session() {
-                    let hotspot = self
+                    let cursor_offset = self
                         .pinnacle
                         .cursor_state
-                        .cursor_hotspot(self.pinnacle.clock.now(), scale)
-                        .unwrap_or_default();
-                    cursor_session.set_hotspot(hotspot);
+                        .cursor_geometry(self.pinnacle.clock.now(), scale)
+                        .unwrap_or_default()
+                        .loc;
+
+                    cursor_session.set_hotspot(Point::default() - cursor_offset);
                 }
 
                 let elements = match session.cursor() {
@@ -206,7 +208,7 @@ impl State {
                                 .popup_elements
                                 .into_iter()
                                 .chain(elements.surface_elements)
-                                .map(OutputRenderElement::from)
+                                .map(DynElement::owned)
                                 .collect::<Vec<_>>()
                         })
                         .unwrap(),
@@ -215,20 +217,13 @@ impl State {
                         .with_renderer(|renderer| {
                             let win_loc = self.pinnacle.space.element_location(&win);
                             let pointer_elements = if let Some(win_loc) = win_loc {
-                                let hotspot = self
-                                    .pinnacle
-                                    .cursor_state
-                                    .cursor_hotspot(self.pinnacle.clock.now(), scale)
-                                    .unwrap_or_default();
-
                                 let pointer_loc =
                                     self.pinnacle.seat.get_pointer().unwrap().current_location()
                                         - win_loc.to_f64()
                                         - win.total_decoration_offset().to_f64();
 
                                 let (pointer_elements, _) = pointer_render_elements(
-                                    pointer_loc.to_physical_precise_round(scale)
-                                        - Point::new(hotspot.x, hotspot.y),
+                                    pointer_loc,
                                     scale,
                                     renderer,
                                     &mut self.pinnacle.cursor_state,
@@ -247,13 +242,13 @@ impl State {
                             );
                             let elements = pointer_elements
                                 .into_iter()
-                                .map(OutputRenderElement::from)
+                                .map(DynElement::owned)
                                 .chain(
                                     elements
                                         .popup_elements
                                         .into_iter()
                                         .chain(elements.surface_elements)
-                                        .map(OutputRenderElement::from),
+                                        .map(DynElement::owned),
                                 )
                                 .collect::<Vec<_>>();
                             elements
@@ -263,15 +258,17 @@ impl State {
                         .backend
                         .with_renderer(|renderer| {
                             let (pointer_elements, _) = pointer_render_elements(
-                                (0, 0).into(),
+                                (0.0, 0.0).into(),
                                 scale,
                                 renderer,
                                 &mut self.pinnacle.cursor_state,
                                 &self.pinnacle.clock,
                             );
+                            let pointer_elements =
+                                crate::render::util::to_local_coord_space(pointer_elements, scale);
                             pointer_elements
                                 .into_iter()
-                                .map(OutputRenderElement::from)
+                                .map(DynElement::owned)
                                 .collect()
                         })
                         .unwrap(),
@@ -304,12 +301,14 @@ impl State {
                 };
 
                 if let Some(cursor_session) = session.cursor_session() {
-                    let hotspot = self
+                    let cursor_offset = self
                         .pinnacle
                         .cursor_state
-                        .cursor_hotspot(self.pinnacle.clock.now(), scale)
-                        .unwrap_or_default();
-                    cursor_session.set_hotspot(hotspot);
+                        .cursor_geometry(self.pinnacle.clock.now(), scale)
+                        .unwrap_or_default()
+                        .loc;
+
+                    cursor_session.set_hotspot(Point::default() - cursor_offset);
                 }
 
                 let elements = match session.cursor() {
@@ -322,18 +321,15 @@ impl State {
                                 &self.pinnacle.space,
                                 &self.pinnacle.z_index_stack,
                             )
+                            .into_iter()
+                            .map(DynElement::owned)
+                            .collect::<Vec<_>>()
                         })
                         .unwrap(),
                     Cursor::Composited => {
                         let Some(output_geo) = self.pinnacle.space.output_geometry(&output) else {
                             continue;
                         };
-
-                        let hotspot = self
-                            .pinnacle
-                            .cursor_state
-                            .cursor_hotspot(self.pinnacle.clock.now(), scale)
-                            .unwrap_or_default();
 
                         let pointer_loc =
                             self.pinnacle.seat.get_pointer().unwrap().current_location()
@@ -343,8 +339,7 @@ impl State {
                         self.backend
                             .with_renderer(|renderer| {
                                 let (pointer_elements, _) = pointer_render_elements(
-                                    pointer_loc.to_physical_precise_round(scale)
-                                        - Point::new(hotspot.x, hotspot.y),
+                                    pointer_loc,
                                     scale,
                                     renderer,
                                     &mut self.pinnacle.cursor_state,
@@ -358,26 +353,31 @@ impl State {
                                 );
                                 pointer_elements
                                     .into_iter()
-                                    .map(OutputRenderElement::from)
-                                    .chain(elements)
+                                    .map(DynElement::owned)
+                                    .chain(elements.into_iter().map(DynElement::owned))
                                     .collect::<Vec<_>>()
                             })
                             .unwrap()
                     }
                     Cursor::Standalone { pointer: _ } => {
                         let scale = output.current_scale().fractional_scale();
+
                         self.backend
                             .with_renderer(|renderer| {
                                 let (pointer_elements, _) = pointer_render_elements(
-                                    (0, 0).into(),
+                                    (0.0, 0.0).into(),
                                     scale,
                                     renderer,
                                     &mut self.pinnacle.cursor_state,
                                     &self.pinnacle.clock,
                                 );
+                                let pointer_elements = crate::render::util::to_local_coord_space(
+                                    pointer_elements,
+                                    scale,
+                                );
                                 pointer_elements
                                     .into_iter()
-                                    .map(OutputRenderElement::from)
+                                    .map(DynElement::owned)
                                     .collect()
                             })
                             .unwrap()
@@ -536,8 +536,8 @@ impl State {
 
             let elements = client_damage
                 .iter()
-                .map(DynElement::new)
-                .chain(elements.iter().map(DynElement::new))
+                .map(DynElement::borrowed)
+                .chain(elements.iter().map(DynElement::borrowed))
                 .collect::<Vec<_>>();
 
             let rendered_damage = trackers
