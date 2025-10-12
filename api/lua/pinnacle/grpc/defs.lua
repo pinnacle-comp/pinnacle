@@ -1125,6 +1125,18 @@ local pinnacle_window_v1_DecorationMode = {
 ---@field tag_id integer?
 ---@field active boolean?
 
+---@class pinnacle.signal.v1.TagCreatedRequest
+---@field control pinnacle.signal.v1.StreamControl?
+
+---@class pinnacle.signal.v1.TagCreatedResponse
+---@field tag_id integer?
+
+---@class pinnacle.signal.v1.TagRemovedRequest
+---@field control pinnacle.signal.v1.StreamControl?
+
+---@class pinnacle.signal.v1.TagRemovedResponse
+---@field tag_id integer?
+
 ---@class pinnacle.signal.v1.InputDeviceAddedRequest
 ---@field control pinnacle.signal.v1.StreamControl?
 
@@ -1499,6 +1511,10 @@ pinnacle.signal.v1.WindowTitleChangedRequest = {}
 pinnacle.signal.v1.WindowTitleChangedResponse = {}
 pinnacle.signal.v1.TagActiveRequest = {}
 pinnacle.signal.v1.TagActiveResponse = {}
+pinnacle.signal.v1.TagCreatedRequest = {}
+pinnacle.signal.v1.TagCreatedResponse = {}
+pinnacle.signal.v1.TagRemovedRequest = {}
+pinnacle.signal.v1.TagRemovedResponse = {}
 pinnacle.signal.v1.InputDeviceAddedRequest = {}
 pinnacle.signal.v1.InputDeviceAddedResponse = {}
 pinnacle.tag = {}
@@ -2749,6 +2765,48 @@ pinnacle.signal.v1.SignalService.TagActive.response = ".pinnacle.signal.v1.TagAc
 ---@return string | nil An error string, if any
 function Client:pinnacle_signal_v1_SignalService_TagActive(callback)
     return self:bidirectional_streaming_request(pinnacle.signal.v1.SignalService.TagActive, callback)
+end
+pinnacle.signal.v1.SignalService.TagCreated = {}
+pinnacle.signal.v1.SignalService.TagCreated.service = "pinnacle.signal.v1.SignalService"
+pinnacle.signal.v1.SignalService.TagCreated.method = "TagCreated"
+pinnacle.signal.v1.SignalService.TagCreated.request = ".pinnacle.signal.v1.TagCreatedRequest"
+pinnacle.signal.v1.SignalService.TagCreated.response = ".pinnacle.signal.v1.TagCreatedResponse"
+
+---Performs a bidirectional-streaming request.
+---
+---`callback` will be called with every streamed response.
+---
+---The raw client-to-server stream is returned to allow you to send encoded messages.
+---
+---@nodiscard
+---
+---@param callback fun(response: pinnacle.signal.v1.TagCreatedResponse, stream: grpc_client.h2.Stream)
+---
+---@return grpc_client.h2.Stream | nil
+---@return string | nil An error string, if any
+function Client:pinnacle_signal_v1_SignalService_TagCreated(callback)
+    return self:bidirectional_streaming_request(pinnacle.signal.v1.SignalService.TagCreated, callback)
+end
+pinnacle.signal.v1.SignalService.TagRemoved = {}
+pinnacle.signal.v1.SignalService.TagRemoved.service = "pinnacle.signal.v1.SignalService"
+pinnacle.signal.v1.SignalService.TagRemoved.method = "TagRemoved"
+pinnacle.signal.v1.SignalService.TagRemoved.request = ".pinnacle.signal.v1.TagRemovedRequest"
+pinnacle.signal.v1.SignalService.TagRemoved.response = ".pinnacle.signal.v1.TagRemovedResponse"
+
+---Performs a bidirectional-streaming request.
+---
+---`callback` will be called with every streamed response.
+---
+---The raw client-to-server stream is returned to allow you to send encoded messages.
+---
+---@nodiscard
+---
+---@param callback fun(response: pinnacle.signal.v1.TagRemovedResponse, stream: grpc_client.h2.Stream)
+---
+---@return grpc_client.h2.Stream | nil
+---@return string | nil An error string, if any
+function Client:pinnacle_signal_v1_SignalService_TagRemoved(callback)
+    return self:bidirectional_streaming_request(pinnacle.signal.v1.SignalService.TagRemoved, callback)
 end
 pinnacle.signal.v1.SignalService.InputDeviceAdded = {}
 pinnacle.signal.v1.SignalService.InputDeviceAdded.service = "pinnacle.signal.v1.SignalService"
