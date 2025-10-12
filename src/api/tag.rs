@@ -101,6 +101,10 @@ pub fn add(
 
     state.pinnacle.update_xwayland_stacking_order();
 
+    for tag in new_tags.iter() {
+        state.pinnacle.signal_state.tag_created.signal(tag);
+    }
+
     new_tags
 }
 
@@ -131,4 +135,12 @@ pub fn remove(state: &mut State, tags_to_remove: Vec<Tag>) {
     }
 
     state.pinnacle.update_xwayland_stacking_order();
+
+    for tag_to_remove in tags_to_remove.iter() {
+        state
+            .pinnacle
+            .signal_state
+            .tag_removed
+            .signal(tag_to_remove);
+    }
 }
