@@ -196,10 +196,14 @@ end
 
 local signal_name_to_SignalName = {
     active = "TagActive",
+    created = "TagCreated",
+    removed = "TagRemoved",
 }
 
 ---@class pinnacle.tag.TagSignal Signals related to tag events.
 ---@field active fun(tag: pinnacle.tag.TagHandle, active: boolean)? A tag was set to active or not active.
+---@field created fun(tag: pinnacle.tag.TagHandle)? A tag was created.
+---@field removed fun(tag: pinnacle.tag.TagHandle)? A tag was removed.
 
 ---Connects to a tag signal.
 ---
