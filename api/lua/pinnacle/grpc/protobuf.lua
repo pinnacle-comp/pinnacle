@@ -28,7 +28,7 @@ function protobuf.build_protos()
     }
 
     local xdg_data_home = os.getenv("XDG_DATA_HOME") or (os.getenv("HOME") .. "/.local/share")
-    local xdg_data_dirs = os.getenv("XDG_DATA_DIRS")
+    local xdg_data_dirs = os.getenv("XDG_DATA_DIRS") or "/usr/local/share/:/usr/share/"
 
     ---@type string[]
     local search_dirs = { xdg_data_home }
