@@ -26,8 +26,11 @@ use tokio_stream::{StreamExt, wrappers::UnboundedReceiverStream};
 use tonic::Streaming;
 
 use crate::{
-    BlockOnTokio, input::libinput::DeviceHandle, output::OutputHandle, tag::TagHandle,
-    window::WindowHandle,
+    BlockOnTokio,
+    input::libinput::DeviceHandle,
+    output::OutputHandle,
+    tag::TagHandle,
+    window::{LayoutMode, WindowHandle},
 };
 
 pub(crate) trait Signal {
@@ -294,6 +297,59 @@ signals! {
                 }
             },
         }
+
+        /// A window's layout mode changed.
+        ///
+        /// Callbacks receive the window and new layout mode.
+        WindowLayoutModeChanged = {
+            enum_name = LayoutModeChanged,
+            callback_type = Box<dyn FnMut(&WindowHandle, LayoutMode) + Send + 'static>,
+            client_request = window_layout_mode_changed,
+            on_response = |response, callbacks| {
+                let handle = WindowHandle { id: response.window_id };
+                let layout_mode = response.layout_mode().try_into().unwrap_or(LayoutMode::Tiled);
+
+                for callback in callbacks {
+                    callback(&handle, layout_mode);
+                }
+            },
+        }
+
+
+        /// A window was created (i.e., mapped for the first time).
+        ///
+        /// Callbacks receive the newly created window.
+        WindowCreated = {
+            enum_name = Created,
+            callback_type = SingleWindowFn,
+            client_request = window_created,
+            on_response = |response, callbacks| {
+                let handle = WindowHandle { id: response.window_id };
+                for callback in callbacks {
+                    callback(&handle);
+                }
+            },
+        }
+
+        /// A window was closed.
+        ///
+        /// Callbacks receive the window that was just closed, its title, and its app_id.
+        /// Note: The window handle is no longer valid as the window was destroyed.
+        /// Any subsequent operations on this handle will likely fail.
+        WindowDestroyed = {
+            enum_name = Destroyed,
+            callback_type = Box<dyn FnMut(&WindowHandle, &str, &str) + Send + 'static>,
+            client_request = window_destroyed,
+            on_response = |response, callbacks| {
+                let handle = WindowHandle { id: response.window_id };
+                let title = response.title;
+                let app_id = response.app_id;
+
+                for callback in callbacks {
+                    callback(&handle, &title, &app_id);
+                }
+            },
+        }
     }
     /// Signals relating to tag events.
     TagSignal => {
@@ -345,6 +401,9 @@ pub(crate) struct SignalState {
     pub(crate) window_pointer_leave: SignalData<WindowPointerLeave>,
     pub(crate) window_focused: SignalData<WindowFocused>,
     pub(crate) window_title_changed: SignalData<WindowTitleChanged>,
+    pub(crate) window_layout_mode_changed: SignalData<WindowLayoutModeChanged>,
+    pub(crate) window_created: SignalData<WindowCreated>,
+    pub(crate) window_destroyed: SignalData<WindowDestroyed>,
 
     pub(crate) tag_active: SignalData<TagActive>,
 
@@ -372,6 +431,9 @@ impl SignalState {
             window_pointer_leave: SignalData::new(),
             window_focused: SignalData::new(),
             window_title_changed: SignalData::new(),
+            window_layout_mode_changed: SignalData::new(),
+            window_created: SignalData::new(),
+            window_destroyed: SignalData::new(),
 
             tag_active: SignalData::new(),
 
@@ -392,6 +454,9 @@ impl SignalState {
         self.window_pointer_leave.reset();
         self.window_focused.reset();
         self.window_title_changed.reset();
+        self.window_layout_mode_changed.reset();
+        self.window_created.reset();
+        self.window_destroyed.reset();
 
         self.tag_active.reset();
 

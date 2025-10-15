@@ -14,7 +14,7 @@ use std::borrow::Borrow;
 
 use futures::FutureExt;
 use pinnacle_api_defs::pinnacle::{
-    util::v1::SetOrToggle,
+    util::{self, v1::SetOrToggle},
     window::{
         self,
         v1::{
@@ -161,6 +161,11 @@ pub fn connect_signal(signal: WindowSignal) -> SignalHandle {
         WindowSignal::PointerLeave(f) => signal_state.window_pointer_leave.add_callback(f),
         WindowSignal::Focused(f) => signal_state.window_focused.add_callback(f),
         WindowSignal::TitleChanged(f) => signal_state.window_title_changed.add_callback(f),
+        WindowSignal::LayoutModeChanged(f) => {
+            signal_state.window_layout_mode_changed.add_callback(f)
+        }
+        WindowSignal::Created(f) => signal_state.window_created.add_callback(f),
+        WindowSignal::Destroyed(f) => signal_state.window_destroyed.add_callback(f),
     }
 }
 
@@ -187,19 +192,17 @@ pub enum LayoutMode {
     Spilled,
 }
 
-impl TryFrom<pinnacle_api_defs::pinnacle::window::v1::LayoutMode> for LayoutMode {
+impl TryFrom<util::v1::LayoutMode> for LayoutMode {
     type Error = ();
 
-    fn try_from(
-        value: pinnacle_api_defs::pinnacle::window::v1::LayoutMode,
-    ) -> Result<Self, Self::Error> {
+    fn try_from(value: util::v1::LayoutMode) -> Result<Self, Self::Error> {
         match value {
-            window::v1::LayoutMode::Unspecified => Err(()),
-            window::v1::LayoutMode::Tiled => Ok(LayoutMode::Tiled),
-            window::v1::LayoutMode::Floating => Ok(LayoutMode::Floating),
-            window::v1::LayoutMode::Fullscreen => Ok(LayoutMode::Fullscreen),
-            window::v1::LayoutMode::Maximized => Ok(LayoutMode::Maximized),
-            window::v1::LayoutMode::Spilled => Ok(LayoutMode::Spilled),
+            util::v1::LayoutMode::Unspecified => Err(()),
+            util::v1::LayoutMode::Tiled => Ok(LayoutMode::Tiled),
+            util::v1::LayoutMode::Floating => Ok(LayoutMode::Floating),
+            util::v1::LayoutMode::Fullscreen => Ok(LayoutMode::Fullscreen),
+            util::v1::LayoutMode::Maximized => Ok(LayoutMode::Maximized),
+            util::v1::LayoutMode::Spilled => Ok(LayoutMode::Spilled),
         }
     }
 }

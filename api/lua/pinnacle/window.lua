@@ -16,7 +16,7 @@ local set_or_toggle = {
     TOGGLE = require("pinnacle.grpc.defs").pinnacle.util.v1.SetOrToggle.SET_OR_TOGGLE_TOGGLE,
 }
 
-local layout_mode_def = require("pinnacle.grpc.defs").pinnacle.window.v1.LayoutMode
+local layout_mode_def = require("pinnacle.grpc.defs").pinnacle.util.v1.LayoutMode
 
 ---@lcat nodoc
 ---@class pinnacle.window.WindowHandleModule
@@ -138,13 +138,13 @@ end
 ---@enum (key) pinnacle.layout.LayoutMode
 local layout_mode = {
     ---The window is tiled.
-    tiled = window_v1.LayoutMode.LAYOUT_MODE_TILED,
+    tiled = util_v1.LayoutMode.LAYOUT_MODE_TILED,
     ---The window is floating.
-    floating = window_v1.LayoutMode.LAYOUT_MODE_FLOATING,
+    floating = util_v1.LayoutMode.LAYOUT_MODE_FLOATING,
     ---The window is fullscreen.
-    fullscreen = window_v1.LayoutMode.LAYOUT_MODE_FULLSCREEN,
+    fullscreen = util_v1.LayoutMode.LAYOUT_MODE_FULLSCREEN,
     ---The window is maximized.
-    maximized = window_v1.LayoutMode.LAYOUT_MODE_MAXIMIZED,
+    maximized = util_v1.LayoutMode.LAYOUT_MODE_MAXIMIZED,
 }
 require("pinnacle.util").make_bijective(layout_mode)
 
@@ -153,6 +153,9 @@ local signal_name_to_SignalName = {
     pointer_leave = "WindowPointerLeave",
     focused = "WindowFocused",
     title_changed = "WindowTitleChanged",
+    layout_mode_changed = "WindowLayoutModeChanged",
+    created = "WindowCreated",
+    destroyed = "WindowDestroyed",
 }
 
 ---@class pinnacle.window.WindowSignal Signals related to compositor events.
@@ -160,6 +163,9 @@ local signal_name_to_SignalName = {
 ---@field pointer_leave fun(window: pinnacle.window.WindowHandle)? The pointer left a window.
 ---@field focused fun(window: pinnacle.window.WindowHandle)? The window got keyboard focus.
 ---@field title_changed fun(window: pinnacle.window.WindowHandle, title: string)? A window's title changed.
+---@field layout_mode_changed fun(window: pinnacle.window.WindowHandle, layout_mode: pinnacle.window.v1.LayoutMode)? A window's layout mode changed.
+---@field created fun(window: pinnacle.window.WindowHandle)? A window was created.
+---@field destroyed fun(window: pinnacle.window.WindowHandle, title: string, app_id: string)? A window was closed.
 
 ---Connects to a window signal.
 ---

@@ -47,20 +47,11 @@ message GetFocusedResponse {
   bool focused = 1;
 }
 
-enum LayoutMode {
-  LAYOUT_MODE_UNSPECIFIED = 0;
-  LAYOUT_MODE_TILED = 1;
-  LAYOUT_MODE_FLOATING = 2;
-  LAYOUT_MODE_FULLSCREEN = 3;
-  LAYOUT_MODE_MAXIMIZED = 4;
-  LAYOUT_MODE_SPILLED = 5;
-}
-
 message GetLayoutModeRequest {
   uint32 window_id = 1;
 }
 message GetLayoutModeResponse {
-  LayoutMode layout_mode = 1;
+  pinnacle.util.v1.LayoutMode layout_mode = 1;
 }
 
 message GetTagIdsRequest {

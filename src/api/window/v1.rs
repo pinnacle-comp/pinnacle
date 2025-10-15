@@ -6,22 +6,18 @@ use std::sync::{
 use indexmap::IndexSet;
 use pinnacle_api_defs::pinnacle::{
     util::{self, v1::SetOrToggle},
-    window::{
-        self,
-        v1::{
-            self, CloseRequest, GetAppIdRequest, GetAppIdResponse, GetFocusedRequest,
-            GetFocusedResponse, GetForeignToplevelListIdentifierRequest,
-            GetForeignToplevelListIdentifierResponse, GetLayoutModeRequest, GetLayoutModeResponse,
-            GetLocRequest, GetLocResponse, GetRequest, GetResponse, GetSizeRequest,
-            GetSizeResponse, GetTagIdsRequest, GetTagIdsResponse, GetTitleRequest,
-            GetTitleResponse, GetWindowsInDirRequest, GetWindowsInDirResponse, LowerRequest,
-            LowerResponse, MoveGrabRequest, MoveToOutputRequest, MoveToOutputResponse,
-            MoveToTagRequest, RaiseRequest, ResizeGrabRequest, ResizeTileRequest,
-            SetDecorationModeRequest, SetFloatingRequest, SetFocusedRequest, SetFullscreenRequest,
-            SetGeometryRequest, SetMaximizedRequest, SetTagRequest, SetTagsRequest,
-            SetTagsResponse, SetVrrDemandRequest, SetVrrDemandResponse, SwapRequest, SwapResponse,
-            WindowRuleRequest, WindowRuleResponse,
-        },
+    window::v1::{
+        self, CloseRequest, GetAppIdRequest, GetAppIdResponse, GetFocusedRequest,
+        GetFocusedResponse, GetForeignToplevelListIdentifierRequest,
+        GetForeignToplevelListIdentifierResponse, GetLayoutModeRequest, GetLayoutModeResponse,
+        GetLocRequest, GetLocResponse, GetRequest, GetResponse, GetSizeRequest, GetSizeResponse,
+        GetTagIdsRequest, GetTagIdsResponse, GetTitleRequest, GetTitleResponse,
+        GetWindowsInDirRequest, GetWindowsInDirResponse, LowerRequest, LowerResponse,
+        MoveGrabRequest, MoveToOutputRequest, MoveToOutputResponse, MoveToTagRequest, RaiseRequest,
+        ResizeGrabRequest, ResizeTileRequest, SetDecorationModeRequest, SetFloatingRequest,
+        SetFocusedRequest, SetFullscreenRequest, SetGeometryRequest, SetMaximizedRequest,
+        SetTagRequest, SetTagsRequest, SetTagsResponse, SetVrrDemandRequest, SetVrrDemandResponse,
+        SwapRequest, SwapResponse, WindowRuleRequest, WindowRuleResponse,
     },
 };
 use smithay::{
@@ -182,11 +178,11 @@ impl v1::window_service_server::WindowService for super::WindowService {
 
             Ok(GetLayoutModeResponse {
                 layout_mode: match layout_mode.current() {
-                    LayoutModeKind::Tiled => window::v1::LayoutMode::Tiled,
-                    LayoutModeKind::Floating => window::v1::LayoutMode::Floating,
-                    LayoutModeKind::Maximized => window::v1::LayoutMode::Maximized,
-                    LayoutModeKind::Fullscreen => window::v1::LayoutMode::Fullscreen,
-                    LayoutModeKind::Spilled => window::v1::LayoutMode::Spilled,
+                    LayoutModeKind::Tiled => util::v1::LayoutMode::Tiled,
+                    LayoutModeKind::Floating => util::v1::LayoutMode::Floating,
+                    LayoutModeKind::Maximized => util::v1::LayoutMode::Maximized,
+                    LayoutModeKind::Fullscreen => util::v1::LayoutMode::Fullscreen,
+                    LayoutModeKind::Spilled => util::v1::LayoutMode::Spilled,
                 }
                 .into(),
             })
