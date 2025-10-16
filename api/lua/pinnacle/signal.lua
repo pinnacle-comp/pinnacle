@@ -102,7 +102,7 @@ local signals = {
     WindowLayoutModeChanged = {
         ---@type grpc_client.h2.Stream?
         sender = nil,
-        ---@type { callback_id: integer, callback: fun(window: pinnacle.window.WindowHandle, layout_mode: pinnacle.window.v1.LayoutMode) }[]
+        ---@type { callback_id: integer, callback: fun(window: pinnacle.window.WindowHandle, layout_mode: pinnacle.util.v1.LayoutMode) }[]
         callbacks = {},
         ---@type fun(response: table)
         on_response = nil,

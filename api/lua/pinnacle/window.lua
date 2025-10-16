@@ -163,7 +163,7 @@ local signal_name_to_SignalName = {
 ---@field pointer_leave fun(window: pinnacle.window.WindowHandle)? The pointer left a window.
 ---@field focused fun(window: pinnacle.window.WindowHandle)? The window got keyboard focus.
 ---@field title_changed fun(window: pinnacle.window.WindowHandle, title: string)? A window's title changed.
----@field layout_mode_changed fun(window: pinnacle.window.WindowHandle, layout_mode: pinnacle.window.v1.LayoutMode)? A window's layout mode changed.
+---@field layout_mode_changed fun(window: pinnacle.window.WindowHandle, layout_mode: pinnacle.util.v1.LayoutMode)? A window's layout mode changed.
 ---@field created fun(window: pinnacle.window.WindowHandle)? A window was created.
 ---@field destroyed fun(window: pinnacle.window.WindowHandle, title: string, app_id: string)? A window was closed.
 
