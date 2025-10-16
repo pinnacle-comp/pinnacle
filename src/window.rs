@@ -41,6 +41,7 @@ use tracing::{error, warn};
 use window_state::LayoutModeKind;
 
 use crate::{
+    api::signal::Signal,
     render::util::snapshot::WindowSnapshot,
     state::{Pinnacle, State, WithState},
     tag::Tag,
@@ -560,6 +561,8 @@ impl Pinnacle {
     pub fn remove_window(&mut self, window: &WindowElement, unmap: bool) {
         let _span = tracy_client::span!("Pinnacle::remove_window");
 
+        self.signal_state.window_destroyed.signal(window);
+
         let hook = window.with_state_mut(|state| state.mapped_hook_id.take());
 
         // TODO: xwayland?
@@ -808,6 +811,8 @@ impl State {
         };
 
         self.pinnacle.windows.push(window.clone());
+
+        self.pinnacle.signal_state.window_created.signal(&window);
 
         self.pinnacle.raise_window(window.clone());
 

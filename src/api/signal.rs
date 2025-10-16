@@ -3,19 +3,24 @@ use std::{
     sync::atomic::{AtomicU32, Ordering},
 };
 
-use pinnacle_api_defs::pinnacle::signal::{
-    self,
-    v1::{
-        InputDeviceAddedRequest, InputDeviceAddedResponse, OutputConnectRequest,
-        OutputConnectResponse, OutputDisconnectRequest, OutputDisconnectResponse,
-        OutputFocusedRequest, OutputFocusedResponse, OutputMoveRequest, OutputMoveResponse,
-        OutputPointerEnterRequest, OutputPointerEnterResponse, OutputPointerLeaveRequest,
-        OutputPointerLeaveResponse, OutputResizeRequest, OutputResizeResponse, SignalRequest,
-        StreamControl, TagActiveRequest, TagActiveResponse, WindowFocusedRequest,
-        WindowFocusedResponse, WindowPointerEnterRequest, WindowPointerEnterResponse,
-        WindowPointerLeaveRequest, WindowPointerLeaveResponse, WindowTitleChangedRequest,
-        WindowTitleChangedResponse,
+use pinnacle_api_defs::pinnacle::{
+    signal::{
+        self,
+        v1::{
+            InputDeviceAddedRequest, InputDeviceAddedResponse, OutputConnectRequest,
+            OutputConnectResponse, OutputDisconnectRequest, OutputDisconnectResponse,
+            OutputFocusedRequest, OutputFocusedResponse, OutputMoveRequest, OutputMoveResponse,
+            OutputPointerEnterRequest, OutputPointerEnterResponse, OutputPointerLeaveRequest,
+            OutputPointerLeaveResponse, OutputResizeRequest, OutputResizeResponse, SignalRequest,
+            StreamControl, TagActiveRequest, TagActiveResponse, WindowCreatedRequest,
+            WindowCreatedResponse, WindowDestroyedRequest, WindowDestroyedResponse,
+            WindowFocusedRequest, WindowFocusedResponse, WindowLayoutModeChangedRequest,
+            WindowLayoutModeChangedResponse, WindowPointerEnterRequest, WindowPointerEnterResponse,
+            WindowPointerLeaveRequest, WindowPointerLeaveResponse, WindowTitleChangedRequest,
+            WindowTitleChangedResponse,
+        },
     },
+    util,
 };
 use smithay::output::Output;
 use tonic::{Request, Response, Status, Streaming};
@@ -25,7 +30,7 @@ use crate::{
     api::Sender,
     state::{State, WithState},
     tag::Tag,
-    window::WindowElement,
+    window::{WindowElement, window_state::LayoutModeKind},
 };
 
 use super::{ResponseStream, StateFnSender, run_bidirectional_streaming};
@@ -46,6 +51,9 @@ pub struct SignalState {
     pub window_pointer_leave: WindowPointerLeave,
     pub window_focused: WindowFocused,
     pub window_title_changed: WindowTitleChanged,
+    pub window_layout_changed: WindowLayoutChanged,
+    pub window_created: WindowCreated,
+    pub window_destroyed: WindowDestroyed,
 
     // Tag
     pub tag_active: TagActive,
@@ -68,6 +76,9 @@ impl SignalState {
         self.window_pointer_leave.clear();
         self.window_focused.clear();
         self.window_title_changed.clear();
+        self.window_layout_changed.clear();
+        self.window_created.clear();
+        self.window_destroyed.clear();
 
         self.tag_active.clear();
 
@@ -333,6 +344,80 @@ impl Signal for WindowTitleChanged {
 }
 
 #[derive(Debug, Default)]
+pub struct WindowLayoutChanged {
+    v1: SignalData<signal::v1::WindowLayoutModeChangedResponse>,
+}
+
+impl Signal for WindowLayoutChanged {
+    type Args<'a> = &'a WindowElement;
+
+    fn signal(&mut self, window: Self::Args<'_>) {
+        self.v1.signal(|buf| {
+            let layout_mode = window.with_state(|state| state.layout_mode.current());
+            buf.push_back(signal::v1::WindowLayoutModeChangedResponse {
+                window_id: window.with_state(|state| state.id.0),
+                layout_mode: match layout_mode {
+                    LayoutModeKind::Tiled => util::v1::LayoutMode::Tiled,
+                    LayoutModeKind::Floating => util::v1::LayoutMode::Floating,
+                    LayoutModeKind::Maximized => util::v1::LayoutMode::Maximized,
+                    LayoutModeKind::Fullscreen => util::v1::LayoutMode::Fullscreen,
+                    LayoutModeKind::Spilled => util::v1::LayoutMode::Spilled,
+                }
+                .into(),
+            });
+        });
+    }
+
+    fn clear(&mut self) {
+        self.v1.instances.clear();
+    }
+}
+
+#[derive(Debug, Default)]
+pub struct WindowCreated {
+    v1: SignalData<signal::v1::WindowCreatedResponse>,
+}
+
+impl Signal for WindowCreated {
+    type Args<'a> = &'a WindowElement;
+
+    fn signal(&mut self, window: Self::Args<'_>) {
+        self.v1.signal(|buf| {
+            buf.push_back(signal::v1::WindowCreatedResponse {
+                window_id: window.with_state(|state| state.id.0),
+            });
+        });
+    }
+
+    fn clear(&mut self) {
+        self.v1.instances.clear();
+    }
+}
+
+#[derive(Debug, Default)]
+pub struct WindowDestroyed {
+    v1: SignalData<signal::v1::WindowDestroyedResponse>,
+}
+
+impl Signal for WindowDestroyed {
+    type Args<'a> = &'a WindowElement;
+
+    fn signal(&mut self, window: Self::Args<'_>) {
+        self.v1.signal(|buf| {
+            buf.push_back(signal::v1::WindowDestroyedResponse {
+                window_id: window.with_state(|state| state.id.0),
+                title: window.title().unwrap_or_default(),
+                app_id: window.class().unwrap_or_default(),
+            });
+        });
+    }
+
+    fn clear(&mut self) {
+        self.v1.instances.clear();
+    }
+}
+
+#[derive(Debug, Default)]
 pub struct TagActive {
     v1: SignalData<signal::v1::TagActiveResponse>,
 }
@@ -492,6 +577,9 @@ impl signal::v1::signal_service_server::SignalService for SignalService {
     type WindowPointerLeaveStream = ResponseStream<WindowPointerLeaveResponse>;
     type WindowFocusedStream = ResponseStream<WindowFocusedResponse>;
     type WindowTitleChangedStream = ResponseStream<WindowTitleChangedResponse>;
+    type WindowLayoutModeChangedStream = ResponseStream<WindowLayoutModeChangedResponse>;
+    type WindowCreatedStream = ResponseStream<WindowCreatedResponse>;
+    type WindowDestroyedStream = ResponseStream<WindowDestroyedResponse>;
 
     type TagActiveStream = ResponseStream<TagActiveResponse>;
 
@@ -615,6 +703,39 @@ impl signal::v1::signal_service_server::SignalService for SignalService {
 
         start_signal_stream(self.sender.clone(), in_stream, |state| {
             &mut state.pinnacle.signal_state.window_title_changed.v1
+        })
+    }
+
+    async fn window_layout_mode_changed(
+        &self,
+        request: Request<Streaming<WindowLayoutModeChangedRequest>>,
+    ) -> Result<Response<Self::WindowLayoutModeChangedStream>, Status> {
+        let in_stream = request.into_inner();
+
+        start_signal_stream(self.sender.clone(), in_stream, |state| {
+            &mut state.pinnacle.signal_state.window_layout_changed.v1
+        })
+    }
+
+    async fn window_created(
+        &self,
+        request: Request<Streaming<WindowCreatedRequest>>,
+    ) -> Result<Response<Self::WindowCreatedStream>, Status> {
+        let in_stream = request.into_inner();
+
+        start_signal_stream(self.sender.clone(), in_stream, |state| {
+            &mut state.pinnacle.signal_state.window_created.v1
+        })
+    }
+
+    async fn window_destroyed(
+        &self,
+        request: Request<Streaming<WindowDestroyedRequest>>,
+    ) -> Result<Response<Self::WindowDestroyedStream>, Status> {
+        let in_stream = request.into_inner();
+
+        start_signal_stream(self.sender.clone(), in_stream, |state| {
+            &mut state.pinnacle.signal_state.window_destroyed.v1
         })
     }
 
