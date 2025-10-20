@@ -368,15 +368,13 @@ pub(crate) enum Event {
 
 impl From<widget::v1::text_input::Event> for Event {
     fn from(value: widget::v1::text_input::Event) -> Self {
-        use widget::v1::text_input::EventType;
+        use widget::v1::text_input::event::Data;
 
-        let widget::v1::text_input::Event { event_type, data } = value;
-
-        let event_type = event_type.try_into().expect("Invalid EventType");
-        match event_type {
-            EventType::EventInput => Self::Input(data.unwrap_or_default()),
-            EventType::EventSubmit => Self::Submit,
-            EventType::EventPaste => Self::Paste(data.unwrap_or_default()),
+        let data = value.data.expect("Invalid EventType");
+        match data {
+            Data::Input(data) => Self::Input(data),
+            Data::Submit(()) => Self::Submit,
+            Data::Paste(data) => Self::Paste(data),
         }
     }
 }
