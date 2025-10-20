@@ -850,9 +850,12 @@ local snowcap_layer_v1_Layer = {
 ---@field layer_id integer?
 ---@field decoration_id integer?
 
----@class snowcap.widget.v1.GetWidgetEventsResponse
+---@class snowcap.widget.v1.WidgetEvent
 ---@field widget_id integer?
 ---@field button snowcap.widget.v1.Button.Event?
+
+---@class snowcap.widget.v1.GetWidgetEventsResponse
+---@field widget_events snowcap.widget.v1.WidgetEvent[]?
 
 ---@class snowcap.decoration.v1.Bounds
 ---@field left integer?
@@ -1103,6 +1106,7 @@ snowcap.widget.v1.Button.Event = {}
 snowcap.widget.v1.Image = {}
 snowcap.widget.v1.Image.Rgba = {}
 snowcap.widget.v1.GetWidgetEventsRequest = {}
+snowcap.widget.v1.WidgetEvent = {}
 snowcap.widget.v1.GetWidgetEventsResponse = {}
 snowcap.decoration = {}
 snowcap.decoration.v1 = {}

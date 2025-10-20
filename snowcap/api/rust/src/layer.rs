@@ -8,7 +8,7 @@ use snowcap_api_defs::snowcap::{
         self,
         v1::{CloseRequest, NewLayerRequest, UpdateLayerRequest},
     },
-    widget::v1::{GetWidgetEventsRequest, get_widget_events_request, get_widget_events_response},
+    widget::v1::{GetWidgetEventsRequest, get_widget_events_request, widget_event},
 };
 use tokio::sync::mpsc::UnboundedSender;
 use tokio_stream::StreamExt;
@@ -173,30 +173,32 @@ where
 
     tokio::spawn(async move {
         loop {
-            let msg = tokio::select! {
-                Some(Ok(event)) = event_stream.next() => {
-                    let id = WidgetId(event.widget_id);
-                    let Some(event) = event.event else {
-                        continue;
-                    };
+            tokio::select! {
+                Some(Ok(response)) = event_stream.next() => {
+                    for widget_event in response.widget_events {
+                        let id = WidgetId(widget_event.widget_id);
+                        let Some(event) = widget_event.event else {
+                            continue;
+                        };
 
-                    match event {
-                        get_widget_events_response::Event::Button(_event) => {
-                            callbacks.get(&id).cloned()
-                        }
+                        let msg = match event {
+                            widget_event::Event::Button(_event) => {
+                                callbacks.get(&id).cloned()
+                            },
+                        };
+
+                        let Some(msg) = msg else {
+                            continue;
+                        };
+
+                        program.update(msg.clone());
                     }
                 }
                 Some(msg) = msg_recv.recv() => {
-                    Some(msg)
+                    program.update(msg.clone());
                 }
                 else => break,
             };
-
-            let Some(msg) = msg else {
-                continue;
-            };
-
-            program.update(msg.clone());
 
             let widget_def = program.view();
 

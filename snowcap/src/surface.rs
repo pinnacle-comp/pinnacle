@@ -57,7 +57,7 @@ pub struct SnowcapSurface {
     viewport: WpViewport,
     fractional_scale: WpFractionalScaleV1,
 
-    pub widget_event_sender: Option<UnboundedSender<(WidgetId, WidgetEvent)>>,
+    pub widget_event_sender: Option<UnboundedSender<Vec<(WidgetId, WidgetEvent)>>>,
 }
 
 impl Drop for SnowcapSurface {
@@ -326,14 +326,21 @@ impl SnowcapSurface {
             });
         }
 
-        if !messages.is_empty() {
-            for message in messages {
-                if let SnowcapMessage::WidgetEvent(id, widget_event) = message
-                    && let Some(sender) = self.widget_event_sender.as_ref()
-                {
-                    let _ = sender.send((id, widget_event));
-                }
-            }
+        if !messages.is_empty()
+            && let Some(sender) = self.widget_event_sender.as_ref()
+        {
+            let widget_events: Vec<_> = messages
+                .into_iter()
+                .filter_map(|message| {
+                    if let SnowcapMessage::WidgetEvent(id, widget_event) = message {
+                        Some((id, widget_event))
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+
+            let _ = sender.send(widget_events);
         }
 
         // If there are messages, we'll need to recreate the UI with the new state.

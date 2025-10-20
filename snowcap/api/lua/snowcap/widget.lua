@@ -578,4 +578,14 @@ function widget._traverse_widget_tree(wgt, callbacks, with_widget)
     end
 end
 
+---@private
+---@lcat nodoc
+---@param callbacks any[]
+---@param wgt snowcap.widget.WidgetDef
+function widget._collect_callbacks(callbacks, wgt)
+    if wgt.button and wgt.button.on_press then
+        callbacks[wgt.button.widget_id] = wgt.button.on_press
+    end
+end
+
 return widget
