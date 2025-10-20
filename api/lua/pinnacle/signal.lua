@@ -25,6 +25,14 @@ local signals = {
         ---@type fun(response: table)
         on_response = nil,
     },
+    OutputSetup = {
+        ---@type grpc_client.h2.Stream?
+        sender = nil,
+        ---@type { callback_id: integer, callback: fun(output: pinnacle.output.OutputHandle) }[]
+        callbacks = {},
+        ---@type fun(response: table)
+        on_response = nil,
+    },
     OutputResize = {
         ---@type grpc_client.h2.Stream?
         sender = nil,
@@ -166,6 +174,16 @@ signals.OutputDisconnect.on_response = function(response)
 
     for _, callback in ipairs(callbacks) do
         protected_callback("OutputDisconnect", callback.callback, handle)
+    end
+end
+
+signals.OutputSetup.on_response = function(response)
+    ---@diagnostic disable-next-line: invisible
+    local handle = require("pinnacle.output").handle.new(response.output_name)
+    local callbacks = require("pinnacle.util").deep_copy(signals.OutputSetup.callbacks)
+
+    for _, callback in ipairs(callbacks) do
+        protected_callback("OutputSetup", callback.callback, handle)
     end
 end
 

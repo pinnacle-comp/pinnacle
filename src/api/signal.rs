@@ -10,11 +10,11 @@ use pinnacle_api_defs::pinnacle::signal::{
         OutputConnectResponse, OutputDisconnectRequest, OutputDisconnectResponse,
         OutputFocusedRequest, OutputFocusedResponse, OutputMoveRequest, OutputMoveResponse,
         OutputPointerEnterRequest, OutputPointerEnterResponse, OutputPointerLeaveRequest,
-        OutputPointerLeaveResponse, OutputResizeRequest, OutputResizeResponse, SignalRequest,
-        StreamControl, TagActiveRequest, TagActiveResponse, WindowFocusedRequest,
-        WindowFocusedResponse, WindowPointerEnterRequest, WindowPointerEnterResponse,
-        WindowPointerLeaveRequest, WindowPointerLeaveResponse, WindowTitleChangedRequest,
-        WindowTitleChangedResponse,
+        OutputPointerLeaveResponse, OutputResizeRequest, OutputResizeResponse, OutputSetupRequest,
+        OutputSetupResponse, SignalRequest, StreamControl, TagActiveRequest, TagActiveResponse,
+        WindowFocusedRequest, WindowFocusedResponse, WindowPointerEnterRequest,
+        WindowPointerEnterResponse, WindowPointerLeaveRequest, WindowPointerLeaveResponse,
+        WindowTitleChangedRequest, WindowTitleChangedResponse,
     },
 };
 use smithay::output::Output;
@@ -35,6 +35,7 @@ pub struct SignalState {
     // Output
     pub output_connect: OutputConnect,
     pub output_disconnect: OutputDisconnect,
+    pub output_setup: OutputSetup,
     pub output_resize: OutputResize,
     pub output_move: OutputMove,
     pub output_pointer_enter: OutputPointerEnter,
@@ -126,6 +127,27 @@ impl Signal for OutputDisconnect {
     fn signal(&mut self, args: Self::Args<'_>) {
         self.v1.signal(|buf| {
             buf.push_back(signal::v1::OutputDisconnectResponse {
+                output_name: args.name(),
+            });
+        });
+    }
+
+    fn clear(&mut self) {
+        self.v1.instances.clear();
+    }
+}
+
+#[derive(Debug, Default)]
+pub struct OutputSetup {
+    v1: SignalData<signal::v1::OutputSetupResponse>,
+}
+
+impl Signal for OutputSetup {
+    type Args<'a> = &'a smithay::output::Output;
+
+    fn signal(&mut self, args: Self::Args<'_>) {
+        self.v1.signal(|buf| {
+            buf.push_back(signal::v1::OutputSetupResponse {
                 output_name: args.name(),
             });
         });
@@ -482,6 +504,7 @@ impl SignalService {
 impl signal::v1::signal_service_server::SignalService for SignalService {
     type OutputConnectStream = ResponseStream<OutputConnectResponse>;
     type OutputDisconnectStream = ResponseStream<OutputDisconnectResponse>;
+    type OutputSetupStream = ResponseStream<OutputSetupResponse>;
     type OutputResizeStream = ResponseStream<OutputResizeResponse>;
     type OutputMoveStream = ResponseStream<OutputMoveResponse>;
     type OutputPointerEnterStream = ResponseStream<OutputPointerEnterResponse>;
@@ -516,6 +539,17 @@ impl signal::v1::signal_service_server::SignalService for SignalService {
 
         start_signal_stream(self.sender.clone(), in_stream, |state| {
             &mut state.pinnacle.signal_state.output_disconnect.v1
+        })
+    }
+
+    async fn output_setup(
+        &self,
+        request: Request<Streaming<OutputSetupRequest>>,
+    ) -> Result<Response<Self::OutputSetupStream>, Status> {
+        let in_stream = request.into_inner();
+
+        start_signal_stream(self.sender.clone(), in_stream, |state| {
+            &mut state.pinnacle.signal_state.output_setup.v1
         })
     }
 

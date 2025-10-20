@@ -317,23 +317,17 @@ impl Pinnacle {
             self.space.map_output(output, output.current_location());
 
             // Trigger the connect signal here for configs to reposition outputs
-            //
-            // TODO: Create a new output_disable/enable signal and trigger it here
-            // instead of connect and disconnect
             if should_signal {
                 self.signal_state.output_connect.signal(output);
             }
         } else {
             if let Some(global) = output.with_state_mut(|state| state.enabled_global_id.take()) {
                 self.display_handle.remove_global::<State>(global);
+
+                // Trigger the disconnect signal here for configs to reposition outputs
+                self.signal_state.output_disconnect.signal(output);
             }
             self.space.unmap_output(output);
-
-            // Trigger the disconnect signal here for configs to reposition outputs
-            //
-            // TODO: Create a new output_disable/enable signal and trigger it here
-            // instead of connect and disconnect
-            self.signal_state.output_disconnect.signal(output);
 
             self.gamma_control_manager_state.output_removed(output);
 

@@ -125,9 +125,6 @@ signals! {
         /// An output was connected.
         ///
         /// Callbacks receive the newly connected output.
-        ///
-        /// FIXME: This will not run on outputs that have been previously connected.
-        /// |      Tell the dev to fix this in the compositor.
         OutputConnect = {
             enum_name = Connect,
             callback_type = SingleOutputFn,
@@ -140,13 +137,29 @@ signals! {
                 }
             },
         }
-        /// An output was connected.
+        /// An output was disconnected.
         ///
         /// Callbacks receive the disconnected output.
         OutputDisconnect = {
             enum_name = Disconnect,
             callback_type = SingleOutputFn,
             client_request = output_disconnect,
+            on_response = |response, callbacks| {
+                let handle = OutputHandle { name: response.output_name };
+
+                for callback in callbacks {
+                    callback(&handle);
+                }
+            },
+        }
+        /// An output was connected for the first time.
+        /// This will not trigger if the output was previously connected.
+        ///
+        /// Callbacks receive the newly connected output.
+        OutputSetup = {
+            enum_name = Setup,
+            callback_type = SingleOutputFn,
+            client_request = output_setup,
             on_response = |response, callbacks| {
                 let handle = OutputHandle { name: response.output_name };
 
@@ -335,6 +348,7 @@ pub(crate) type SingleWindowFn = Box<dyn FnMut(&WindowHandle) + Send + 'static>;
 pub(crate) struct SignalState {
     pub(crate) output_connect: SignalData<OutputConnect>,
     pub(crate) output_disconnect: SignalData<OutputDisconnect>,
+    pub(crate) output_setup: SignalData<OutputSetup>,
     pub(crate) output_resize: SignalData<OutputResize>,
     pub(crate) output_move: SignalData<OutputMove>,
     pub(crate) output_pointer_enter: SignalData<OutputPointerEnter>,
@@ -362,6 +376,7 @@ impl SignalState {
         Self {
             output_connect: SignalData::new(),
             output_disconnect: SignalData::new(),
+            output_setup: SignalData::new(),
             output_resize: SignalData::new(),
             output_move: SignalData::new(),
             output_pointer_enter: SignalData::new(),
@@ -382,6 +397,7 @@ impl SignalState {
     pub(crate) fn shutdown(&mut self) {
         self.output_connect.reset();
         self.output_disconnect.reset();
+        self.output_setup.reset();
         self.output_resize.reset();
         self.output_move.reset();
         self.output_pointer_enter.reset();

@@ -1078,8 +1078,10 @@ impl Udev {
                 self.set_output_powered(&output, &pinnacle.loop_handle, powered);
             }
         } else {
-            pinnacle.signal_state.output_connect.signal(&output);
+            pinnacle.signal_state.output_setup.signal(&output);
         }
+
+        pinnacle.signal_state.output_connect.signal(&output);
 
         pinnacle.output_management_manager_state.update::<State>();
     }

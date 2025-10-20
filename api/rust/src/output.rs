@@ -158,6 +158,7 @@ pub fn connect_signal(signal: OutputSignal) -> SignalHandle {
     match signal {
         OutputSignal::Connect(f) => signal_state.output_connect.add_callback(f),
         OutputSignal::Disconnect(f) => signal_state.output_disconnect.add_callback(f),
+        OutputSignal::Setup(f) => signal_state.output_setup.add_callback(f),
         OutputSignal::Resize(f) => signal_state.output_resize.add_callback(f),
         OutputSignal::Move(f) => signal_state.output_move.add_callback(f),
         OutputSignal::PointerEnter(f) => signal_state.output_pointer_enter.add_callback(f),
