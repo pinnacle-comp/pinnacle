@@ -426,9 +426,9 @@ local mouse = {
 
 ---@enum snowcap.widget.text_input.event.Type
 local text_input_event_type = {
-    INPUT = 0,
-    SUBMIT = 1,
-    PASTE = 2,
+    INPUT = "input",
+    SUBMIT = "submit",
+    PASTE = "press",
 }
 
 ---@class snowcap.widget.Length
@@ -1150,8 +1150,17 @@ function widget._text_input_process_event(callbacks, event)
         [text_input_event_type.PASTE] = "on_paste",
     }
 
-    local key = translate[event.event_type]
-    local cb = callbacks[key]
+    local event_type = nil
+    local cb = nil
+
+    for k, v in pairs(translate) do
+        if event[k] ~= nil then
+            event_type = k
+            cb = callbacks[v]
+
+            break
+        end
+    end
 
     if cb == nil then
         return nil
@@ -1159,10 +1168,10 @@ function widget._text_input_process_event(callbacks, event)
 
     local msg = nil
 
-    if event.event_type == text_input_event_type.SUBMIT then
+    if event_type == text_input_event_type.SUBMIT then
         msg = cb
     else
-        local ok, val = pcall(cb, event.data)
+        local ok, val = pcall(cb, event[event_type])
 
         if not ok then
             require("snowcap.log").error(val)
