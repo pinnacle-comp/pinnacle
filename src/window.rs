@@ -751,6 +751,29 @@ impl Pinnacle {
             LayoutModeKind::Fullscreen => Some(output_geo),
         }
     }
+
+    /// Checks if layout mode was changed and fire window layout change signal if appropriate
+    pub fn check_window_layout_mode_change(&mut self) {
+        for window in &self.windows {
+            let current_mode = window.with_state(|s| s.layout_mode);
+            let old_mode_opt = window.with_state(|s| s.old_layout_mode);
+
+            match old_mode_opt {
+                Some(old_mode) if old_mode != current_mode => {
+                    // Mode changed since last check
+                    self.signal_state.window_layout_changed.signal(window);
+                    window.with_state_mut(|state| state.old_layout_mode = Some(current_mode));
+                }
+                None => {
+                    // First time seeing this window just set the old state
+                    window.with_state_mut(|state| state.old_layout_mode = Some(current_mode));
+                }
+                _ => {
+                    // No change, do nothing
+                }
+            }
+        }
+    }
 }
 
 fn set_tags_to_output(tags: &mut IndexSet<Tag>, output: &Output) {

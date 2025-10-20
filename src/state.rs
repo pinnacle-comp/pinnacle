@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use crate::{
-    api::signal::{Signal, SignalState},
+    api::signal::SignalState,
     backend::{
         self, Backend,
         udev::{SurfaceDmabufFeedback, Udev},
@@ -287,29 +287,7 @@ impl State {
             .flush_clients()
             .expect("failed to flush client buffers");
 
-        // Check if layout mode changed and fire signal if appropriate
-        for window in &self.pinnacle.windows {
-            let current_mode = window.with_state(|s| s.layout_mode);
-            let old_mode_opt = window.with_state(|s| s.old_layout_mode);
-
-            match old_mode_opt {
-                Some(old_mode) if old_mode != current_mode => {
-                    // Mode changed since last check
-                    self.pinnacle
-                        .signal_state
-                        .window_layout_changed
-                        .signal(window);
-                    window.with_state_mut(|state| state.old_layout_mode = Some(current_mode));
-                }
-                None => {
-                    // First time seeing this window just set the old state
-                    window.with_state_mut(|state| state.old_layout_mode = Some(current_mode));
-                }
-                _ => {
-                    // No change, do nothing
-                }
-            }
-        }
+        self.pinnacle.check_window_layout_mode_change();
     }
 
     fn notify_blocker_cleared(&mut self) {

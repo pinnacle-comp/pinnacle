@@ -307,10 +307,11 @@ signals! {
             client_request = window_layout_mode_changed,
             on_response = |response, callbacks| {
                 let handle = WindowHandle { id: response.window_id };
-                let layout_mode = response.layout_mode().try_into().unwrap_or(LayoutMode::Tiled);
 
-                for callback in callbacks {
-                    callback(&handle, layout_mode);
+                if let Ok(layout_mode) = response.layout_mode().try_into() {
+                    for callback in callbacks {
+                        callback(&handle, layout_mode);
+                    }
                 }
             },
         }
