@@ -440,15 +440,12 @@ message TextInput {
     }
   }
 
-  enum EventType {
-    EVENT_INPUT = 0;
-    EVENT_SUBMIT = 1;
-    EVENT_PASTE = 2;
-  }
-
   message Event {
-    EventType event_type = 1;
-    optional string data = 2;
+    oneof data {
+      string input = 1;
+      google.protobuf.Empty submit = 2;
+      string paste = 3;
+    }
   }
 }
 

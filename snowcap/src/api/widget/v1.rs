@@ -1211,17 +1211,15 @@ impl FromApi<iced::Point> for snowcap_api_defs::snowcap::widget::v1::mouse_area:
 
 impl From<TextInputEvent> for snowcap_api_defs::snowcap::widget::v1::text_input::Event {
     fn from(value: TextInputEvent) -> Self {
-        use snowcap_api_defs::snowcap::widget::v1::text_input::EventType;
+        use snowcap_api_defs::snowcap::widget::v1::text_input::event::Data;
 
-        let (event_type, data) = match value {
-            TextInputEvent::Input(data) => (EventType::EventInput, Some(data)),
-            TextInputEvent::Submit => (EventType::EventSubmit, None),
-            TextInputEvent::Paste(data) => (EventType::EventPaste, Some(data)),
+        let data = match value {
+            TextInputEvent::Input(data) => Data::Input(data),
+            TextInputEvent::Submit => Data::Submit(()),
+            TextInputEvent::Paste(data) => Data::Paste(data),
         };
 
-        let event_type: i32 = event_type.into();
-
-        Self { event_type, data }
+        Self { data: Some(data) }
     }
 }
 
