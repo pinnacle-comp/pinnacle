@@ -291,10 +291,8 @@ local mouse = {
 ---        placeholder = "placeholder:",
 ---        value = self.input_value or "",
 ---        id = self.INPUT_ID,
----        callbacks = {
----            on_input = function(data) return { content_changed = data } end,
----            on_submit = { submit = {} },
----        },
+---        on_input = function(data) return { content_changed = data } end,
+---        on_submit = { submit = {} },
 ---        width = Widget.length.Fixed(500.0)
 ---    })
 ---end
@@ -349,8 +347,15 @@ local mouse = {
 ---@field id string?
 ---Convert the `TextInput` into a secure password input.
 ---@field secure boolean?
----The `TextInput` callbacks.
----@field callbacks snowcap.widget.text_input.Callbacks?
+---Sets the message that should be produced when some text is typed into the `TextInput`.
+---
+---If the field is not set, the `TextInput` will be disabled.
+---@field on_input (fun(data:string): any)?
+---Sets the message that should be produced when the `TextInput` is focused and the enter
+---key is pressed.
+---@field on_submit any?
+---Sets the message that should be produced when some text is pasted into the `TextInput`.
+---@field on_paste (fun(data:string): any)?
 ---Sets the `Font` of the `TextInput`.
 ---@field font snowcap.widget.Font?
 ---Sets the `Icon` of the `TextInput`.
@@ -813,17 +818,15 @@ end
 ---@param def snowcap.widget.TextInput
 ---@return snowcap.widget.v1.TextInput
 local function text_input_into_api(def)
-    def.callbacks = def.callbacks or {}
-
     ---@type snowcap.widget.v1.TextInput
     return {
         placeholder = def.placeholder,
         value = def.value,
         id = def.id,
         secure = def.secure,
-        on_input = def.callbacks.on_input ~= nil,
-        on_submit = def.callbacks.on_submit ~= nil,
-        on_paste = def.callbacks.on_paste ~= nil,
+        on_input = def.on_input ~= nil,
+        on_submit = def.on_submit ~= nil,
+        on_paste = def.on_paste ~= nil,
         font = def.font --[[@as snowcap.widget.v1.Font]],
         icon = def.icon --[[@as snowcap.widget.v1.TextInput.Icon]],
         width = def.width --[[@as snowcap.widget.v1.Length]],
@@ -989,11 +992,9 @@ end
 function widget.text_input(text_input)
     local has_cb = false
 
-    if text_input.callbacks then
-        has_cb = has_cb or text_input.callbacks.on_input ~= nil
-        has_cb = has_cb or text_input.callbacks.on_submit ~= nil
-        has_cb = has_cb or text_input.callbacks.on_paste ~= nil
-    end
+    has_cb = has_cb or text_input.on_input ~= nil
+    has_cb = has_cb or text_input.on_submit ~= nil
+    has_cb = has_cb or text_input.on_paste ~= nil
 
     if has_cb then
         text_input.widget_id = widget_id_counter
@@ -1056,6 +1057,20 @@ local function collect_mouse_area_callbacks(mouse_area)
     }
 end
 
+---@package
+---@lcat nodoc
+---
+---Collect event callbacks from a `snowcap.widget.TextInput`
+---@param text_input snowcap.widget.TextInput
+---@return snowcap.widget.text_input.Callbacks
+local function collect_text_input_callbacks(text_input)
+    return {
+        on_input = text_input.on_input,
+        on_submit = text_input.on_submit,
+        on_paste = text_input.on_paste,
+    }
+end
+
 ---@private
 ---@lcat nodoc
 ---@param callbacks any[]
@@ -1070,7 +1085,7 @@ function widget._collect_callbacks(callbacks, wgt)
     end
 
     if wgt.text_input and wgt.text_input.widget_id then
-        callbacks[wgt.text_input.widget_id] = wgt.text_input.callbacks
+        callbacks[wgt.text_input.widget_id] = collect_text_input_callbacks(wgt.text_input)
     end
 end
 
