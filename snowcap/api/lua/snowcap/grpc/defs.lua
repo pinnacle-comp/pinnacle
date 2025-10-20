@@ -560,13 +560,6 @@ local snowcap_widget_v1_MouseArea_Interaction = {
     INTERACTION_HELP = 17,
 }
 
----@enum snowcap.widget.v1.TextInput.EventType
-local snowcap_widget_v1_TextInput_EventType = {
-    EVENT_INPUT = 0,
-    EVENT_SUBMIT = 1,
-    EVENT_PASTE = 2,
-}
-
 ---@enum snowcap.widget.v0alpha1.Alignment
 local snowcap_widget_v0alpha1_Alignment = {
     ALIGNMENT_UNSPECIFIED = 0,
@@ -981,8 +974,9 @@ local snowcap_layer_v1_Layer = {
 ---@field selection snowcap.widget.v1.Color?
 
 ---@class snowcap.widget.v1.TextInput.Event
----@field event_type snowcap.widget.v1.TextInput.EventType?
----@field data string?
+---@field input string?
+---@field submit google.protobuf.Empty?
+---@field paste string?
 
 ---@class snowcap.widget.v1.GetWidgetEventsRequest
 ---@field layer_id integer?
@@ -1388,7 +1382,6 @@ snowcap.widget.v1.Font.Stretch = snowcap_widget_v1_Font_Stretch
 snowcap.widget.v1.Font.Style = snowcap_widget_v1_Font_Style
 snowcap.widget.v1.Image.ContentFit = snowcap_widget_v1_Image_ContentFit
 snowcap.widget.v1.MouseArea.Interaction = snowcap_widget_v1_MouseArea_Interaction
-snowcap.widget.v1.TextInput.EventType = snowcap_widget_v1_TextInput_EventType
 snowcap.widget.v0alpha1.Alignment = snowcap_widget_v0alpha1_Alignment
 snowcap.widget.v0alpha1.ScrollableAlignment = snowcap_widget_v0alpha1_ScrollableAlignment
 snowcap.widget.v0alpha1.Font.Weight = snowcap_widget_v0alpha1_Font_Weight
