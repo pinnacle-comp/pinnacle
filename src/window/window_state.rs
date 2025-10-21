@@ -388,6 +388,7 @@ pub struct WindowElementState {
     /// What tags the window is currently on.
     pub tags: IndexSet<Tag>,
     pub layout_mode: LayoutMode,
+    pub old_layout_mode: Option<LayoutMode>,
     pub minimized: bool,
     pub decoration_mode: Option<zxdg_toplevel_decoration_v1::Mode>,
     pub floating_x: Option<i32>,
@@ -674,6 +675,7 @@ impl WindowElementState {
             id: WindowId::next(),
             tags: Default::default(),
             layout_mode: LayoutMode::new_tiled(),
+            old_layout_mode: None,
             floating_x: Default::default(),
             floating_y: Default::default(),
             floating_size: Default::default(),
