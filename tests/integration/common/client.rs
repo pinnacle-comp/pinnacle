@@ -81,6 +81,7 @@ pub struct Window {
 
     current_configure_serial: Option<u32>,
     pending_configure: PendingConfigure,
+    size_configure_hook: Option<Box<dyn FnMut((i32, i32)) -> bool>>,
     pub close_requested: bool,
     pub fullscreen: bool,
     pub maximized: bool,
@@ -228,6 +229,7 @@ impl State {
             viewport,
             current_configure_serial: None,
             pending_configure: Default::default(),
+            size_configure_hook: None,
             close_requested: false,
             fullscreen: false,
             maximized: false,
@@ -309,6 +311,20 @@ impl Window {
 
     pub fn unset_maximized(&self) {
         self.toplevel.unset_maximized();
+    }
+
+    /// Set a callback for size change sent by the compositor.
+    ///
+    /// The hook is called when the XdgSurface gets the configure event, and is called if
+    /// `window.pending_configure.size` is set.
+    ///
+    /// If the hook returns true, it's kept and will be called again on the next size change. If
+    /// not, the hook is removed.
+    pub fn size_configure_hook<F>(&mut self, hook: F)
+    where
+        F: FnMut((i32, i32)) -> bool + 'static,
+    {
+        self.size_configure_hook = Some(Box::new(hook))
     }
 }
 
@@ -438,6 +454,16 @@ impl Dispatch<XdgSurface, ()> for State {
                 } = std::mem::take(&mut window.pending_configure);
 
                 if let Some((mut w, mut h)) = size {
+                    let keep_hook = window
+                        .size_configure_hook
+                        .as_mut()
+                        .map(|hook| hook((w, h)))
+                        .unwrap_or(false);
+
+                    if !keep_hook {
+                        window.size_configure_hook = None;
+                    };
+
                     if w == 0 {
                         w = 640;
                     }
