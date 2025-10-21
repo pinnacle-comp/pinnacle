@@ -583,6 +583,8 @@ fn tag_signal_created() {
             },
         }
 
+        fixture.dispatch_until(|_| tester_cpy.done());
+
         let new_tag = output
             .with_state(|s| {
                 s.tags.iter().find_map(|t| {
