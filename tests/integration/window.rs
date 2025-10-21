@@ -206,3 +206,26 @@ fn window_move_to_output() {
     let tags = fixture.pinnacle().windows[0].with_state(|state| state.tags.clone());
     assert_eq!(tags, output2.with_state(|state| state.tags.clone()));
 }
+
+#[test_log::test]
+fn window_floating_pick_size() {
+    let (mut fixture, ..) = set_up();
+
+    let client_id = fixture.add_client();
+
+    fixture.spawn_blocking(move || {
+        pinnacle_api::window::add_window_rule(|win| {
+            win.set_floating(true);
+        });
+    });
+
+    fixture.spawn_floating_window_with(client_id, (500, 500), |win| {
+        win.size_configure_hook(|size| {
+            assert_eq!(size, (0, 0));
+            false // we only care about initial configure. Unhook ourselves.
+        });
+    });
+
+    let size = fixture.pinnacle().windows[0].geometry().size;
+    assert_eq!(size, (500, 500).into());
+}
