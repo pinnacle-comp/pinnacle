@@ -10,6 +10,8 @@ local stream_control = require("pinnacle.grpc.defs").pinnacle.signal.v1.StreamCo
 
 local layout_mode_def = require("pinnacle.grpc.defs").pinnacle.window.v1.LayoutMode
 
+local window = require("pinnacle.window")
+
 local signals = {
     OutputConnect = {
         ---@type grpc_client.h2.Stream?
@@ -102,7 +104,7 @@ local signals = {
     WindowLayoutModeChanged = {
         ---@type grpc_client.h2.Stream?
         sender = nil,
-        ---@type { callback_id: integer, callback: fun(window: pinnacle.window.WindowHandle, layout_mode: pinnacle.window.v1.LayoutMode) }[]
+        ---@type { callback_id: integer, callback: fun(window: pinnacle.window.WindowHandle, layout_mode: pinnacle.window.LayoutMode) }[]
         callbacks = {},
         ---@type fun(response: table)
         on_response = nil,
@@ -312,10 +314,12 @@ signals.WindowLayoutModeChanged.on_response = function(response)
     ---@diagnostic disable-next-line: invisible
     local window_handle = require("pinnacle.window").handle.new(response.window_id)
     local callbacks = require("pinnacle.util").deep_copy(signals.WindowLayoutModeChanged.callbacks)
-    local layout_mode = response.layout_mode or layout_mode_def.LAYOUT_MODE_TILED
+    local layout_mode_proto = response.layout_mode or layout_mode_def.LAYOUT_MODE_TILED
+
+    local layout_mode_string = window.layout_mode[layout_mode_proto]
 
     for _, callback in ipairs(callbacks) do
-        protected_callback("WindowLayoutModeChanged", callback.callback, window_handle, layout_mode)
+        protected_callback("WindowLayoutModeChanged", callback.callback, window_handle, layout_mode_string)
     end
 end
 
