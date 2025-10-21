@@ -5,7 +5,7 @@ use snowcap_api_defs::snowcap::widget::{
     self,
     v1::{
         GetWidgetEventsRequest, GetWidgetEventsResponse, WidgetDef, get_widget_events_request,
-        widget_def, widget_service_server,
+        widget_def, widget_event, widget_service_server,
     },
 };
 use tonic::{Request, Response, Status};
@@ -44,16 +44,19 @@ impl widget_service_server::WidgetService for super::WidgetService {
                     }
                 }
             },
-            |(id, event)| {
+            |events| {
                 Ok(GetWidgetEventsResponse {
-                    widget_id: id.into_inner(),
-                    event: Some(match event {
-                        WidgetEvent::Button => {
-                            widget::v1::get_widget_events_response::Event::Button(
-                                widget::v1::button::Event {},
-                            )
-                        }
-                    }),
+                    widget_events: events
+                        .into_iter()
+                        .map(|(id, event)| widget::v1::WidgetEvent {
+                            widget_id: id.into_inner(),
+                            event: Some(match event {
+                                WidgetEvent::Button => {
+                                    widget_event::Event::Button(widget::v1::button::Event {})
+                                }
+                            }),
+                        })
+                        .collect(),
                 })
             },
         )

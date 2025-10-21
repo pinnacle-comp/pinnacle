@@ -297,12 +297,16 @@ message GetWidgetEventsRequest {
   }
 }
 
-message GetWidgetEventsResponse {
+message WidgetEvent {
   uint32 widget_id = 1;
 
   oneof event {
     Button.Event button = 2;
   }
+}
+
+message GetWidgetEventsResponse {
+  repeated WidgetEvent widget_events = 1;
 }
 
 service WidgetService {
