@@ -11,10 +11,10 @@ use pinnacle_api_defs::pinnacle::signal::{
         OutputFocusedRequest, OutputFocusedResponse, OutputMoveRequest, OutputMoveResponse,
         OutputPointerEnterRequest, OutputPointerEnterResponse, OutputPointerLeaveRequest,
         OutputPointerLeaveResponse, OutputResizeRequest, OutputResizeResponse, SignalRequest,
-        StreamControl, TagActiveRequest, TagActiveResponse, WindowFocusedRequest,
-        WindowFocusedResponse, WindowPointerEnterRequest, WindowPointerEnterResponse,
-        WindowPointerLeaveRequest, WindowPointerLeaveResponse, WindowTitleChangedRequest,
-        WindowTitleChangedResponse,
+        StreamControl, TagActiveRequest, TagActiveResponse, TagCreatedRequest, TagCreatedResponse,
+        TagRemovedRequest, TagRemovedResponse, WindowFocusedRequest, WindowFocusedResponse,
+        WindowPointerEnterRequest, WindowPointerEnterResponse, WindowPointerLeaveRequest,
+        WindowPointerLeaveResponse, WindowTitleChangedRequest, WindowTitleChangedResponse,
     },
 };
 use smithay::output::Output;
@@ -49,6 +49,8 @@ pub struct SignalState {
 
     // Tag
     pub tag_active: TagActive,
+    pub tag_created: TagCreated,
+    pub tag_removed: TagRemoved,
 
     // Input
     pub input_device_added: InputDeviceAdded,
@@ -70,6 +72,8 @@ impl SignalState {
         self.window_title_changed.clear();
 
         self.tag_active.clear();
+        self.tag_created.clear();
+        self.tag_removed.clear();
 
         self.input_device_added.clear();
     }
@@ -355,6 +359,48 @@ impl Signal for TagActive {
 }
 
 #[derive(Debug, Default)]
+pub struct TagCreated {
+    v1: SignalData<signal::v1::TagCreatedResponse>,
+}
+
+impl Signal for TagCreated {
+    type Args<'a> = &'a Tag;
+
+    fn signal(&mut self, tag: Self::Args<'_>) {
+        self.v1.signal(|buf| {
+            buf.push_back(signal::v1::TagCreatedResponse {
+                tag_id: tag.id().to_inner(),
+            });
+        });
+    }
+
+    fn clear(&mut self) {
+        self.v1.instances.clear();
+    }
+}
+
+#[derive(Debug, Default)]
+pub struct TagRemoved {
+    v1: SignalData<signal::v1::TagRemovedResponse>,
+}
+
+impl Signal for TagRemoved {
+    type Args<'a> = &'a Tag;
+
+    fn signal(&mut self, tag: Self::Args<'_>) {
+        self.v1.signal(|buf| {
+            buf.push_back(signal::v1::TagRemovedResponse {
+                tag_id: tag.id().to_inner(),
+            });
+        });
+    }
+
+    fn clear(&mut self) {
+        self.v1.instances.clear();
+    }
+}
+
+#[derive(Debug, Default)]
 pub struct InputDeviceAdded {
     v1: SignalData<signal::v1::InputDeviceAddedResponse>,
 }
@@ -395,6 +441,7 @@ impl<T> SignalData<T> {
                 && let Some(data) = instance.buffer.pop_front()
             {
                 instance.ready = false;
+
                 return instance.sender.send_blocking(Ok(data)).is_ok();
             }
 
@@ -494,6 +541,8 @@ impl signal::v1::signal_service_server::SignalService for SignalService {
     type WindowTitleChangedStream = ResponseStream<WindowTitleChangedResponse>;
 
     type TagActiveStream = ResponseStream<TagActiveResponse>;
+    type TagCreatedStream = ResponseStream<TagCreatedResponse>;
+    type TagRemovedStream = ResponseStream<TagRemovedResponse>;
 
     type InputDeviceAddedStream = ResponseStream<InputDeviceAddedResponse>;
 
@@ -626,6 +675,28 @@ impl signal::v1::signal_service_server::SignalService for SignalService {
 
         start_signal_stream(self.sender.clone(), in_stream, |state| {
             &mut state.pinnacle.signal_state.tag_active.v1
+        })
+    }
+
+    async fn tag_created(
+        &self,
+        request: Request<Streaming<TagCreatedRequest>>,
+    ) -> Result<Response<Self::TagCreatedStream>, Status> {
+        let in_stream = request.into_inner();
+
+        start_signal_stream(self.sender.clone(), in_stream, |state| {
+            &mut state.pinnacle.signal_state.tag_created.v1
+        })
+    }
+
+    async fn tag_removed(
+        &self,
+        request: Request<Streaming<TagRemovedRequest>>,
+    ) -> Result<Response<Self::TagRemovedStream>, Status> {
+        let in_stream = request.into_inner();
+
+        start_signal_stream(self.sender.clone(), in_stream, |state| {
+            &mut state.pinnacle.signal_state.tag_removed.v1
         })
     }
 

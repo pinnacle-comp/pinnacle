@@ -310,6 +310,32 @@ signals! {
                 }
             },
         }
+        /// A tag was created.
+        TagCreated = {
+            enum_name = Created,
+            callback_type = Box<dyn FnMut(&TagHandle) + Send + 'static>,
+            client_request = tag_created,
+            on_response = |response, callbacks| {
+                let handle = TagHandle { id: response.tag_id };
+
+                for callback in callbacks {
+                    callback(&handle);
+                }
+            },
+        }
+        /// A tag was removed
+        TagRemoved = {
+            enum_name = Removed,
+            callback_type = Box<dyn FnMut(&TagHandle) + Send + 'static>,
+            client_request = tag_removed,
+            on_response = |response, callbacks| {
+                let handle = TagHandle { id: response.tag_id };
+
+                for callback in callbacks {
+                    callback(&handle);
+                }
+            },
+        }
     }
     /// Signals relating to input events.
     InputSignal => {
@@ -347,6 +373,8 @@ pub(crate) struct SignalState {
     pub(crate) window_title_changed: SignalData<WindowTitleChanged>,
 
     pub(crate) tag_active: SignalData<TagActive>,
+    pub(crate) tag_created: SignalData<TagCreated>,
+    pub(crate) tag_removed: SignalData<TagRemoved>,
 
     pub(crate) input_device_added: SignalData<InputDeviceAdded>,
 }
@@ -374,6 +402,8 @@ impl SignalState {
             window_title_changed: SignalData::new(),
 
             tag_active: SignalData::new(),
+            tag_created: SignalData::new(),
+            tag_removed: SignalData::new(),
 
             input_device_added: SignalData::new(),
         }
@@ -394,6 +424,8 @@ impl SignalState {
         self.window_title_changed.reset();
 
         self.tag_active.reset();
+        self.tag_created.reset();
+        self.tag_removed.reset();
 
         self.input_device_added.reset();
     }

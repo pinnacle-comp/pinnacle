@@ -107,6 +107,20 @@ message TagActiveResponse {
   bool active = 2;
 }
 
+message TagCreatedRequest {
+  StreamControl control = 1;
+}
+message TagCreatedResponse {
+  uint32 tag_id = 1;
+}
+
+message TagRemovedRequest {
+  StreamControl control = 1;
+}
+message TagRemovedResponse {
+  uint32 tag_id = 1;
+}
+
 message InputDeviceAddedRequest {
   StreamControl control = 1;
 }
@@ -129,6 +143,8 @@ service SignalService {
   rpc WindowTitleChanged(stream WindowTitleChangedRequest) returns (stream WindowTitleChangedResponse);
 
   rpc TagActive(stream TagActiveRequest) returns (stream TagActiveResponse);
+  rpc TagCreated(stream TagCreatedRequest) returns (stream TagCreatedResponse);
+  rpc TagRemoved(stream TagRemovedRequest) returns (stream TagRemovedResponse);
 
   rpc InputDeviceAdded(stream InputDeviceAddedRequest) returns (stream InputDeviceAddedResponse);
 }

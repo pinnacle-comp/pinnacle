@@ -1,5 +1,11 @@
+use std::{
+    collections::{HashMap, HashSet},
+    sync::{Arc, Mutex},
+};
+
+use mlua::{UserData, UserDataMethods};
 use pinnacle::{state::WithState, tag::Tag};
-use pinnacle_api::layout::LayoutNode;
+use pinnacle_api::{layout::LayoutNode, signal::TagSignal, tag::TagHandle};
 use smithay::{output::Output, utils::Rectangle};
 
 use crate::{
@@ -394,4 +400,253 @@ fn tag_get_does_not_return_tags_cleared_after_config_reload() {
     });
 }
 
-// TODO: tag connect_signal
+// TODO: Implement a less shady/more generic way to test signals,
+// ideally something allowing to describe an expected sequence/list of signals
+#[derive(Clone)]
+struct TagSignalTester {
+    active: Arc<Mutex<HashMap<TagHandle, bool>>>,
+    created: Arc<Mutex<HashSet<TagHandle>>>,
+    removed: Arc<Mutex<HashSet<TagHandle>>>,
+    done: Arc<dyn Fn(&Self) -> bool + Send + Sync + 'static>,
+}
+
+impl TagSignalTester {
+    fn new<F>(done: F) -> Self
+    where
+        F: Fn(&Self) -> bool + Send + Sync + 'static,
+    {
+        Self {
+            active: Default::default(),
+            created: Default::default(),
+            removed: Default::default(),
+            done: Arc::new(done),
+        }
+    }
+
+    fn log_active(&self, tag: TagHandle, active: bool) {
+        let mut storage = self.active.lock().unwrap();
+        storage.insert(tag, active);
+    }
+
+    fn active(&self) -> &Arc<Mutex<HashMap<TagHandle, bool>>> {
+        &self.active
+    }
+
+    fn log_created(&self, tag: TagHandle) {
+        let mut storage = self.created.lock().unwrap();
+        storage.insert(tag);
+    }
+
+    fn created(&self) -> &Arc<Mutex<HashSet<TagHandle>>> {
+        &self.created
+    }
+
+    fn log_removed(&self, tag: TagHandle) {
+        let mut storage = self.removed.lock().unwrap();
+        storage.insert(tag);
+    }
+
+    fn removed(&self) -> &Arc<Mutex<HashSet<TagHandle>>> {
+        &self.removed
+    }
+
+    fn done(&self) -> bool {
+        (self.done)(&self.clone())
+    }
+}
+
+impl UserData for TagSignalTester {
+    fn add_methods<M: UserDataMethods<Self>>(methods: &mut M) {
+        methods.add_method("log_active", |_, this, (id, active): (u32, bool)| {
+            let handle = TagHandle::from_id(id);
+
+            this.log_active(handle, active);
+
+            Ok(())
+        });
+
+        methods.add_method("log_created", |_, this, id: u32| {
+            let handle = TagHandle::from_id(id);
+
+            this.log_created(handle);
+
+            Ok(())
+        });
+
+        methods.add_method("log_removed", |_, this, id: u32| {
+            let handle = TagHandle::from_id(id);
+
+            this.log_removed(handle);
+
+            Ok(())
+        });
+
+        methods.add_method("done", |_, this, ()| Ok(this.done()));
+    }
+}
+
+#[test_log::test]
+fn tag_signal_active() {
+    for_each_api(|lang| {
+        let (mut fixture, _o1, _o2, tags, ..) = set_up();
+
+        let tag_name = tags[1].name();
+        let handle = TagHandle::from_id(tags[1].id().to_inner());
+
+        let tester = TagSignalTester::new(move |t| {
+            let Ok(active) = t.active().try_lock() else {
+                return false;
+            };
+
+            active.contains_key(&handle)
+        });
+
+        let tag1_hndl = TagHandle::from_id(tags[0].id().to_inner());
+        let tag2_hndl = TagHandle::from_id(tags[1].id().to_inner());
+        let tester_cpy = tester.clone();
+
+        match lang {
+            Lang::Rust => fixture.spawn_blocking(move || {
+                pinnacle_api::tag::connect_signal(pinnacle_api::signal::TagSignal::Active(
+                    Box::new(move |tag, active| {
+                        tester.log_active(tag.clone(), active);
+                    }),
+                ));
+
+                pinnacle_api::tag::get(tag_name).unwrap().switch_to();
+            }),
+            Lang::Lua => spawn_lua_blocking! {
+                fixture,
+                Tag.connect_signal({
+                    active = function(tag, active)
+                        $tester:log_active(tag.id, active)
+                    end
+                })
+
+                Tag.get($tag_name):switch_to()
+
+                local client = require("pinnacle.grpc.client").client
+                while not $tester:done() do
+                    client.loop:step();
+                end
+            },
+        }
+
+        fixture.dispatch_until(|_| tester_cpy.done());
+
+        let store = tester_cpy.active().lock().unwrap();
+        assert_eq!(store.get(&tag1_hndl), Some(&false));
+        assert_eq!(store.get(&tag2_hndl), Some(&true));
+    })
+}
+
+#[test_log::test]
+fn tag_signal_created() {
+    for_each_api(|lang| {
+        let (mut fixture, output, ..) = set_up();
+
+        let tag_name = "test_tag";
+        let tester = TagSignalTester::new(move |t| {
+            let Ok(created) = t.created().try_lock() else {
+                return false;
+            };
+
+            !created.is_empty()
+        });
+
+        let tester_cpy = tester.clone();
+
+        match lang {
+            Lang::Rust => fixture.spawn_blocking(move || {
+                pinnacle_api::tag::connect_signal(TagSignal::Created(Box::new(move |tag| {
+                    tester.log_created(tag.clone());
+                })));
+
+                let output = pinnacle_api::output::get_focused().unwrap();
+                let _ = pinnacle_api::tag::add(&output, [tag_name]);
+            }),
+            Lang::Lua => spawn_lua_blocking! {
+                fixture,
+                Tag.connect_signal({
+                    created = function(tag)
+                        $tester:log_created(tag.id)
+                    end
+                })
+
+                local out = Output.get_focused()
+                Tag.add(out, $tag_name)
+
+                local client = require("pinnacle.grpc.client").client
+                while not $tester:done() do
+                    client.loop:step();
+                end
+            },
+        }
+
+        let new_tag = output
+            .with_state(|s| {
+                s.tags.iter().find_map(|t| {
+                    if &t.name() == tag_name {
+                        Some(TagHandle::from_id(t.id().to_inner()))
+                    } else {
+                        None
+                    }
+                })
+            })
+            .unwrap();
+
+        let storage = tester_cpy.created().lock().unwrap();
+        assert!(storage.contains(&new_tag));
+    });
+}
+
+#[test_log::test]
+fn tag_signal_removed() {
+    for_each_api(|lang| {
+        let (mut fixture, _o1, _o2, tags, ..) = set_up();
+
+        let tag_name = "2";
+        let tag_handle = TagHandle::from_id(tags[1].id().to_inner());
+        let tester = TagSignalTester::new(move |t| {
+            let Ok(created) = t.removed().try_lock() else {
+                return false;
+            };
+
+            !created.is_empty()
+        });
+
+        let tester_cpy = tester.clone();
+
+        match lang {
+            Lang::Rust => fixture.spawn_blocking(move || {
+                pinnacle_api::tag::connect_signal(TagSignal::Removed(Box::new(move |tag| {
+                    tester.log_removed(tag.clone());
+                })));
+
+                let to_remove = pinnacle_api::tag::get(tag_name).unwrap();
+                pinnacle_api::tag::remove([to_remove]);
+            }),
+            Lang::Lua => spawn_lua_blocking! {
+                fixture,
+                Tag.connect_signal({
+                    removed = function(tag)
+                        $tester:log_removed(tag.id)
+                    end
+                })
+
+                local to_remove = Tag.get($tag_name);
+                Tag.remove({to_remove})
+
+                local client = require("pinnacle.grpc.client").client
+                while not $tester:done() do
+                    client.loop:step();
+                end
+            },
+        }
+
+        fixture.dispatch_until(|_| tester_cpy.done());
+
+        let storage = tester_cpy.removed().lock().unwrap();
+        assert!(storage.contains(&tag_handle));
+    });
+}
