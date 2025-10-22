@@ -611,20 +611,6 @@ local pinnacle_render_v1_Filter = {
     FILTER_NEAREST_NEIGHBOR = 2,
 }
 
----@enum pinnacle.signal.v1.StreamControl
-local pinnacle_signal_v1_StreamControl = {
-    STREAM_CONTROL_UNSPECIFIED = 0,
-    STREAM_CONTROL_READY = 1,
-    STREAM_CONTROL_DISCONNECT = 2,
-}
-
----@enum pinnacle.v1.Backend
-local pinnacle_v1_Backend = {
-    BACKEND_UNSPECIFIED = 0,
-    BACKEND_WINDOW = 1,
-    BACKEND_TTY = 2,
-}
-
 ---@enum pinnacle.window.v1.LayoutMode
 local pinnacle_window_v1_LayoutMode = {
     LAYOUT_MODE_UNSPECIFIED = 0,
@@ -640,6 +626,20 @@ local pinnacle_window_v1_DecorationMode = {
     DECORATION_MODE_UNSPECIFIED = 0,
     DECORATION_MODE_CLIENT_SIDE = 1,
     DECORATION_MODE_SERVER_SIDE = 2,
+}
+
+---@enum pinnacle.signal.v1.StreamControl
+local pinnacle_signal_v1_StreamControl = {
+    STREAM_CONTROL_UNSPECIFIED = 0,
+    STREAM_CONTROL_READY = 1,
+    STREAM_CONTROL_DISCONNECT = 2,
+}
+
+---@enum pinnacle.v1.Backend
+local pinnacle_v1_Backend = {
+    BACKEND_UNSPECIFIED = 0,
+    BACKEND_WINDOW = 1,
+    BACKEND_TTY = 2,
 }
 
 
@@ -1047,6 +1047,166 @@ local pinnacle_window_v1_DecorationMode = {
 ---@class pinnacle.render.v1.SetDownscaleFilterRequest
 ---@field filter pinnacle.render.v1.Filter?
 
+---@class pinnacle.window.v1.GetRequest
+
+---@class pinnacle.window.v1.GetResponse
+---@field window_ids integer[]?
+
+---@class pinnacle.window.v1.GetAppIdRequest
+---@field window_id integer?
+
+---@class pinnacle.window.v1.GetAppIdResponse
+---@field app_id string?
+
+---@class pinnacle.window.v1.GetTitleRequest
+---@field window_id integer?
+
+---@class pinnacle.window.v1.GetTitleResponse
+---@field title string?
+
+---@class pinnacle.window.v1.GetLocRequest
+---@field window_id integer?
+
+---@class pinnacle.window.v1.GetLocResponse
+---@field loc pinnacle.util.v1.Point?
+
+---@class pinnacle.window.v1.GetSizeRequest
+---@field window_id integer?
+
+---@class pinnacle.window.v1.GetSizeResponse
+---@field size pinnacle.util.v1.Size?
+
+---@class pinnacle.window.v1.GetFocusedRequest
+---@field window_id integer?
+
+---@class pinnacle.window.v1.GetFocusedResponse
+---@field focused boolean?
+
+---@class pinnacle.window.v1.GetLayoutModeRequest
+---@field window_id integer?
+
+---@class pinnacle.window.v1.GetLayoutModeResponse
+---@field layout_mode pinnacle.window.v1.LayoutMode?
+
+---@class pinnacle.window.v1.GetTagIdsRequest
+---@field window_id integer?
+
+---@class pinnacle.window.v1.GetTagIdsResponse
+---@field tag_ids integer[]?
+
+---@class pinnacle.window.v1.GetWindowsInDirRequest
+---@field window_id integer?
+---@field dir pinnacle.util.v1.Dir?
+
+---@class pinnacle.window.v1.GetWindowsInDirResponse
+---@field window_ids integer[]?
+
+---@class pinnacle.window.v1.GetForeignToplevelListIdentifierRequest
+---@field window_id integer?
+
+---@class pinnacle.window.v1.GetForeignToplevelListIdentifierResponse
+---@field identifier string?
+
+---@class pinnacle.window.v1.CloseRequest
+---@field window_id integer?
+
+---@class pinnacle.window.v1.SetGeometryRequest
+---@field window_id integer?
+---@field x integer?
+---@field y integer?
+---@field w integer?
+---@field h integer?
+
+---@class pinnacle.window.v1.ResizeTileRequest
+---@field window_id integer?
+---@field left integer?
+---@field right integer?
+---@field top integer?
+---@field bottom integer?
+
+---@class pinnacle.window.v1.SetFullscreenRequest
+---@field window_id integer?
+---@field set_or_toggle pinnacle.util.v1.SetOrToggle?
+
+---@class pinnacle.window.v1.SetMaximizedRequest
+---@field window_id integer?
+---@field set_or_toggle pinnacle.util.v1.SetOrToggle?
+
+---@class pinnacle.window.v1.SetFloatingRequest
+---@field window_id integer?
+---@field set_or_toggle pinnacle.util.v1.SetOrToggle?
+
+---@class pinnacle.window.v1.SetFocusedRequest
+---@field window_id integer?
+---@field set_or_toggle pinnacle.util.v1.SetOrToggle?
+
+---@class pinnacle.window.v1.SetDecorationModeRequest
+---@field window_id integer?
+---@field decoration_mode pinnacle.window.v1.DecorationMode?
+
+---@class pinnacle.window.v1.MoveToTagRequest
+---@field window_id integer?
+---@field tag_id integer?
+
+---@class pinnacle.window.v1.SetTagRequest
+---@field window_id integer?
+---@field tag_id integer?
+---@field set_or_toggle pinnacle.util.v1.SetOrToggle?
+
+---@class pinnacle.window.v1.SetTagsRequest
+---@field window_id integer?
+---@field tag_ids integer[]?
+
+---@class pinnacle.window.v1.SetTagsResponse
+
+---@class pinnacle.window.v1.VrrDemand
+---@field fullscreen boolean?
+
+---@class pinnacle.window.v1.SetVrrDemandRequest
+---@field window_id integer?
+---@field vrr_demand pinnacle.window.v1.VrrDemand?
+
+---@class pinnacle.window.v1.SetVrrDemandResponse
+
+---@class pinnacle.window.v1.MoveToOutputRequest
+---@field window_id integer?
+---@field output_name string?
+
+---@class pinnacle.window.v1.MoveToOutputResponse
+
+---@class pinnacle.window.v1.RaiseRequest
+---@field window_id integer?
+
+---@class pinnacle.window.v1.LowerRequest
+---@field window_id integer?
+
+---@class pinnacle.window.v1.LowerResponse
+
+---@class pinnacle.window.v1.MoveGrabRequest
+---@field button integer?
+
+---@class pinnacle.window.v1.ResizeGrabRequest
+---@field button integer?
+
+---@class pinnacle.window.v1.SwapRequest
+---@field window_id integer?
+---@field target_id integer?
+
+---@class pinnacle.window.v1.SwapResponse
+
+---@class pinnacle.window.v1.WindowRuleRequest
+---@field finished pinnacle.window.v1.WindowRuleRequest.Finished?
+
+---@class pinnacle.window.v1.WindowRuleRequest.Finished
+---@field request_id integer?
+
+---@class pinnacle.window.v1.WindowRuleResponse
+---@field new_window pinnacle.window.v1.WindowRuleResponse.NewWindowRequest?
+
+---@class pinnacle.window.v1.WindowRuleResponse.NewWindowRequest
+---@field request_id integer?
+---@field window_id integer?
+
 ---@class pinnacle.signal.v1.OutputConnectRequest
 ---@field control pinnacle.signal.v1.StreamControl?
 
@@ -1228,166 +1388,6 @@ local pinnacle_window_v1_DecorationMode = {
 ---@class pinnacle.v1.TakeLastErrorResponse
 ---@field error string?
 
----@class pinnacle.window.v1.GetRequest
-
----@class pinnacle.window.v1.GetResponse
----@field window_ids integer[]?
-
----@class pinnacle.window.v1.GetAppIdRequest
----@field window_id integer?
-
----@class pinnacle.window.v1.GetAppIdResponse
----@field app_id string?
-
----@class pinnacle.window.v1.GetTitleRequest
----@field window_id integer?
-
----@class pinnacle.window.v1.GetTitleResponse
----@field title string?
-
----@class pinnacle.window.v1.GetLocRequest
----@field window_id integer?
-
----@class pinnacle.window.v1.GetLocResponse
----@field loc pinnacle.util.v1.Point?
-
----@class pinnacle.window.v1.GetSizeRequest
----@field window_id integer?
-
----@class pinnacle.window.v1.GetSizeResponse
----@field size pinnacle.util.v1.Size?
-
----@class pinnacle.window.v1.GetFocusedRequest
----@field window_id integer?
-
----@class pinnacle.window.v1.GetFocusedResponse
----@field focused boolean?
-
----@class pinnacle.window.v1.GetLayoutModeRequest
----@field window_id integer?
-
----@class pinnacle.window.v1.GetLayoutModeResponse
----@field layout_mode pinnacle.window.v1.LayoutMode?
-
----@class pinnacle.window.v1.GetTagIdsRequest
----@field window_id integer?
-
----@class pinnacle.window.v1.GetTagIdsResponse
----@field tag_ids integer[]?
-
----@class pinnacle.window.v1.GetWindowsInDirRequest
----@field window_id integer?
----@field dir pinnacle.util.v1.Dir?
-
----@class pinnacle.window.v1.GetWindowsInDirResponse
----@field window_ids integer[]?
-
----@class pinnacle.window.v1.GetForeignToplevelListIdentifierRequest
----@field window_id integer?
-
----@class pinnacle.window.v1.GetForeignToplevelListIdentifierResponse
----@field identifier string?
-
----@class pinnacle.window.v1.CloseRequest
----@field window_id integer?
-
----@class pinnacle.window.v1.SetGeometryRequest
----@field window_id integer?
----@field x integer?
----@field y integer?
----@field w integer?
----@field h integer?
-
----@class pinnacle.window.v1.ResizeTileRequest
----@field window_id integer?
----@field left integer?
----@field right integer?
----@field top integer?
----@field bottom integer?
-
----@class pinnacle.window.v1.SetFullscreenRequest
----@field window_id integer?
----@field set_or_toggle pinnacle.util.v1.SetOrToggle?
-
----@class pinnacle.window.v1.SetMaximizedRequest
----@field window_id integer?
----@field set_or_toggle pinnacle.util.v1.SetOrToggle?
-
----@class pinnacle.window.v1.SetFloatingRequest
----@field window_id integer?
----@field set_or_toggle pinnacle.util.v1.SetOrToggle?
-
----@class pinnacle.window.v1.SetFocusedRequest
----@field window_id integer?
----@field set_or_toggle pinnacle.util.v1.SetOrToggle?
-
----@class pinnacle.window.v1.SetDecorationModeRequest
----@field window_id integer?
----@field decoration_mode pinnacle.window.v1.DecorationMode?
-
----@class pinnacle.window.v1.MoveToTagRequest
----@field window_id integer?
----@field tag_id integer?
-
----@class pinnacle.window.v1.SetTagRequest
----@field window_id integer?
----@field tag_id integer?
----@field set_or_toggle pinnacle.util.v1.SetOrToggle?
-
----@class pinnacle.window.v1.SetTagsRequest
----@field window_id integer?
----@field tag_ids integer[]?
-
----@class pinnacle.window.v1.SetTagsResponse
-
----@class pinnacle.window.v1.VrrDemand
----@field fullscreen boolean?
-
----@class pinnacle.window.v1.SetVrrDemandRequest
----@field window_id integer?
----@field vrr_demand pinnacle.window.v1.VrrDemand?
-
----@class pinnacle.window.v1.SetVrrDemandResponse
-
----@class pinnacle.window.v1.MoveToOutputRequest
----@field window_id integer?
----@field output_name string?
-
----@class pinnacle.window.v1.MoveToOutputResponse
-
----@class pinnacle.window.v1.RaiseRequest
----@field window_id integer?
-
----@class pinnacle.window.v1.LowerRequest
----@field window_id integer?
-
----@class pinnacle.window.v1.LowerResponse
-
----@class pinnacle.window.v1.MoveGrabRequest
----@field button integer?
-
----@class pinnacle.window.v1.ResizeGrabRequest
----@field button integer?
-
----@class pinnacle.window.v1.SwapRequest
----@field window_id integer?
----@field target_id integer?
-
----@class pinnacle.window.v1.SwapResponse
-
----@class pinnacle.window.v1.WindowRuleRequest
----@field finished pinnacle.window.v1.WindowRuleRequest.Finished?
-
----@class pinnacle.window.v1.WindowRuleRequest.Finished
----@field request_id integer?
-
----@class pinnacle.window.v1.WindowRuleResponse
----@field new_window pinnacle.window.v1.WindowRuleResponse.NewWindowRequest?
-
----@class pinnacle.window.v1.WindowRuleResponse.NewWindowRequest
----@field request_id integer?
----@field window_id integer?
-
 local google = {}
 google.protobuf = {}
 google.protobuf.Empty = {}
@@ -1506,6 +1506,56 @@ pinnacle.render = {}
 pinnacle.render.v1 = {}
 pinnacle.render.v1.SetUpscaleFilterRequest = {}
 pinnacle.render.v1.SetDownscaleFilterRequest = {}
+pinnacle.window = {}
+pinnacle.window.v1 = {}
+pinnacle.window.v1.GetRequest = {}
+pinnacle.window.v1.GetResponse = {}
+pinnacle.window.v1.GetAppIdRequest = {}
+pinnacle.window.v1.GetAppIdResponse = {}
+pinnacle.window.v1.GetTitleRequest = {}
+pinnacle.window.v1.GetTitleResponse = {}
+pinnacle.window.v1.GetLocRequest = {}
+pinnacle.window.v1.GetLocResponse = {}
+pinnacle.window.v1.GetSizeRequest = {}
+pinnacle.window.v1.GetSizeResponse = {}
+pinnacle.window.v1.GetFocusedRequest = {}
+pinnacle.window.v1.GetFocusedResponse = {}
+pinnacle.window.v1.GetLayoutModeRequest = {}
+pinnacle.window.v1.GetLayoutModeResponse = {}
+pinnacle.window.v1.GetTagIdsRequest = {}
+pinnacle.window.v1.GetTagIdsResponse = {}
+pinnacle.window.v1.GetWindowsInDirRequest = {}
+pinnacle.window.v1.GetWindowsInDirResponse = {}
+pinnacle.window.v1.GetForeignToplevelListIdentifierRequest = {}
+pinnacle.window.v1.GetForeignToplevelListIdentifierResponse = {}
+pinnacle.window.v1.CloseRequest = {}
+pinnacle.window.v1.SetGeometryRequest = {}
+pinnacle.window.v1.ResizeTileRequest = {}
+pinnacle.window.v1.SetFullscreenRequest = {}
+pinnacle.window.v1.SetMaximizedRequest = {}
+pinnacle.window.v1.SetFloatingRequest = {}
+pinnacle.window.v1.SetFocusedRequest = {}
+pinnacle.window.v1.SetDecorationModeRequest = {}
+pinnacle.window.v1.MoveToTagRequest = {}
+pinnacle.window.v1.SetTagRequest = {}
+pinnacle.window.v1.SetTagsRequest = {}
+pinnacle.window.v1.SetTagsResponse = {}
+pinnacle.window.v1.VrrDemand = {}
+pinnacle.window.v1.SetVrrDemandRequest = {}
+pinnacle.window.v1.SetVrrDemandResponse = {}
+pinnacle.window.v1.MoveToOutputRequest = {}
+pinnacle.window.v1.MoveToOutputResponse = {}
+pinnacle.window.v1.RaiseRequest = {}
+pinnacle.window.v1.LowerRequest = {}
+pinnacle.window.v1.LowerResponse = {}
+pinnacle.window.v1.MoveGrabRequest = {}
+pinnacle.window.v1.ResizeGrabRequest = {}
+pinnacle.window.v1.SwapRequest = {}
+pinnacle.window.v1.SwapResponse = {}
+pinnacle.window.v1.WindowRuleRequest = {}
+pinnacle.window.v1.WindowRuleRequest.Finished = {}
+pinnacle.window.v1.WindowRuleResponse = {}
+pinnacle.window.v1.WindowRuleResponse.NewWindowRequest = {}
 pinnacle.signal = {}
 pinnacle.signal.v1 = {}
 pinnacle.signal.v1.OutputConnectRequest = {}
@@ -1570,56 +1620,6 @@ pinnacle.v1.SetXwaylandClientSelfScaleRequest = {}
 pinnacle.v1.SetLastErrorRequest = {}
 pinnacle.v1.TakeLastErrorRequest = {}
 pinnacle.v1.TakeLastErrorResponse = {}
-pinnacle.window = {}
-pinnacle.window.v1 = {}
-pinnacle.window.v1.GetRequest = {}
-pinnacle.window.v1.GetResponse = {}
-pinnacle.window.v1.GetAppIdRequest = {}
-pinnacle.window.v1.GetAppIdResponse = {}
-pinnacle.window.v1.GetTitleRequest = {}
-pinnacle.window.v1.GetTitleResponse = {}
-pinnacle.window.v1.GetLocRequest = {}
-pinnacle.window.v1.GetLocResponse = {}
-pinnacle.window.v1.GetSizeRequest = {}
-pinnacle.window.v1.GetSizeResponse = {}
-pinnacle.window.v1.GetFocusedRequest = {}
-pinnacle.window.v1.GetFocusedResponse = {}
-pinnacle.window.v1.GetLayoutModeRequest = {}
-pinnacle.window.v1.GetLayoutModeResponse = {}
-pinnacle.window.v1.GetTagIdsRequest = {}
-pinnacle.window.v1.GetTagIdsResponse = {}
-pinnacle.window.v1.GetWindowsInDirRequest = {}
-pinnacle.window.v1.GetWindowsInDirResponse = {}
-pinnacle.window.v1.GetForeignToplevelListIdentifierRequest = {}
-pinnacle.window.v1.GetForeignToplevelListIdentifierResponse = {}
-pinnacle.window.v1.CloseRequest = {}
-pinnacle.window.v1.SetGeometryRequest = {}
-pinnacle.window.v1.ResizeTileRequest = {}
-pinnacle.window.v1.SetFullscreenRequest = {}
-pinnacle.window.v1.SetMaximizedRequest = {}
-pinnacle.window.v1.SetFloatingRequest = {}
-pinnacle.window.v1.SetFocusedRequest = {}
-pinnacle.window.v1.SetDecorationModeRequest = {}
-pinnacle.window.v1.MoveToTagRequest = {}
-pinnacle.window.v1.SetTagRequest = {}
-pinnacle.window.v1.SetTagsRequest = {}
-pinnacle.window.v1.SetTagsResponse = {}
-pinnacle.window.v1.VrrDemand = {}
-pinnacle.window.v1.SetVrrDemandRequest = {}
-pinnacle.window.v1.SetVrrDemandResponse = {}
-pinnacle.window.v1.MoveToOutputRequest = {}
-pinnacle.window.v1.MoveToOutputResponse = {}
-pinnacle.window.v1.RaiseRequest = {}
-pinnacle.window.v1.LowerRequest = {}
-pinnacle.window.v1.LowerResponse = {}
-pinnacle.window.v1.MoveGrabRequest = {}
-pinnacle.window.v1.ResizeGrabRequest = {}
-pinnacle.window.v1.SwapRequest = {}
-pinnacle.window.v1.SwapResponse = {}
-pinnacle.window.v1.WindowRuleRequest = {}
-pinnacle.window.v1.WindowRuleRequest.Finished = {}
-pinnacle.window.v1.WindowRuleResponse = {}
-pinnacle.window.v1.WindowRuleResponse.NewWindowRequest = {}
 pinnacle.util.v1.SetOrToggle = pinnacle_util_v1_SetOrToggle
 pinnacle.util.v1.AbsOrRel = pinnacle_util_v1_AbsOrRel
 pinnacle.util.v1.Dir = pinnacle_util_v1_Dir
@@ -1635,10 +1635,10 @@ pinnacle.layout.v1.FlexDir = pinnacle_layout_v1_FlexDir
 pinnacle.output.v1.Transform = pinnacle_output_v1_Transform
 pinnacle.output.v1.Vrr = pinnacle_output_v1_Vrr
 pinnacle.render.v1.Filter = pinnacle_render_v1_Filter
-pinnacle.signal.v1.StreamControl = pinnacle_signal_v1_StreamControl
-pinnacle.v1.Backend = pinnacle_v1_Backend
 pinnacle.window.v1.LayoutMode = pinnacle_window_v1_LayoutMode
 pinnacle.window.v1.DecorationMode = pinnacle_window_v1_DecorationMode
+pinnacle.signal.v1.StreamControl = pinnacle_signal_v1_StreamControl
+pinnacle.v1.Backend = pinnacle_v1_Backend
 
 pinnacle.debug.v1.DebugService = {}
 pinnacle.debug.v1.DebugService.SetDamageVisualization = {}
@@ -2540,6 +2540,504 @@ pinnacle.render.v1.RenderService.SetDownscaleFilter.response = ".google.protobuf
 function Client:pinnacle_render_v1_RenderService_SetDownscaleFilter(data)
     return self:unary_request(pinnacle.render.v1.RenderService.SetDownscaleFilter, data)
 end
+pinnacle.window.v1.WindowService = {}
+pinnacle.window.v1.WindowService.Get = {}
+pinnacle.window.v1.WindowService.Get.service = "pinnacle.window.v1.WindowService"
+pinnacle.window.v1.WindowService.Get.method = "Get"
+pinnacle.window.v1.WindowService.Get.request = ".pinnacle.window.v1.GetRequest"
+pinnacle.window.v1.WindowService.Get.response = ".pinnacle.window.v1.GetResponse"
+
+---Performs a unary request.
+---
+---@nodiscard
+---
+---@param data pinnacle.window.v1.GetRequest
+---
+---@return pinnacle.window.v1.GetResponse | nil response
+---@return string | nil error An error string, if any
+function Client:pinnacle_window_v1_WindowService_Get(data)
+    return self:unary_request(pinnacle.window.v1.WindowService.Get, data)
+end
+pinnacle.window.v1.WindowService.GetAppId = {}
+pinnacle.window.v1.WindowService.GetAppId.service = "pinnacle.window.v1.WindowService"
+pinnacle.window.v1.WindowService.GetAppId.method = "GetAppId"
+pinnacle.window.v1.WindowService.GetAppId.request = ".pinnacle.window.v1.GetAppIdRequest"
+pinnacle.window.v1.WindowService.GetAppId.response = ".pinnacle.window.v1.GetAppIdResponse"
+
+---Performs a unary request.
+---
+---@nodiscard
+---
+---@param data pinnacle.window.v1.GetAppIdRequest
+---
+---@return pinnacle.window.v1.GetAppIdResponse | nil response
+---@return string | nil error An error string, if any
+function Client:pinnacle_window_v1_WindowService_GetAppId(data)
+    return self:unary_request(pinnacle.window.v1.WindowService.GetAppId, data)
+end
+pinnacle.window.v1.WindowService.GetTitle = {}
+pinnacle.window.v1.WindowService.GetTitle.service = "pinnacle.window.v1.WindowService"
+pinnacle.window.v1.WindowService.GetTitle.method = "GetTitle"
+pinnacle.window.v1.WindowService.GetTitle.request = ".pinnacle.window.v1.GetTitleRequest"
+pinnacle.window.v1.WindowService.GetTitle.response = ".pinnacle.window.v1.GetTitleResponse"
+
+---Performs a unary request.
+---
+---@nodiscard
+---
+---@param data pinnacle.window.v1.GetTitleRequest
+---
+---@return pinnacle.window.v1.GetTitleResponse | nil response
+---@return string | nil error An error string, if any
+function Client:pinnacle_window_v1_WindowService_GetTitle(data)
+    return self:unary_request(pinnacle.window.v1.WindowService.GetTitle, data)
+end
+pinnacle.window.v1.WindowService.GetLoc = {}
+pinnacle.window.v1.WindowService.GetLoc.service = "pinnacle.window.v1.WindowService"
+pinnacle.window.v1.WindowService.GetLoc.method = "GetLoc"
+pinnacle.window.v1.WindowService.GetLoc.request = ".pinnacle.window.v1.GetLocRequest"
+pinnacle.window.v1.WindowService.GetLoc.response = ".pinnacle.window.v1.GetLocResponse"
+
+---Performs a unary request.
+---
+---@nodiscard
+---
+---@param data pinnacle.window.v1.GetLocRequest
+---
+---@return pinnacle.window.v1.GetLocResponse | nil response
+---@return string | nil error An error string, if any
+function Client:pinnacle_window_v1_WindowService_GetLoc(data)
+    return self:unary_request(pinnacle.window.v1.WindowService.GetLoc, data)
+end
+pinnacle.window.v1.WindowService.GetSize = {}
+pinnacle.window.v1.WindowService.GetSize.service = "pinnacle.window.v1.WindowService"
+pinnacle.window.v1.WindowService.GetSize.method = "GetSize"
+pinnacle.window.v1.WindowService.GetSize.request = ".pinnacle.window.v1.GetSizeRequest"
+pinnacle.window.v1.WindowService.GetSize.response = ".pinnacle.window.v1.GetSizeResponse"
+
+---Performs a unary request.
+---
+---@nodiscard
+---
+---@param data pinnacle.window.v1.GetSizeRequest
+---
+---@return pinnacle.window.v1.GetSizeResponse | nil response
+---@return string | nil error An error string, if any
+function Client:pinnacle_window_v1_WindowService_GetSize(data)
+    return self:unary_request(pinnacle.window.v1.WindowService.GetSize, data)
+end
+pinnacle.window.v1.WindowService.GetFocused = {}
+pinnacle.window.v1.WindowService.GetFocused.service = "pinnacle.window.v1.WindowService"
+pinnacle.window.v1.WindowService.GetFocused.method = "GetFocused"
+pinnacle.window.v1.WindowService.GetFocused.request = ".pinnacle.window.v1.GetFocusedRequest"
+pinnacle.window.v1.WindowService.GetFocused.response = ".pinnacle.window.v1.GetFocusedResponse"
+
+---Performs a unary request.
+---
+---@nodiscard
+---
+---@param data pinnacle.window.v1.GetFocusedRequest
+---
+---@return pinnacle.window.v1.GetFocusedResponse | nil response
+---@return string | nil error An error string, if any
+function Client:pinnacle_window_v1_WindowService_GetFocused(data)
+    return self:unary_request(pinnacle.window.v1.WindowService.GetFocused, data)
+end
+pinnacle.window.v1.WindowService.GetLayoutMode = {}
+pinnacle.window.v1.WindowService.GetLayoutMode.service = "pinnacle.window.v1.WindowService"
+pinnacle.window.v1.WindowService.GetLayoutMode.method = "GetLayoutMode"
+pinnacle.window.v1.WindowService.GetLayoutMode.request = ".pinnacle.window.v1.GetLayoutModeRequest"
+pinnacle.window.v1.WindowService.GetLayoutMode.response = ".pinnacle.window.v1.GetLayoutModeResponse"
+
+---Performs a unary request.
+---
+---@nodiscard
+---
+---@param data pinnacle.window.v1.GetLayoutModeRequest
+---
+---@return pinnacle.window.v1.GetLayoutModeResponse | nil response
+---@return string | nil error An error string, if any
+function Client:pinnacle_window_v1_WindowService_GetLayoutMode(data)
+    return self:unary_request(pinnacle.window.v1.WindowService.GetLayoutMode, data)
+end
+pinnacle.window.v1.WindowService.GetTagIds = {}
+pinnacle.window.v1.WindowService.GetTagIds.service = "pinnacle.window.v1.WindowService"
+pinnacle.window.v1.WindowService.GetTagIds.method = "GetTagIds"
+pinnacle.window.v1.WindowService.GetTagIds.request = ".pinnacle.window.v1.GetTagIdsRequest"
+pinnacle.window.v1.WindowService.GetTagIds.response = ".pinnacle.window.v1.GetTagIdsResponse"
+
+---Performs a unary request.
+---
+---@nodiscard
+---
+---@param data pinnacle.window.v1.GetTagIdsRequest
+---
+---@return pinnacle.window.v1.GetTagIdsResponse | nil response
+---@return string | nil error An error string, if any
+function Client:pinnacle_window_v1_WindowService_GetTagIds(data)
+    return self:unary_request(pinnacle.window.v1.WindowService.GetTagIds, data)
+end
+pinnacle.window.v1.WindowService.GetWindowsInDir = {}
+pinnacle.window.v1.WindowService.GetWindowsInDir.service = "pinnacle.window.v1.WindowService"
+pinnacle.window.v1.WindowService.GetWindowsInDir.method = "GetWindowsInDir"
+pinnacle.window.v1.WindowService.GetWindowsInDir.request = ".pinnacle.window.v1.GetWindowsInDirRequest"
+pinnacle.window.v1.WindowService.GetWindowsInDir.response = ".pinnacle.window.v1.GetWindowsInDirResponse"
+
+---Performs a unary request.
+---
+---@nodiscard
+---
+---@param data pinnacle.window.v1.GetWindowsInDirRequest
+---
+---@return pinnacle.window.v1.GetWindowsInDirResponse | nil response
+---@return string | nil error An error string, if any
+function Client:pinnacle_window_v1_WindowService_GetWindowsInDir(data)
+    return self:unary_request(pinnacle.window.v1.WindowService.GetWindowsInDir, data)
+end
+pinnacle.window.v1.WindowService.GetForeignToplevelListIdentifier = {}
+pinnacle.window.v1.WindowService.GetForeignToplevelListIdentifier.service = "pinnacle.window.v1.WindowService"
+pinnacle.window.v1.WindowService.GetForeignToplevelListIdentifier.method = "GetForeignToplevelListIdentifier"
+pinnacle.window.v1.WindowService.GetForeignToplevelListIdentifier.request = ".pinnacle.window.v1.GetForeignToplevelListIdentifierRequest"
+pinnacle.window.v1.WindowService.GetForeignToplevelListIdentifier.response = ".pinnacle.window.v1.GetForeignToplevelListIdentifierResponse"
+
+---Performs a unary request.
+---
+---@nodiscard
+---
+---@param data pinnacle.window.v1.GetForeignToplevelListIdentifierRequest
+---
+---@return pinnacle.window.v1.GetForeignToplevelListIdentifierResponse | nil response
+---@return string | nil error An error string, if any
+function Client:pinnacle_window_v1_WindowService_GetForeignToplevelListIdentifier(data)
+    return self:unary_request(pinnacle.window.v1.WindowService.GetForeignToplevelListIdentifier, data)
+end
+pinnacle.window.v1.WindowService.Close = {}
+pinnacle.window.v1.WindowService.Close.service = "pinnacle.window.v1.WindowService"
+pinnacle.window.v1.WindowService.Close.method = "Close"
+pinnacle.window.v1.WindowService.Close.request = ".pinnacle.window.v1.CloseRequest"
+pinnacle.window.v1.WindowService.Close.response = ".google.protobuf.Empty"
+
+---Performs a unary request.
+---
+---@nodiscard
+---
+---@param data pinnacle.window.v1.CloseRequest
+---
+---@return google.protobuf.Empty | nil response
+---@return string | nil error An error string, if any
+function Client:pinnacle_window_v1_WindowService_Close(data)
+    return self:unary_request(pinnacle.window.v1.WindowService.Close, data)
+end
+pinnacle.window.v1.WindowService.SetGeometry = {}
+pinnacle.window.v1.WindowService.SetGeometry.service = "pinnacle.window.v1.WindowService"
+pinnacle.window.v1.WindowService.SetGeometry.method = "SetGeometry"
+pinnacle.window.v1.WindowService.SetGeometry.request = ".pinnacle.window.v1.SetGeometryRequest"
+pinnacle.window.v1.WindowService.SetGeometry.response = ".google.protobuf.Empty"
+
+---Performs a unary request.
+---
+---@nodiscard
+---
+---@param data pinnacle.window.v1.SetGeometryRequest
+---
+---@return google.protobuf.Empty | nil response
+---@return string | nil error An error string, if any
+function Client:pinnacle_window_v1_WindowService_SetGeometry(data)
+    return self:unary_request(pinnacle.window.v1.WindowService.SetGeometry, data)
+end
+pinnacle.window.v1.WindowService.ResizeTile = {}
+pinnacle.window.v1.WindowService.ResizeTile.service = "pinnacle.window.v1.WindowService"
+pinnacle.window.v1.WindowService.ResizeTile.method = "ResizeTile"
+pinnacle.window.v1.WindowService.ResizeTile.request = ".pinnacle.window.v1.ResizeTileRequest"
+pinnacle.window.v1.WindowService.ResizeTile.response = ".google.protobuf.Empty"
+
+---Performs a unary request.
+---
+---@nodiscard
+---
+---@param data pinnacle.window.v1.ResizeTileRequest
+---
+---@return google.protobuf.Empty | nil response
+---@return string | nil error An error string, if any
+function Client:pinnacle_window_v1_WindowService_ResizeTile(data)
+    return self:unary_request(pinnacle.window.v1.WindowService.ResizeTile, data)
+end
+pinnacle.window.v1.WindowService.SetFullscreen = {}
+pinnacle.window.v1.WindowService.SetFullscreen.service = "pinnacle.window.v1.WindowService"
+pinnacle.window.v1.WindowService.SetFullscreen.method = "SetFullscreen"
+pinnacle.window.v1.WindowService.SetFullscreen.request = ".pinnacle.window.v1.SetFullscreenRequest"
+pinnacle.window.v1.WindowService.SetFullscreen.response = ".google.protobuf.Empty"
+
+---Performs a unary request.
+---
+---@nodiscard
+---
+---@param data pinnacle.window.v1.SetFullscreenRequest
+---
+---@return google.protobuf.Empty | nil response
+---@return string | nil error An error string, if any
+function Client:pinnacle_window_v1_WindowService_SetFullscreen(data)
+    return self:unary_request(pinnacle.window.v1.WindowService.SetFullscreen, data)
+end
+pinnacle.window.v1.WindowService.SetMaximized = {}
+pinnacle.window.v1.WindowService.SetMaximized.service = "pinnacle.window.v1.WindowService"
+pinnacle.window.v1.WindowService.SetMaximized.method = "SetMaximized"
+pinnacle.window.v1.WindowService.SetMaximized.request = ".pinnacle.window.v1.SetMaximizedRequest"
+pinnacle.window.v1.WindowService.SetMaximized.response = ".google.protobuf.Empty"
+
+---Performs a unary request.
+---
+---@nodiscard
+---
+---@param data pinnacle.window.v1.SetMaximizedRequest
+---
+---@return google.protobuf.Empty | nil response
+---@return string | nil error An error string, if any
+function Client:pinnacle_window_v1_WindowService_SetMaximized(data)
+    return self:unary_request(pinnacle.window.v1.WindowService.SetMaximized, data)
+end
+pinnacle.window.v1.WindowService.SetFloating = {}
+pinnacle.window.v1.WindowService.SetFloating.service = "pinnacle.window.v1.WindowService"
+pinnacle.window.v1.WindowService.SetFloating.method = "SetFloating"
+pinnacle.window.v1.WindowService.SetFloating.request = ".pinnacle.window.v1.SetFloatingRequest"
+pinnacle.window.v1.WindowService.SetFloating.response = ".google.protobuf.Empty"
+
+---Performs a unary request.
+---
+---@nodiscard
+---
+---@param data pinnacle.window.v1.SetFloatingRequest
+---
+---@return google.protobuf.Empty | nil response
+---@return string | nil error An error string, if any
+function Client:pinnacle_window_v1_WindowService_SetFloating(data)
+    return self:unary_request(pinnacle.window.v1.WindowService.SetFloating, data)
+end
+pinnacle.window.v1.WindowService.SetFocused = {}
+pinnacle.window.v1.WindowService.SetFocused.service = "pinnacle.window.v1.WindowService"
+pinnacle.window.v1.WindowService.SetFocused.method = "SetFocused"
+pinnacle.window.v1.WindowService.SetFocused.request = ".pinnacle.window.v1.SetFocusedRequest"
+pinnacle.window.v1.WindowService.SetFocused.response = ".google.protobuf.Empty"
+
+---Performs a unary request.
+---
+---@nodiscard
+---
+---@param data pinnacle.window.v1.SetFocusedRequest
+---
+---@return google.protobuf.Empty | nil response
+---@return string | nil error An error string, if any
+function Client:pinnacle_window_v1_WindowService_SetFocused(data)
+    return self:unary_request(pinnacle.window.v1.WindowService.SetFocused, data)
+end
+pinnacle.window.v1.WindowService.SetDecorationMode = {}
+pinnacle.window.v1.WindowService.SetDecorationMode.service = "pinnacle.window.v1.WindowService"
+pinnacle.window.v1.WindowService.SetDecorationMode.method = "SetDecorationMode"
+pinnacle.window.v1.WindowService.SetDecorationMode.request = ".pinnacle.window.v1.SetDecorationModeRequest"
+pinnacle.window.v1.WindowService.SetDecorationMode.response = ".google.protobuf.Empty"
+
+---Performs a unary request.
+---
+---@nodiscard
+---
+---@param data pinnacle.window.v1.SetDecorationModeRequest
+---
+---@return google.protobuf.Empty | nil response
+---@return string | nil error An error string, if any
+function Client:pinnacle_window_v1_WindowService_SetDecorationMode(data)
+    return self:unary_request(pinnacle.window.v1.WindowService.SetDecorationMode, data)
+end
+pinnacle.window.v1.WindowService.MoveToTag = {}
+pinnacle.window.v1.WindowService.MoveToTag.service = "pinnacle.window.v1.WindowService"
+pinnacle.window.v1.WindowService.MoveToTag.method = "MoveToTag"
+pinnacle.window.v1.WindowService.MoveToTag.request = ".pinnacle.window.v1.MoveToTagRequest"
+pinnacle.window.v1.WindowService.MoveToTag.response = ".google.protobuf.Empty"
+
+---Performs a unary request.
+---
+---@nodiscard
+---
+---@param data pinnacle.window.v1.MoveToTagRequest
+---
+---@return google.protobuf.Empty | nil response
+---@return string | nil error An error string, if any
+function Client:pinnacle_window_v1_WindowService_MoveToTag(data)
+    return self:unary_request(pinnacle.window.v1.WindowService.MoveToTag, data)
+end
+pinnacle.window.v1.WindowService.SetTag = {}
+pinnacle.window.v1.WindowService.SetTag.service = "pinnacle.window.v1.WindowService"
+pinnacle.window.v1.WindowService.SetTag.method = "SetTag"
+pinnacle.window.v1.WindowService.SetTag.request = ".pinnacle.window.v1.SetTagRequest"
+pinnacle.window.v1.WindowService.SetTag.response = ".google.protobuf.Empty"
+
+---Performs a unary request.
+---
+---@nodiscard
+---
+---@param data pinnacle.window.v1.SetTagRequest
+---
+---@return google.protobuf.Empty | nil response
+---@return string | nil error An error string, if any
+function Client:pinnacle_window_v1_WindowService_SetTag(data)
+    return self:unary_request(pinnacle.window.v1.WindowService.SetTag, data)
+end
+pinnacle.window.v1.WindowService.SetTags = {}
+pinnacle.window.v1.WindowService.SetTags.service = "pinnacle.window.v1.WindowService"
+pinnacle.window.v1.WindowService.SetTags.method = "SetTags"
+pinnacle.window.v1.WindowService.SetTags.request = ".pinnacle.window.v1.SetTagsRequest"
+pinnacle.window.v1.WindowService.SetTags.response = ".pinnacle.window.v1.SetTagsResponse"
+
+---Performs a unary request.
+---
+---@nodiscard
+---
+---@param data pinnacle.window.v1.SetTagsRequest
+---
+---@return pinnacle.window.v1.SetTagsResponse | nil response
+---@return string | nil error An error string, if any
+function Client:pinnacle_window_v1_WindowService_SetTags(data)
+    return self:unary_request(pinnacle.window.v1.WindowService.SetTags, data)
+end
+pinnacle.window.v1.WindowService.SetVrrDemand = {}
+pinnacle.window.v1.WindowService.SetVrrDemand.service = "pinnacle.window.v1.WindowService"
+pinnacle.window.v1.WindowService.SetVrrDemand.method = "SetVrrDemand"
+pinnacle.window.v1.WindowService.SetVrrDemand.request = ".pinnacle.window.v1.SetVrrDemandRequest"
+pinnacle.window.v1.WindowService.SetVrrDemand.response = ".pinnacle.window.v1.SetVrrDemandResponse"
+
+---Performs a unary request.
+---
+---@nodiscard
+---
+---@param data pinnacle.window.v1.SetVrrDemandRequest
+---
+---@return pinnacle.window.v1.SetVrrDemandResponse | nil response
+---@return string | nil error An error string, if any
+function Client:pinnacle_window_v1_WindowService_SetVrrDemand(data)
+    return self:unary_request(pinnacle.window.v1.WindowService.SetVrrDemand, data)
+end
+pinnacle.window.v1.WindowService.MoveToOutput = {}
+pinnacle.window.v1.WindowService.MoveToOutput.service = "pinnacle.window.v1.WindowService"
+pinnacle.window.v1.WindowService.MoveToOutput.method = "MoveToOutput"
+pinnacle.window.v1.WindowService.MoveToOutput.request = ".pinnacle.window.v1.MoveToOutputRequest"
+pinnacle.window.v1.WindowService.MoveToOutput.response = ".pinnacle.window.v1.MoveToOutputResponse"
+
+---Performs a unary request.
+---
+---@nodiscard
+---
+---@param data pinnacle.window.v1.MoveToOutputRequest
+---
+---@return pinnacle.window.v1.MoveToOutputResponse | nil response
+---@return string | nil error An error string, if any
+function Client:pinnacle_window_v1_WindowService_MoveToOutput(data)
+    return self:unary_request(pinnacle.window.v1.WindowService.MoveToOutput, data)
+end
+pinnacle.window.v1.WindowService.Raise = {}
+pinnacle.window.v1.WindowService.Raise.service = "pinnacle.window.v1.WindowService"
+pinnacle.window.v1.WindowService.Raise.method = "Raise"
+pinnacle.window.v1.WindowService.Raise.request = ".pinnacle.window.v1.RaiseRequest"
+pinnacle.window.v1.WindowService.Raise.response = ".google.protobuf.Empty"
+
+---Performs a unary request.
+---
+---@nodiscard
+---
+---@param data pinnacle.window.v1.RaiseRequest
+---
+---@return google.protobuf.Empty | nil response
+---@return string | nil error An error string, if any
+function Client:pinnacle_window_v1_WindowService_Raise(data)
+    return self:unary_request(pinnacle.window.v1.WindowService.Raise, data)
+end
+pinnacle.window.v1.WindowService.Lower = {}
+pinnacle.window.v1.WindowService.Lower.service = "pinnacle.window.v1.WindowService"
+pinnacle.window.v1.WindowService.Lower.method = "Lower"
+pinnacle.window.v1.WindowService.Lower.request = ".pinnacle.window.v1.LowerRequest"
+pinnacle.window.v1.WindowService.Lower.response = ".pinnacle.window.v1.LowerResponse"
+
+---Performs a unary request.
+---
+---@nodiscard
+---
+---@param data pinnacle.window.v1.LowerRequest
+---
+---@return pinnacle.window.v1.LowerResponse | nil response
+---@return string | nil error An error string, if any
+function Client:pinnacle_window_v1_WindowService_Lower(data)
+    return self:unary_request(pinnacle.window.v1.WindowService.Lower, data)
+end
+pinnacle.window.v1.WindowService.MoveGrab = {}
+pinnacle.window.v1.WindowService.MoveGrab.service = "pinnacle.window.v1.WindowService"
+pinnacle.window.v1.WindowService.MoveGrab.method = "MoveGrab"
+pinnacle.window.v1.WindowService.MoveGrab.request = ".pinnacle.window.v1.MoveGrabRequest"
+pinnacle.window.v1.WindowService.MoveGrab.response = ".google.protobuf.Empty"
+
+---Performs a unary request.
+---
+---@nodiscard
+---
+---@param data pinnacle.window.v1.MoveGrabRequest
+---
+---@return google.protobuf.Empty | nil response
+---@return string | nil error An error string, if any
+function Client:pinnacle_window_v1_WindowService_MoveGrab(data)
+    return self:unary_request(pinnacle.window.v1.WindowService.MoveGrab, data)
+end
+pinnacle.window.v1.WindowService.ResizeGrab = {}
+pinnacle.window.v1.WindowService.ResizeGrab.service = "pinnacle.window.v1.WindowService"
+pinnacle.window.v1.WindowService.ResizeGrab.method = "ResizeGrab"
+pinnacle.window.v1.WindowService.ResizeGrab.request = ".pinnacle.window.v1.ResizeGrabRequest"
+pinnacle.window.v1.WindowService.ResizeGrab.response = ".google.protobuf.Empty"
+
+---Performs a unary request.
+---
+---@nodiscard
+---
+---@param data pinnacle.window.v1.ResizeGrabRequest
+---
+---@return google.protobuf.Empty | nil response
+---@return string | nil error An error string, if any
+function Client:pinnacle_window_v1_WindowService_ResizeGrab(data)
+    return self:unary_request(pinnacle.window.v1.WindowService.ResizeGrab, data)
+end
+pinnacle.window.v1.WindowService.Swap = {}
+pinnacle.window.v1.WindowService.Swap.service = "pinnacle.window.v1.WindowService"
+pinnacle.window.v1.WindowService.Swap.method = "Swap"
+pinnacle.window.v1.WindowService.Swap.request = ".pinnacle.window.v1.SwapRequest"
+pinnacle.window.v1.WindowService.Swap.response = ".pinnacle.window.v1.SwapResponse"
+
+---Performs a unary request.
+---
+---@nodiscard
+---
+---@param data pinnacle.window.v1.SwapRequest
+---
+---@return pinnacle.window.v1.SwapResponse | nil response
+---@return string | nil error An error string, if any
+function Client:pinnacle_window_v1_WindowService_Swap(data)
+    return self:unary_request(pinnacle.window.v1.WindowService.Swap, data)
+end
+pinnacle.window.v1.WindowService.WindowRule = {}
+pinnacle.window.v1.WindowService.WindowRule.service = "pinnacle.window.v1.WindowService"
+pinnacle.window.v1.WindowService.WindowRule.method = "WindowRule"
+pinnacle.window.v1.WindowService.WindowRule.request = ".pinnacle.window.v1.WindowRuleRequest"
+pinnacle.window.v1.WindowService.WindowRule.response = ".pinnacle.window.v1.WindowRuleResponse"
+
+---Performs a bidirectional-streaming request.
+---
+---`callback` will be called with every streamed response.
+---
+---The raw client-to-server stream is returned to allow you to send encoded messages.
+---
+---@nodiscard
+---
+---@param callback fun(response: pinnacle.window.v1.WindowRuleResponse, stream: grpc_client.h2.Stream)
+---
+---@return grpc_client.h2.Stream | nil
+---@return string | nil An error string, if any
+function Client:pinnacle_window_v1_WindowService_WindowRule(callback)
+    return self:bidirectional_streaming_request(pinnacle.window.v1.WindowService.WindowRule, callback)
+end
 pinnacle.signal.v1.SignalService = {}
 pinnacle.signal.v1.SignalService.OutputConnect = {}
 pinnacle.signal.v1.SignalService.OutputConnect.service = "pinnacle.signal.v1.SignalService"
@@ -3179,504 +3677,6 @@ pinnacle.v1.PinnacleService.TakeLastError.response = ".pinnacle.v1.TakeLastError
 ---@return string | nil error An error string, if any
 function Client:pinnacle_v1_PinnacleService_TakeLastError(data)
     return self:unary_request(pinnacle.v1.PinnacleService.TakeLastError, data)
-end
-pinnacle.window.v1.WindowService = {}
-pinnacle.window.v1.WindowService.Get = {}
-pinnacle.window.v1.WindowService.Get.service = "pinnacle.window.v1.WindowService"
-pinnacle.window.v1.WindowService.Get.method = "Get"
-pinnacle.window.v1.WindowService.Get.request = ".pinnacle.window.v1.GetRequest"
-pinnacle.window.v1.WindowService.Get.response = ".pinnacle.window.v1.GetResponse"
-
----Performs a unary request.
----
----@nodiscard
----
----@param data pinnacle.window.v1.GetRequest
----
----@return pinnacle.window.v1.GetResponse | nil response
----@return string | nil error An error string, if any
-function Client:pinnacle_window_v1_WindowService_Get(data)
-    return self:unary_request(pinnacle.window.v1.WindowService.Get, data)
-end
-pinnacle.window.v1.WindowService.GetAppId = {}
-pinnacle.window.v1.WindowService.GetAppId.service = "pinnacle.window.v1.WindowService"
-pinnacle.window.v1.WindowService.GetAppId.method = "GetAppId"
-pinnacle.window.v1.WindowService.GetAppId.request = ".pinnacle.window.v1.GetAppIdRequest"
-pinnacle.window.v1.WindowService.GetAppId.response = ".pinnacle.window.v1.GetAppIdResponse"
-
----Performs a unary request.
----
----@nodiscard
----
----@param data pinnacle.window.v1.GetAppIdRequest
----
----@return pinnacle.window.v1.GetAppIdResponse | nil response
----@return string | nil error An error string, if any
-function Client:pinnacle_window_v1_WindowService_GetAppId(data)
-    return self:unary_request(pinnacle.window.v1.WindowService.GetAppId, data)
-end
-pinnacle.window.v1.WindowService.GetTitle = {}
-pinnacle.window.v1.WindowService.GetTitle.service = "pinnacle.window.v1.WindowService"
-pinnacle.window.v1.WindowService.GetTitle.method = "GetTitle"
-pinnacle.window.v1.WindowService.GetTitle.request = ".pinnacle.window.v1.GetTitleRequest"
-pinnacle.window.v1.WindowService.GetTitle.response = ".pinnacle.window.v1.GetTitleResponse"
-
----Performs a unary request.
----
----@nodiscard
----
----@param data pinnacle.window.v1.GetTitleRequest
----
----@return pinnacle.window.v1.GetTitleResponse | nil response
----@return string | nil error An error string, if any
-function Client:pinnacle_window_v1_WindowService_GetTitle(data)
-    return self:unary_request(pinnacle.window.v1.WindowService.GetTitle, data)
-end
-pinnacle.window.v1.WindowService.GetLoc = {}
-pinnacle.window.v1.WindowService.GetLoc.service = "pinnacle.window.v1.WindowService"
-pinnacle.window.v1.WindowService.GetLoc.method = "GetLoc"
-pinnacle.window.v1.WindowService.GetLoc.request = ".pinnacle.window.v1.GetLocRequest"
-pinnacle.window.v1.WindowService.GetLoc.response = ".pinnacle.window.v1.GetLocResponse"
-
----Performs a unary request.
----
----@nodiscard
----
----@param data pinnacle.window.v1.GetLocRequest
----
----@return pinnacle.window.v1.GetLocResponse | nil response
----@return string | nil error An error string, if any
-function Client:pinnacle_window_v1_WindowService_GetLoc(data)
-    return self:unary_request(pinnacle.window.v1.WindowService.GetLoc, data)
-end
-pinnacle.window.v1.WindowService.GetSize = {}
-pinnacle.window.v1.WindowService.GetSize.service = "pinnacle.window.v1.WindowService"
-pinnacle.window.v1.WindowService.GetSize.method = "GetSize"
-pinnacle.window.v1.WindowService.GetSize.request = ".pinnacle.window.v1.GetSizeRequest"
-pinnacle.window.v1.WindowService.GetSize.response = ".pinnacle.window.v1.GetSizeResponse"
-
----Performs a unary request.
----
----@nodiscard
----
----@param data pinnacle.window.v1.GetSizeRequest
----
----@return pinnacle.window.v1.GetSizeResponse | nil response
----@return string | nil error An error string, if any
-function Client:pinnacle_window_v1_WindowService_GetSize(data)
-    return self:unary_request(pinnacle.window.v1.WindowService.GetSize, data)
-end
-pinnacle.window.v1.WindowService.GetFocused = {}
-pinnacle.window.v1.WindowService.GetFocused.service = "pinnacle.window.v1.WindowService"
-pinnacle.window.v1.WindowService.GetFocused.method = "GetFocused"
-pinnacle.window.v1.WindowService.GetFocused.request = ".pinnacle.window.v1.GetFocusedRequest"
-pinnacle.window.v1.WindowService.GetFocused.response = ".pinnacle.window.v1.GetFocusedResponse"
-
----Performs a unary request.
----
----@nodiscard
----
----@param data pinnacle.window.v1.GetFocusedRequest
----
----@return pinnacle.window.v1.GetFocusedResponse | nil response
----@return string | nil error An error string, if any
-function Client:pinnacle_window_v1_WindowService_GetFocused(data)
-    return self:unary_request(pinnacle.window.v1.WindowService.GetFocused, data)
-end
-pinnacle.window.v1.WindowService.GetLayoutMode = {}
-pinnacle.window.v1.WindowService.GetLayoutMode.service = "pinnacle.window.v1.WindowService"
-pinnacle.window.v1.WindowService.GetLayoutMode.method = "GetLayoutMode"
-pinnacle.window.v1.WindowService.GetLayoutMode.request = ".pinnacle.window.v1.GetLayoutModeRequest"
-pinnacle.window.v1.WindowService.GetLayoutMode.response = ".pinnacle.window.v1.GetLayoutModeResponse"
-
----Performs a unary request.
----
----@nodiscard
----
----@param data pinnacle.window.v1.GetLayoutModeRequest
----
----@return pinnacle.window.v1.GetLayoutModeResponse | nil response
----@return string | nil error An error string, if any
-function Client:pinnacle_window_v1_WindowService_GetLayoutMode(data)
-    return self:unary_request(pinnacle.window.v1.WindowService.GetLayoutMode, data)
-end
-pinnacle.window.v1.WindowService.GetTagIds = {}
-pinnacle.window.v1.WindowService.GetTagIds.service = "pinnacle.window.v1.WindowService"
-pinnacle.window.v1.WindowService.GetTagIds.method = "GetTagIds"
-pinnacle.window.v1.WindowService.GetTagIds.request = ".pinnacle.window.v1.GetTagIdsRequest"
-pinnacle.window.v1.WindowService.GetTagIds.response = ".pinnacle.window.v1.GetTagIdsResponse"
-
----Performs a unary request.
----
----@nodiscard
----
----@param data pinnacle.window.v1.GetTagIdsRequest
----
----@return pinnacle.window.v1.GetTagIdsResponse | nil response
----@return string | nil error An error string, if any
-function Client:pinnacle_window_v1_WindowService_GetTagIds(data)
-    return self:unary_request(pinnacle.window.v1.WindowService.GetTagIds, data)
-end
-pinnacle.window.v1.WindowService.GetWindowsInDir = {}
-pinnacle.window.v1.WindowService.GetWindowsInDir.service = "pinnacle.window.v1.WindowService"
-pinnacle.window.v1.WindowService.GetWindowsInDir.method = "GetWindowsInDir"
-pinnacle.window.v1.WindowService.GetWindowsInDir.request = ".pinnacle.window.v1.GetWindowsInDirRequest"
-pinnacle.window.v1.WindowService.GetWindowsInDir.response = ".pinnacle.window.v1.GetWindowsInDirResponse"
-
----Performs a unary request.
----
----@nodiscard
----
----@param data pinnacle.window.v1.GetWindowsInDirRequest
----
----@return pinnacle.window.v1.GetWindowsInDirResponse | nil response
----@return string | nil error An error string, if any
-function Client:pinnacle_window_v1_WindowService_GetWindowsInDir(data)
-    return self:unary_request(pinnacle.window.v1.WindowService.GetWindowsInDir, data)
-end
-pinnacle.window.v1.WindowService.GetForeignToplevelListIdentifier = {}
-pinnacle.window.v1.WindowService.GetForeignToplevelListIdentifier.service = "pinnacle.window.v1.WindowService"
-pinnacle.window.v1.WindowService.GetForeignToplevelListIdentifier.method = "GetForeignToplevelListIdentifier"
-pinnacle.window.v1.WindowService.GetForeignToplevelListIdentifier.request = ".pinnacle.window.v1.GetForeignToplevelListIdentifierRequest"
-pinnacle.window.v1.WindowService.GetForeignToplevelListIdentifier.response = ".pinnacle.window.v1.GetForeignToplevelListIdentifierResponse"
-
----Performs a unary request.
----
----@nodiscard
----
----@param data pinnacle.window.v1.GetForeignToplevelListIdentifierRequest
----
----@return pinnacle.window.v1.GetForeignToplevelListIdentifierResponse | nil response
----@return string | nil error An error string, if any
-function Client:pinnacle_window_v1_WindowService_GetForeignToplevelListIdentifier(data)
-    return self:unary_request(pinnacle.window.v1.WindowService.GetForeignToplevelListIdentifier, data)
-end
-pinnacle.window.v1.WindowService.Close = {}
-pinnacle.window.v1.WindowService.Close.service = "pinnacle.window.v1.WindowService"
-pinnacle.window.v1.WindowService.Close.method = "Close"
-pinnacle.window.v1.WindowService.Close.request = ".pinnacle.window.v1.CloseRequest"
-pinnacle.window.v1.WindowService.Close.response = ".google.protobuf.Empty"
-
----Performs a unary request.
----
----@nodiscard
----
----@param data pinnacle.window.v1.CloseRequest
----
----@return google.protobuf.Empty | nil response
----@return string | nil error An error string, if any
-function Client:pinnacle_window_v1_WindowService_Close(data)
-    return self:unary_request(pinnacle.window.v1.WindowService.Close, data)
-end
-pinnacle.window.v1.WindowService.SetGeometry = {}
-pinnacle.window.v1.WindowService.SetGeometry.service = "pinnacle.window.v1.WindowService"
-pinnacle.window.v1.WindowService.SetGeometry.method = "SetGeometry"
-pinnacle.window.v1.WindowService.SetGeometry.request = ".pinnacle.window.v1.SetGeometryRequest"
-pinnacle.window.v1.WindowService.SetGeometry.response = ".google.protobuf.Empty"
-
----Performs a unary request.
----
----@nodiscard
----
----@param data pinnacle.window.v1.SetGeometryRequest
----
----@return google.protobuf.Empty | nil response
----@return string | nil error An error string, if any
-function Client:pinnacle_window_v1_WindowService_SetGeometry(data)
-    return self:unary_request(pinnacle.window.v1.WindowService.SetGeometry, data)
-end
-pinnacle.window.v1.WindowService.ResizeTile = {}
-pinnacle.window.v1.WindowService.ResizeTile.service = "pinnacle.window.v1.WindowService"
-pinnacle.window.v1.WindowService.ResizeTile.method = "ResizeTile"
-pinnacle.window.v1.WindowService.ResizeTile.request = ".pinnacle.window.v1.ResizeTileRequest"
-pinnacle.window.v1.WindowService.ResizeTile.response = ".google.protobuf.Empty"
-
----Performs a unary request.
----
----@nodiscard
----
----@param data pinnacle.window.v1.ResizeTileRequest
----
----@return google.protobuf.Empty | nil response
----@return string | nil error An error string, if any
-function Client:pinnacle_window_v1_WindowService_ResizeTile(data)
-    return self:unary_request(pinnacle.window.v1.WindowService.ResizeTile, data)
-end
-pinnacle.window.v1.WindowService.SetFullscreen = {}
-pinnacle.window.v1.WindowService.SetFullscreen.service = "pinnacle.window.v1.WindowService"
-pinnacle.window.v1.WindowService.SetFullscreen.method = "SetFullscreen"
-pinnacle.window.v1.WindowService.SetFullscreen.request = ".pinnacle.window.v1.SetFullscreenRequest"
-pinnacle.window.v1.WindowService.SetFullscreen.response = ".google.protobuf.Empty"
-
----Performs a unary request.
----
----@nodiscard
----
----@param data pinnacle.window.v1.SetFullscreenRequest
----
----@return google.protobuf.Empty | nil response
----@return string | nil error An error string, if any
-function Client:pinnacle_window_v1_WindowService_SetFullscreen(data)
-    return self:unary_request(pinnacle.window.v1.WindowService.SetFullscreen, data)
-end
-pinnacle.window.v1.WindowService.SetMaximized = {}
-pinnacle.window.v1.WindowService.SetMaximized.service = "pinnacle.window.v1.WindowService"
-pinnacle.window.v1.WindowService.SetMaximized.method = "SetMaximized"
-pinnacle.window.v1.WindowService.SetMaximized.request = ".pinnacle.window.v1.SetMaximizedRequest"
-pinnacle.window.v1.WindowService.SetMaximized.response = ".google.protobuf.Empty"
-
----Performs a unary request.
----
----@nodiscard
----
----@param data pinnacle.window.v1.SetMaximizedRequest
----
----@return google.protobuf.Empty | nil response
----@return string | nil error An error string, if any
-function Client:pinnacle_window_v1_WindowService_SetMaximized(data)
-    return self:unary_request(pinnacle.window.v1.WindowService.SetMaximized, data)
-end
-pinnacle.window.v1.WindowService.SetFloating = {}
-pinnacle.window.v1.WindowService.SetFloating.service = "pinnacle.window.v1.WindowService"
-pinnacle.window.v1.WindowService.SetFloating.method = "SetFloating"
-pinnacle.window.v1.WindowService.SetFloating.request = ".pinnacle.window.v1.SetFloatingRequest"
-pinnacle.window.v1.WindowService.SetFloating.response = ".google.protobuf.Empty"
-
----Performs a unary request.
----
----@nodiscard
----
----@param data pinnacle.window.v1.SetFloatingRequest
----
----@return google.protobuf.Empty | nil response
----@return string | nil error An error string, if any
-function Client:pinnacle_window_v1_WindowService_SetFloating(data)
-    return self:unary_request(pinnacle.window.v1.WindowService.SetFloating, data)
-end
-pinnacle.window.v1.WindowService.SetFocused = {}
-pinnacle.window.v1.WindowService.SetFocused.service = "pinnacle.window.v1.WindowService"
-pinnacle.window.v1.WindowService.SetFocused.method = "SetFocused"
-pinnacle.window.v1.WindowService.SetFocused.request = ".pinnacle.window.v1.SetFocusedRequest"
-pinnacle.window.v1.WindowService.SetFocused.response = ".google.protobuf.Empty"
-
----Performs a unary request.
----
----@nodiscard
----
----@param data pinnacle.window.v1.SetFocusedRequest
----
----@return google.protobuf.Empty | nil response
----@return string | nil error An error string, if any
-function Client:pinnacle_window_v1_WindowService_SetFocused(data)
-    return self:unary_request(pinnacle.window.v1.WindowService.SetFocused, data)
-end
-pinnacle.window.v1.WindowService.SetDecorationMode = {}
-pinnacle.window.v1.WindowService.SetDecorationMode.service = "pinnacle.window.v1.WindowService"
-pinnacle.window.v1.WindowService.SetDecorationMode.method = "SetDecorationMode"
-pinnacle.window.v1.WindowService.SetDecorationMode.request = ".pinnacle.window.v1.SetDecorationModeRequest"
-pinnacle.window.v1.WindowService.SetDecorationMode.response = ".google.protobuf.Empty"
-
----Performs a unary request.
----
----@nodiscard
----
----@param data pinnacle.window.v1.SetDecorationModeRequest
----
----@return google.protobuf.Empty | nil response
----@return string | nil error An error string, if any
-function Client:pinnacle_window_v1_WindowService_SetDecorationMode(data)
-    return self:unary_request(pinnacle.window.v1.WindowService.SetDecorationMode, data)
-end
-pinnacle.window.v1.WindowService.MoveToTag = {}
-pinnacle.window.v1.WindowService.MoveToTag.service = "pinnacle.window.v1.WindowService"
-pinnacle.window.v1.WindowService.MoveToTag.method = "MoveToTag"
-pinnacle.window.v1.WindowService.MoveToTag.request = ".pinnacle.window.v1.MoveToTagRequest"
-pinnacle.window.v1.WindowService.MoveToTag.response = ".google.protobuf.Empty"
-
----Performs a unary request.
----
----@nodiscard
----
----@param data pinnacle.window.v1.MoveToTagRequest
----
----@return google.protobuf.Empty | nil response
----@return string | nil error An error string, if any
-function Client:pinnacle_window_v1_WindowService_MoveToTag(data)
-    return self:unary_request(pinnacle.window.v1.WindowService.MoveToTag, data)
-end
-pinnacle.window.v1.WindowService.SetTag = {}
-pinnacle.window.v1.WindowService.SetTag.service = "pinnacle.window.v1.WindowService"
-pinnacle.window.v1.WindowService.SetTag.method = "SetTag"
-pinnacle.window.v1.WindowService.SetTag.request = ".pinnacle.window.v1.SetTagRequest"
-pinnacle.window.v1.WindowService.SetTag.response = ".google.protobuf.Empty"
-
----Performs a unary request.
----
----@nodiscard
----
----@param data pinnacle.window.v1.SetTagRequest
----
----@return google.protobuf.Empty | nil response
----@return string | nil error An error string, if any
-function Client:pinnacle_window_v1_WindowService_SetTag(data)
-    return self:unary_request(pinnacle.window.v1.WindowService.SetTag, data)
-end
-pinnacle.window.v1.WindowService.SetTags = {}
-pinnacle.window.v1.WindowService.SetTags.service = "pinnacle.window.v1.WindowService"
-pinnacle.window.v1.WindowService.SetTags.method = "SetTags"
-pinnacle.window.v1.WindowService.SetTags.request = ".pinnacle.window.v1.SetTagsRequest"
-pinnacle.window.v1.WindowService.SetTags.response = ".pinnacle.window.v1.SetTagsResponse"
-
----Performs a unary request.
----
----@nodiscard
----
----@param data pinnacle.window.v1.SetTagsRequest
----
----@return pinnacle.window.v1.SetTagsResponse | nil response
----@return string | nil error An error string, if any
-function Client:pinnacle_window_v1_WindowService_SetTags(data)
-    return self:unary_request(pinnacle.window.v1.WindowService.SetTags, data)
-end
-pinnacle.window.v1.WindowService.SetVrrDemand = {}
-pinnacle.window.v1.WindowService.SetVrrDemand.service = "pinnacle.window.v1.WindowService"
-pinnacle.window.v1.WindowService.SetVrrDemand.method = "SetVrrDemand"
-pinnacle.window.v1.WindowService.SetVrrDemand.request = ".pinnacle.window.v1.SetVrrDemandRequest"
-pinnacle.window.v1.WindowService.SetVrrDemand.response = ".pinnacle.window.v1.SetVrrDemandResponse"
-
----Performs a unary request.
----
----@nodiscard
----
----@param data pinnacle.window.v1.SetVrrDemandRequest
----
----@return pinnacle.window.v1.SetVrrDemandResponse | nil response
----@return string | nil error An error string, if any
-function Client:pinnacle_window_v1_WindowService_SetVrrDemand(data)
-    return self:unary_request(pinnacle.window.v1.WindowService.SetVrrDemand, data)
-end
-pinnacle.window.v1.WindowService.MoveToOutput = {}
-pinnacle.window.v1.WindowService.MoveToOutput.service = "pinnacle.window.v1.WindowService"
-pinnacle.window.v1.WindowService.MoveToOutput.method = "MoveToOutput"
-pinnacle.window.v1.WindowService.MoveToOutput.request = ".pinnacle.window.v1.MoveToOutputRequest"
-pinnacle.window.v1.WindowService.MoveToOutput.response = ".pinnacle.window.v1.MoveToOutputResponse"
-
----Performs a unary request.
----
----@nodiscard
----
----@param data pinnacle.window.v1.MoveToOutputRequest
----
----@return pinnacle.window.v1.MoveToOutputResponse | nil response
----@return string | nil error An error string, if any
-function Client:pinnacle_window_v1_WindowService_MoveToOutput(data)
-    return self:unary_request(pinnacle.window.v1.WindowService.MoveToOutput, data)
-end
-pinnacle.window.v1.WindowService.Raise = {}
-pinnacle.window.v1.WindowService.Raise.service = "pinnacle.window.v1.WindowService"
-pinnacle.window.v1.WindowService.Raise.method = "Raise"
-pinnacle.window.v1.WindowService.Raise.request = ".pinnacle.window.v1.RaiseRequest"
-pinnacle.window.v1.WindowService.Raise.response = ".google.protobuf.Empty"
-
----Performs a unary request.
----
----@nodiscard
----
----@param data pinnacle.window.v1.RaiseRequest
----
----@return google.protobuf.Empty | nil response
----@return string | nil error An error string, if any
-function Client:pinnacle_window_v1_WindowService_Raise(data)
-    return self:unary_request(pinnacle.window.v1.WindowService.Raise, data)
-end
-pinnacle.window.v1.WindowService.Lower = {}
-pinnacle.window.v1.WindowService.Lower.service = "pinnacle.window.v1.WindowService"
-pinnacle.window.v1.WindowService.Lower.method = "Lower"
-pinnacle.window.v1.WindowService.Lower.request = ".pinnacle.window.v1.LowerRequest"
-pinnacle.window.v1.WindowService.Lower.response = ".pinnacle.window.v1.LowerResponse"
-
----Performs a unary request.
----
----@nodiscard
----
----@param data pinnacle.window.v1.LowerRequest
----
----@return pinnacle.window.v1.LowerResponse | nil response
----@return string | nil error An error string, if any
-function Client:pinnacle_window_v1_WindowService_Lower(data)
-    return self:unary_request(pinnacle.window.v1.WindowService.Lower, data)
-end
-pinnacle.window.v1.WindowService.MoveGrab = {}
-pinnacle.window.v1.WindowService.MoveGrab.service = "pinnacle.window.v1.WindowService"
-pinnacle.window.v1.WindowService.MoveGrab.method = "MoveGrab"
-pinnacle.window.v1.WindowService.MoveGrab.request = ".pinnacle.window.v1.MoveGrabRequest"
-pinnacle.window.v1.WindowService.MoveGrab.response = ".google.protobuf.Empty"
-
----Performs a unary request.
----
----@nodiscard
----
----@param data pinnacle.window.v1.MoveGrabRequest
----
----@return google.protobuf.Empty | nil response
----@return string | nil error An error string, if any
-function Client:pinnacle_window_v1_WindowService_MoveGrab(data)
-    return self:unary_request(pinnacle.window.v1.WindowService.MoveGrab, data)
-end
-pinnacle.window.v1.WindowService.ResizeGrab = {}
-pinnacle.window.v1.WindowService.ResizeGrab.service = "pinnacle.window.v1.WindowService"
-pinnacle.window.v1.WindowService.ResizeGrab.method = "ResizeGrab"
-pinnacle.window.v1.WindowService.ResizeGrab.request = ".pinnacle.window.v1.ResizeGrabRequest"
-pinnacle.window.v1.WindowService.ResizeGrab.response = ".google.protobuf.Empty"
-
----Performs a unary request.
----
----@nodiscard
----
----@param data pinnacle.window.v1.ResizeGrabRequest
----
----@return google.protobuf.Empty | nil response
----@return string | nil error An error string, if any
-function Client:pinnacle_window_v1_WindowService_ResizeGrab(data)
-    return self:unary_request(pinnacle.window.v1.WindowService.ResizeGrab, data)
-end
-pinnacle.window.v1.WindowService.Swap = {}
-pinnacle.window.v1.WindowService.Swap.service = "pinnacle.window.v1.WindowService"
-pinnacle.window.v1.WindowService.Swap.method = "Swap"
-pinnacle.window.v1.WindowService.Swap.request = ".pinnacle.window.v1.SwapRequest"
-pinnacle.window.v1.WindowService.Swap.response = ".pinnacle.window.v1.SwapResponse"
-
----Performs a unary request.
----
----@nodiscard
----
----@param data pinnacle.window.v1.SwapRequest
----
----@return pinnacle.window.v1.SwapResponse | nil response
----@return string | nil error An error string, if any
-function Client:pinnacle_window_v1_WindowService_Swap(data)
-    return self:unary_request(pinnacle.window.v1.WindowService.Swap, data)
-end
-pinnacle.window.v1.WindowService.WindowRule = {}
-pinnacle.window.v1.WindowService.WindowRule.service = "pinnacle.window.v1.WindowService"
-pinnacle.window.v1.WindowService.WindowRule.method = "WindowRule"
-pinnacle.window.v1.WindowService.WindowRule.request = ".pinnacle.window.v1.WindowRuleRequest"
-pinnacle.window.v1.WindowService.WindowRule.response = ".pinnacle.window.v1.WindowRuleResponse"
-
----Performs a bidirectional-streaming request.
----
----`callback` will be called with every streamed response.
----
----The raw client-to-server stream is returned to allow you to send encoded messages.
----
----@nodiscard
----
----@param callback fun(response: pinnacle.window.v1.WindowRuleResponse, stream: grpc_client.h2.Stream)
----
----@return grpc_client.h2.Stream | nil
----@return string | nil An error string, if any
-function Client:pinnacle_window_v1_WindowService_WindowRule(callback)
-    return self:bidirectional_streaming_request(pinnacle.window.v1.WindowService.WindowRule, callback)
 end
 return {
     google = google,
