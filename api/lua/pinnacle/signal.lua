@@ -314,12 +314,21 @@ signals.WindowLayoutModeChanged.on_response = function(response)
     ---@diagnostic disable-next-line: invisible
     local window_handle = require("pinnacle.window").handle.new(response.window_id)
     local callbacks = require("pinnacle.util").deep_copy(signals.WindowLayoutModeChanged.callbacks)
-    local layout_mode_proto = response.layout_mode or layout_mode_def.LAYOUT_MODE_TILED
+    local layout_mode_proto = response.layout_mode
+
+    if layout_mode_proto == layout_mode_def.LAYOUT_MODE_UNSPECIFIED or layout_mode_proto == nil then
+        layout_mode_proto = layout_mode_def.LAYOUT_MODE_TILED
+    end
 
     local layout_mode_string = window.layout_mode[layout_mode_proto]
 
     for _, callback in ipairs(callbacks) do
-        protected_callback("WindowLayoutModeChanged", callback.callback, window_handle, layout_mode_string)
+        protected_callback(
+            "WindowLayoutModeChanged",
+            callback.callback,
+            window_handle,
+            layout_mode_string
+        )
     end
 end
 

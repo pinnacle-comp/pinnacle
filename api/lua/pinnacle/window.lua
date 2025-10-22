@@ -136,7 +136,6 @@ end
 
 ---A window's current layout mode.
 ---@alias pinnacle.window.LayoutMode
----| "unspecified" The window has unspecified layout mode.
 ---| "tiled" The window is tiled.
 ---| "floating" The window is floating.
 ---| "fullscreen" The window is fullscreen.
@@ -144,7 +143,6 @@ end
 ---| "spilled" The window is spilled.
 
 local layout_mode = {
-    unspecified = window_v1.LayoutMode.LAYOUT_MODE_UNSPECIFIED,
     tiled = window_v1.LayoutMode.LAYOUT_MODE_TILED,
     floating = window_v1.LayoutMode.LAYOUT_MODE_FLOATING,
     fullscreen = window_v1.LayoutMode.LAYOUT_MODE_FULLSCREEN,
