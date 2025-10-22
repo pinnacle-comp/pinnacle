@@ -12,7 +12,7 @@
 //!
 //! ## To-Do:
 //! - Add tests for move & resize. These need an instrumented pointer since they must be triggered by a
-//! click.
+//!   click.
 //! - Add tests for set_minimize. Not implemented on the server yet.
 //! - Add tests for unmapped functions
 //!
@@ -173,7 +173,7 @@ fn mapped_fullscreen_twice_two_outputs() {
     fixture
         .client(client_id)
         .window_for_surface(surface)
-        .set_fullscreen(outputs.iter().nth(0));
+        .set_fullscreen(outputs.first());
     fixture.roundtrip(client_id);
     fixture.wait_client_configure(client_id);
     fixture.flush();
@@ -191,7 +191,7 @@ fn mapped_fullscreen_twice_two_outputs() {
     fixture
         .client(client_id)
         .window_for_surface(surface)
-        .set_fullscreen(outputs.iter().nth(1));
+        .set_fullscreen(outputs.get(1));
     fixture.roundtrip(client_id);
     fixture.wait_client_configure(client_id);
     fixture.flush();
@@ -217,7 +217,7 @@ fn mapped_set_fullscreen_on_output() {
     fixture
         .client(client_id)
         .window_for_surface(surface)
-        .set_fullscreen(outputs.iter().nth(1));
+        .set_fullscreen(outputs.get(1));
     fixture.roundtrip(client_id);
     fixture.wait_client_configure(client_id);
     fixture.flush();
@@ -246,7 +246,7 @@ fn mapped_set_fullscreen_on_output_update_floating_loc() {
     fixture
         .client(client_id)
         .window_for_surface(&surface)
-        .set_fullscreen(outputs.iter().nth(1));
+        .set_fullscreen(outputs.get(1));
     fixture.roundtrip(client_id);
     fixture.wait_client_configure(client_id);
     fixture.flush();
@@ -285,9 +285,8 @@ fn unmapped_set_fullscreen_on_output() {
     let outputs = fixture.client(client_id).wl_outputs().clone();
 
     // Use floating window since the layout tree will not update
-    let surface = fixture.spawn_floating_window_with(client_id, (500, 500), |w| {
-        w.set_fullscreen(outputs.iter().nth(1))
-    });
+    let surface = fixture
+        .spawn_floating_window_with(client_id, (500, 500), |w| w.set_fullscreen(outputs.get(1)));
 
     let tags = fixture.pinnacle().windows[0].with_state(|state| state.tags.clone());
 

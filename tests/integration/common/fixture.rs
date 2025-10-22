@@ -283,11 +283,6 @@ impl Fixture {
         self.client(id).ack_all_window();
         self.roundtrip(id);
 
-        // Waiting one last time because we're getting focused/activated at this point.
-        let pinnacle_win = self.pinnacle().windows.last().cloned().unwrap();
-        let output = pinnacle_win.output(self.pinnacle());
-        let focused_output = self.pinnacle().focused_output();
-
         // Wait for pending_transactions, if any
         self.flush();
 
