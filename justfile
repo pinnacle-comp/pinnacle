@@ -73,12 +73,12 @@ compile-wlcs:
     #!/usr/bin/env bash
     set -euxo pipefail
 
-    WLCS_SHA=26c5a8cfef265b4ae021adebfec90d758c08792e
+    WLCS_SHA=0ef85361b3865311fe2115095a161f39cae8d23b
 
     cd "{{rootdir}}"
 
     if [ -f "./wlcs/wlcs" ] && [ "$(cd wlcs; git rev-parse HEAD)" = "${WLCS_SHA}" ] ; then
-        echo "WLCS commit 26c5a8c is already compiled"
+        echo "WLCS is already compiled"
     else
         echo "Compiling WLCS"
         git clone https://github.com/canonical/wlcs
