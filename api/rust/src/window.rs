@@ -161,6 +161,11 @@ pub fn connect_signal(signal: WindowSignal) -> SignalHandle {
         WindowSignal::PointerLeave(f) => signal_state.window_pointer_leave.add_callback(f),
         WindowSignal::Focused(f) => signal_state.window_focused.add_callback(f),
         WindowSignal::TitleChanged(f) => signal_state.window_title_changed.add_callback(f),
+        WindowSignal::LayoutModeChanged(f) => {
+            signal_state.window_layout_mode_changed.add_callback(f)
+        }
+        WindowSignal::Created(f) => signal_state.window_created.add_callback(f),
+        WindowSignal::Destroyed(f) => signal_state.window_destroyed.add_callback(f),
     }
 }
 
@@ -187,12 +192,10 @@ pub enum LayoutMode {
     Spilled,
 }
 
-impl TryFrom<pinnacle_api_defs::pinnacle::window::v1::LayoutMode> for LayoutMode {
+impl TryFrom<window::v1::LayoutMode> for LayoutMode {
     type Error = ();
 
-    fn try_from(
-        value: pinnacle_api_defs::pinnacle::window::v1::LayoutMode,
-    ) -> Result<Self, Self::Error> {
+    fn try_from(value: window::v1::LayoutMode) -> Result<Self, Self::Error> {
         match value {
             window::v1::LayoutMode::Unspecified => Err(()),
             window::v1::LayoutMode::Tiled => Ok(LayoutMode::Tiled),

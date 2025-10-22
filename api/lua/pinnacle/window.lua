@@ -135,24 +135,33 @@ function window.begin_resize(button)
 end
 
 ---A window's current layout mode.
----@enum (key) pinnacle.layout.LayoutMode
+---@alias pinnacle.window.LayoutMode
+---| "tiled" The window is tiled.
+---| "floating" The window is floating.
+---| "fullscreen" The window is fullscreen.
+---| "maximized" The window is maximized.
+---| "spilled" The window is spilled.
+
 local layout_mode = {
-    ---The window is tiled.
     tiled = window_v1.LayoutMode.LAYOUT_MODE_TILED,
-    ---The window is floating.
     floating = window_v1.LayoutMode.LAYOUT_MODE_FLOATING,
-    ---The window is fullscreen.
     fullscreen = window_v1.LayoutMode.LAYOUT_MODE_FULLSCREEN,
-    ---The window is maximized.
     maximized = window_v1.LayoutMode.LAYOUT_MODE_MAXIMIZED,
+    spilled = window_v1.LayoutMode.LAYOUT_MODE_SPILLED,
 }
+
 require("pinnacle.util").make_bijective(layout_mode)
+
+window.layout_mode = layout_mode
 
 local signal_name_to_SignalName = {
     pointer_enter = "WindowPointerEnter",
     pointer_leave = "WindowPointerLeave",
     focused = "WindowFocused",
     title_changed = "WindowTitleChanged",
+    layout_mode_changed = "WindowLayoutModeChanged",
+    created = "WindowCreated",
+    destroyed = "WindowDestroyed",
 }
 
 ---@class pinnacle.window.WindowSignal Signals related to compositor events.
@@ -160,6 +169,9 @@ local signal_name_to_SignalName = {
 ---@field pointer_leave fun(window: pinnacle.window.WindowHandle)? The pointer left a window.
 ---@field focused fun(window: pinnacle.window.WindowHandle)? The window got keyboard focus.
 ---@field title_changed fun(window: pinnacle.window.WindowHandle, title: string)? A window's title changed.
+---@field layout_mode_changed fun(window: pinnacle.window.WindowHandle, layout_mode: pinnacle.window.LayoutMode)? A window's layout mode changed.
+---@field created fun(window: pinnacle.window.WindowHandle)? A window was created.
+---@field destroyed fun(window: pinnacle.window.WindowHandle, title: string, app_id: string)? A window was closed.
 
 ---Connects to a window signal.
 ---

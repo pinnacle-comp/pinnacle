@@ -1118,6 +1118,27 @@ local pinnacle_window_v1_DecorationMode = {
 ---@field window_id integer?
 ---@field title string?
 
+---@class pinnacle.signal.v1.WindowLayoutModeChangedRequest
+---@field control pinnacle.signal.v1.StreamControl?
+
+---@class pinnacle.signal.v1.WindowLayoutModeChangedResponse
+---@field window_id integer?
+---@field layout_mode pinnacle.window.v1.LayoutMode?
+
+---@class pinnacle.signal.v1.WindowCreatedRequest
+---@field control pinnacle.signal.v1.StreamControl?
+
+---@class pinnacle.signal.v1.WindowCreatedResponse
+---@field window_id integer?
+
+---@class pinnacle.signal.v1.WindowDestroyedRequest
+---@field control pinnacle.signal.v1.StreamControl?
+
+---@class pinnacle.signal.v1.WindowDestroyedResponse
+---@field window_id integer?
+---@field title string?
+---@field app_id string?
+
 ---@class pinnacle.signal.v1.TagActiveRequest
 ---@field control pinnacle.signal.v1.StreamControl?
 
@@ -1509,6 +1530,12 @@ pinnacle.signal.v1.WindowFocusedRequest = {}
 pinnacle.signal.v1.WindowFocusedResponse = {}
 pinnacle.signal.v1.WindowTitleChangedRequest = {}
 pinnacle.signal.v1.WindowTitleChangedResponse = {}
+pinnacle.signal.v1.WindowLayoutModeChangedRequest = {}
+pinnacle.signal.v1.WindowLayoutModeChangedResponse = {}
+pinnacle.signal.v1.WindowCreatedRequest = {}
+pinnacle.signal.v1.WindowCreatedResponse = {}
+pinnacle.signal.v1.WindowDestroyedRequest = {}
+pinnacle.signal.v1.WindowDestroyedResponse = {}
 pinnacle.signal.v1.TagActiveRequest = {}
 pinnacle.signal.v1.TagActiveResponse = {}
 pinnacle.signal.v1.TagCreatedRequest = {}
@@ -2744,6 +2771,69 @@ pinnacle.signal.v1.SignalService.WindowTitleChanged.response = ".pinnacle.signal
 ---@return string | nil An error string, if any
 function Client:pinnacle_signal_v1_SignalService_WindowTitleChanged(callback)
     return self:bidirectional_streaming_request(pinnacle.signal.v1.SignalService.WindowTitleChanged, callback)
+end
+pinnacle.signal.v1.SignalService.WindowLayoutModeChanged = {}
+pinnacle.signal.v1.SignalService.WindowLayoutModeChanged.service = "pinnacle.signal.v1.SignalService"
+pinnacle.signal.v1.SignalService.WindowLayoutModeChanged.method = "WindowLayoutModeChanged"
+pinnacle.signal.v1.SignalService.WindowLayoutModeChanged.request = ".pinnacle.signal.v1.WindowLayoutModeChangedRequest"
+pinnacle.signal.v1.SignalService.WindowLayoutModeChanged.response = ".pinnacle.signal.v1.WindowLayoutModeChangedResponse"
+
+---Performs a bidirectional-streaming request.
+---
+---`callback` will be called with every streamed response.
+---
+---The raw client-to-server stream is returned to allow you to send encoded messages.
+---
+---@nodiscard
+---
+---@param callback fun(response: pinnacle.signal.v1.WindowLayoutModeChangedResponse, stream: grpc_client.h2.Stream)
+---
+---@return grpc_client.h2.Stream | nil
+---@return string | nil An error string, if any
+function Client:pinnacle_signal_v1_SignalService_WindowLayoutModeChanged(callback)
+    return self:bidirectional_streaming_request(pinnacle.signal.v1.SignalService.WindowLayoutModeChanged, callback)
+end
+pinnacle.signal.v1.SignalService.WindowCreated = {}
+pinnacle.signal.v1.SignalService.WindowCreated.service = "pinnacle.signal.v1.SignalService"
+pinnacle.signal.v1.SignalService.WindowCreated.method = "WindowCreated"
+pinnacle.signal.v1.SignalService.WindowCreated.request = ".pinnacle.signal.v1.WindowCreatedRequest"
+pinnacle.signal.v1.SignalService.WindowCreated.response = ".pinnacle.signal.v1.WindowCreatedResponse"
+
+---Performs a bidirectional-streaming request.
+---
+---`callback` will be called with every streamed response.
+---
+---The raw client-to-server stream is returned to allow you to send encoded messages.
+---
+---@nodiscard
+---
+---@param callback fun(response: pinnacle.signal.v1.WindowCreatedResponse, stream: grpc_client.h2.Stream)
+---
+---@return grpc_client.h2.Stream | nil
+---@return string | nil An error string, if any
+function Client:pinnacle_signal_v1_SignalService_WindowCreated(callback)
+    return self:bidirectional_streaming_request(pinnacle.signal.v1.SignalService.WindowCreated, callback)
+end
+pinnacle.signal.v1.SignalService.WindowDestroyed = {}
+pinnacle.signal.v1.SignalService.WindowDestroyed.service = "pinnacle.signal.v1.SignalService"
+pinnacle.signal.v1.SignalService.WindowDestroyed.method = "WindowDestroyed"
+pinnacle.signal.v1.SignalService.WindowDestroyed.request = ".pinnacle.signal.v1.WindowDestroyedRequest"
+pinnacle.signal.v1.SignalService.WindowDestroyed.response = ".pinnacle.signal.v1.WindowDestroyedResponse"
+
+---Performs a bidirectional-streaming request.
+---
+---`callback` will be called with every streamed response.
+---
+---The raw client-to-server stream is returned to allow you to send encoded messages.
+---
+---@nodiscard
+---
+---@param callback fun(response: pinnacle.signal.v1.WindowDestroyedResponse, stream: grpc_client.h2.Stream)
+---
+---@return grpc_client.h2.Stream | nil
+---@return string | nil An error string, if any
+function Client:pinnacle_signal_v1_SignalService_WindowDestroyed(callback)
+    return self:bidirectional_streaming_request(pinnacle.signal.v1.SignalService.WindowDestroyed, callback)
 end
 pinnacle.signal.v1.SignalService.TagActive = {}
 pinnacle.signal.v1.SignalService.TagActive.service = "pinnacle.signal.v1.SignalService"

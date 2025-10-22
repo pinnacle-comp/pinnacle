@@ -286,6 +286,8 @@ impl State {
             .display_handle
             .flush_clients()
             .expect("failed to flush client buffers");
+
+        self.pinnacle.check_window_layout_mode_change();
     }
 
     fn notify_blocker_cleared(&mut self) {

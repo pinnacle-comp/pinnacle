@@ -8,6 +8,10 @@ local signal_service = require("pinnacle.grpc.defs").pinnacle.signal.v1.SignalSe
 
 local stream_control = require("pinnacle.grpc.defs").pinnacle.signal.v1.StreamControl
 
+local layout_mode_def = require("pinnacle.grpc.defs").pinnacle.window.v1.LayoutMode
+
+local window = require("pinnacle.window")
+
 local signals = {
     OutputConnect = {
         ---@type grpc_client.h2.Stream?
@@ -93,6 +97,30 @@ local signals = {
         ---@type grpc_client.h2.Stream?
         sender = nil,
         ---@type { callback_id: integer, callback: fun(window: pinnacle.window.WindowHandle, title: string) }[]
+        callbacks = {},
+        ---@type fun(response: table)
+        on_response = nil,
+    },
+    WindowLayoutModeChanged = {
+        ---@type grpc_client.h2.Stream?
+        sender = nil,
+        ---@type { callback_id: integer, callback: fun(window: pinnacle.window.WindowHandle, layout_mode: pinnacle.window.LayoutMode) }[]
+        callbacks = {},
+        ---@type fun(response: table)
+        on_response = nil,
+    },
+    WindowCreated = {
+        ---@type grpc_client.h2.Stream?
+        sender = nil,
+        ---@type { callback_id: integer, callback: fun(window: pinnacle.window.WindowHandle) }[]
+        callbacks = {},
+        ---@type fun(response: table)
+        on_response = nil,
+    },
+    WindowDestroyed = {
+        ---@type grpc_client.h2.Stream?
+        sender = nil,
+        ---@type { callback_id: integer, callback: fun(window: pinnacle.window.WindowHandle, title: string, app_id: string) }[]
         callbacks = {},
         ---@type fun(response: table)
         on_response = nil,
@@ -279,6 +307,50 @@ signals.WindowTitleChanged.on_response = function(response)
 
     for _, callback in ipairs(callbacks) do
         protected_callback("WindowTitleChanged", callback.callback, window_handle, title)
+    end
+end
+
+signals.WindowLayoutModeChanged.on_response = function(response)
+    ---@diagnostic disable-next-line: invisible
+    local window_handle = require("pinnacle.window").handle.new(response.window_id)
+    local callbacks = require("pinnacle.util").deep_copy(signals.WindowLayoutModeChanged.callbacks)
+    local layout_mode_proto = response.layout_mode
+
+    if layout_mode_proto == layout_mode_def.LAYOUT_MODE_UNSPECIFIED or layout_mode_proto == nil then
+        layout_mode_proto = layout_mode_def.LAYOUT_MODE_TILED
+    end
+
+    local layout_mode_string = window.layout_mode[layout_mode_proto]
+
+    for _, callback in ipairs(callbacks) do
+        protected_callback(
+            "WindowLayoutModeChanged",
+            callback.callback,
+            window_handle,
+            layout_mode_string
+        )
+    end
+end
+
+signals.WindowCreated.on_response = function(response)
+    ---@diagnostic disable-next-line: invisible
+    local window_handle = require("pinnacle.window").handle.new(response.window_id)
+    local callbacks = require("pinnacle.util").deep_copy(signals.WindowCreated.callbacks)
+
+    for _, callback in ipairs(callbacks) do
+        protected_callback("WindowCreated", callback.callback, window_handle)
+    end
+end
+
+signals.WindowDestroyed.on_response = function(response)
+    ---@diagnostic disable-next-line: invisible
+    local window_handle = require("pinnacle.window").handle.new(response.window_id)
+    local callbacks = require("pinnacle.util").deep_copy(signals.WindowDestroyed.callbacks)
+    local title = response.title or ""
+    local app_id = response.app_id or ""
+
+    for _, callback in ipairs(callbacks) do
+        protected_callback("WindowDestroyed", callback.callback, window_handle, title, app_id)
     end
 end
 

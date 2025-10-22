@@ -2,6 +2,8 @@ syntax = "proto3";
 
 package pinnacle.signal.v1;
 
+import "pinnacle/window/v1/window.proto";
+
 enum StreamControl {
   STREAM_CONTROL_UNSPECIFIED = 0;
   // The client is ready to receive the next signal.
@@ -98,6 +100,30 @@ message WindowTitleChangedResponse {
   string title = 2;
 }
 
+message WindowLayoutModeChangedRequest {
+  StreamControl control = 1;
+}
+message WindowLayoutModeChangedResponse {
+  uint32 window_id = 1;
+  pinnacle.window.v1.LayoutMode layout_mode = 2;
+}
+
+message WindowCreatedRequest {
+  StreamControl control = 1;
+}
+message WindowCreatedResponse {
+  uint32 window_id = 1;
+}
+
+message WindowDestroyedRequest {
+  StreamControl control = 1;
+}
+message WindowDestroyedResponse {
+  uint32 window_id = 1;
+  string title = 2;
+  string app_id = 3;
+}
+
 message TagActiveRequest {
   StreamControl control = 1;
 }
@@ -141,6 +167,9 @@ service SignalService {
   rpc WindowPointerLeave(stream WindowPointerLeaveRequest) returns (stream WindowPointerLeaveResponse);
   rpc WindowFocused(stream WindowFocusedRequest) returns (stream WindowFocusedResponse);
   rpc WindowTitleChanged(stream WindowTitleChangedRequest) returns (stream WindowTitleChangedResponse);
+  rpc WindowLayoutModeChanged(stream WindowLayoutModeChangedRequest) returns (stream WindowLayoutModeChangedResponse);
+  rpc WindowCreated(stream WindowCreatedRequest) returns (stream WindowCreatedResponse);
+  rpc WindowDestroyed(stream WindowDestroyedRequest) returns (stream WindowDestroyedResponse);
 
   rpc TagActive(stream TagActiveRequest) returns (stream TagActiveResponse);
   rpc TagCreated(stream TagCreatedRequest) returns (stream TagCreatedResponse);
