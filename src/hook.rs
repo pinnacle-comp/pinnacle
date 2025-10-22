@@ -1,5 +1,8 @@
 use smithay::{
-    backend::renderer::{buffer_dimensions, utils::SurfaceView},
+    backend::renderer::{
+        buffer_dimensions,
+        utils::{RendererSurfaceStateUserData, SurfaceView},
+    },
     reexports::{
         calloop::Interest,
         wayland_server::{Resource, protocol::wl_surface::WlSurface},
@@ -401,14 +404,16 @@ fn pending_bbox(surface: &WlSurface) -> Rectangle<i32, Logical> {
         (0, 0).into(),
         |_surface, states, loc: &Point<i32, Logical>| {
             let mut loc = *loc;
+            let data = states.data_map.get::<RendererSurfaceStateUserData>();
 
-            if let Some(surface_view) = pending_surface_view(states) {
+            if let Some(surface_view) =
+                pending_surface_view(states).or_else(|| data.and_then(|d| d.lock().unwrap().view()))
+            {
                 loc += surface_view.offset;
-
                 bounding_box = bounding_box.merge(Rectangle::new(loc, surface_view.dst));
-
                 TraversalAction::DoChildren(loc)
             } else {
+                // Surface is unmapped, skip children
                 TraversalAction::SkipChildren
             }
         },
