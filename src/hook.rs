@@ -11,13 +11,14 @@ use smithay::{
             SurfaceData, TraversalAction, with_surface_tree_downward,
         },
         dmabuf,
-        shell::xdg::{ToplevelSurface, XdgToplevelSurfaceData},
+        shell::xdg::{ToplevelCachedState, ToplevelSurface},
         viewporter::ViewportCachedState,
     },
 };
 use tracing::{error, field::Empty, trace, trace_span};
 
 use crate::{
+    protocol::snowcap_decoration::DecorationSurfaceCachedState,
     state::{Pinnacle, State, WithState},
     util::transaction::TransactionBuilder,
 };
@@ -43,14 +44,15 @@ pub fn add_decoration_pre_commit_hook(deco: &crate::decoration::DecorationSurfac
                 }
             };
 
-            let role = states
-                .data_map
-                .get::<crate::protocol::snowcap_decoration::DecorationSurfaceData>()
-                .unwrap()
-                .lock()
-                .unwrap();
+            let commit_serial = states
+                .cached_state
+                .get::<DecorationSurfaceCachedState>()
+                .pending()
+                .last_acked
+                .as_ref()
+                .map(|configure| configure.serial);
 
-            (role.configure_serial, dmabuf)
+            (commit_serial, dmabuf)
         });
 
         let mut transaction_for_dmabuf = None;
@@ -149,14 +151,15 @@ pub fn add_mapped_toplevel_pre_commit_hook(toplevel: &ToplevelSurface) -> HookId
                         }
                     };
 
-                    let role = states
-                        .data_map
-                        .get::<XdgToplevelSurfaceData>()
-                        .unwrap()
-                        .lock()
-                        .unwrap();
+                    let commit_serial = states
+                        .cached_state
+                        .get::<ToplevelCachedState>()
+                        .pending()
+                        .last_acked
+                        .as_ref()
+                        .map(|configure| configure.serial);
 
-                    (got_unmapped, dmabuf, role.configure_serial)
+                    (got_unmapped, dmabuf, commit_serial)
                 });
 
             let mut deco_serials = Vec::new();

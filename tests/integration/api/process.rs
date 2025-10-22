@@ -66,6 +66,13 @@ fn process_spawn() {
             fixture.pinnacle().windows[0].class().as_deref(),
             Some("Alacritty")
         );
+
+        fixture.dispatch_until(|fixture| {
+            for win in fixture.pinnacle().windows.iter() {
+                win.close();
+            }
+            fixture.pinnacle().windows.is_empty()
+        });
     });
 }
 
@@ -145,6 +152,13 @@ fn process_spawn_unique() {
             fixture.pinnacle().windows[0].class().as_deref(),
             Some("Alacritty")
         );
+
+        fixture.dispatch_until(|fixture| {
+            for win in fixture.pinnacle().windows.iter() {
+                win.close();
+            }
+            fixture.pinnacle().windows.is_empty()
+        });
     });
 }
 
@@ -210,6 +224,13 @@ fn process_spawn_once() {
         fixture.dispatch_for(Duration::from_secs(1));
 
         assert_eq!(fixture.pinnacle().windows.len(), 0);
+
+        fixture.dispatch_until(|fixture| {
+            for win in fixture.pinnacle().windows.iter() {
+                win.close();
+            }
+            fixture.pinnacle().windows.is_empty()
+        });
     });
 }
 
@@ -302,6 +323,8 @@ fn process_stdio_with_no_pipes_has_no_child_stdio() {
 
         assert!(child.stdout.is_none());
     });
+
+    fixture.dispatch_for(Duration::from_secs(1));
 
     spawn_lua_blocking! {
         fixture,

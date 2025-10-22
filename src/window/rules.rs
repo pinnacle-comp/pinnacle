@@ -4,7 +4,6 @@ use smithay::{
     reexports::wayland_protocols::xdg::decoration::zv1::server::zxdg_toplevel_decoration_v1,
     utils::{Logical, Size},
 };
-use tracing::error;
 
 use crate::{
     api::Sender,
@@ -209,18 +208,7 @@ impl Pinnacle {
 
         match unmapped.window.underlying_surface() {
             WindowSurface::Wayland(toplevel) => {
-                // This should be an assert, but currently Smithay does not
-                // raise a protocol error when a client commits a buffer
-                // before the initial configure
-                if toplevel.is_initial_configure_sent() {
-                    error!(
-                        app_id = ?unmapped.window.class(),
-                        "toplevel already configured after window rules; \
-                        this is either a bug with Pinnacle or the client application \
-                        committed a buffer before receiving an initial configure, \
-                        which is a protocol error"
-                    );
-                }
+                assert!(!toplevel.is_initial_configure_sent());
                 toplevel.send_configure();
             }
             WindowSurface::X11(surface) => {

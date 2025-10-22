@@ -111,10 +111,11 @@ impl DecorationSurface {
 
     pub fn cached_state(&self) -> DecorationSurfaceCachedState {
         compositor::with_states(self.0.surface.wl_surface(), |states| {
-            *states
+            states
                 .cached_state
                 .get::<DecorationSurfaceCachedState>()
                 .current()
+                .clone()
         })
     }
 

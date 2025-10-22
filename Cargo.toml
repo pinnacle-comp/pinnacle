@@ -56,7 +56,7 @@ wayland-scanner = "0.31.7"
 
 [workspace.dependencies.smithay]
 git = "https://github.com/Smithay/smithay"
-rev = "20d2dac"
+rev = "07f9db5"
 # path = "../../git/smithay"
 default-features = false
 features = [
@@ -106,7 +106,7 @@ rust-version.workspace = true
 [dependencies]
 # Smithay
 smithay = { workspace = true }
-smithay-drm-extras = { git = "https://github.com/Smithay/smithay", rev = "9ccbd35" }
+smithay-drm-extras = { git = "https://github.com/Smithay/smithay", rev = "07f9db5" }
 # Tracing
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }

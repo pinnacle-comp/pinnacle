@@ -47,7 +47,7 @@ impl Fixture {
         Self::new_inner(true)
     }
 
-    pub fn new_inner(create_socket: bool) -> Self {
+    fn new_inner(create_socket: bool) -> Self {
         let _test_guard = TEST_MUTEX.lock().unwrap_or_else(|guard| {
             TEST_MUTEX.clear_poison();
             guard.into_inner()
@@ -235,11 +235,6 @@ impl Fixture {
         self.client(id).ack_all_window();
         self.roundtrip(id);
 
-        // Waiting one last time because we're getting focused/activated at this point.
-        self.wait_client_configure(id);
-        self.client(id).ack_all_window();
-        self.roundtrip(id);
-
         // Wait for pending_transactions, if any
         self.flush();
 
@@ -275,8 +270,11 @@ impl Fixture {
         let window = self.client(id).window_for_surface(&surface);
         window.attach_buffer();
         window.set_size(size.0, size.1);
-        tracing::debug!("Buffer & size commit");
-        window.commit();
+
+        let current_serial = window.current_serial();
+        assert!(current_serial.is_some());
+        window.ack_and_commit();
+        assert!(window.current_serial().is_none());
         self.roundtrip(id);
 
         tracing::debug!("Wait for size configuration");
@@ -289,14 +287,6 @@ impl Fixture {
         let pinnacle_win = self.pinnacle().windows.last().cloned().unwrap();
         let output = pinnacle_win.output(self.pinnacle());
         let focused_output = self.pinnacle().focused_output();
-
-        if output.as_ref() == focused_output {
-            tracing::info!("Wait activation");
-            // Waiting to be activated/focused.
-            self.wait_client_configure(id);
-            self.client(id).ack_all_window();
-            self.roundtrip(id);
-        }
 
         // Wait for pending_transactions, if any
         self.flush();

@@ -26,26 +26,20 @@ pub type DecorationSurfaceData = Mutex<DecorationSurfaceAttributes>;
 
 pub struct DecorationSurfaceAttributes {
     surface: SnowcapDecorationSurfaceV1,
-    pub configured: bool,
-    pub configure_serial: Option<Serial>,
     pub initial_configure_sent: bool,
     pending_configures: Vec<DecorationSurfaceConfigure>,
     pub server_pending: Option<DecorationSurfaceState>,
-    pub last_acked: Option<DecorationSurfaceState>,
-    pub current: DecorationSurfaceState,
+    pub last_acked: Option<DecorationSurfaceConfigure>,
 }
 
 impl DecorationSurfaceAttributes {
     fn new(surface: SnowcapDecorationSurfaceV1) -> Self {
         Self {
             surface,
-            configured: false,
-            configure_serial: None,
             initial_configure_sent: false,
             pending_configures: Vec::new(),
             server_pending: None,
             last_acked: None,
-            current: Default::default(),
         }
     }
 
@@ -56,37 +50,33 @@ impl DecorationSurfaceAttributes {
             .find(|configure| configure.serial == serial)
             .cloned()?;
 
-        self.last_acked = Some(configure.state.clone());
+        self.last_acked = Some(configure.clone());
 
-        self.configured = true;
-        self.configure_serial = Some(serial);
         self.pending_configures.retain(|c| c.serial > serial);
 
         Some(configure)
     }
 
     fn reset(&mut self) {
-        self.configured = false;
-        self.configure_serial = None;
         self.initial_configure_sent = false;
         self.pending_configures = Vec::new();
         self.server_pending = None;
         self.last_acked = None;
-        self.current = Default::default();
     }
 
-    fn current_server_state(&self) -> &DecorationSurfaceState {
+    fn current_server_state(&self) -> DecorationSurfaceState {
         self.pending_configures
             .last()
             .map(|c| &c.state)
-            .or(self.last_acked.as_ref())
-            .unwrap_or(&self.current)
+            .or(self.last_acked.as_ref().map(|c| &c.state))
+            .cloned()
+            .unwrap_or_default()
     }
 
     fn has_pending_changes(&self) -> bool {
         self.server_pending
             .as_ref()
-            .map(|s| s != self.current_server_state())
+            .map(|s| *s != self.current_server_state())
             .unwrap_or(false)
     }
 }
@@ -105,16 +95,17 @@ pub struct DecorationSurfaceState {
     pub toplevel_size: Option<Size<i32, Logical>>,
 }
 
-#[derive(Clone, Copy, Default, Debug)]
+#[derive(Clone, Default, Debug)]
 pub struct DecorationSurfaceCachedState {
     pub location: Point<i32, Logical>,
     pub bounds: Bounds,
     pub z_index: i32,
+    pub last_acked: Option<DecorationSurfaceConfigure>,
 }
 
 impl Cacheable for DecorationSurfaceCachedState {
     fn commit(&mut self, _dh: &smithay::reexports::wayland_server::DisplayHandle) -> Self {
-        *self
+        self.clone()
     }
 
     fn merge_into(self, into: &mut Self, _dh: &smithay::reexports::wayland_server::DisplayHandle) {
@@ -265,22 +256,6 @@ impl DecorationSurface {
         serial
     }
 
-    pub fn ensure_configured(&self) -> bool {
-        let configured = compositor::with_states(&self.wl_surface, |states| {
-            states
-                .data_map
-                .get::<Mutex<DecorationSurfaceAttributes>>()
-                .unwrap()
-                .lock()
-                .unwrap()
-                .configured
-        });
-        if !configured {
-            // TODO: post error here
-        }
-        configured
-    }
-
     pub fn wl_surface(&self) -> &WlSurface {
         &self.wl_surface
     }
@@ -318,21 +293,25 @@ impl DecorationSurface {
         })
     }
 
-    pub fn current_state(&self) -> DecorationSurfaceState {
-        compositor::with_states(&self.wl_surface, |states| {
-            let attributes = states
-                .data_map
-                .get::<Mutex<DecorationSurfaceAttributes>>()
-                .unwrap()
-                .lock()
-                .unwrap();
+    pub fn decoration_surface(&self) -> &SnowcapDecorationSurfaceV1 {
+        &self.decoration_surface
+    }
 
-            attributes.current.clone()
+    pub fn with_cached_state<F, T>(&self, f: F) -> T
+    where
+        F: FnOnce(&DecorationSurfaceCachedState) -> T,
+    {
+        compositor::with_states(&self.wl_surface, |states| {
+            let mut guard = states.cached_state.get::<DecorationSurfaceCachedState>();
+            f(guard.current())
         })
     }
 
-    pub fn decoration_surface(&self) -> &SnowcapDecorationSurfaceV1 {
-        &self.decoration_surface
+    pub fn with_committed_state<F, T>(&self, f: F) -> T
+    where
+        F: FnOnce(Option<&DecorationSurfaceState>) -> T,
+    {
+        self.with_cached_state(move |state| f(state.last_acked.as_ref().map(|c| &c.state)))
     }
 }
 

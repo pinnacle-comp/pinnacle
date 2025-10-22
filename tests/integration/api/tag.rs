@@ -1,6 +1,6 @@
 use std::{
     collections::{HashMap, HashSet},
-    sync::{Arc, Mutex},
+    sync::{Arc, Mutex, OnceLock},
 };
 
 use mlua::{UserData, UserDataMethods};
@@ -504,14 +504,17 @@ fn tag_signal_active() {
         let tag1_hndl = TagHandle::from_id(tags[0].id().to_inner());
         let tag2_hndl = TagHandle::from_id(tags[1].id().to_inner());
         let tester_cpy = tester.clone();
+        let signal_handle = Arc::new(OnceLock::new());
+        let signal_handle_clone = signal_handle.clone();
 
         match lang {
             Lang::Rust => fixture.spawn_blocking(move || {
-                pinnacle_api::tag::connect_signal(pinnacle_api::signal::TagSignal::Active(
-                    Box::new(move |tag, active| {
+                let handle = pinnacle_api::tag::connect_signal(
+                    pinnacle_api::signal::TagSignal::Active(Box::new(move |tag, active| {
                         tester.log_active(tag.clone(), active);
-                    }),
-                ));
+                    })),
+                );
+                signal_handle_clone.set(handle).unwrap();
 
                 pinnacle_api::tag::get(tag_name).unwrap().switch_to();
             }),
@@ -537,6 +540,12 @@ fn tag_signal_active() {
         let store = tester_cpy.active().lock().unwrap();
         assert_eq!(store.get(&tag1_hndl), Some(&false));
         assert_eq!(store.get(&tag2_hndl), Some(&true));
+
+        if lang == Lang::Rust {
+            // Think the Rust client waits for signals forever, was only able
+            // to reproduce in release mode though, strange
+            signal_handle.get().unwrap().disconnect();
+        }
     })
 }
 
@@ -555,12 +564,16 @@ fn tag_signal_created() {
         });
 
         let tester_cpy = tester.clone();
+        let signal_handle = Arc::new(OnceLock::new());
+        let signal_handle_clone = signal_handle.clone();
 
         match lang {
             Lang::Rust => fixture.spawn_blocking(move || {
-                pinnacle_api::tag::connect_signal(TagSignal::Created(Box::new(move |tag| {
-                    tester.log_created(tag.clone());
-                })));
+                let handle =
+                    pinnacle_api::tag::connect_signal(TagSignal::Created(Box::new(move |tag| {
+                        tester.log_created(tag.clone());
+                    })));
+                signal_handle_clone.set(handle).unwrap();
 
                 let output = pinnacle_api::output::get_focused().unwrap();
                 let _ = pinnacle_api::tag::add(&output, [tag_name]);
@@ -588,7 +601,7 @@ fn tag_signal_created() {
         let new_tag = output
             .with_state(|s| {
                 s.tags.iter().find_map(|t| {
-                    if &t.name() == tag_name {
+                    if t.name() == tag_name {
                         Some(TagHandle::from_id(t.id().to_inner()))
                     } else {
                         None
@@ -599,6 +612,10 @@ fn tag_signal_created() {
 
         let storage = tester_cpy.created().lock().unwrap();
         assert!(storage.contains(&new_tag));
+
+        if lang == Lang::Rust {
+            signal_handle.get().unwrap().disconnect();
+        }
     });
 }
 
@@ -618,12 +635,16 @@ fn tag_signal_removed() {
         });
 
         let tester_cpy = tester.clone();
+        let signal_handle = Arc::new(OnceLock::new());
+        let signal_handle_clone = signal_handle.clone();
 
         match lang {
             Lang::Rust => fixture.spawn_blocking(move || {
-                pinnacle_api::tag::connect_signal(TagSignal::Removed(Box::new(move |tag| {
-                    tester.log_removed(tag.clone());
-                })));
+                let handle =
+                    pinnacle_api::tag::connect_signal(TagSignal::Removed(Box::new(move |tag| {
+                        tester.log_removed(tag.clone());
+                    })));
+                signal_handle_clone.set(handle).unwrap();
 
                 let to_remove = pinnacle_api::tag::get(tag_name).unwrap();
                 pinnacle_api::tag::remove([to_remove]);
@@ -650,5 +671,9 @@ fn tag_signal_removed() {
 
         let storage = tester_cpy.removed().lock().unwrap();
         assert!(storage.contains(&tag_handle));
+
+        if lang == Lang::Rust {
+            signal_handle.get().unwrap().disconnect();
+        }
     });
 }

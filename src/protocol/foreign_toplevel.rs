@@ -19,7 +19,7 @@ use smithay::{
             protocol::{wl_output::WlOutput, wl_surface::WlSurface},
         },
     },
-    wayland::{compositor, seat::WaylandFocus, shell::xdg::XdgToplevelSurfaceData},
+    wayland::seat::WaylandFocus,
 };
 use tracing::error;
 
@@ -162,37 +162,41 @@ fn pending_toplevel_data_for(
 ) -> Option<PendingToplevelData> {
     let focused_win = pinnacle.keyboard_focus_stack.current_focus();
 
-    let surface = win.wl_surface()?;
-
     let output = win.output(pinnacle);
 
     let focused = focused_win == Some(win);
 
-    compositor::with_states(&surface, |states| match win.underlying_surface() {
-        WindowSurface::Wayland(_toplevel) => {
-            let role = states
-                .data_map
-                .get::<XdgToplevelSurfaceData>()?
-                .lock()
-                .ok()?;
+    let title = win.title();
+    let app_id = win.class();
+
+    match win.underlying_surface() {
+        WindowSurface::Wayland(toplevel) => {
+            let (maximized, fullscreen, _activated) = toplevel.with_committed_state(|state| {
+                state
+                    .map(|state| {
+                        (
+                            state.states.contains(xdg_toplevel::State::Maximized),
+                            state.states.contains(xdg_toplevel::State::Fullscreen),
+                            state.states.contains(xdg_toplevel::State::Activated),
+                        )
+                    })
+                    .unwrap_or_default()
+            });
 
             Some(PendingToplevelData {
-                title: role.title.clone(),
-                app_id: role.app_id.clone(),
-                maximized: role.current.states.contains(xdg_toplevel::State::Maximized),
+                title,
+                app_id,
+                maximized,
                 minimized: win.with_state(|state| state.minimized),
-                fullscreen: role
-                    .current
-                    .states
-                    .contains(xdg_toplevel::State::Fullscreen),
-                _activated: role.current.states.contains(xdg_toplevel::State::Activated),
+                fullscreen,
+                _activated,
                 focused,
                 output,
             })
         }
         WindowSurface::X11(x11_surface) => Some(PendingToplevelData {
-            title: Some(x11_surface.title()),
-            app_id: Some(x11_surface.class()),
+            title,
+            app_id,
             maximized: x11_surface.is_maximized(),
             minimized: x11_surface.is_minimized(),
             fullscreen: x11_surface.is_fullscreen(),
@@ -200,7 +204,7 @@ fn pending_toplevel_data_for(
             focused,
             output,
         }),
-    })
+    }
 }
 
 pub fn on_output_bound(state: &mut State, output: &Output, wl_output: &WlOutput) {

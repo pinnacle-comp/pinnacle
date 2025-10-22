@@ -10,12 +10,13 @@ use smithay::{
         protocol::wl_surface::WlSurface,
     },
     utils::{Point, Serial},
-    wayland::compositor,
+    wayland::compositor::{self, BufferAssignment, SurfaceAttributes},
 };
 use snowcap_protocols::snowcap_decoration_v1::server::{
     snowcap_decoration_manager_v1::{self, SnowcapDecorationManagerV1},
     snowcap_decoration_surface_v1::{self, SnowcapDecorationSurfaceV1},
 };
+use tracing::warn;
 
 use crate::protocol::snowcap_decoration::{
     DECORATION_SURFACE_ROLE, DecorationSurfaceAttributes, DecorationSurfaceCachedState,
@@ -101,17 +102,50 @@ where
                 });
 
                 if initial {
-                    compositor::add_post_commit_hook::<D, _>(&surface, |_state, _dh, surface| {
+                    compositor::add_pre_commit_hook::<D, _>(&surface, |_state, _dh, surface| {
                         compositor::with_states(surface, |states| {
-                            let mut guard = states
+                            let mut role = states
                                 .data_map
-                                .get::<Mutex<DecorationSurfaceAttributes>>()
+                                .get::<DecorationSurfaceData>()
                                 .unwrap()
                                 .lock()
                                 .unwrap();
+                            let mut guard_deco =
+                                states.cached_state.get::<DecorationSurfaceCachedState>();
+                            let pending = guard_deco.pending();
 
-                            if let Some(state) = guard.last_acked.clone() {
-                                guard.current = state;
+                            let had_buffer_before = pending.last_acked.is_some();
+
+                            let mut guard_surface = states.cached_state.get::<SurfaceAttributes>();
+
+                            let has_buffer = match guard_surface.pending().buffer.as_ref() {
+                                Some(BufferAssignment::NewBuffer(_)) => true,
+                                Some(BufferAssignment::Removed) => false,
+                                None => had_buffer_before,
+                            };
+
+                            let got_unmapped = had_buffer_before && !has_buffer;
+
+                            if has_buffer {
+                                let Some(last_acked) = role.last_acked.clone() else {
+                                    // TODO: post error here or something
+                                    warn!(
+                                        "decoration attached buffer before acking initial configure"
+                                    );
+                                    return;
+                                };
+
+                                pending.last_acked = Some(last_acked);
+                            } else {
+                                pending.last_acked = None;
+                            }
+
+                            if got_unmapped {
+                                let pending_configures =
+                                    std::mem::take(&mut role.pending_configures);
+                                role.reset();
+                                role.pending_configures = pending_configures;
+                                *guard_deco.pending() = Default::default();
                             }
                         })
                     });

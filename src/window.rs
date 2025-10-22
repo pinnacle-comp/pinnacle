@@ -339,21 +339,13 @@ impl WindowElement {
 
     pub fn should_not_have_ssd(&self) -> bool {
         match self.underlying_surface() {
-            WindowSurface::Wayland(toplevel) => {
-                compositor::with_states(toplevel.wl_surface(), |states| {
-                    let guard = states
-                        .data_map
-                        .get::<XdgToplevelSurfaceData>()
-                        .unwrap()
-                        .lock()
-                        .unwrap();
-                    let state = &guard.current;
-
+            WindowSurface::Wayland(toplevel) => toplevel.with_committed_state(|state| {
+                state.is_some_and(|state| {
                     state.states.contains(xdg_toplevel::State::Fullscreen)
                         || state.decoration_mode
                             == Some(zxdg_toplevel_decoration_v1::Mode::ClientSide)
                 })
-            }
+            }),
             WindowSurface::X11(x11_surface) => {
                 x11_surface.is_fullscreen() || x11_surface.is_decorated()
             }

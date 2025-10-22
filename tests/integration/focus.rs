@@ -56,33 +56,8 @@ fn keyboard_focus() {
 
     // Add a window
     let client_id = fixture.add_client();
-    let window = fixture.client(client_id).create_window();
-    let surface1 = window.surface();
-    window.commit();
-    let window = fixture.client(client_id).create_window();
-    let surface2 = window.surface();
-    window.commit();
-    fixture.roundtrip(client_id);
 
-    // Commit a buffer
-    let window1 = fixture.client(client_id).window_for_surface(&surface1);
-    window1.attach_buffer();
-    window1.ack_and_commit();
-    let window2 = fixture.client(client_id).window_for_surface(&surface2);
-    window2.attach_buffer();
-    window2.ack_and_commit();
-    fixture.roundtrip(client_id);
-
-    // Let Pinnacle do a layout
-    fixture.dispatch_until(|fixture| fixture.pinnacle().layout_state.layout_trees.len() == 1);
-    fixture.roundtrip(client_id);
-
-    // Commit the layout
-    let window1 = fixture.client(client_id).window_for_surface(&surface1);
-    window1.ack_and_commit();
-    let window2 = fixture.client(client_id).window_for_surface(&surface2);
-    window2.ack_and_commit();
-    fixture.roundtrip(client_id);
+    fixture.spawn_windows(2, client_id);
 
     let current_focus = fixture
         .pinnacle()
