@@ -17,14 +17,18 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          submodules: recursive
       - name: Get Rust toolchain
         uses: dtolnay/rust-toolchain@stable
       - name: Cache stuff
         uses: Swatinem/rust-cache@v2
       - name: Get dependencies
-        run: sudo apt remove needrestart && sudo apt update && sudo apt install libwayland-dev libxkbcommon-dev libudev-dev libinput-dev libgbm-dev libseat-dev libsystemd-dev protobuf-compiler xwayland libegl-dev liblua5.4-dev libdisplay-info-dev
+        uses: awalsh128/cache-apt-pkgs-action@v1
+        with:
+          packages:
+            "libwayland-dev libxkbcommon-dev libudev-dev libinput-dev \
+             libgbm-dev libseat-dev libsystemd-dev protobuf-compiler xwayland libegl-dev \
+             liblua5.4-dev libdisplay-info-dev"
+          version: 1.0
       - name: Setup Lua
         uses: leafo/gh-actions-lua@v10
         with:
@@ -41,20 +45,18 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          submodules: recursive
       - name: Get Rust toolchain
         uses: dtolnay/rust-toolchain@stable
       - name: Cache stuff
         uses: Swatinem/rust-cache@v2
       - name: Get dependencies
-        run: |
-          sudo apt remove needrestart
-          sudo add-apt-repository ppa:aslatter/ppa
-          sudo apt update
-          sudo apt install libwayland-dev libxkbcommon-dev libudev-dev libinput-dev \
-            libgbm-dev libseat-dev libsystemd-dev protobuf-compiler xwayland libegl-dev \
-            liblua5.4-dev libdisplay-info-dev alacritty
+        uses: awalsh128/cache-apt-pkgs-action@v1
+        with:
+          packages:
+            "libwayland-dev libxkbcommon-dev libudev-dev libinput-dev \
+             libgbm-dev libseat-dev libsystemd-dev protobuf-compiler xwayland libegl-dev \
+             liblua5.4-dev libdisplay-info-dev"
+          version: 1.0
       - name: Setup Lua
         uses: leafo/gh-actions-lua@v10
         with:
@@ -103,12 +105,13 @@ jobs:
       - name: Cache stuff
         uses: Swatinem/rust-cache@v2
       - name: Get dependencies
-        run: |
-          sudo apt remove needrestart
-          sudo apt update
-          sudo apt install libwayland-dev libxkbcommon-dev libudev-dev libinput-dev \
-              libgbm-dev libseat-dev libsystemd-dev protobuf-compiler xwayland libegl-dev \
-              liblua5.4-dev libdisplay-info-dev
+        uses: awalsh128/cache-apt-pkgs-action@v1
+        with:
+          packages:
+            "libwayland-dev libxkbcommon-dev libudev-dev libinput-dev \
+             libgbm-dev libseat-dev libsystemd-dev protobuf-compiler xwayland libegl-dev \
+             liblua5.4-dev libdisplay-info-dev"
+          version: 1.0
       - name: Setup Lua
         uses: leafo/gh-actions-lua@v10
         with:
