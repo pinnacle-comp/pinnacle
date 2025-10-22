@@ -235,7 +235,11 @@ impl PendingTransactions {
 
         let next = entry.first()?;
 
-        if next.is_completed() || next.is_cancelled() {
+        // wlcs won't commit any new configures, force complete the transaction here
+        // to get surfaces to map
+        let is_wlcs = cfg!(feature = "wlcs");
+
+        if next.is_completed() || next.is_cancelled() || is_wlcs {
             return Some(entry.remove(0));
         }
 

@@ -145,22 +145,11 @@ jobs:
               :WpViewporterTest.assigning_a_viewport_to_a_surface_with_an_existing_viewport_is_an_error"
           - job_name: "Pointer constraints"
             gtest_filter: 
-              "PointerConstraints.can_get_locked_pointer\
-              :PointerConstraints.locked_pointer_on_initially_unfocussed_surface_gets_no_locked_notification\
-              :PointerConstraints.can_get_confined_pointer\
-              :PointerConstraints.confined_pointer_on_initially_unfocussed_surface_gets_no_confined_notification"
-              # TODO:
-              # PointerConstraints.locked_pointer_on_initially_focussed_surface_gets_locked_notification
-              # PointerConstraints.locked_pointer_does_not_move
-              # PointerConstraints.when_surface_is_selected_locked_pointer_gets_locked_notification
-              # PointerConstraints.when_surface_is_unselected_locked_pointer_gets_unlocked_notification
-              # PointerConstraints.when_surface_is_reselected_persistent_locked_pointer_gets_notifications
-              # PointerConstraints.confined_pointer_on_initially_focussed_surface_gets_confined_notification
-              # PointerConstraints.confined_pointer_does_move
-              # PointerConstraints.confined_pointer_movement_is_constrained
-              # PointerConstraints.when_surface_is_selected_confined_pointer_gets_confined_notification
-              # PointerConstraints.when_surface_is_unselected_confined_pointer_gets_unconfined_notification
-              # PointerConstraints.when_surface_is_reselected_persistent_confined_pointer_gets_notifications
+              "PointerConstraints.*\
+              :-PointerConstraints.when_surface_is_reselected_persistent_confined_pointer_gets_notifications\
+              :PointerConstraints.when_surface_is_unselected_confined_pointer_gets_unconfined_notification\
+              :PointerConstraints.when_surface_is_reselected_persistent_locked_pointer_gets_notifications\
+              :PointerConstraints.when_surface_is_unselected_locked_pointer_gets_unlocked_notification"
           - job_name: "Foreign toplevel"
             gtest_filter:
               "ForeignToplevelManagerTest.does_not_detect_toplevels_when_test_creates_none\
