@@ -67,7 +67,7 @@ run *args: gen-lua-pb-defs
 
 # Run `cargo test`
 test *args: gen-lua-pb-defs
-    cargo test --no-default-features --all {{args}}
+    cargo test --no-default-features --all --features=testing --exclude wlcs_pinnacle {{args}}
 
 compile-wlcs:
     #!/usr/bin/env bash
