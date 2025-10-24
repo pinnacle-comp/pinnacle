@@ -4,8 +4,12 @@ use keyboard::KeyboardFocusTarget;
 use smithay::{
     desktop::layer_map_for_output,
     output::Output,
+    reexports::wayland_server::Resource,
     utils::{IsAlive, SERIAL_COUNTER},
-    wayland::shell::wlr_layer::{self, KeyboardInteractivity},
+    wayland::{
+        shell::wlr_layer::{self, KeyboardInteractivity},
+        xwayland_keyboard_grab::XWaylandKeyboardGrab,
+    },
 };
 
 use crate::{
@@ -73,6 +77,20 @@ impl State {
             }
 
             return;
+        }
+
+        let xwayland_grab_dead = keyboard
+            .with_grab(|_, grab| {
+                if let Some(xwayland_grab) = grab.downcast_ref::<XWaylandKeyboardGrab<State>>() {
+                    !xwayland_grab.grab().is_alive()
+                } else {
+                    false
+                }
+            })
+            .unwrap_or_default();
+
+        if xwayland_grab_dead {
+            keyboard.unset_grab(self);
         }
 
         if keyboard.is_grabbed() {
