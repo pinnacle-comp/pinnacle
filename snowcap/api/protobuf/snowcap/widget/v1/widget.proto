@@ -34,6 +34,36 @@ message Color {
   float alpha = 4;
 }
 
+message Gradient {
+  message ColorStop {
+    float offset = 1;
+    Color color = 2;
+  }
+
+  message Linear {
+    float radians = 1;
+    repeated ColorStop stops = 2;
+  }
+
+  oneof gradient {
+    Linear linear = 1;
+  }
+}
+
+message Background {
+  oneof background {
+    Color color = 1;
+    Gradient gradient = 2;
+  }
+}
+
+message LineHeight {
+  oneof line_height {
+    float relative = 1;
+    float absolute = 2;
+  }
+}
+
 message Font {
   message Family {
     oneof family {
@@ -128,6 +158,8 @@ message WidgetDef {
     Button button = 7;
     Image image = 8;
     InputRegion input_region = 9;
+    MouseArea mouse_area = 10;
+    TextInput text_input = 11;
   }
 }
 
@@ -290,6 +322,133 @@ message Image {
   }
 }
 
+message MouseArea {
+  WidgetDef child = 1;
+  bool on_press = 2;
+  bool on_release = 3;
+  bool on_double_click = 4;
+  bool on_right_press = 5;
+  bool on_right_release = 6;
+  bool on_middle_press = 7;
+  bool on_middle_release = 8;
+  bool on_scroll = 9;
+  bool on_enter = 10;
+  bool on_move = 11;
+  bool on_exit = 12;
+  optional Interaction interaction = 13;
+  optional uint32 widget_id = 14;
+
+  enum Interaction {
+    INTERACTION_NONE = 0;
+    INTERACTION_IDLE = 1;
+    INTERACTION_POINTER = 2;
+    INTERACTION_GRAB = 3;
+    INTERACTION_TEXT = 4;
+    INTERACTION_CROSSHAIR = 5;
+    INTERACTION_GRABBING = 6;
+    INTERACTION_RESIZE_HORIZONTAL = 7;
+    INTERACTION_RESIZE_VERTICAL = 8;
+    INTERACTION_RESIZE_DIAGONAL_UP = 9;
+    INTERACTION_RESIZE_DIAGONAL_DOWN = 10;
+    INTERACTION_NOT_ALLOWED = 11;
+    INTERACTION_ZOOM_IN = 12;
+    INTERACTION_ZOOM_OUT = 13;
+    INTERACTION_CELL = 14;
+    INTERACTION_MOVE = 15;
+    INTERACTION_COPY = 16;
+    INTERACTION_HELP = 17;
+  }
+
+  message Event {
+    oneof data {
+      google.protobuf.Empty press = 1;
+      google.protobuf.Empty release = 2;
+      google.protobuf.Empty double_click = 3;
+      google.protobuf.Empty right_press = 4;
+      google.protobuf.Empty right_release = 5;
+      google.protobuf.Empty middle_press = 6;
+      google.protobuf.Empty middle_release = 7;
+      ScrollEvent scroll = 8;
+      google.protobuf.Empty enter = 9;
+      MoveEvent move = 10;
+      google.protobuf.Empty exit = 11;
+    }
+  }
+
+  message ScrollEvent {
+    message Lines {
+      float x = 1;
+      float y = 2;
+    }
+
+    message Pixels {
+      float x = 1;
+      float y = 2;
+    }
+
+    oneof data {
+      Lines lines = 1;
+      Pixels pixels = 2;
+    }
+  }
+
+  message MoveEvent {
+    float x = 1;
+    float y = 2;
+  }
+}
+
+message TextInput {
+  string placeholder = 1;
+  string value = 2;
+  optional string id = 3;
+  bool secure = 4;
+  bool on_input = 5;
+  bool on_submit = 6;
+  bool on_paste = 7;
+  optional Font font = 8;
+  optional Icon icon = 9;
+  optional Length width = 10;
+  optional Padding padding = 11;
+  optional LineHeight line_height = 12;
+  optional Alignment horizontal_alignment = 13;
+  optional Style style = 14;
+  optional uint32 widget_id = 19;
+
+  message Icon {
+    Font font = 1;
+    uint32 code_point = 2;
+    optional float pixels = 3;
+    float spacing = 4;
+    bool right_side = 5;
+  }
+
+  message Style {
+    optional Inner active = 1;
+    optional Inner hovered = 2;
+    optional Inner focused = 3;
+    optional Inner hover_focused = 4;
+    optional Inner disabled = 5;
+
+    message Inner {
+      optional Background background = 1;
+      optional Border border = 2;
+      optional Color icon = 3;
+      optional Color placeholder = 4;
+      optional Color value = 5;
+      optional Color selection = 6;
+    }
+  }
+
+  message Event {
+    oneof data {
+      string input = 1;
+      google.protobuf.Empty submit = 2;
+      string paste = 3;
+    }
+  }
+}
+
 message GetWidgetEventsRequest {
   oneof id {
     uint32 layer_id = 1;
@@ -302,6 +461,8 @@ message WidgetEvent {
 
   oneof event {
     Button.Event button = 2;
+    MouseArea.Event mouse_area = 3;
+    TextInput.Event text_input = 4;
   }
 }
 

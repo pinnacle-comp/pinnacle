@@ -127,6 +127,14 @@ function layer.new_widget(args)
 
             if event.button then
                 msg = callbacks[widget_id]
+            elseif event.mouse_area then
+                if callbacks[widget_id] ~= nil then
+                    msg = widget._mouse_area_process_event(callbacks[widget_id], event.mouse_area)
+                end
+            elseif event.text_input then
+                if callbacks[widget_id] ~= nil then
+                    msg = widget._text_input_process_event(callbacks[widget_id], event.text_input)
+                end
             end
 
             if msg then
@@ -207,6 +215,19 @@ end
 
 function LayerHandle:send_message(message)
     self.update(message)
+end
+
+---Sends an `Operation` to this layer.
+---@param operation snowcap.widget.operation.Operation
+function LayerHandle:operate(operation)
+    local _, err = client:snowcap_layer_v1_LayerService_OperateLayer({
+        layer_id = self.id,
+        operation = require("snowcap.widget.operation")._to_api(operation),
+    })
+
+    if err then
+        log.error(err)
+    end
 end
 
 layer.anchor = anchor

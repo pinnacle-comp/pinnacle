@@ -5,7 +5,9 @@ use std::collections::HashMap;
 use snowcap_api_defs::snowcap::{
     decoration::{
         self,
-        v1::{CloseRequest, NewDecorationRequest, UpdateDecorationRequest},
+        v1::{
+            CloseRequest, NewDecorationRequest, OperateDecorationRequest, UpdateDecorationRequest,
+        },
     },
     widget::v1::{GetWidgetEventsRequest, get_widget_events_request, widget_event},
 };
@@ -16,7 +18,7 @@ use tracing::error;
 use crate::{
     BlockOnTokio,
     client::Client,
-    widget::{Program, Widget, WidgetId},
+    widget::{self, Program, WidgetDef, WidgetId, WidgetMessage},
 };
 
 /// The bounds of a window or decoration.
@@ -75,15 +77,11 @@ where
     Msg: Clone + Send + 'static,
     P: Program<Message = Msg> + Send + 'static,
 {
-    let mut callbacks = HashMap::<WidgetId, Msg>::new();
+    let mut callbacks = HashMap::<WidgetId, WidgetMessage<Msg>>::new();
 
     let widget_def = program.view();
 
-    widget_def.collect_messages(&mut callbacks, |def, cbs| {
-        if let Widget::Button(button) = &def.widget {
-            cbs.extend(button.on_press.clone());
-        }
-    });
+    widget_def.collect_messages(&mut callbacks, WidgetDef::message_collector);
 
     let response = Client::decoration()
         .new_decoration(NewDecorationRequest {
@@ -118,7 +116,28 @@ where
 
                         let msg = match event {
                             widget_event::Event::Button(_event) => {
-                                callbacks.get(&id).cloned()
+                                callbacks.get(&id).cloned().map(|f| {
+                                    match f {
+                                        WidgetMessage::Button(msg) => msg,
+                                        _ => unreachable!()
+                                    }
+                                })
+                            },
+                            widget_event::Event::MouseArea(event) => {
+                                callbacks.get(&id).cloned().and_then(|f| {
+                                    match f {
+                                        WidgetMessage::MouseArea(callbacks) => callbacks.process_event(event.into()),
+                                        _ => unreachable!()
+                                    }
+                                })
+                            },
+                            widget_event::Event::TextInput(event) => {
+                                callbacks.get(&id).cloned().and_then(|f| {
+                                    match f {
+                                        WidgetMessage::TextInput(callbacks) => callbacks.process_event(event.into()),
+                                        _ => unreachable!()
+                                    }
+                                })
                             }
                         };
 
@@ -126,12 +145,12 @@ where
                             continue;
                         };
 
-                        program.update(msg.clone());
+                        program.update(msg);
                     }
 
                 }
                 Some(msg) = msg_recv.recv() => {
-                    program.update(msg.clone());
+                    program.update(msg);
                 }
                 else => break,
             };
@@ -140,11 +159,7 @@ where
 
             callbacks.clear();
 
-            widget_def.collect_messages(&mut callbacks, |def, cbs| {
-                if let Widget::Button(button) = &def.widget {
-                    cbs.extend(button.on_press.clone());
-                }
-            });
+            widget_def.collect_messages(&mut callbacks, WidgetDef::message_collector);
 
             Client::decoration()
                 .update_decoration(UpdateDecorationRequest {
@@ -196,6 +211,21 @@ impl<Msg> DecorationHandle<Msg> {
     /// Sends a message to this decoration's [`Program`].
     pub fn send_message(&self, message: Msg) {
         let _ = self.msg_sender.send(message);
+    }
+
+    /// Sends an [`Operation`] to this Decoration.
+    ///
+    /// [`Operation`]: widget::operation::Operation
+    pub fn operate(&self, operation: widget::operation::Operation) {
+        if let Err(status) = Client::decoration()
+            .operate_decoration(OperateDecorationRequest {
+                decoration_id: self.id.to_inner(),
+                operation: Some(operation.into()),
+            })
+            .block_on_tokio()
+        {
+            error!("Failed to send FocusWidget to {self:?}: {status}");
+        }
     }
 
     /// Sets the z-index that this decoration will render at.

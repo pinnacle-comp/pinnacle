@@ -63,7 +63,17 @@ impl SeatHandler for State {
         capability: Capability,
     ) {
         if capability == Capability::Keyboard && self.keyboard.is_none() {
-            let keyboard = self.seat_state.get_keyboard(qh, &seat, None).unwrap();
+            let keyboard = self
+                .seat_state
+                .get_keyboard_with_repeat(
+                    qh,
+                    &seat,
+                    None,
+                    self.loop_handle.clone(),
+                    Box::new(State::on_key_press),
+                )
+                .unwrap();
+
             self.keyboard = Some(keyboard);
         }
 

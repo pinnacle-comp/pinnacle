@@ -6,7 +6,7 @@ use snowcap_api_defs::snowcap::{
     input::v1::KeyboardKeyRequest,
     layer::{
         self,
-        v1::{CloseRequest, NewLayerRequest, UpdateLayerRequest},
+        v1::{CloseRequest, NewLayerRequest, OperateLayerRequest, UpdateLayerRequest},
     },
     widget::v1::{GetWidgetEventsRequest, get_widget_events_request, widget_event},
 };
@@ -19,7 +19,7 @@ use crate::{
     BlockOnTokio,
     client::Client,
     input::Modifiers,
-    widget::{Program, Widget, WidgetId},
+    widget::{self, Program, WidgetDef, WidgetId, WidgetMessage},
 };
 
 // TODO: change to bitflag
@@ -137,15 +137,11 @@ where
     Msg: Clone + Send + 'static,
     P: Program<Message = Msg> + Send + 'static,
 {
-    let mut callbacks = HashMap::<WidgetId, Msg>::new();
+    let mut callbacks = HashMap::<WidgetId, WidgetMessage<Msg>>::new();
 
     let widget_def = program.view();
 
-    widget_def.collect_messages(&mut callbacks, |def, cbs| {
-        if let Widget::Button(button) = &def.widget {
-            cbs.extend(button.on_press.clone());
-        }
-    });
+    widget_def.collect_messages(&mut callbacks, WidgetDef::message_collector);
 
     let response = Client::layer()
         .new_layer(NewLayerRequest {
@@ -183,19 +179,40 @@ where
 
                         let msg = match event {
                             widget_event::Event::Button(_event) => {
-                                callbacks.get(&id).cloned()
+                                callbacks.get(&id).cloned().map(|f| {
+                                    match f {
+                                        WidgetMessage::Button(msg) => msg,
+                                        _ => unreachable!()
+                                    }
+                                })
                             },
+                            widget_event::Event::MouseArea(event) => {
+                                callbacks.get(&id).cloned().and_then(|f| {
+                                    match f {
+                                        WidgetMessage::MouseArea(callbacks) => callbacks.process_event(event.into()),
+                                        _ => unreachable!()
+                                    }
+                                })
+                            },
+                            widget_event::Event::TextInput(event) => {
+                                callbacks.get(&id).cloned().and_then(|f| {
+                                    match f {
+                                        WidgetMessage::TextInput(callbacks) => callbacks.process_event(event.into()),
+                                        _ => unreachable!()
+                                    }
+                                })
+                            }
                         };
 
                         let Some(msg) = msg else {
                             continue;
                         };
 
-                        program.update(msg.clone());
+                        program.update(msg);
                     }
                 }
                 Some(msg) = msg_recv.recv() => {
-                    program.update(msg.clone());
+                    program.update(msg);
                 }
                 else => break,
             };
@@ -204,11 +221,7 @@ where
 
             callbacks.clear();
 
-            widget_def.collect_messages(&mut callbacks, |def, cbs| {
-                if let Widget::Button(button) = &def.widget {
-                    cbs.extend(button.on_press.clone());
-                }
-            });
+            widget_def.collect_messages(&mut callbacks, WidgetDef::message_collector);
 
             Client::layer()
                 .update_layer(UpdateLayerRequest {
@@ -262,6 +275,21 @@ where
     /// Sends a message to this Layer [`Program`].
     pub fn send_message(&self, message: Msg) {
         let _ = self.msg_sender.send(message);
+    }
+
+    /// Sends an [`Operation`] to this Layer.
+    ///
+    /// [`Operation`]: widget::operation::Operation
+    pub fn operate(&self, operation: widget::operation::Operation) {
+        if let Err(status) = Client::layer()
+            .operate_layer(OperateLayerRequest {
+                layer_id: self.id.to_inner(),
+                operation: Some(operation.into()),
+            })
+            .block_on_tokio()
+        {
+            error!("Failed to send operation to {self:?}: {status}");
+        }
     }
 
     /// Do something on key press.

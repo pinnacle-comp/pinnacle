@@ -4,6 +4,7 @@ package snowcap.decoration.v1;
 
 import "google/protobuf/empty.proto";
 import "snowcap/widget/v1/widget.proto";
+import "snowcap/operation/v1/operation.proto";
 
 message Bounds {
   uint32 left = 1;
@@ -37,8 +38,15 @@ message UpdateDecorationRequest {
 }
 message UpdateDecorationResponse {}
 
+message OperateDecorationRequest {
+  uint32 decoration_id = 1;
+  snowcap.operation.v1.Operation operation = 2;
+}
+message OperateDecorationResponse {}
+
 service DecorationService {
   rpc NewDecoration(NewDecorationRequest) returns (NewDecorationResponse);
   rpc Close(CloseRequest) returns (CloseResponse);
   rpc UpdateDecoration(UpdateDecorationRequest) returns (UpdateDecorationResponse);
+  rpc OperateDecoration(OperateDecorationRequest) returns (OperateDecorationResponse);
 }
