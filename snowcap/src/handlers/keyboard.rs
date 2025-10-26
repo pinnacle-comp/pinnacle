@@ -16,6 +16,7 @@ pub struct KeyboardKey {
     pub key: Keysym,
     pub modifiers: Modifiers,
     pub pressed: bool,
+    pub captured: bool,
 }
 
 impl State {
