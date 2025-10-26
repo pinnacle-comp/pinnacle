@@ -926,6 +926,7 @@ local snowcap_layer_v1_Layer = {
 ---@field key integer?
 ---@field modifiers snowcap.input.v1.Modifiers?
 ---@field pressed boolean?
+---@field captured boolean?
 
 ---@class snowcap.input.v1.PointerButtonRequest
 ---@field id integer?

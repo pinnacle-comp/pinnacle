@@ -180,10 +180,7 @@ impl State {
 
         runtime.track(iced_futures::subscription::into_recipes(
             iced::event::listen_with(|event, status, id| {
-                if status == iced::event::Status::Captured {
-                    return None;
-                }
-
+                let captured = status == iced::event::Status::Captured;
                 match event {
                     iced::Event::Keyboard(iced::keyboard::Event::KeyPressed {
                         modifiers,
@@ -202,6 +199,7 @@ impl State {
                                 num_lock: false,
                             },
                             pressed: true,
+                            captured,
                         }),
                     )),
                     iced::Event::Keyboard(iced::keyboard::Event::KeyReleased {
@@ -221,6 +219,7 @@ impl State {
                                 num_lock: false,
                             },
                             pressed: false,
+                            captured,
                         }),
                     )),
                     _ => None,
