@@ -18,7 +18,7 @@ use xkbcommon::xkb::Keysym;
 use crate::{
     BlockOnTokio,
     client::Client,
-    input::Modifiers,
+    input::{KeyEvent, Modifiers},
     widget::{Program, Widget, WidgetId},
 };
 
@@ -264,6 +264,35 @@ where
         let _ = self.msg_sender.send(message);
     }
 
+    /// Do something when a key event is received
+    pub fn on_key_event(
+        &self,
+        mut on_event: impl FnMut(LayerHandle<Msg>, KeyEvent) + Send + 'static,
+    ) {
+        let mut stream = match Client::input()
+            .keyboard_key(KeyboardKeyRequest {
+                id: self.id.to_inner(),
+            })
+            .block_on_tokio()
+        {
+            Ok(stream) => stream.into_inner(),
+            Err(status) => {
+                error!("Failed to set `on_key_event` handler: {status}");
+                return;
+            }
+        };
+
+        let handle = self.clone();
+
+        tokio::spawn(async move {
+            while let Some(Ok(response)) = stream.next().await {
+                let event = KeyEvent::from(response);
+
+                on_event(handle.clone(), event);
+            }
+        });
+    }
+
     /// Do something on key press.
     pub fn on_key_press(
         &self,
@@ -286,7 +315,7 @@ where
 
         tokio::spawn(async move {
             while let Some(Ok(response)) = stream.next().await {
-                if !response.pressed {
+                if !response.pressed || response.captured {
                     continue;
                 }
 
