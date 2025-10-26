@@ -17,6 +17,7 @@ message KeyboardKeyResponse {
   uint32 key = 1;
   Modifiers modifiers = 2;
   bool pressed = 3;
+  bool captured = 4;
 }
 
 message PointerButtonRequest {
