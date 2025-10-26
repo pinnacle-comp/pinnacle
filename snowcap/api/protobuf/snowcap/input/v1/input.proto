@@ -18,6 +18,7 @@ message KeyboardKeyResponse {
   Modifiers modifiers = 2;
   bool pressed = 3;
   bool captured = 4;
+  optional string text = 5;
 }
 
 message PointerButtonRequest {

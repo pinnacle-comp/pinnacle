@@ -11,12 +11,13 @@ use smithay_client_toolkit::{
 
 use crate::{input::keyboard::keysym_to_iced_key_and_loc, state::State};
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub struct KeyboardKey {
     pub key: Keysym,
     pub modifiers: Modifiers,
     pub pressed: bool,
     pub captured: bool,
+    pub text: Option<String>,
 }
 
 impl State {
