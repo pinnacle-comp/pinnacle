@@ -18,7 +18,7 @@ use xkbcommon::xkb::Keysym;
 use crate::{
     BlockOnTokio,
     client::Client,
-    input::Modifiers,
+    input::{KeyEvent, Modifiers},
     widget::{Program, Widget, WidgetId},
 };
 
@@ -346,10 +346,10 @@ where
         let _ = self.msg_sender.send(message);
     }
 
-    /// Do something on key press.
-    pub fn on_key_press(
+    /// Do something when a key event is received
+    pub fn on_key_event(
         &self,
-        mut on_press: impl FnMut(LayerHandle<Msg>, Keysym, Modifiers) + Send + 'static,
+        mut on_event: impl FnMut(LayerHandle<Msg>, KeyEvent) + Send + 'static,
     ) {
         let mut stream = match Client::input()
             .keyboard_key(KeyboardKeyRequest {
@@ -359,7 +359,7 @@ where
         {
             Ok(stream) => stream.into_inner(),
             Err(status) => {
-                error!("Failed to set `on_key_press` handler: {status}");
+                error!("Failed to set `on_key_event` handler: {status}");
                 return;
             }
         };
@@ -368,15 +368,24 @@ where
 
         tokio::spawn(async move {
             while let Some(Ok(response)) = stream.next().await {
-                if !response.pressed {
-                    continue;
-                }
+                let event = KeyEvent::from(response);
 
-                let key = Keysym::new(response.key);
-                let mods = Modifiers::from(response.modifiers.unwrap_or_default());
-
-                on_press(handle.clone(), key, mods);
+                on_event(handle.clone(), event);
             }
+        });
+    }
+
+    /// Do something on key press.
+    pub fn on_key_press(
+        &self,
+        mut on_press: impl FnMut(LayerHandle<Msg>, Keysym, Modifiers) + Send + 'static,
+    ) {
+        self.on_key_event(move |handle, event| {
+            if !event.pressed || event.captured {
+                return;
+            }
+
+            on_press(handle, event.key, event.mods)
         });
     }
 }
