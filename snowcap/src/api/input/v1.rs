@@ -44,6 +44,7 @@ impl input_service_server::InputService for super::InputService {
                     modifiers: Some(api_modifiers),
                     pressed: item.pressed,
                     captured: item.captured,
+                    text: item.text,
                 })
             },
         )

@@ -154,6 +154,7 @@ impl State {
                     iced::Event::Keyboard(iced::keyboard::Event::KeyPressed {
                         modifiers,
                         physical_key: Physical::Unidentified(NativeCode::Xkb(raw)),
+                        text,
                         ..
                     }) => Some((
                         id,
@@ -169,6 +170,7 @@ impl State {
                             },
                             pressed: true,
                             captured,
+                            text: text.map(|s| s.into()),
                         }),
                     )),
                     iced::Event::Keyboard(iced::keyboard::Event::KeyReleased {
@@ -189,6 +191,7 @@ impl State {
                             },
                             pressed: false,
                             captured,
+                            text: None,
                         }),
                     )),
                     _ => None,
