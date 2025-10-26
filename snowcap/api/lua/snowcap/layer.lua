@@ -164,16 +164,13 @@ function layer.new_widget(args)
     end)
 end
 
----@param on_press fun(mods: snowcap.input.Modifiers, key: snowcap.Key)
-function LayerHandle:on_key_press(on_press)
+---Do something when a key event is received.
+---@param on_event fun(handle: snowcap.layer.LayerHandle, event: snowcap.input.KeyEvent)
+function LayerHandle:on_key_event(on_event)
     local err = client:snowcap_input_v1_InputService_KeyboardKey(
         { id = self.id },
         function(response)
             ---@cast response snowcap.input.v1.KeyboardKeyResponse
-
-            if not response.pressed then
-                return
-            end
 
             local mods = response.modifiers or {}
             mods.shift = mods.shift or false
@@ -183,13 +180,33 @@ function LayerHandle:on_key_press(on_press)
 
             ---@cast mods snowcap.input.Modifiers
 
-            on_press(mods, response.key or 0)
+            ---@type snowcap.input.KeyEvent
+            local event = {
+                key = response.key or 0,
+                mods = mods,
+                pressed = response.pressed,
+                captured = response.captured,
+                text = response.text,
+            }
+
+            on_event(self, event)
         end
     )
 
     if err then
         log.error(err)
     end
+end
+
+---@param on_press fun(mods: snowcap.input.Modifiers, key: snowcap.Key)
+function LayerHandle:on_key_press(on_press)
+    self:on_key_event(function(_, event)
+        if not event.pressed or event.captured then
+            return
+        end
+
+        on_press(event.mods, event.key)
+    end)
 end
 
 ---@class snowcap.layer.LayerUpdateArgs
