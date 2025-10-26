@@ -43,6 +43,7 @@ impl input_service_server::InputService for super::InputService {
                     key: item.key.raw(),
                     modifiers: Some(api_modifiers),
                     pressed: item.pressed,
+                    captured: item.captured,
                 })
             },
         )
