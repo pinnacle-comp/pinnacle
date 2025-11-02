@@ -448,23 +448,6 @@ impl Pinnacle {
     pub fn set_pointer_contents(&mut self, new_contents: PointerContents) {
         let old_contents = std::mem::take(&mut self.pointer_contents);
 
-        let old_focused_win = old_contents
-            .focus_under
-            .and_then(|(foc, _)| foc.window_for(self));
-        let new_focused_win = new_contents
-            .focus_under
-            .as_ref()
-            .and_then(|(foc, _)| foc.window_for(self));
-
-        if old_focused_win != new_focused_win {
-            if let Some(old) = old_focused_win {
-                self.signal_state.window_pointer_leave.signal(&old);
-            }
-            if let Some(new) = new_focused_win {
-                self.signal_state.window_pointer_enter.signal(&new);
-            }
-        }
-
         let old_op = old_contents.output_under.and_then(|op| op.upgrade());
         let new_op = new_contents
             .output_under

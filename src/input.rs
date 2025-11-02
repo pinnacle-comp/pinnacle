@@ -6,6 +6,7 @@ pub mod libinput;
 use std::{any::Any, time::Duration};
 
 use crate::{
+    api::signal::Signal as _,
     focus::pointer::{PointerContents, PointerFocusTarget},
     state::{Pinnacle, WithState},
     window::WindowElement,
@@ -230,6 +231,35 @@ impl Pinnacle {
             output_under: Some(output.downgrade()),
         }
     }
+
+    pub fn process_window_focus_signal(&mut self) {
+        let _span = tracy_client::span!();
+
+        let Some(pointer) = self.seat.get_pointer() else {
+            return;
+        };
+
+        let last_focus = self.last_pointer_focus.as_ref();
+        let current_focus = pointer.current_focus();
+
+        if last_focus == current_focus.as_ref() {
+            return;
+        }
+
+        let old_focused_win = last_focus.and_then(|foc| foc.window_for(self));
+        let new_focused_win = current_focus.as_ref().and_then(|foc| foc.window_for(self));
+
+        if old_focused_win != new_focused_win {
+            if let Some(old) = old_focused_win {
+                self.signal_state.window_pointer_leave.signal(&old);
+            }
+            if let Some(new) = new_focused_win {
+                self.signal_state.window_pointer_enter.signal(&new);
+            }
+        }
+
+        self.last_pointer_focus = current_focus;
+    }
 }
 
 impl State {
@@ -328,6 +358,7 @@ impl State {
                 time: Duration::from(self.pinnacle.clock.now()).as_millis() as u32,
             },
         );
+        pointer.frame(self);
 
         // TODO: only on outputs that the ptr left and entered
         for output in self.pinnacle.space.outputs().cloned().collect::<Vec<_>>() {

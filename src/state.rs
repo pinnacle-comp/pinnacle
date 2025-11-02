@@ -42,7 +42,7 @@ use smithay::{
             surface_primary_scanout_output, update_surface_primary_scanout_output,
         },
     },
-    input::{Seat, SeatState, keyboard::XkbConfig, pointer::CursorImageStatus},
+    input::{Seat, SeatHandler, SeatState, keyboard::XkbConfig, pointer::CursorImageStatus},
     output::Output,
     reexports::{
         calloop::{
@@ -232,6 +232,7 @@ pub struct Pinnacle {
     pub cursor_state: CursorState,
 
     pub pointer_contents: PointerContents,
+    pub last_pointer_focus: Option<<State as SeatHandler>::PointerFocus>,
 
     pub blocker_cleared_tx: std::sync::mpsc::Sender<Client>,
     pub blocker_cleared_rx: std::sync::mpsc::Receiver<Client>,
@@ -262,6 +263,7 @@ impl State {
         self.pinnacle.cursor_state.cleanup();
         self.pinnacle.popup_manager.cleanup();
         self.update_pointer_focus();
+        self.pinnacle.process_window_focus_signal();
         foreign_toplevel::refresh(self);
         ext_workspace::refresh(self);
         self.pinnacle.refresh_idle_inhibit();
@@ -537,6 +539,7 @@ impl Pinnacle {
             cursor_state: CursorState::new(),
 
             pointer_contents: Default::default(),
+            last_pointer_focus: Default::default(),
 
             blocker_cleared_tx,
             blocker_cleared_rx,
