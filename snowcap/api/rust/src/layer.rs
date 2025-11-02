@@ -125,6 +125,14 @@ pub enum NewLayerError {
     GrpcStatus(#[from] tonic::Status),
 }
 
+/// The error type for [`LayerHandle::update`] and set_* functions.
+#[derive(thiserror::Error, Debug)]
+pub enum UpdateLayerError {
+    /// Snowcap returned a gRPC error status.
+    #[error("gRPC error: `{0}`")]
+    GrpcStatus(#[from] tonic::Status),
+}
+
 /// Create a new widget.
 pub fn new_widget<Msg, P>(
     mut program: P,
@@ -247,6 +255,71 @@ impl<Msg> LayerHandle<Msg>
 where
     Msg: Clone + Send + 'static,
 {
+    /// Update this layer's attributes.
+    pub fn update(
+        &self,
+        anchor: Option<Option<Anchor>>,
+        keyboard_interactivity: Option<KeyboardInteractivity>,
+        exclusive_zone: Option<ExclusiveZone>,
+        layer: Option<ZLayer>,
+    ) -> Result<(), UpdateLayerError> {
+        let anchor = if let Some(anchor) = anchor {
+            anchor
+                .map(layer::v1::Anchor::from)
+                .or(Some(layer::v1::Anchor::Unspecified))
+                .map(i32::from)
+        } else {
+            None
+        };
+
+        let keyboard_interactivity = keyboard_interactivity
+            .map(layer::v1::KeyboardInteractivity::from)
+            .map(i32::from);
+
+        let exclusive_zone = exclusive_zone.map(i32::from);
+
+        let layer = layer.map(layer::v1::Layer::from).map(i32::from);
+
+        Client::layer()
+            .update_layer(UpdateLayerRequest {
+                layer_id: self.id.to_inner(),
+                widget_def: None,
+                anchor,
+                keyboard_interactivity,
+                exclusive_zone,
+                layer,
+            })
+            .block_on_tokio()?;
+
+        Ok(())
+    }
+
+    /// Update this layer's anchor.
+    pub fn set_anchor(&self, anchor: Option<Anchor>) -> Result<(), UpdateLayerError> {
+        self.update(Some(anchor), None, None, None)
+    }
+
+    /// Update this layer's keyboard_interactivity.
+    pub fn set_keyboard_interactivity(
+        &self,
+        keyboard_interactivity: KeyboardInteractivity,
+    ) -> Result<(), UpdateLayerError> {
+        self.update(None, Some(keyboard_interactivity), None, None)
+    }
+
+    /// Update this layer's exclusive_one.
+    pub fn set_exclusive_zone(
+        &self,
+        exclusive_zone: ExclusiveZone,
+    ) -> Result<(), UpdateLayerError> {
+        self.update(None, None, Some(exclusive_zone), None)
+    }
+
+    /// Update this layer's ZLayer.
+    pub fn set_layer(&self, layer: ZLayer) -> Result<(), UpdateLayerError> {
+        self.update(None, None, None, Some(layer))
+    }
+
     /// Close this layer widget.
     pub fn close(&self) {
         if let Err(status) = Client::layer()

@@ -14,7 +14,7 @@ local layer_handle = {}
 
 ---@class snowcap.layer.LayerHandle
 ---@field id integer
----@field private update fun(msg:any)
+---@field private _update fun(msg:any)
 local LayerHandle = {}
 
 ---@param id integer
@@ -24,7 +24,7 @@ function layer_handle.new(id, update)
     ---@type snowcap.layer.LayerHandle
     local self = {
         id = id,
-        update = update,
+        _update = update,
     }
     setmetatable(self, { __index = LayerHandle })
     return self
@@ -197,6 +197,33 @@ function LayerHandle:on_key_press(on_press)
     end
 end
 
+---@class snowcap.layer.LayerUpdateArgs
+---@field anchor? snowcap.layer.Anchor
+---@field keyboard_interactivity? snowcap.layer.KeyboardInteractivity
+---@field exclusive_zone? snowcap.layer.ExclusiveZone
+---@field layer? snowcap.layer.ZLayer
+
+---Update this layer's attributes.
+---@param args snowcap.layer.LayerUpdateArgs
+---@return boolean True if the operation succeed.
+function LayerHandle:update(args)
+    local exclusive_zone = args.exclusive_zone and exclusive_zone_to_api(args.exclusive_zone) or nil
+
+    local _, err = client:snowcap_layer_v1_LayerService_UpdateLayer({
+        layer_id = self.id,
+        anchor = args.anchor,
+        keyboard_interactivity = args.keyboard_interactivity,
+        exclusive_zone = exclusive_zone,
+        layer = args.layer,
+    })
+
+    if err then
+        log.error(err)
+    end
+
+    return err == nil
+end
+
 function LayerHandle:close()
     local _, err = client:snowcap_layer_v1_LayerService_Close({ layer_id = self.id })
 
@@ -206,7 +233,7 @@ function LayerHandle:close()
 end
 
 function LayerHandle:send_message(message)
-    self.update(message)
+    self._update(message)
 end
 
 layer.anchor = anchor
