@@ -793,13 +793,18 @@ impl State {
         let Unmapped {
             window,
             activation_token_data: _, // TODO:
-            state:
-                UnmappedState::PostInitialConfigure {
-                    attempt_float_on_map,
-                    focus,
-                },
-        } = unmapped
-        else {
+            state,
+        } = unmapped;
+
+        let (attempt_float_on_map, focus) = if let UnmappedState::PostInitialConfigure {
+            attempt_float_on_map,
+            focus,
+        } = state
+        {
+            (attempt_float_on_map, focus)
+        } else if cfg!(feature = "wlcs") {
+            (true, true)
+        } else {
             panic!("tried to map window pre initial configure");
         };
 
