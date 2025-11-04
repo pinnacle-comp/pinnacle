@@ -441,16 +441,17 @@ impl<Msg: PartialEq> PartialEq for Callbacks<Msg> {
 }
 
 /// The side of a [`TextInput`]
-#[derive(Clone, Copy, PartialEq, Debug)]
+#[derive(Default, Clone, Copy, PartialEq, Debug)]
 pub enum Side {
     /// The left side of a [`TextInput`],
+    #[default]
     Left,
     /// The right side of a [`TextInput`],
     Right,
 }
 
 /// The content of the [`Icon`].
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Default, Clone, PartialEq, Debug)]
 pub struct Icon {
     /// The [`Font`] that will be used to display the `code_point`.
     pub font: Font,
@@ -462,6 +463,41 @@ pub struct Icon {
     pub spacing: f32,
     /// The side of a [`TextInput`] the [`Icon`] should be displayed.
     pub side: Side,
+}
+
+impl Icon {
+    /// Create a new [`Icon`]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Sets the [`Font`] used to display the [`Icon`].
+    pub fn font(self, font: Font) -> Self {
+        Self { font, ..self }
+    }
+
+    /// Sets the [`Icon`]'s unicode character.
+    pub fn code_point(self, code_point: char) -> Self {
+        Self { code_point, ..self }
+    }
+
+    /// Sets the [`Icon`]'s font size, in pixels.
+    pub fn pixels(self, pixels: f32) -> Self {
+        Self {
+            pixels: Some(pixels),
+            ..self
+        }
+    }
+
+    /// Sets the space between the [`Icon`] and the [`TextInput`] content.
+    pub fn spacing(self, spacing: f32) -> Self {
+        Self { spacing, ..self }
+    }
+
+    /// Sets the side of the [`TextInput`] the [`Icon`] should be displayed at.
+    pub fn side(self, side: Side) -> Self {
+        Self { side, ..self }
+    }
 }
 
 impl From<Icon> for widget::v1::text_input::Icon {
