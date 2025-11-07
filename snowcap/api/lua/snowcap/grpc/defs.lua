@@ -1067,6 +1067,11 @@ local snowcap_layer_v1_Layer = {
 
 ---@class snowcap.layer.v1.UpdateLayerResponse
 
+---@class snowcap.layer.v1.ViewRequest
+---@field layer_id integer?
+
+---@class snowcap.layer.v1.ViewResponse
+
 ---@class snowcap.v0alpha1.Nothing
 
 ---@class snowcap.v1.Nothing
@@ -1155,6 +1160,8 @@ snowcap.layer.v1.NewLayerResponse = {}
 snowcap.layer.v1.CloseRequest = {}
 snowcap.layer.v1.UpdateLayerRequest = {}
 snowcap.layer.v1.UpdateLayerResponse = {}
+snowcap.layer.v1.ViewRequest = {}
+snowcap.layer.v1.ViewResponse = {}
 snowcap.v0alpha1 = {}
 snowcap.v0alpha1.Nothing = {}
 snowcap.v1 = {}
@@ -1412,6 +1419,23 @@ snowcap.layer.v1.LayerService.UpdateLayer.response = ".snowcap.layer.v1.UpdateLa
 ---@return string | nil error An error string, if any
 function Client:snowcap_layer_v1_LayerService_UpdateLayer(data)
     return self:unary_request(snowcap.layer.v1.LayerService.UpdateLayer, data)
+end
+snowcap.layer.v1.LayerService.RequestView = {}
+snowcap.layer.v1.LayerService.RequestView.service = "snowcap.layer.v1.LayerService"
+snowcap.layer.v1.LayerService.RequestView.method = "RequestView"
+snowcap.layer.v1.LayerService.RequestView.request = ".snowcap.layer.v1.ViewRequest"
+snowcap.layer.v1.LayerService.RequestView.response = ".snowcap.layer.v1.ViewResponse"
+
+---Performs a unary request.
+---
+---@nodiscard
+---
+---@param data snowcap.layer.v1.ViewRequest
+---
+---@return snowcap.layer.v1.ViewResponse | nil response
+---@return string | nil error An error string, if any
+function Client:snowcap_layer_v1_LayerService_RequestView(data)
+    return self:unary_request(snowcap.layer.v1.LayerService.RequestView, data)
 end
 return {
     google = google,
