@@ -6,7 +6,7 @@ use snowcap_api_defs::snowcap::{
     input::v1::KeyboardKeyRequest,
     layer::{
         self,
-        v1::{CloseRequest, NewLayerRequest, UpdateLayerRequest},
+        v1::{CloseRequest, NewLayerRequest, UpdateLayerRequest, ViewRequest},
     },
     widget::v1::{GetWidgetEventsRequest, get_widget_events_request, widget_event},
 };
@@ -203,7 +203,16 @@ where
                     }
                 }
                 Some(msg) = msg_recv.recv() => {
-                    program.update(msg.clone());
+                    program.update(msg);
+
+                    if let Err(status) = Client::layer()
+                        .request_view(ViewRequest { layer_id })
+                        .block_on_tokio()
+                    {
+                        error!("Failed to request view for {layer_id}: {status}");
+                    }
+
+                    continue;
                 }
                 else => break,
             };
