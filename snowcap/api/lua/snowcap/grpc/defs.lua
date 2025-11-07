@@ -887,6 +887,11 @@ local snowcap_layer_v1_Layer = {
 
 ---@class snowcap.decoration.v1.UpdateDecorationResponse
 
+---@class snowcap.decoration.v1.ViewRequest
+---@field decoration_id integer?
+
+---@class snowcap.decoration.v1.ViewResponse
+
 ---@class snowcap.input.v0alpha1.Modifiers
 ---@field shift boolean?
 ---@field ctrl boolean?
@@ -1122,6 +1127,8 @@ snowcap.decoration.v1.CloseRequest = {}
 snowcap.decoration.v1.CloseResponse = {}
 snowcap.decoration.v1.UpdateDecorationRequest = {}
 snowcap.decoration.v1.UpdateDecorationResponse = {}
+snowcap.decoration.v1.ViewRequest = {}
+snowcap.decoration.v1.ViewResponse = {}
 snowcap.input = {}
 snowcap.input.v0alpha1 = {}
 snowcap.input.v0alpha1.Modifiers = {}
@@ -1254,6 +1261,23 @@ snowcap.decoration.v1.DecorationService.UpdateDecoration.response = ".snowcap.de
 ---@return string | nil error An error string, if any
 function Client:snowcap_decoration_v1_DecorationService_UpdateDecoration(data)
     return self:unary_request(snowcap.decoration.v1.DecorationService.UpdateDecoration, data)
+end
+snowcap.decoration.v1.DecorationService.RequestView = {}
+snowcap.decoration.v1.DecorationService.RequestView.service = "snowcap.decoration.v1.DecorationService"
+snowcap.decoration.v1.DecorationService.RequestView.method = "RequestView"
+snowcap.decoration.v1.DecorationService.RequestView.request = ".snowcap.decoration.v1.ViewRequest"
+snowcap.decoration.v1.DecorationService.RequestView.response = ".snowcap.decoration.v1.ViewResponse"
+
+---Performs a unary request.
+---
+---@nodiscard
+---
+---@param data snowcap.decoration.v1.ViewRequest
+---
+---@return snowcap.decoration.v1.ViewResponse | nil response
+---@return string | nil error An error string, if any
+function Client:snowcap_decoration_v1_DecorationService_RequestView(data)
+    return self:unary_request(snowcap.decoration.v1.DecorationService.RequestView, data)
 end
 snowcap.input.v0alpha1.InputService = {}
 snowcap.input.v0alpha1.InputService.KeyboardKey = {}
