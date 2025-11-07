@@ -153,14 +153,9 @@ function layer.new_widget(args)
     return layer_handle.new(layer_id, function(msg)
         args.program:update(msg)
 
-        local widget_def = args.program:view()
-        callbacks = {}
-
-        widget._traverse_widget_tree(widget_def, callbacks, widget._collect_callbacks)
-
-        local _, err = client:snowcap_layer_v1_LayerService_UpdateLayer({
+        ---@diagnostic disable-next-line: redefined-local
+        local _, err = client:snowcap_layer_v1_LayerService_RequestView({
             layer_id = layer_id,
-            widget_def = widget.widget_def_into_api(widget_def),
         })
 
         if err then
