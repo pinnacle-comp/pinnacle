@@ -47,6 +47,7 @@ pub struct SnowcapSurface {
 
     redraw_scheduled: bool,
     pending_view: Option<ViewFn>,
+    view_requested: bool,
     waiting_view: bool,
     pub widgets: SnowcapWidgetProgram,
     clipboard: WaylandClipboard,
@@ -135,6 +136,7 @@ impl SnowcapSurface {
             bounds: iced::Size::default(),
             pending_bounds: None,
             pending_view: None,
+            view_requested: false,
             waiting_view: false,
             widgets,
             renderer,
@@ -158,6 +160,10 @@ impl SnowcapSurface {
 
     pub fn view_changed(&mut self, new_view: ViewFn) {
         self.pending_view = Some(new_view);
+    }
+
+    pub fn request_view(&mut self) {
+        self.view_requested = true;
     }
 
     pub fn schedule_redraw(&mut self) {
@@ -333,7 +339,7 @@ impl SnowcapSurface {
             });
         }
 
-        if !messages.is_empty()
+        if (!messages.is_empty() || self.view_requested)
             && let Some(sender) = self.widget_event_sender.as_ref()
         {
             let widget_events: Vec<_> = messages
@@ -347,6 +353,7 @@ impl SnowcapSurface {
                 })
                 .collect();
 
+            self.view_requested = false;
             self.waiting_view = true;
             let _ = sender.send(widget_events);
         }
