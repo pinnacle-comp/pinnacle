@@ -94,7 +94,7 @@ large_enum_variant = "allow"
 
 [package]
 name = "pinnacle"
-version = "0.1.0"
+version = "0.2.0-alpha.1"
 authors.workspace = true
 edition.workspace = true
 license = "GPL-3.0-or-later"

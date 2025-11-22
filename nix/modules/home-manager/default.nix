@@ -69,7 +69,7 @@ with lib.options;
                 (final: prev: {
                   pinnacle-config = prev.pinnacle.buildRustConfig {
                     pname = "pinnacle-config";
-                    version = "0.1.0";
+                    version = "0.2.0-alpha.1";
                     src = ./.;
                   };
                 })

@@ -7,11 +7,8 @@ hero:
   tagline: The wiki for Pinnacle, a Wayland compositor
   actions:
     - theme: brand
-      text: Read the wiki (main branch)
+      text: Read the wiki
       link: ./getting-started/introduction
-    - theme: alt
-      text: Read the wiki (latest release)
-      link: ./0.2.0-alpha.1/getting-started/introduction
 
 features:
   - title: Configurable
