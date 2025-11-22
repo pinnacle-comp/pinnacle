@@ -2,7 +2,7 @@ use std::{ptr::NonNull, time::Instant};
 
 use iced::window::RedrawRequest;
 use iced_graphics::Compositor;
-use iced_runtime::user_interface;
+use iced_runtime::{core::widget, user_interface};
 use raw_window_handle::{
     HasDisplayHandle, HasWindowHandle, RawDisplayHandle, RawWindowHandle, WaylandDisplayHandle,
     WaylandWindowHandle,
@@ -365,6 +365,10 @@ impl SnowcapSurface {
         }
 
         resized
+    }
+
+    pub fn operate(&mut self, operation: Box<dyn widget::Operation + 'static>) {
+        self.widgets.operate(&mut self.renderer, operation);
     }
 
     pub fn request_frame(&self) {
