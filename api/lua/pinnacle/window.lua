@@ -140,14 +140,14 @@ end
 ---| "floating" The window is floating.
 ---| "fullscreen" The window is fullscreen.
 ---| "maximized" The window is maximized.
----| "spilled" The window is spilled.
+-- ---| "spilled" The window is spilled.
 
 local layout_mode = {
     tiled = window_v1.LayoutMode.LAYOUT_MODE_TILED,
     floating = window_v1.LayoutMode.LAYOUT_MODE_FLOATING,
     fullscreen = window_v1.LayoutMode.LAYOUT_MODE_FULLSCREEN,
     maximized = window_v1.LayoutMode.LAYOUT_MODE_MAXIMIZED,
-    spilled = window_v1.LayoutMode.LAYOUT_MODE_SPILLED,
+    -- spilled = window_v1.LayoutMode.LAYOUT_MODE_SPILLED,
 }
 
 require("pinnacle.util").make_bijective(layout_mode)
@@ -708,7 +708,9 @@ function WindowHandle:floating()
     local response, err =
         client:pinnacle_window_v1_WindowService_GetLayoutMode({ window_id = self.id })
 
-    return response and response.layout_mode == layout_mode_def.LAYOUT_MODE_FLOATING or false
+    return response
+            and (response.layout_mode == layout_mode_def.LAYOUT_MODE_FLOATING or response.layout_mode == layout_mode_def.LAYOUT_MODE_SPILLED)
+        or false
 end
 
 ---Gets whether this window is tiled.
@@ -721,20 +723,20 @@ function WindowHandle:tiled()
     return response and response.layout_mode == layout_mode_def.LAYOUT_MODE_TILED or false
 end
 
----Gets whether this window is spilled from the layout.
----
----A window is spilled when the current layout doesn't contains enough nodes
----and the compositor cannot assign a geometry to it. In that state, the window
----behaves as a floating window except that it gets tiled again if the number
----of nodes become big enough.
----
----@return boolean
-function WindowHandle:spilled()
-    local response, err =
-        client:pinnacle_window_v1_WindowService_GetLayoutMode({ window_id = self.id })
-
-    return response and response.layout_mode == layout_mode_def.LAYOUT_MODE_SPILLED or false
-end
+-- ---Gets whether this window is spilled from the layout.
+-- ---
+-- ---A window is spilled when the current layout doesn't contains enough nodes
+-- ---and the compositor cannot assign a geometry to it. In that state, the window
+-- ---behaves as a floating window except that it gets tiled again if the number
+-- ---of nodes become big enough.
+-- ---
+-- ---@return boolean
+-- function WindowHandle:spilled()
+--     local response, err =
+--         client:pinnacle_window_v1_WindowService_GetLayoutMode({ window_id = self.id })
+--
+--     return response and response.layout_mode == layout_mode_def.LAYOUT_MODE_SPILLED or false
+-- end
 
 ---Gets whether this window is fullscreen.
 ---

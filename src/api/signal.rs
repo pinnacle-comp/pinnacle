@@ -367,7 +367,7 @@ impl Signal for WindowLayoutChanged {
                     LayoutModeKind::Floating => window::v1::LayoutMode::Floating,
                     LayoutModeKind::Maximized => window::v1::LayoutMode::Maximized,
                     LayoutModeKind::Fullscreen => window::v1::LayoutMode::Fullscreen,
-                    LayoutModeKind::Spilled => window::v1::LayoutMode::Spilled,
+                    LayoutModeKind::Spilled => window::v1::LayoutMode::Floating,
                 }
                 .into(),
             });

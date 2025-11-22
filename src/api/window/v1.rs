@@ -186,7 +186,7 @@ impl v1::window_service_server::WindowService for super::WindowService {
                     LayoutModeKind::Floating => window::v1::LayoutMode::Floating,
                     LayoutModeKind::Maximized => window::v1::LayoutMode::Maximized,
                     LayoutModeKind::Fullscreen => window::v1::LayoutMode::Fullscreen,
-                    LayoutModeKind::Spilled => window::v1::LayoutMode::Spilled,
+                    LayoutModeKind::Spilled => window::v1::LayoutMode::Floating,
                 }
                 .into(),
             })

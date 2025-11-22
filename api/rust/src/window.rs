@@ -188,8 +188,6 @@ pub enum LayoutMode {
     Fullscreen,
     /// The window is maximized.
     Maximized,
-    /// The window is spilled from the layout.
-    Spilled,
 }
 
 impl TryFrom<window::v1::LayoutMode> for LayoutMode {
@@ -202,7 +200,7 @@ impl TryFrom<window::v1::LayoutMode> for LayoutMode {
             window::v1::LayoutMode::Floating => Ok(LayoutMode::Floating),
             window::v1::LayoutMode::Fullscreen => Ok(LayoutMode::Fullscreen),
             window::v1::LayoutMode::Maximized => Ok(LayoutMode::Maximized),
-            window::v1::LayoutMode::Spilled => Ok(LayoutMode::Spilled),
+            // window::v1::LayoutMode::Spilled => Ok(LayoutMode::Floating),
         }
     }
 }
@@ -775,19 +773,19 @@ impl WindowHandle {
         self.layout_mode_async().await == LayoutMode::Tiled
     }
 
-    /// Gets whether or not this window is spilled from the layout.
-    ///
-    /// A window is spilled when the current layout doesn't contains enough nodes and the
-    /// compositor cannot assign a geometry to it. In that state, the window behaves as a floating
-    /// window except that it gets tiled again if the number of nodes become big enough.
-    pub fn spilled(&self) -> bool {
-        self.spilled_async().block_on_tokio()
-    }
+    // /// Gets whether or not this window is spilled from the layout.
+    // ///
+    // /// A window is spilled when the current layout doesn't contains enough nodes and the
+    // /// compositor cannot assign a geometry to it. In that state, the window behaves as a floating
+    // /// window except that it gets tiled again if the number of nodes become big enough.
+    // pub fn spilled(&self) -> bool {
+    //     self.spilled_async().block_on_tokio()
+    // }
 
-    /// Async impl for [`Self::spilled`].
-    pub async fn spilled_async(&self) -> bool {
-        self.layout_mode_async().await == LayoutMode::Spilled
-    }
+    // /// Async impl for [`Self::spilled`].
+    // pub async fn spilled_async(&self) -> bool {
+    //     self.layout_mode_async().await == LayoutMode::Spilled
+    // }
 
     /// Gets whether or not this window is fullscreen.
     pub fn fullscreen(&self) -> bool {
