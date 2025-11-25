@@ -27,7 +27,7 @@ use futures::FutureExt;
 use pinnacle_api_defs::pinnacle::{
     tag::v1::{
         AddRequest, GetActiveRequest, GetNameRequest, GetOutputNameRequest, GetRequest,
-        RemoveRequest, SetActiveRequest, SwitchToRequest,
+        RemoveRequest, SetActiveRequest, SwitchOutputRequest, SwitchToRequest,
     },
     util::v1::SetOrToggle,
 };
@@ -75,6 +75,31 @@ where
         .tag_ids
         .into_iter()
         .map(|id| TagHandle { id })
+}
+
+/// Move existing tags to the specified output.
+///
+/// # Examples
+///
+/// ```no_run
+/// let output = output::get_by_name("eDP-1")?;
+/// let tag_to_move = tag::get("1")?;
+/// tag::switch_output(&output, tag_to_move);
+/// ```
+pub fn switch_output<I>(output: &OutputHandle, tag_handles: I)
+where
+    I: IntoIterator<Item = TagHandle>,
+{
+    let output_name = output.name();
+    let tag_ids = tag_handles.into_iter().map(|h| h.id).collect();
+
+    Client::tag()
+        .switch_output(SwitchOutputRequest {
+            output_name,
+            tag_ids,
+        })
+        .block_on_tokio()
+        .unwrap();
 }
 
 /// Gets handles to all tags across all outputs.
