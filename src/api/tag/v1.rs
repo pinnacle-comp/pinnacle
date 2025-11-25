@@ -2,7 +2,7 @@ use pinnacle_api_defs::pinnacle::{
     tag::v1::{
         self, AddRequest, AddResponse, GetActiveRequest, GetActiveResponse, GetNameRequest,
         GetNameResponse, GetOutputNameRequest, GetOutputNameResponse, GetRequest, GetResponse,
-        RemoveRequest, SetActiveRequest, SwitchToRequest,
+        RemoveRequest, SetActiveRequest, MoveToOutputRequest, SwitchToRequest,
     },
     util::v1::SetOrToggle,
 };
@@ -135,6 +135,24 @@ impl v1::tag_service_server::TagService for super::TagService {
             let tag_ids = tags.into_iter().map(|tag| tag.id().to_inner()).collect();
 
             Ok(AddResponse { tag_ids })
+        })
+        .await
+    }
+
+    async fn move_to_output(&self, request: Request<MoveToOutputRequest>) -> TonicResult<()> {
+        let request = request.into_inner();
+
+        let output_name = OutputName(request.output_name);
+
+        let tag_ids = request.tag_ids.into_iter().map(TagId::new);
+
+        run_unary(&self.sender, move |state| {
+            let tags_to_move = tag_ids
+                .flat_map(|id| id.tag(&state.pinnacle))
+                .collect::<Vec<_>>();
+
+            crate::api::tag::move_to_output(state, tags_to_move, output_name);
+            Ok(())
         })
         .await
     }
