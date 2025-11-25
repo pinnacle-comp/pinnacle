@@ -118,14 +118,18 @@ pub fn remove(state: &mut State, tags_to_remove: Vec<Tag>) {
     }
 
     for output in state.pinnacle.outputs.clone() {
+        let mut changed = false;
+
         output.with_state_mut(|state| {
             for tag_to_remove in tags_to_remove.iter() {
-                state.tags.shift_remove(tag_to_remove);
+                changed = state.tags.shift_remove(tag_to_remove) || changed;
             }
         });
 
-        state.pinnacle.request_layout(&output);
-        state.schedule_render(&output);
+        if changed {
+            state.pinnacle.request_layout(&output);
+            state.schedule_render(&output);
+        }
     }
 
     for conn_saved_state in state.pinnacle.config.connector_saved_states.values_mut() {
@@ -143,4 +147,39 @@ pub fn remove(state: &mut State, tags_to_remove: Vec<Tag>) {
             .tag_removed
             .signal(tag_to_remove);
     }
+}
+
+pub fn move_to_output(state: &mut State, tags_to_move: Vec<Tag>, output_name: OutputName) {
+    let Some(new_output) = output_name.output(&state.pinnacle) else {
+        warn!(
+            "Tried to move tags to output {} but it doesn't exist",
+            output_name.0
+        );
+        return;
+    };
+
+    for output in state.pinnacle.outputs.clone() {
+        let mut changed = false;
+
+        if output.name() == new_output.name() {
+            output.with_state_mut(|state| {
+                for tag in tags_to_move.iter() {
+                    changed = state.tags.insert(tag.clone()) || changed;
+                }
+            });
+        } else {
+            output.with_state_mut(|state| {
+                for tag in tags_to_move.iter() {
+                    changed = state.tags.shift_remove(tag) || changed;
+                }
+            });
+        }
+
+        if changed {
+            state.pinnacle.request_layout(&output);
+            state.schedule_render(&output);
+        }
+    }
+
+    state.pinnacle.update_xwayland_stacking_order();
 }
