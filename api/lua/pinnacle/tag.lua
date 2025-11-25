@@ -194,6 +194,34 @@ function tag.remove(tags)
     end
 end
 
+---Move existing tags to the specified output.
+---
+---#### Example
+---```lua
+---local tag_to_move = Tag.get("1")
+---Tag.move_to_output(Output.get_by_name("HDMI-1"), tag_to_move)
+---```
+---
+---@param output pinnacle.output.OutputHandle The output to add tags to.
+---@param tags pinnacle.tag.TagHandle The names of the new tags.
+function tag.move_to_output(output, tags)
+    ---@type integer[]
+    local ids = {}
+
+    for _, tg in ipairs(tags) do
+        table.insert(ids, tg.id)
+    end
+
+    local _, err = client:pinnacle_tag_v1_TagService_MoveToOutput({
+        output_name = output.name,
+        tag_ids = ids,
+    })
+
+    if err then
+        log.error(err)
+    end
+end
+
 local signal_name_to_SignalName = {
     active = "TagActive",
     created = "TagCreated",
