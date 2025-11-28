@@ -1335,6 +1335,10 @@ local pinnacle_v1_Backend = {
 ---@class pinnacle.tag.v1.AddResponse
 ---@field tag_ids integer[]?
 
+---@class pinnacle.tag.v1.SwitchOutputRequest
+---@field output_name string?
+---@field tag_ids integer[]?
+
 ---@class pinnacle.tag.v1.RemoveRequest
 ---@field tag_ids integer[]?
 
@@ -1599,6 +1603,7 @@ pinnacle.tag.v1.GetRequest = {}
 pinnacle.tag.v1.GetResponse = {}
 pinnacle.tag.v1.AddRequest = {}
 pinnacle.tag.v1.AddResponse = {}
+pinnacle.tag.v1.SwitchOutputRequest = {}
 pinnacle.tag.v1.RemoveRequest = {}
 pinnacle.tag.v1.GetActiveRequest = {}
 pinnacle.tag.v1.GetActiveResponse = {}
@@ -3501,6 +3506,23 @@ pinnacle.tag.v1.TagService.Add.response = ".pinnacle.tag.v1.AddResponse"
 ---@return string | nil error An error string, if any
 function Client:pinnacle_tag_v1_TagService_Add(data)
     return self:unary_request(pinnacle.tag.v1.TagService.Add, data)
+end
+pinnacle.tag.v1.TagService.SwitchOutput = {}
+pinnacle.tag.v1.TagService.SwitchOutput.service = "pinnacle.tag.v1.TagService"
+pinnacle.tag.v1.TagService.SwitchOutput.method = "SwitchOutput"
+pinnacle.tag.v1.TagService.SwitchOutput.request = ".pinnacle.tag.v1.SwitchOutputRequest"
+pinnacle.tag.v1.TagService.SwitchOutput.response = ".google.protobuf.Empty"
+
+---Performs a unary request.
+---
+---@nodiscard
+---
+---@param data pinnacle.tag.v1.SwitchOutputRequest
+---
+---@return google.protobuf.Empty | nil response
+---@return string | nil error An error string, if any
+function Client:pinnacle_tag_v1_TagService_SwitchOutput(data)
+    return self:unary_request(pinnacle.tag.v1.TagService.SwitchOutput, data)
 end
 pinnacle.tag.v1.TagService.Remove = {}
 pinnacle.tag.v1.TagService.Remove.service = "pinnacle.tag.v1.TagService"
