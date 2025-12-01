@@ -350,6 +350,25 @@ function TagHandle:toggle_active()
     end
 end
 
+---Move existing tags to the specified output.
+---
+---@see pinnacle.tag.move_to_output - for further information
+---@param output pinnacle.output.OutputHandle The output to add tags to.
+function TagHandle:move_to_output(output)
+    ---@type integer[]
+    local ids = {}
+    table.insert(ids, self.id)
+
+    local _, err = client:pinnacle_tag_v1_TagService_MoveToOutput({
+        output_name = output.name,
+        tag_ids = ids,
+    })
+
+    if err then
+        log.error(err)
+    end
+end
+
 ---Gets whether or not this tag is active.
 ---
 ---@return boolean
