@@ -77,33 +77,6 @@ where
         .map(|id| TagHandle { id })
 }
 
-/// Move existing tags to the specified output.
-///
-/// # Examples
-///
-/// ```no_run
-/// # use pinnacle_api::output;
-/// # use pinnacle_api::tag;
-/// let output = output::get_by_name("eDP-1")?;
-/// let tag_to_move = tag::get("1")?;
-/// tag::move_to_output(&output, tag_to_move);
-/// ```
-pub fn move_to_output<I>(output: &OutputHandle, tag_handles: I)
-where
-    I: IntoIterator<Item = TagHandle>,
-{
-    let output_name = output.name();
-    let tag_ids = tag_handles.into_iter().map(|h| h.id).collect();
-
-    Client::tag()
-        .move_to_output(MoveToOutputRequest {
-            output_name,
-            tag_ids,
-        })
-        .block_on_tokio()
-        .unwrap();
-}
-
 /// Gets handles to all tags across all outputs.
 ///
 /// # Examples
@@ -338,6 +311,31 @@ impl TagHandle {
             .set_active(SetActiveRequest {
                 tag_id,
                 set_or_toggle: SetOrToggle::Toggle.into(),
+            })
+            .block_on_tokio()
+            .unwrap();
+    }
+
+    /// Move existing tags to the specified output.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// # use pinnacle_api::output;
+    /// # use pinnacle_api::tag;
+    /// let output = output::get_by_name("eDP-1")?;
+    /// let tag_to_move = tag::get("1")?;
+    /// tag::move_to_output(&output, tag_to_move);
+    /// ```
+    pub fn move_to_output<I>(&self, output: &OutputHandle)
+    {
+        let output_name = output.name();
+        let tag_ids = vec![self.id];
+
+        Client::tag()
+            .move_to_output(MoveToOutputRequest {
+                output_name,
+                tag_ids,
             })
             .block_on_tokio()
             .unwrap();
