@@ -79,7 +79,7 @@ let
       ];
     };
     sourceRoot = "${src.name}/api/lua";
-    knownRockspec = ../../api/lua/rockspecs/pinnacle-api-0.2.0-alpha.1-1.rockspec;
+    knownRockspec = ../../api/lua/rockspecs/pinnacle-api-0.2.0alpha.1-1.rockspec;
     propagatedBuildInputs = with lua54Packages; [
       cqueues
       http
