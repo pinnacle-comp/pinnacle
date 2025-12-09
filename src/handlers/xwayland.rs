@@ -643,6 +643,7 @@ impl Pinnacle {
                     } => {
                         let mut wm = match X11Wm::start_wm(
                             state.pinnacle.loop_handle.clone(),
+                            &state.pinnacle.display_handle,
                             x11_socket,
                             client.clone(),
                         ) {

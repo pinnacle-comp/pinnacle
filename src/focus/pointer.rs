@@ -1,4 +1,4 @@
-use std::borrow::Cow;
+use std::{borrow::Cow, sync::Arc};
 
 use smithay::{
     desktop::{
@@ -7,14 +7,17 @@ use smithay::{
     },
     input::{
         Seat, SeatHandler,
+        dnd::{DndFocus, Source},
         pointer::{self, PointerTarget},
         touch::{self, TouchTarget},
     },
     output::WeakOutput,
-    reexports::wayland_server::{backend::ObjectId, protocol::wl_surface::WlSurface},
+    reexports::wayland_server::{
+        DisplayHandle, backend::ObjectId, protocol::wl_surface::WlSurface,
+    },
     utils::{IsAlive, Logical, Point, Serial},
-    wayland::{seat::WaylandFocus, session_lock::LockSurface},
-    xwayland::X11Surface,
+    wayland::{seat::WaylandFocus, selection::data_device::WlOfferData, session_lock::LockSurface},
+    xwayland::{X11Surface, xwm::XwmOfferData},
 };
 
 use crate::{
@@ -29,6 +32,34 @@ use super::keyboard::KeyboardFocusTarget;
 pub enum PointerFocusTarget {
     WlSurface(WlSurface),
     X11Surface(X11Surface),
+}
+
+pub enum OfferData<S: Source> {
+    Wayland(WlOfferData<S>),
+    X11(XwmOfferData<S>),
+}
+
+impl<S: Source> smithay::input::dnd::OfferData for OfferData<S> {
+    fn disable(&self) {
+        match self {
+            OfferData::Wayland(data) => data.disable(),
+            OfferData::X11(data) => data.disable(),
+        }
+    }
+
+    fn drop(&self) {
+        match self {
+            OfferData::Wayland(data) => data.drop(),
+            OfferData::X11(data) => data.drop(),
+        }
+    }
+
+    fn validated(&self) -> bool {
+        match self {
+            OfferData::Wayland(data) => data.validated(),
+            OfferData::X11(data) => data.validated(),
+        }
+    }
 }
 
 impl PointerFocusTarget {
@@ -128,6 +159,111 @@ impl IsAlive for PointerFocusTarget {
         match self {
             PointerFocusTarget::WlSurface(surf) => surf.alive(),
             PointerFocusTarget::X11Surface(surf) => surf.alive(),
+        }
+    }
+}
+
+impl DndFocus<State> for PointerFocusTarget {
+    type OfferData<S: Source> = OfferData<S>;
+
+    fn enter<S: Source>(
+        &self,
+        data: &mut State,
+        dh: &DisplayHandle,
+        source: Arc<S>,
+        seat: &Seat<State>,
+        location: Point<f64, Logical>,
+        serial: &Serial,
+    ) -> Option<Self::OfferData<S>> {
+        match self {
+            PointerFocusTarget::WlSurface(wl_surface) => {
+                DndFocus::enter(wl_surface, data, dh, source, seat, location, serial)
+                    .map(OfferData::Wayland)
+            }
+            PointerFocusTarget::X11Surface(x11_surface) => {
+                DndFocus::enter(x11_surface, data, dh, source, seat, location, serial)
+                    .map(OfferData::X11)
+            }
+        }
+    }
+
+    fn motion<S: Source>(
+        &self,
+        data: &mut State,
+        offer: Option<&mut Self::OfferData<S>>,
+        seat: &Seat<State>,
+        location: Point<f64, Logical>,
+        time: u32,
+    ) {
+        match self {
+            PointerFocusTarget::WlSurface(wl_surface) => {
+                let offer = match offer {
+                    Some(OfferData::Wayland(offer)) => Some(offer),
+                    None => None,
+                    _ => return,
+                };
+                DndFocus::motion(wl_surface, data, offer, seat, location, time);
+            }
+            PointerFocusTarget::X11Surface(x11_surface) => {
+                let offer = match offer {
+                    Some(OfferData::X11(offer)) => Some(offer),
+                    None => None,
+                    _ => return,
+                };
+                DndFocus::motion(x11_surface, data, offer, seat, location, time);
+            }
+        }
+    }
+
+    fn leave<S: Source>(
+        &self,
+        data: &mut State,
+        offer: Option<&mut Self::OfferData<S>>,
+        seat: &Seat<State>,
+    ) {
+        match self {
+            PointerFocusTarget::WlSurface(wl_surface) => {
+                let offer = match offer {
+                    Some(OfferData::Wayland(offer)) => Some(offer),
+                    None => None,
+                    _ => return,
+                };
+                DndFocus::leave(wl_surface, data, offer, seat);
+            }
+            PointerFocusTarget::X11Surface(x11_surface) => {
+                let offer = match offer {
+                    Some(OfferData::X11(offer)) => Some(offer),
+                    None => None,
+                    _ => return,
+                };
+                DndFocus::leave(x11_surface, data, offer, seat);
+            }
+        }
+    }
+
+    fn drop<S: Source>(
+        &self,
+        data: &mut State,
+        offer: Option<&mut Self::OfferData<S>>,
+        seat: &Seat<State>,
+    ) {
+        match self {
+            PointerFocusTarget::WlSurface(wl_surface) => {
+                let offer = match offer {
+                    Some(OfferData::Wayland(offer)) => Some(offer),
+                    None => None,
+                    _ => return,
+                };
+                DndFocus::drop(wl_surface, data, offer, seat);
+            }
+            PointerFocusTarget::X11Surface(x11_surface) => {
+                let offer = match offer {
+                    Some(OfferData::X11(offer)) => Some(offer),
+                    None => None,
+                    _ => return,
+                };
+                DndFocus::drop(x11_surface, data, offer, seat);
+            }
         }
     }
 }

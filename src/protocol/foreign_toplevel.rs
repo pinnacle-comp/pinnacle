@@ -198,7 +198,7 @@ fn pending_toplevel_data_for(
             title,
             app_id,
             maximized: x11_surface.is_maximized(),
-            minimized: x11_surface.is_minimized(),
+            minimized: x11_surface.is_hidden(),
             fullscreen: x11_surface.is_fullscreen(),
             _activated: x11_surface.is_activated(),
             focused,

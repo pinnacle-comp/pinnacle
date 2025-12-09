@@ -172,7 +172,18 @@ impl Pinnacle {
 
                 win.surface_under(point - loc, surface_type)
                     .map(|(surf, surf_loc)| {
-                        (PointerFocusTarget::WlSurface(surf), surf_loc.to_f64() + loc)
+                        let target = if let Some(x11_surface) = win.x11_surface()
+                            && Some(&surf) == x11_surface.wl_surface().as_ref()
+                        {
+                            // Our `surface_under` impl currently doesn't differentiate between
+                            // wl surfaces from wayland or xwayland, which is a problem for XDND
+                            // which requires knowledge that the pointer focus is an X11Surface,
+                            // so recover that information here.
+                            PointerFocusTarget::X11Surface(x11_surface.clone())
+                        } else {
+                            PointerFocusTarget::WlSurface(surf)
+                        };
+                        (target, surf_loc.to_f64() + loc)
                     })
             })
         };

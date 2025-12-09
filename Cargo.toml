@@ -40,7 +40,7 @@ xdg = "3.0.0"
 bitflags = "2.9.1"
 clap = { version = "4.5.40", features = ["derive", "string"] }
 tempfile = "3.20.0"
-indexmap = "2.9.0"
+indexmap = "2.12.1"
 anyhow = { version = "1.0.98", features = ["backtrace"] }
 snowcap-api-defs = { path = "./snowcap/snowcap-api-defs" }
 hyper-util = { version = "0.1.14", features = ["tokio"] }
@@ -56,7 +56,7 @@ wayland-scanner = "0.31.7"
 
 [workspace.dependencies.smithay]
 git = "https://github.com/Smithay/smithay"
-rev = "07f9db5"
+rev = "61f5a0d"
 # path = "../../git/smithay"
 default-features = false
 features = [
@@ -106,7 +106,7 @@ rust-version.workspace = true
 [dependencies]
 # Smithay
 smithay = { workspace = true }
-smithay-drm-extras = { git = "https://github.com/Smithay/smithay", rev = "07f9db5" }
+smithay-drm-extras = { git = "https://github.com/Smithay/smithay", rev = "61f5a0d" }
 # Tracing
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }

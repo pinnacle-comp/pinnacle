@@ -256,8 +256,9 @@ impl WindowElement {
         self.0.geometry()
     }
 
-    /// Returns the surface under the given point relative to
-    /// (0, 0) of this window's root wl surface.
+    /// Returns the surface under the given point.
+    ///
+    /// The point should be relative to (0, 0) of this window's root wl surface.
     pub fn surface_under<P: Into<Point<f64, Logical>>>(
         &self,
         point: P,
@@ -314,11 +315,17 @@ impl WindowElement {
         }
 
         // Check for the window itself.
-        if let Some(surface) = self.wl_surface() {
-            let surf = under_from_surface_tree(&surface, point, (0, 0), surface_type);
-            if surf.is_some() {
-                return surf;
+        let surf = match self.underlying_surface() {
+            WindowSurface::Wayland(toplevel) => {
+                under_from_surface_tree(toplevel.wl_surface(), point, (0, 0), surface_type)
             }
+            WindowSurface::X11(x11_surface) => {
+                // Use `X11Surface::surface_under` to prevent focus on OR windows during XDND
+                x11_surface.surface_under(point, (0, 0), surface_type)
+            }
+        };
+        if surf.is_some() {
+            return surf;
         }
 
         // Check for decoration surfaces below the window.

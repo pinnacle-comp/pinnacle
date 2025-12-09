@@ -38,18 +38,16 @@ use smithay::{
     },
     input::{
         Seat, SeatHandler, SeatState,
+        dnd::{DnDGrab, DndGrabHandler, GrabType},
         keyboard::LedState,
-        pointer::{CursorImageStatus, PointerHandle},
+        pointer::{self, CursorImageStatus, PointerHandle},
     },
     output::{Mode, Output, Scale},
     reexports::{
         wayland_protocols::xdg::shell::server::xdg_positioner::ConstraintAdjustment,
         wayland_server::{
             Client, Resource,
-            protocol::{
-                wl_buffer::WlBuffer, wl_data_source::WlDataSource, wl_output::WlOutput,
-                wl_surface::WlSurface,
-            },
+            protocol::{wl_buffer::WlBuffer, wl_output::WlOutput, wl_surface::WlSurface},
         },
     },
     utils::{Logical, Point, Rectangle},
@@ -70,8 +68,7 @@ use smithay::{
         selection::{
             SelectionHandler, SelectionSource, SelectionTarget,
             data_device::{
-                ClientDndGrabHandler, DataDeviceHandler, DataDeviceState, ServerDndGrabHandler,
-                set_data_device_focus,
+                DataDeviceHandler, DataDeviceState, WaylandDndGrabHandler, set_data_device_focus,
             },
             ext_data_control,
             primary_selection::{
@@ -455,22 +452,55 @@ fn layer_surface_is_initial_configure_sent(layer: &LayerSurface) -> bool {
     initial_configure_sent
 }
 
-impl ClientDndGrabHandler for State {
-    fn started(
+impl WaylandDndGrabHandler for State {
+    fn dnd_requested<S: smithay::input::dnd::Source>(
         &mut self,
-        _source: Option<WlDataSource>,
+        source: S,
         icon: Option<WlSurface>,
-        _seat: Seat<Self>,
+        seat: Seat<Self>,
+        serial: smithay::utils::Serial,
+        type_: GrabType,
     ) {
         self.pinnacle.cursor_state.set_dnd_icon(icon);
-    }
 
-    fn dropped(&mut self, _target: Option<WlSurface>, _validated: bool, _seat: Seat<Self>) {
-        self.pinnacle.cursor_state.set_dnd_icon(None);
+        match type_ {
+            GrabType::Pointer => {
+                let pointer = seat.get_pointer().unwrap();
+                let start_data = pointer.grab_start_data().unwrap();
+                pointer.set_grab(
+                    self,
+                    DnDGrab::new_pointer(&self.pinnacle.display_handle, start_data, source, seat),
+                    serial,
+                    pointer::Focus::Keep,
+                );
+            }
+            GrabType::Touch => {
+                let Some(touch) = seat.get_touch() else {
+                    return;
+                };
+
+                let start_data = touch.grab_start_data().unwrap();
+                touch.set_grab(
+                    self,
+                    DnDGrab::new_touch(&self.pinnacle.display_handle, start_data, source, seat),
+                    serial,
+                );
+            }
+        }
     }
 }
 
-impl ServerDndGrabHandler for State {}
+impl DndGrabHandler for State {
+    fn dropped(
+        &mut self,
+        _target: Option<smithay::input::dnd::DndTarget<'_, Self>>,
+        _validated: bool,
+        _seat: Seat<Self>,
+        _location: Point<f64, Logical>,
+    ) {
+        self.pinnacle.cursor_state.set_dnd_icon(None);
+    }
+}
 
 impl SelectionHandler for State {
     type SelectionUserData = ();
@@ -509,8 +539,7 @@ impl SelectionHandler for State {
             .xwayland_state
             .as_mut()
             .map(|xwayland| &mut xwayland.xwm)
-            && let Err(err) =
-                xwm.send_selection(ty, mime_type, fd, self.pinnacle.loop_handle.clone())
+            && let Err(err) = xwm.send_selection(ty, mime_type, fd)
         {
             warn!(?err, "Failed to send selection (X11 -> Wayland)");
         }
