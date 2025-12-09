@@ -5,15 +5,20 @@ edition = "2024"
 rust-version.workspace = true
 
 [dependencies]
-smithay-client-toolkit = "0.19.2"
 anyhow = { workspace = true }
-iced = { git = "https://github.com/iced-rs/iced", rev = "d475ae5", default-features = false, features = ["wgpu", "tokio", "tiny-skia", "image"] }
-iced_wgpu = { git = "https://github.com/iced-rs/iced", rev = "d475ae5" }
-iced_runtime = { git = "https://github.com/iced-rs/iced", rev = "d475ae5" }
+iced = { git = "https://github.com/iced-rs/iced", rev = "d475ae5", default-features = false, features = [
+    "wgpu",
+    "tokio",
+    "tiny-skia",
+    "image",
+] }
 iced_futures = { git = "https://github.com/iced-rs/iced", rev = "d475ae5" }
 iced_graphics = { git = "https://github.com/iced-rs/iced", rev = "d475ae5" }
-iced_tiny_skia = { git = "https://github.com/iced-rs/iced", rev = "d475ae5" }
 iced_renderer = { git = "https://github.com/iced-rs/iced", rev = "d475ae5" }
+iced_runtime = { git = "https://github.com/iced-rs/iced", rev = "d475ae5" }
+iced_tiny_skia = { git = "https://github.com/iced-rs/iced", rev = "d475ae5" }
+iced_wgpu = { git = "https://github.com/iced-rs/iced", rev = "d475ae5" }
+smithay-client-toolkit = "0.19.2"
 # iced = { path = "../../../git/iced", default-features = false, features = ["wgpu", "tokio", "tiny-skia", "image"] }
 # iced_wgpu = { path = "../../../git/iced/wgpu" }
 # iced_runtime = { path = "../../../git/iced/runtime" }
@@ -21,26 +26,30 @@ iced_renderer = { git = "https://github.com/iced-rs/iced", rev = "d475ae5" }
 # iced_graphics = { path = "../../../git/iced/graphics" }
 # iced_tiny_skia = { path = "../../../git/iced/tiny_skia" }
 # iced_renderer = { path = "../../../git/iced/renderer" }
-tracing = { workspace = true }
-tracing-subscriber = { workspace = true }
-raw-window-handle = "0.6.2"
-xdg = { workspace = true }
-smithay-clipboard = "0.7.2"
-tokio = { workspace = true }
-tokio-stream = { workspace = true }
 futures = { workspace = true }
 prost = { workspace = true }
+raw-window-handle = "0.6.2"
+smithay-clipboard = "0.7.2"
+snowcap-api-defs = { workspace = true }
+snowcap-protocols = { workspace = true }
+tokio = { workspace = true }
+tokio-stream = { workspace = true }
 tonic = { workspace = true }
 tonic-reflection = { workspace = true }
-snowcap-api-defs = { workspace = true }
-xkbcommon = { workspace = true }
-snowcap-protocols = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
 tracy-client = { workspace = true }
+xdg = { workspace = true }
+xkbcommon = { workspace = true }
 
 [features]
 default = []
 tracy = ["tracy-client/default"]
-tracy-ondemand = ["tracy", "tracy-client/ondemand", "tracy-client/manual-lifetime"]
+tracy-ondemand = [
+    "tracy",
+    "tracy-client/ondemand",
+    "tracy-client/manual-lifetime",
+]
 tracy-alloc = ["tracy"]
 
 [lints]

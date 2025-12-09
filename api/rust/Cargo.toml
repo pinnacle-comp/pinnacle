@@ -11,19 +11,19 @@ categories = ["api-bindings", "config"]
 rust-version.workspace = true
 
 [dependencies]
+bitflags = { workspace = true }
+futures = { workspace = true }
+hyper-util = { workspace = true }
+indexmap = { workspace = true }
+num_enum = "0.7.3"
+passfd = { workspace = true }
 pinnacle-api-defs = { workspace = true }
+snowcap-api = { path = "../../snowcap/api/rust", optional = true }
 tokio = { workspace = true, features = ["net", "process"] }
 tokio-stream = { workspace = true }
 tonic = { workspace = true }
 tower = { workspace = true }
-hyper-util = { workspace = true }
-futures = { workspace = true }
 xkbcommon = { workspace = true }
-bitflags = { workspace = true }
-snowcap-api = { path = "../../snowcap/api/rust", optional = true }
-indexmap = { workspace = true }
-num_enum = "0.7.3"
-passfd = { workspace = true }
 
 [features]
 default = ["snowcap"]

@@ -21,38 +21,36 @@ repository = "https://github.com/pinnacle-comp/pinnacle/"
 rust-version = "1.88"
 
 [workspace.dependencies]
-# Tokio
-tokio = { version = "1.45.1", features = ["macros", "rt-multi-thread"]}
-tokio-stream = { version = "0.1.17", features = ["net"] }
-# gRPC
-prost = "0.13.5"
-tonic = "0.13.1"
-tonic-reflection = "0.13.1"
-tonic-build = "0.13.0"
-# Tracing
-tracing = "0.1.41"
-tracing-subscriber = { version = "0.3.19", features = ["env-filter", "registry"] }
-# API definitions
-pinnacle-api-defs = { path = "./pinnacle-api-defs" }
-# Misc.
-xkbcommon = "0.8.0"
-xdg = "3.0.0"
+anyhow = { version = "1.0.98", features = ["backtrace"] }
 bitflags = "2.9.1"
 clap = { version = "4.5.40", features = ["derive", "string"] }
-tempfile = "3.20.0"
-indexmap = "2.12.1"
-anyhow = { version = "1.0.98", features = ["backtrace"] }
-snowcap-api-defs = { path = "./snowcap/snowcap-api-defs" }
-hyper-util = { version = "0.1.14", features = ["tokio"] }
 futures = "0.3.31"
-thiserror = "2.0.12"
-walkdir = "2.5.0"
-tower = { version = "0.5.2", features = ["util"] }
+hyper-util = { version = "0.1.14", features = ["tokio"] }
+indexmap = "2.12.1"
 passfd = "0.1.6"
-tracy-client = { version = "0.18.1", default-features = false }
+pinnacle-api-defs = { path = "./pinnacle-api-defs" }
+prost = "0.13.5"
+snowcap-api-defs = { path = "./snowcap/snowcap-api-defs" }
 snowcap-protocols = { path = "./snowcap/snowcap-protocols" }
+tempfile = "3.20.0"
+thiserror = "2.0.12"
+tokio = { version = "1.45.1", features = ["macros", "rt-multi-thread"] }
+tokio-stream = { version = "0.1.17", features = ["net"] }
+tonic = "0.13.1"
+tonic-build = "0.13.0"
+tonic-reflection = "0.13.1"
+tower = { version = "0.5.2", features = ["util"] }
+tracing = "0.1.41"
+tracing-subscriber = { version = "0.3.19", features = [
+    "env-filter",
+    "registry",
+] }
+tracy-client = { version = "0.18.1", default-features = false }
+walkdir = "2.5.0"
 wayland-backend = "0.3.11"
 wayland-scanner = "0.31.7"
+xdg = "3.0.0"
+xkbcommon = "0.8.0"
 
 [workspace.dependencies.smithay]
 git = "https://github.com/Smithay/smithay"
@@ -82,13 +80,13 @@ features = [
 ]
 
 [workspace.lints.clippy]
-too_many_arguments = "allow"
-new_without_default = "allow"
-type_complexity = "allow"
-let_and_return = "allow"
 dbg_macro = "warn"
-result_large_err = "allow"
 large_enum_variant = "allow"
+let_and_return = "allow"
+new_without_default = "allow"
+result_large_err = "allow"
+too_many_arguments = "allow"
+type_complexity = "allow"
 
 ########################################################################yo😎###########
 
@@ -104,58 +102,50 @@ keywords = ["wayland", "compositor", "smithay", "lua"]
 rust-version.workspace = true
 
 [dependencies]
-# Smithay
 smithay = { workspace = true }
 smithay-drm-extras = { git = "https://github.com/Smithay/smithay", rev = "61f5a0d" }
-# Tracing
-tracing = { workspace = true }
-tracing-subscriber = { workspace = true }
-tracing-appender = "0.2.3"
-# Errors
+
 anyhow = { workspace = true }
-# xcursor stuff
-xcursor = { version = "0.3.8" }
-# gRPC
-tonic = { workspace = true }
-tonic-reflection = { workspace = true }
-# Tokio
-tokio = { workspace = true, features = ["process", "io-util", "signal"] }
-tokio-stream = { workspace = true }
-# CLI
+assert_matches = "1.5.0"
+async-channel = "2.5.0"
+bimap = "0.6.3"
+bitflags = { workspace = true }
+bytemuck = "1.23.1"
 clap = { workspace = true }
 clap_complete = "4.5.54"
 cliclack = "0.3.6"
-# Misc.
-bitflags = { workspace = true }
-serde = { version = "1.0.219", features = ["derive"] }
-toml = "0.8.23"
-shellexpand = { version = "3.1.1", features = ["path"] }
-xkbcommon = { workspace = true }
-xdg = { workspace = true }
-sysinfo = "0.34.2"
-pinnacle-api-defs = { workspace = true }
-bytemuck = "1.23.1"
-pinnacle-api = { path = "./api/rust", default-features = false }
-gag = "1.0.0"
 drm-sys = "0.8.0"
-libdisplay-info = "0.3.0"
+gag = "1.0.0"
 indexmap = { workspace = true }
+itertools = "0.14.0"
+libdisplay-info = "0.3.0"
+passfd = { workspace = true }
+pinnacle-api = { path = "./api/rust", default-features = false }
+pinnacle-api-defs = { workspace = true }
+profiling = { version = "1.0.16", optional = true } # Only used to enable profiling within smithay
+sd-notify = "0.4.5"
+serde = { version = "1.0.219", features = ["derive"] }
+shellexpand = { version = "3.1.1", features = ["path"] }
+slab_tree = { git = "https://github.com/Ottatop/slab-tree", rev = "d6adbbb" } # impl traits for NodeRef
 snowcap = { path = "./snowcap", optional = true }
 snowcap-api = { path = "./snowcap/api/rust", optional = true }
-assert_matches = "1.5.0"
-taffy = "=0.8.2" # Patched below for rounding fixes
-# impl traits for NodeRef
-slab_tree = { git = "https://github.com/Ottatop/slab-tree", rev = "d6adbbb" }
-bimap = "0.6.3"
-itertools = "0.14.0"
-passfd = { workspace = true }
-profiling = { version = "1.0.16", optional = true } # Only used to enable profiling within smithay
-tracy-client = { workspace = true }
-sd-notify = "0.4.5"
 snowcap-protocols = { workspace = true }
-async-channel = "2.5.0"
+sysinfo = "0.34.2"
+taffy = "=0.8.2" # Patched below for rounding fixes
+tokio = { workspace = true, features = ["process", "io-util", "signal"] }
+tokio-stream = { workspace = true }
+toml = "0.8.23"
+tonic = { workspace = true }
+tonic-reflection = { workspace = true }
+tracing = { workspace = true }
+tracing-appender = "0.2.3"
+tracing-subscriber = { workspace = true }
+tracy-client = { workspace = true }
 wayland-backend = { workspace = true }
 wayland-scanner = { workspace = true }
+xcursor = { version = "0.3.8" }
+xdg = { workspace = true }
+xkbcommon = { workspace = true }
 
 [build-dependencies]
 vergen-gitcl = { version = "1.0.5", features = ["rustc", "cargo", "si"] }
@@ -163,7 +153,9 @@ vergen-gitcl = { version = "1.0.5", features = ["rustc", "cargo", "si"] }
 [dev-dependencies]
 temp-env = "0.3.6"
 tempfile = { workspace = true }
-test-log = { version = "0.2.17", default-features = false, features = ["trace"] }
+test-log = { version = "0.2.17", default-features = false, features = [
+    "trace",
+] }
 pinnacle = { path = ".", default-features = false }
 pinnacle-api = { path = "./api/rust", default-features = false }
 mlua = { version = "0.10.5", features = ["lua54", "send", "macros"] }
@@ -178,8 +170,17 @@ default = ["snowcap"]
 snowcap = ["pinnacle-api/snowcap", "dep:snowcap", "dep:snowcap-api"]
 testing = ["smithay/renderer_test"]
 wlcs = ["testing"]
-tracy = ["profiling/profile-with-tracy", "tracy-client/default", "snowcap?/tracy"]
-tracy-ondemand = ["tracy", "tracy-client/ondemand", "tracy-client/manual-lifetime", "snowcap?/tracy-ondemand"]
+tracy = [
+    "profiling/profile-with-tracy",
+    "tracy-client/default",
+    "snowcap?/tracy",
+]
+tracy-ondemand = [
+    "tracy",
+    "tracy-client/ondemand",
+    "tracy-client/manual-lifetime",
+    "snowcap?/tracy-ondemand",
+]
 tracy-alloc = ["tracy", "snowcap?/tracy-alloc"]
 
 [profile.release]

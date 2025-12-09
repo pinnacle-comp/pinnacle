@@ -8,8 +8,8 @@ repository.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-tonic = { workspace = true }
 prost = { workspace = true }
+tonic = { workspace = true }
 
 [build-dependencies]
 walkdir = { workspace = true }

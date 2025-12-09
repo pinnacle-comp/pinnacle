@@ -5,18 +5,18 @@ edition = "2024"
 rust-version.workspace = true
 
 [dependencies]
+from_variants = "1.0.2"
+futures = { workspace = true }
+hyper-util = { workspace = true }
 snowcap-api-defs = { workspace = true }
+thiserror = { workspace = true }
 tokio = { workspace = true }
 tokio-stream = { workspace = true }
 tonic = { workspace = true }
 tower = { workspace = true }
-futures = { workspace = true }
+tracing = { workspace = true }
 xdg = { workspace = true }
 xkbcommon = { workspace = true }
-from_variants = "1.0.2"
-tracing = { workspace = true }
-thiserror = { workspace = true }
-hyper-util = { workspace = true }
 
 [lints.rust]
 missing_docs = "warn"

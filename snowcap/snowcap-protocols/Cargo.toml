@@ -4,8 +4,8 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-wayland-scanner = { workspace = true }
-wayland-protocols = "0.32.9"
 wayland-backend = { workspace = true }
 wayland-client = "0.31.10"
+wayland-protocols = "0.32.9"
+wayland-scanner = { workspace = true }
 wayland-server = "0.31.9"
