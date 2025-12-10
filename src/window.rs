@@ -812,7 +812,11 @@ impl State {
         } else if cfg!(feature = "wlcs") {
             (true, true)
         } else {
-            panic!("tried to map window pre initial configure");
+            warn!(
+                "Window \"{}\" tried to attach a buffer before acking the initial configure",
+                window.class().as_deref().unwrap_or("unknown")
+            );
+            return;
         };
 
         self.pinnacle.windows.push(window.clone());
