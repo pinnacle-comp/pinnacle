@@ -6,9 +6,6 @@
 - Work on `ConnectorSavedState`
 - Keyboard focus in Idea Xwayland is weird when creating a new Java file
 
-- Snowcap crashes when a window opens and immediately closes because the foreign toplevel handle is no longer valid
-- Cursor position when scaled is wrong
-- Add DND surfaces to cursor captures
 - api::output::output_handle_toggle_powered keeps failing on CI
 
 Testing

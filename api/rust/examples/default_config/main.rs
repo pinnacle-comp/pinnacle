@@ -354,13 +354,13 @@ async fn config() {
 
         // Add borders to already existing windows.
         for win in window::get_all() {
-            FocusBorder::new_with_titlebar(&win).decorate();
+            let _ = FocusBorder::new_with_titlebar(&win).decorate();
         }
 
         // Add borders to new windows.
         window::add_window_rule(move |window| {
             window.set_decoration_mode(window::DecorationMode::ServerSide);
-            FocusBorder::new_with_titlebar(&window).decorate();
+            let _ = FocusBorder::new_with_titlebar(&window).decorate();
         });
     }
 

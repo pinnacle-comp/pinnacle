@@ -8,7 +8,7 @@ use std::sync::{Arc, OnceLock};
 
 use indexmap::IndexMap;
 use snowcap_api::{
-    decoration::DecorationHandle,
+    decoration::{DecorationHandle, NewDecorationError},
     layer::{ExclusiveZone, KeyboardInteractivity, ZLayer},
     widget::{
         Alignment, Border, Color, Length, Padding, Program, Radius, WidgetDef,
@@ -635,7 +635,7 @@ impl FocusBorder {
     }
 
     /// Decorates the window with this focus border.
-    pub fn decorate(self) -> DecorationHandle<FocusBorderMessage> {
+    pub fn decorate(self) -> Result<DecorationHandle<FocusBorderMessage>, NewDecorationError> {
         let thickness = self.thickness;
         let titlebar_height = self.titlebar_height;
         let window = self.window.clone();
@@ -666,8 +666,7 @@ impl FocusBorder {
                 bottom: thickness,
             },
             20,
-        )
-        .unwrap();
+        )?;
 
         let signal_holder = Arc::new(OnceLock::<SignalHandle>::new());
         let signal_holder2 = Arc::new(OnceLock::<SignalHandle>::new());
@@ -711,7 +710,7 @@ impl FocusBorder {
 
         signal_holder2.set(signal).unwrap();
 
-        border
+        Ok(border)
     }
 }
 

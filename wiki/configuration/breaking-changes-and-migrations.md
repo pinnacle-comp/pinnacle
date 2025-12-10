@@ -133,6 +133,14 @@ across major versions.
   to be closer to the way Awesome behaves in the future.
 
 
+### Other API changes
+
+#### Rust
+
+- `FocusBorder::decorate` now returns a result. It is possible for the
+  passed window to not exist. Previously, this would panic. This is no
+  longer the case.
+
 ## v0.1.0
 
 No breaking changes

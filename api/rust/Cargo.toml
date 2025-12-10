@@ -28,3 +28,8 @@ xkbcommon = { workspace = true }
 [features]
 default = ["snowcap"]
 snowcap = ["dep:snowcap-api"]
+
+[lints.clippy]
+too_many_arguments = "allow"
+type_complexity = "allow"
+result_large_err = "allow"
