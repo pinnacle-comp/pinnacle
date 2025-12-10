@@ -69,7 +69,7 @@ where
     }
 
     fn layout(
-        &self,
+        &mut self,
         tree: &mut iced_wgpu::core::widget::Tree,
         renderer: &Renderer,
         limits: &iced_wgpu::core::layout::Limits,
@@ -112,7 +112,7 @@ where
     }
 
     fn operate(
-        &self,
+        &mut self,
         state: &mut iced_wgpu::core::widget::Tree,
         layout: iced_wgpu::core::Layout<'_>,
         renderer: &Renderer,
@@ -180,13 +180,8 @@ impl Collect {
 }
 
 impl Operation for Collect {
-    fn container(
-        &mut self,
-        _id: Option<&iced_wgpu::core::widget::Id>,
-        _bounds: iced::Rectangle,
-        operate_on_children: &mut dyn FnMut(&mut dyn Operation<()>),
-    ) {
-        operate_on_children(self);
+    fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation<()>)) {
+        operate(self);
     }
 
     fn custom(

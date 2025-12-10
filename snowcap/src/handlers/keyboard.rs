@@ -95,6 +95,7 @@ impl KeyboardHandler for State {
                 text: None,
                 modified_key: key, // TODO:
                 physical_key: Physical::Unidentified(NativeCode::Xkb(event.keysym.raw())),
+                repeat: false,
             }));
     }
 

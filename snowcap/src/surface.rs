@@ -1,7 +1,7 @@
-use std::{ptr::NonNull, time::Instant};
+use std::{mem, ptr::NonNull, time::Instant};
 
 use iced::window::RedrawRequest;
-use iced_graphics::Compositor;
+use iced_graphics::{Compositor, shell::Notifier};
 use iced_runtime::user_interface;
 use raw_window_handle::{
     HasDisplayHandle, HasWindowHandle, RawDisplayHandle, RawWindowHandle, WaylandDisplayHandle,
@@ -11,7 +11,7 @@ use smithay_client_toolkit::{
     compositor::CompositorState,
     reexports::{
         calloop::{self, LoopHandle, timer::Timer},
-        client::{Proxy, QueueHandle, protocol::wl_surface::WlSurface},
+        client::{Connection, Proxy, QueueHandle, protocol::wl_surface::WlSurface},
         protocols::wp::{
             fractional_scale::v1::client::wp_fractional_scale_v1::WpFractionalScaleV1,
             viewporter::client::wp_viewport::WpViewport,
@@ -48,6 +48,7 @@ pub struct SnowcapSurface {
     redraw_scheduled: bool,
     pending_view: Option<ViewFn>,
     waiting_view: bool,
+    layout_invalidated: bool,
     pub widgets: SnowcapWidgetProgram,
     clipboard: WaylandClipboard,
 
@@ -86,16 +87,13 @@ impl SnowcapSurface {
         let compositor_state = state.compositor_state.clone();
 
         let window_handle = WindowHandle::new(&wl_surface);
+        // SAFETY: Wayland connection is not dropped until after this is
+        let display_handle = DisplayHandle::new(&state.conn);
 
         let compositor = if force_tiny_skia {
             state.tiny_skia.get_or_insert_with(|| {
                 let tiny_skia = iced_tiny_skia::window::compositor::new(
-                    iced_graphics::Settings {
-                        default_font: Default::default(),
-                        default_text_size: iced::Pixels(16.0),
-                        antialiasing: None,
-                    }
-                    .into(),
+                    iced_graphics::Settings::default().into(),
                     window_handle,
                 );
 
@@ -104,12 +102,10 @@ impl SnowcapSurface {
         } else {
             state.compositor.get_or_insert_with(|| {
                 crate::compositor::Compositor::new(
-                    iced_graphics::Settings {
-                        default_font: Default::default(),
-                        default_text_size: iced::Pixels(16.0),
-                        antialiasing: None,
-                    },
+                    iced_graphics::Settings::default(),
+                    display_handle,
                     window_handle,
+                    state.shell.clone(),
                 )
                 .block_on_tokio()
                 .unwrap()
@@ -134,8 +130,9 @@ impl SnowcapSurface {
             pending_output_scale: None,
             bounds: iced::Size::default(),
             pending_bounds: None,
-            pending_view: None,
             waiting_view: false,
+            pending_view: None,
+            layout_invalidated: false,
             widgets,
             renderer,
             clipboard,
@@ -158,6 +155,10 @@ impl SnowcapSurface {
 
     pub fn view_changed(&mut self, new_view: ViewFn) {
         self.pending_view = Some(new_view);
+    }
+
+    pub fn invalidate_layout(&mut self) {
+        self.layout_invalidated = true;
     }
 
     pub fn schedule_redraw(&mut self) {
@@ -225,7 +226,7 @@ impl SnowcapSurface {
     ) -> bool {
         let _span = tracy_client::span!("SnowcapSurface::update");
 
-        let mut needs_rebuild = false;
+        let mut needs_rebuild = mem::take(&mut self.layout_invalidated);
         if let Some(scale) = self.pending_output_scale.take()
             && scale != self.output_scale
         {
@@ -307,6 +308,7 @@ impl SnowcapSurface {
                 mouse_interaction: _, // TODO:
                 redraw_request,
                 input_method: _,
+                has_layout_changed: _,
             } => match redraw_request {
                 RedrawRequest::NextFrame => {
                     request_frame = true;
@@ -374,6 +376,34 @@ impl SnowcapSurface {
     }
 }
 
+#[derive(Clone)]
+pub struct CalloopNotifier {
+    request_redraw_ping: calloop::ping::Ping,
+    invalidate_layout_ping: calloop::ping::Ping,
+}
+
+impl CalloopNotifier {
+    pub fn new(
+        request_redraw_ping: calloop::ping::Ping,
+        invalidate_layout_ping: calloop::ping::Ping,
+    ) -> Self {
+        Self {
+            request_redraw_ping,
+            invalidate_layout_ping,
+        }
+    }
+}
+
+impl Notifier for CalloopNotifier {
+    fn request_redraw(&self) {
+        self.request_redraw_ping.ping();
+    }
+
+    fn invalidate_layout(&self) {
+        self.invalidate_layout_ping.ping();
+    }
+}
+
 #[derive(Clone, Copy)]
 struct WindowHandle {
     display: RawDisplayHandle,
@@ -420,5 +450,37 @@ impl HasWindowHandle for WindowHandle {
         // the iced renderer surface is dropped first (at the top
         // of `SnowcapLayer` in declaration order)
         Ok(unsafe { raw_window_handle::WindowHandle::borrow_raw(self.window) })
+    }
+}
+
+#[derive(Clone, Copy)]
+struct DisplayHandle {
+    display: RawDisplayHandle,
+}
+
+impl DisplayHandle {
+    fn new(conn: &Connection) -> Self {
+        let raw_display_handle = RawDisplayHandle::Wayland(WaylandDisplayHandle::new(
+            NonNull::new(conn.backend().display_ptr() as *mut _).unwrap(),
+        ));
+
+        DisplayHandle {
+            display: raw_display_handle,
+        }
+    }
+}
+
+// SAFETY: The objects that the pointers are derived from are Send and Sync
+unsafe impl Send for DisplayHandle {}
+unsafe impl Sync for DisplayHandle {}
+
+impl HasDisplayHandle for DisplayHandle {
+    fn display_handle(
+        &self,
+    ) -> Result<raw_window_handle::DisplayHandle<'_>, raw_window_handle::HandleError> {
+        // SAFETY: The raw display pointer remains valid as long as
+        // the iced renderer surface is dropped first (at the top
+        // of `SnowcapLayer` in declaration order)
+        Ok(unsafe { raw_window_handle::DisplayHandle::borrow_raw(self.display) })
     }
 }

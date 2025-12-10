@@ -303,7 +303,8 @@ pub fn widget_def_to_fn(def: WidgetDef) -> Option<ViewFn> {
                             s.vertical_rail.border = FromApi::from_api(border);
                         }
                         if let Some(scroller_color) = scroller_color {
-                            s.vertical_rail.scroller.color = FromApi::from_api(scroller_color);
+                            s.vertical_rail.scroller.background =
+                                iced::Background::Color(FromApi::from_api(scroller_color));
                         }
                         if let Some(scroller_border) = scroller_border {
                             s.vertical_rail.scroller.border = FromApi::from_api(scroller_border);
@@ -325,7 +326,8 @@ pub fn widget_def_to_fn(def: WidgetDef) -> Option<ViewFn> {
                             s.horizontal_rail.border = FromApi::from_api(border);
                         }
                         if let Some(scroller_color) = scroller_color {
-                            s.horizontal_rail.scroller.color = FromApi::from_api(scroller_color);
+                            s.horizontal_rail.scroller.background =
+                                iced::Background::Color(FromApi::from_api(scroller_color));
                         }
                         if let Some(scroller_border) = scroller_border {
                             s.horizontal_rail.scroller.border = FromApi::from_api(scroller_border);

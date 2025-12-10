@@ -6,18 +6,19 @@ rust-version.workspace = true
 
 [dependencies]
 anyhow = { workspace = true }
-iced = { git = "https://github.com/iced-rs/iced", rev = "d475ae5", default-features = false, features = [
+iced = { version = "0.14.0", default-features = false, features = [
     "wgpu",
     "tokio",
     "tiny-skia",
     "image",
+    "wayland",
 ] }
-iced_futures = { git = "https://github.com/iced-rs/iced", rev = "d475ae5" }
-iced_graphics = { git = "https://github.com/iced-rs/iced", rev = "d475ae5" }
-iced_renderer = { git = "https://github.com/iced-rs/iced", rev = "d475ae5" }
-iced_runtime = { git = "https://github.com/iced-rs/iced", rev = "d475ae5" }
-iced_tiny_skia = { git = "https://github.com/iced-rs/iced", rev = "d475ae5" }
-iced_wgpu = { git = "https://github.com/iced-rs/iced", rev = "d475ae5" }
+iced_futures = "0.14.0"
+iced_graphics = "0.14.0"
+iced_renderer = "0.14.0"
+iced_runtime = "0.14.0"
+iced_tiny_skia = "0.14.0"
+iced_wgpu = "0.14.0"
 smithay-client-toolkit = "0.20.0"
 # iced = { path = "../../../git/iced", default-features = false, features = ["wgpu", "tokio", "tiny-skia", "image"] }
 # iced_wgpu = { path = "../../../git/iced/wgpu" }

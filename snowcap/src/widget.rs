@@ -75,15 +75,17 @@ impl SnowcapWidgetProgram {
             .take()
             .map(|ui| ui.into_cache())
             .unwrap_or_default();
-        let view = (self.view)();
+        let mut view = (self.view)();
         let mut tree = iced_wgpu::core::widget::Tree::empty();
         tree.diff(&view);
 
         let bounds = iced::Size::new(bounds.width as f32, bounds.height as f32);
 
-        let node =
-            view.as_widget()
-                .layout(&mut tree, renderer, &Limits::new(iced::Size::ZERO, bounds));
+        let node = view.as_widget_mut().layout(
+            &mut tree,
+            renderer,
+            &Limits::new(iced::Size::ZERO, bounds),
+        );
 
         let mut ui = UserInterface::build(view, bounds, cache, renderer);
 
@@ -159,7 +161,7 @@ impl SnowcapWidgetProgram {
     pub fn viewport(&self, scale: f32) -> Viewport {
         let buffer_width = (self.size.width as f32 * scale).ceil() as u32;
         let buffer_height = (self.size.height as f32 * scale).ceil() as u32;
-        Viewport::with_physical_size(iced::Size::new(buffer_width, buffer_height), scale as f64)
+        Viewport::with_physical_size(iced::Size::new(buffer_width, buffer_height), scale)
     }
 }
 

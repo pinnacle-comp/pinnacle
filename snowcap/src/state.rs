@@ -36,6 +36,7 @@ use crate::{
     layer::{LayerIdCounter, SnowcapLayer},
     runtime::{CalloopSenderSink, CurrentTokioExecutor},
     server::GrpcServerState,
+    surface::CalloopNotifier,
     widget::SnowcapMessage,
 };
 
@@ -44,6 +45,7 @@ pub struct State {
     pub loop_signal: LoopSignal,
     pub conn: Connection,
     pub wayland_source: Dispatcher<'static, WaylandSource<State>, State>,
+    pub shell: iced_graphics::Shell,
 
     pub runtime: crate::runtime::Runtime,
     pub registry_state: RegistryState,
@@ -113,8 +115,37 @@ impl State {
 
         loop_handle.register_dispatcher(dispatcher.clone())?;
 
+        let (request_redraw_ping, request_redraw_ping_source) = calloop::ping::make_ping().unwrap();
+        let (invalidate_layout_ping, invalidate_layout_ping_source) =
+            calloop::ping::make_ping().unwrap();
+
+        loop_handle
+            .insert_source(request_redraw_ping_source, |_, _, state| {
+                for layer in state.layers.iter_mut() {
+                    layer.schedule_redraw();
+                }
+                for deco in state.decorations.iter_mut() {
+                    deco.schedule_redraw();
+                }
+            })
+            .unwrap();
+
+        loop_handle
+            .insert_source(invalidate_layout_ping_source, |_, _, state| {
+                for layer in state.layers.iter_mut() {
+                    layer.surface.invalidate_layout();
+                }
+                for deco in state.decorations.iter_mut() {
+                    deco.surface.invalidate_layout();
+                }
+            })
+            .unwrap();
+
+        let notifier = CalloopNotifier::new(request_redraw_ping, invalidate_layout_ping);
+        let shell = iced_graphics::Shell::new(notifier);
+
         // Attempt to create a wgpu renderer upfront; this takes a non-trivial amount of time to do
-        let compositor = crate::wgpu::Compositor::new()
+        let compositor = crate::wgpu::Compositor::new(shell.clone())
             .ok()
             .map(crate::compositor::Compositor::Primary);
 
@@ -202,6 +233,7 @@ impl State {
             loop_signal,
             conn: conn.clone(),
             wayland_source: dispatcher,
+            shell,
             runtime,
 
             registry_state,

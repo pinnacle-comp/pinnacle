@@ -1,4 +1,5 @@
 use anyhow::Context;
+use iced::wgpu::ExperimentalFeatures;
 use iced_graphics::Compositor as _;
 use iced_wgpu::wgpu;
 
@@ -19,7 +20,7 @@ pub struct Compositor {
 }
 
 impl Compositor {
-    pub fn new() -> anyhow::Result<Self> {
+    pub fn new(shell: iced_graphics::Shell) -> anyhow::Result<Self> {
         if std::env::var("ICED_BACKEND")
             .ok()
             .is_some_and(|backend| backend != "wgpu")
@@ -50,6 +51,7 @@ impl Compositor {
                     .using_resolution(adapter.limits()),
                 memory_hints: wgpu::MemoryHints::MemoryUsage,
                 trace: wgpu::Trace::Off,
+                experimental_features: ExperimentalFeatures::disabled(),
             })
             .block_on_tokio()?;
 
@@ -59,6 +61,7 @@ impl Compositor {
             queue,
             wgpu::TextureFormat::Rgba8UnormSrgb,
             None, // TODO:
+            shell,
         );
 
         let mut compositor = Compositor {
@@ -84,13 +87,15 @@ impl iced_graphics::Compositor for Compositor {
 
     type Surface = wgpu::Surface<'static>;
 
-    async fn with_backend<W: iced_graphics::compositor::Window + Clone>(
+    async fn with_backend(
         _settings: iced_graphics::Settings,
-        _compatible_window: W,
+        _display: impl iced_graphics::compositor::Display + Clone,
+        _compatible_window: impl iced_graphics::compositor::Window + Clone,
+        shell: iced_graphics::Shell,
         backend: Option<&str>,
     ) -> Result<Self, iced_graphics::Error> {
         match backend {
-            None | Some("wgpu") => Ok(Compositor::new().map_err(|err| {
+            None | Some("wgpu") => Ok(Compositor::new(shell).map_err(|err| {
                 iced_graphics::Error::GraphicsAdapterNotFound {
                     backend: "wgpu",
                     reason: iced_graphics::error::Reason::RequestFailed(err.to_string()),
@@ -141,7 +146,7 @@ impl iced_graphics::Compositor for Compositor {
         surface.configure(&self.device, &surface_config);
     }
 
-    fn fetch_information(&self) -> iced_graphics::compositor::Information {
+    fn information(&self) -> iced_graphics::compositor::Information {
         let information = self.adapter.get_info();
 
         iced_graphics::compositor::Information {
