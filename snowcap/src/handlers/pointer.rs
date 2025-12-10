@@ -82,8 +82,8 @@ impl PointerHandler for State {
                     // Values are negated because they're backwards otherwise
                     let delta = match source {
                         Some(AxisSource::Wheel | AxisSource::WheelTilt) => ScrollDelta::Lines {
-                            x: -horizontal.discrete as f32,
-                            y: -vertical.discrete as f32,
+                            x: -horizontal.value120 as f32 / 120.0,
+                            y: -vertical.value120 as f32 / 120.0,
                         },
                         Some(AxisSource::Finger | AxisSource::Continuous) => ScrollDelta::Pixels {
                             x: -horizontal.absolute as f32,
