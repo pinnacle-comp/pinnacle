@@ -7,6 +7,6 @@ rust-version.workspace = true
 [dependencies]
 indexmap = { workspace = true }
 prost = { workspace = true }
-prost-build = "0.13.4"
-prost-types = "0.13.4"
+prost-build = "0.13.5"
+prost-types = "0.13.5"
 walkdir = { workspace = true }

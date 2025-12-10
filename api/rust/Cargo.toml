@@ -15,7 +15,7 @@ bitflags = { workspace = true }
 futures = { workspace = true }
 hyper-util = { workspace = true }
 indexmap = { workspace = true }
-num_enum = "0.7.3"
+num_enum = "0.7.5"
 passfd = { workspace = true }
 pinnacle-api-defs = { workspace = true }
 snowcap-api = { path = "../../snowcap/api/rust", optional = true }

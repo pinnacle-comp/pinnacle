@@ -5,7 +5,7 @@ use smithay_client_toolkit::{
         Connection, QueueHandle,
         protocol::{wl_keyboard::WlKeyboard, wl_surface::WlSurface},
     },
-    seat::keyboard::{KeyEvent, KeyboardHandler, Keysym, Modifiers},
+    seat::keyboard::{KeyEvent, KeyboardHandler, Keysym, Modifiers, RawModifiers},
     shell::{WaylandSurface, wlr_layer::LayerSurface},
 };
 
@@ -150,10 +150,22 @@ impl KeyboardHandler for State {
         _keyboard: &WlKeyboard,
         _serial: u32,
         modifiers: Modifiers,
+        _raw_modifiers: RawModifiers,
         _layout: u32,
     ) {
         // TODO: per wl_keyboard
         self.keyboard_modifiers = modifiers;
+    }
+
+    fn repeat_key(
+        &mut self,
+        _conn: &Connection,
+        _qh: &QueueHandle<Self>,
+        _keyboard: &smithay_client_toolkit::reexports::client::protocol::wl_keyboard::WlKeyboard,
+        _serial: u32,
+        _event: KeyEvent,
+    ) {
+        // TODO:
     }
 }
 delegate_keyboard!(State);
