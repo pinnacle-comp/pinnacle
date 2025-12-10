@@ -147,6 +147,120 @@ Pinnacle.setup(function()
         description = "Toggle maximized on the focused window",
     })
 
+    -- Media keybinds ----------------------------------------------------
+
+    Input.keybind({
+        mods = {},
+        key = key.XF86AudioRaiseVolume,
+        on_press = function()
+            Process.spawn("wpctl", "set-volume", "@DEFAULT_AUDIO_SINK@", "0.02+", "-l", "1.0")
+        end,
+        allow_when_locked = true,
+        group = "Media",
+        description = "Increase volume by 2%",
+    })
+
+    Input.keybind({
+        mods = {},
+        key = key.XF86AudioLowerVolume,
+        on_press = function()
+            Process.spawn("wpctl", "set-volume", "@DEFAULT_AUDIO_SINK@", "0.02-", "-l", "1.0")
+        end,
+        allow_when_locked = true,
+        group = "Media",
+        description = "Decrease volume by 2%",
+    })
+
+    Input.keybind({
+        mods = {},
+        key = key.XF86AudioMute,
+        on_press = function()
+            Process.spawn("wpctl", "set-mute", "@DEFAULT_AUDIO_SINK@", "toggle")
+        end,
+        allow_when_locked = true,
+        group = "Media",
+        description = "Toggle mute",
+    })
+
+    Input.keybind({
+        mods = {},
+        key = key.XF86AudioMicMute,
+        on_press = function()
+            Process.spawn("wpctl", "set-mute", "@DEFAULT_AUDIO_SOURCE@", "toggle")
+        end,
+        allow_when_locked = true,
+        group = "Media",
+        description = "Toggle mic mute",
+    })
+
+    Input.keybind({
+        mods = {},
+        key = key.XF86AudioPlay,
+        on_press = function()
+            Process.spawn("playerctl", "play-pause")
+        end,
+        allow_when_locked = true,
+        group = "Media",
+        description = "Play/pause media",
+    })
+
+    Input.keybind({
+        mods = {},
+        key = key.XF86AudioStop,
+        on_press = function()
+            Process.spawn("playerctl", "stop")
+        end,
+        allow_when_locked = true,
+        group = "Media",
+        description = "Stop media",
+    })
+
+    Input.keybind({
+        mods = {},
+        key = key.XF86AudioNext,
+        on_press = function()
+            Process.spawn("playerctl", "next")
+        end,
+        allow_when_locked = true,
+        group = "Media",
+        description = "Go to next media",
+    })
+
+    Input.keybind({
+        mods = {},
+        key = key.XF86AudioPrev,
+        on_press = function()
+            Process.spawn("playerctl", "previous")
+        end,
+        allow_when_locked = true,
+        group = "Media",
+        description = "Go to previous media",
+    })
+
+    -- Display brightness keybinds ----------------------------------
+
+    Input.keybind({
+        mods = {},
+        key = key.XF86MonBrightnessUp,
+        on_press = function()
+            Process.spawn("brightnessctl", "--class=backlight", "set", "+10%")
+        end,
+        allow_when_locked = true,
+        group = "Display",
+        description = "Increase display brightness by 10%",
+    })
+
+    Input.keybind({
+        mods = {},
+        key = key.XF86MonBrightnessDown,
+        on_press = function()
+            Process.spawn("brightnessctl", "--class=backlight", "set", "10%-")
+        end,
+        allow_when_locked = true,
+        group = "Display",
+        description = "Decrease display brightness by 10%",
+    })
+
     --------------------
     -- Layouts        --
     --------------------
