@@ -167,18 +167,25 @@ pub fn add_mapped_toplevel_pre_commit_hook(toplevel: &ToplevelSurface) -> HookId
 
             let mut deco_serials = Vec::new();
 
-            let size = compositor::with_states(surface, |states| {
+            let bbox = pending_bbox(surface);
+
+            let window_geometry = compositor::with_states(surface, |states| {
                 let mut guard = states
                     .cached_state
                     .get::<smithay::wayland::shell::xdg::SurfaceCachedState>();
-                guard.pending().geometry.map(|geo| geo.size)
-            })
-            .unwrap_or_else(|| pending_bbox(surface).size);
+                guard.pending().geometry
+            });
+
+            // `xdg_surface.set_window_geometry` states that the effective geometry
+            // is the set window geometry clamped to the bbox.
+            let window_geometry = window_geometry
+                .and_then(|geo| bbox.intersection(geo))
+                .unwrap_or(bbox);
 
             window.with_state(|state| {
                 for deco in state.decoration_surfaces.iter() {
                     deco.decoration_surface().with_pending_state(|state| {
-                        state.toplevel_size = Some(size);
+                        state.toplevel_size = Some(window_geometry.size);
                     });
                     deco_serials.push(deco.decoration_surface().send_pending_configure());
                 }
