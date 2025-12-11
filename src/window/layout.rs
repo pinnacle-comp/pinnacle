@@ -171,10 +171,12 @@ impl Pinnacle {
         }
 
         if need_layout {
-            if geo.is_some() && !mode.is_spilled() {
+            if let Some(geo) = geo
+                && !mode.is_spilled()
+            {
                 self.layout_state
                     .pending_window_updates
-                    .add_for_output(&output, vec![(window.clone(), geo.unwrap())]);
+                    .add_for_output(&output, vec![(window.clone(), geo)]);
             }
 
             self.request_layout(&output);
