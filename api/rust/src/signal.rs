@@ -76,8 +76,6 @@ macro_rules! signals {
                         .send((self.current_id, callback))
                         .expect("failed to send callback");
 
-                    self.callback_count.fetch_add(1, Ordering::SeqCst);
-
                     let handle = SignalHandle::new(self.current_id, remove_callback_sender);
 
                     self.current_id.0 += 1;
@@ -89,7 +87,7 @@ macro_rules! signals {
                     self.callback_sender.take();
                     self.dc_pinger.take();
                     self.remove_callback_sender.take();
-                    self.callback_count.store(0, Ordering::SeqCst);
+                    self.callback_count = Default::default();
                     self.current_id = SignalConnId::default();
                 }
 
@@ -587,8 +585,7 @@ where
                 callback = callback_recv_recv => {
                     if let Some((id, callback)) = callback {
                         callbacks.insert(id, callback);
-                        // Added in `add_callback` in the macro above
-                        // callback_count.fetch_add(1, Ordering::SeqCst);
+                        callback_count.fetch_add(1, Ordering::SeqCst);
                     }
                 }
                 remove = remove_callback_recv_recv => {
