@@ -27,7 +27,7 @@ use futures::FutureExt;
 use pinnacle_api_defs::pinnacle::{
     tag::v1::{
         AddRequest, GetActiveRequest, GetNameRequest, GetOutputNameRequest, GetRequest,
-        RemoveRequest, SetActiveRequest, SwitchToRequest,
+        MoveToOutputRequest, RemoveRequest, SetActiveRequest, SwitchToRequest,
     },
     util::v1::SetOrToggle,
 };
@@ -181,6 +181,33 @@ pub fn remove(tags: impl IntoIterator<Item = TagHandle>) {
         .unwrap();
 }
 
+/// Move existing tags to the specified output.
+///
+/// # Examples
+///
+/// ```no_run
+/// # use pinnacle_api::output;
+/// # use pinnacle_api::tag;
+/// let output = output::get_by_name("eDP-1")?;
+/// let tag_to_move = tag::get("1")?;
+/// tag::move_to_output(&output, [tag_to_move]);
+/// ```
+pub fn move_to_output<I>(output: &OutputHandle, tag_handles: I)
+where
+    I: IntoIterator<Item = TagHandle>,
+{
+    let output_name = output.name();
+    let tag_ids = tag_handles.into_iter().map(|h| h.id).collect();
+
+    Client::tag()
+        .move_to_output(MoveToOutputRequest {
+            output_name,
+            tag_ids,
+        })
+        .block_on_tokio()
+        .unwrap();
+}
+
 /// Connects to a [`TagSignal`].
 ///
 /// # Examples
@@ -314,6 +341,14 @@ impl TagHandle {
             })
             .block_on_tokio()
             .unwrap();
+    }
+
+    /// Move existing tags to the specified output.
+    ///
+    /// See [super::tag::move_to_output] for further information
+    pub fn move_to_output<I>(&self, output: &OutputHandle)
+    {
+        move_to_output(output, [self.clone()])
     }
 
     /// Removes this tag from its output.
