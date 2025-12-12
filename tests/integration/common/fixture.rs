@@ -318,7 +318,7 @@ impl Fixture {
         while loop_again {
             tracing::debug!("Flushing transaction and configure");
             for id in client_ids.iter().cloned() {
-                loop_again |= self.client(id).ack_all_window();
+                self.client(id).ack_all_window();
                 self.roundtrip(id);
             }
             self.dispatch();
@@ -363,6 +363,8 @@ macro_rules! spawn_lua_blocking {
                 Pinnacle.run(function()
                     local run = function()
                         $($code)*
+                        ; // Prevent some parsing error because everything is concatenated in a
+                          // string which may or may not end with a '\n'.
                     end
 
                     local success, err = pcall(run)
