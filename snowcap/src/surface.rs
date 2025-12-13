@@ -47,6 +47,7 @@ pub struct SnowcapSurface {
 
     redraw_scheduled: bool,
     pending_view: Option<ViewFn>,
+    view_requested: bool,
     waiting_view: bool,
     layout_invalidated: bool,
     pub widgets: SnowcapWidgetProgram,
@@ -130,6 +131,7 @@ impl SnowcapSurface {
             pending_output_scale: None,
             bounds: iced::Size::default(),
             pending_bounds: None,
+            view_requested: false,
             waiting_view: false,
             pending_view: None,
             layout_invalidated: false,
@@ -159,6 +161,10 @@ impl SnowcapSurface {
 
     pub fn invalidate_layout(&mut self) {
         self.layout_invalidated = true;
+    }
+
+    pub fn request_view(&mut self) {
+        self.view_requested = true;
     }
 
     pub fn schedule_redraw(&mut self) {
@@ -335,7 +341,7 @@ impl SnowcapSurface {
             });
         }
 
-        if !messages.is_empty()
+        if (!messages.is_empty() || self.view_requested)
             && let Some(sender) = self.widget_event_sender.as_ref()
         {
             let widget_events: Vec<_> = messages
@@ -349,6 +355,7 @@ impl SnowcapSurface {
                 })
                 .collect();
 
+            self.view_requested = false;
             self.waiting_view = true;
             let _ = sender.send(widget_events);
         }

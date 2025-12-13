@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use snowcap_api_defs::snowcap::{
     decoration::{
         self,
-        v1::{CloseRequest, NewDecorationRequest, UpdateDecorationRequest},
+        v1::{CloseRequest, NewDecorationRequest, UpdateDecorationRequest, ViewRequest},
     },
     widget::v1::{GetWidgetEventsRequest, get_widget_events_request, widget_event},
 };
@@ -131,7 +131,16 @@ where
 
                 }
                 Some(msg) = msg_recv.recv() => {
-                    program.update(msg.clone());
+                    program.update(msg);
+
+                    if let Err(status) = Client::decoration()
+                        .request_view(ViewRequest { decoration_id })
+                        .block_on_tokio()
+                    {
+                        error!("Failed to request view for {decoration_id}: {status}")
+                    }
+
+                    continue;
                 }
                 else => break,
             };
