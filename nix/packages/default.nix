@@ -16,8 +16,6 @@
   libdisplay-info,
   git,
   libgbm,
-  writeScriptBin,
-  wlcs,
   rustc,
   cargo,
   makeWrapper,
@@ -30,10 +28,6 @@
 }:
 let
   pinnacle = ../..;
-  wlcs-script = writeScriptBin "wlcs" ''
-    #!/bin/sh
-    ${wlcs}/libexec/wlcs/wlcs "$@"
-  '';
   buildRustConfig = callPackage ./pinnacle-config.nix { };
 
   meta = {
@@ -117,8 +111,6 @@ rustPlatform.buildRustPackage {
     allowBuiltinFetchGit = true;
   };
 
-  buildFeatures = [ "wlcs" ];
-
   buildInputs = [
     wayland
 
@@ -132,7 +124,6 @@ rustPlatform.buildRustPackage {
     libdisplay-info
     libgbm
     lua5_4
-    wlcs
 
     # winit on x11
     xorg.libXcursor
@@ -149,7 +140,6 @@ rustPlatform.buildRustPackage {
     lua-client-api
     git
     wayland
-    wlcs-script
     makeWrapper
     autoPatchelfHook
   ];
@@ -170,7 +160,6 @@ rustPlatform.buildRustPackage {
         rustc
         cargo
         lua
-        wlcs-script
         xwayland
       ]
     }
