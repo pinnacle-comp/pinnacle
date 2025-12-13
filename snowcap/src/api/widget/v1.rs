@@ -1,3 +1,4 @@
+use anyhow::Context;
 use iced::widget::{
     Column, Container, Row, Scrollable, button, image::FilterMethod, scrollable::Scrollbar,
 };
@@ -14,8 +15,8 @@ use crate::{
     api::{ResponseStream, run_server_streaming_mapped},
     decoration::DecorationId,
     layer::LayerId,
-    util::convert::FromApi,
-    widget::{ViewFn, WidgetEvent, WidgetId},
+    util::convert::{FromApi, TryFromApi},
+    widget::{MouseAreaEvent, TextInputEvent, ViewFn, WidgetEvent, WidgetId},
 };
 
 #[tonic::async_trait]
@@ -53,6 +54,12 @@ impl widget_service_server::WidgetService for super::WidgetService {
                             event: Some(match event {
                                 WidgetEvent::Button => {
                                     widget_event::Event::Button(widget::v1::button::Event {})
+                                }
+                                WidgetEvent::MouseArea(evt) => {
+                                    widget_event::Event::MouseArea(evt.into())
+                                }
+                                WidgetEvent::TextInput(evt) => {
+                                    widget_event::Event::TextInput(evt.into())
                                 }
                             }),
                         })
@@ -617,6 +624,290 @@ pub fn widget_def_to_fn(def: WidgetDef) -> Option<ViewFn> {
 
             Some(f)
         }
+        widget_def::Widget::MouseArea(mouse_area) => {
+            let widget::v1::MouseArea {
+                child,
+                on_press,
+                on_release,
+                on_double_click,
+                on_right_press,
+                on_right_release,
+                on_middle_press,
+                on_middle_release,
+                on_scroll,
+                on_enter,
+                on_move,
+                on_exit,
+                interaction,
+                widget_id,
+            } = *mouse_area;
+
+            let child_widget_fn = child.and_then(|def| widget_def_to_fn(*def));
+
+            let f: ViewFn = Box::new(move || {
+                let mut mouse_area = iced::widget::MouseArea::new(
+                    child_widget_fn
+                        .as_ref()
+                        .map(|child| child())
+                        .unwrap_or_else(|| iced::widget::Text::new("NULL").into()),
+                );
+
+                if let Some(widget_id) = widget_id {
+                    if on_press {
+                        mouse_area =
+                            mouse_area.on_press(crate::widget::SnowcapMessage::WidgetEvent(
+                                WidgetId(widget_id),
+                                WidgetEvent::MouseArea(MouseAreaEvent::Press),
+                            ));
+                    }
+
+                    if on_release {
+                        mouse_area =
+                            mouse_area.on_release(crate::widget::SnowcapMessage::WidgetEvent(
+                                WidgetId(widget_id),
+                                WidgetEvent::MouseArea(MouseAreaEvent::Release),
+                            ));
+                    }
+
+                    if on_double_click {
+                        mouse_area =
+                            mouse_area.on_double_click(crate::widget::SnowcapMessage::WidgetEvent(
+                                WidgetId(widget_id),
+                                WidgetEvent::MouseArea(MouseAreaEvent::DoubleClick),
+                            ));
+                    }
+
+                    if on_right_press {
+                        mouse_area =
+                            mouse_area.on_right_press(crate::widget::SnowcapMessage::WidgetEvent(
+                                WidgetId(widget_id),
+                                WidgetEvent::MouseArea(MouseAreaEvent::RightPress),
+                            ));
+                    }
+
+                    if on_right_release {
+                        mouse_area = mouse_area.on_right_release(
+                            crate::widget::SnowcapMessage::WidgetEvent(
+                                WidgetId(widget_id),
+                                WidgetEvent::MouseArea(MouseAreaEvent::RightRelease),
+                            ),
+                        );
+                    }
+
+                    if on_middle_press {
+                        mouse_area =
+                            mouse_area.on_middle_press(crate::widget::SnowcapMessage::WidgetEvent(
+                                WidgetId(widget_id),
+                                WidgetEvent::MouseArea(MouseAreaEvent::MiddlePress),
+                            ));
+                    }
+
+                    if on_middle_release {
+                        mouse_area = mouse_area.on_middle_release(
+                            crate::widget::SnowcapMessage::WidgetEvent(
+                                WidgetId(widget_id),
+                                WidgetEvent::MouseArea(MouseAreaEvent::MiddleRelease),
+                            ),
+                        );
+                    }
+
+                    if on_scroll {
+                        mouse_area = mouse_area.on_scroll(move |scroll_delta| {
+                            crate::widget::SnowcapMessage::WidgetEvent(
+                                WidgetId(widget_id),
+                                WidgetEvent::MouseArea(MouseAreaEvent::Scroll(scroll_delta)),
+                            )
+                        });
+                    }
+
+                    if on_enter {
+                        mouse_area =
+                            mouse_area.on_enter(crate::widget::SnowcapMessage::WidgetEvent(
+                                WidgetId(widget_id),
+                                WidgetEvent::MouseArea(MouseAreaEvent::Enter),
+                            ));
+                    }
+
+                    if on_move {
+                        mouse_area = mouse_area.on_move(move |point| {
+                            crate::widget::SnowcapMessage::WidgetEvent(
+                                WidgetId(widget_id),
+                                WidgetEvent::MouseArea(MouseAreaEvent::Move(point)),
+                            )
+                        });
+                    }
+
+                    if on_exit {
+                        mouse_area =
+                            mouse_area.on_exit(crate::widget::SnowcapMessage::WidgetEvent(
+                                WidgetId(widget_id),
+                                WidgetEvent::MouseArea(MouseAreaEvent::Exit),
+                            ));
+                    }
+                }
+
+                let interaction = interaction
+                    .and_then(|repr| widget::v1::mouse_area::Interaction::try_from(repr).ok());
+                if let Some(interaction) = interaction {
+                    mouse_area =
+                        mouse_area.interaction(iced::mouse::Interaction::from_api(interaction));
+                }
+
+                mouse_area.into()
+            });
+
+            Some(f)
+        }
+        widget_def::Widget::TextInput(text_input) => {
+            let horizontal_alignment = text_input.horizontal_alignment();
+
+            let widget::v1::TextInput {
+                placeholder,
+                value,
+                id,
+                secure,
+                on_input,
+                on_submit,
+                on_paste,
+                font,
+                icon,
+                width,
+                padding,
+                line_height,
+                horizontal_alignment: _,
+                style,
+                widget_id,
+            } = *text_input;
+
+            let f: ViewFn = Box::new(move || {
+                let mut text_input = iced::widget::TextInput::new(&placeholder, &value);
+
+                if let Some(id) = id.clone() {
+                    text_input = text_input.id(id);
+                }
+
+                text_input = text_input.secure(secure);
+
+                if let Some(widget_id) = widget_id {
+                    if on_input {
+                        text_input = text_input.on_input(move |value| {
+                            crate::widget::SnowcapMessage::WidgetEvent(
+                                WidgetId(widget_id),
+                                WidgetEvent::TextInput(TextInputEvent::Input(value)),
+                            )
+                        })
+                    }
+
+                    if on_submit {
+                        text_input =
+                            text_input.on_submit(crate::widget::SnowcapMessage::WidgetEvent(
+                                WidgetId(widget_id),
+                                WidgetEvent::TextInput(TextInputEvent::Submit),
+                            ));
+                    }
+
+                    if on_paste {
+                        text_input = text_input.on_paste(move |value| {
+                            crate::widget::SnowcapMessage::WidgetEvent(
+                                WidgetId(widget_id),
+                                WidgetEvent::TextInput(TextInputEvent::Paste(value)),
+                            )
+                        })
+                    }
+                }
+
+                if let Some(font) = font.clone() {
+                    text_input = text_input.font(iced::Font::from_api(font));
+                }
+
+                if let Some(icon) = icon.clone() {
+                    text_input = text_input.icon(iced::widget::text_input::Icon::from_api(icon));
+                }
+
+                if let Some(width) = width {
+                    text_input = text_input.width(iced::Length::from_api(width))
+                }
+
+                if let Some(padding) = padding {
+                    text_input = text_input.padding(iced::Padding::from_api(padding));
+                }
+
+                if let Some(line_height) = line_height {
+                    text_input = text_input
+                        .line_height(iced::widget::text::LineHeight::from_api(line_height))
+                }
+
+                match horizontal_alignment {
+                    widget::v1::Alignment::Unspecified => (),
+                    widget::v1::Alignment::Start => {
+                        text_input = text_input.align_x(iced::alignment::Horizontal::Left)
+                    }
+                    widget::v1::Alignment::Center => {
+                        text_input = text_input.align_x(iced::alignment::Horizontal::Center)
+                    }
+                    widget::v1::Alignment::End => {
+                        text_input = text_input.align_x(iced::alignment::Horizontal::Right)
+                    }
+                }
+
+                if let Some(style) = style.clone() {
+                    use crate::widget::text_input::{Style, Styles};
+
+                    let style = Styles::from_api(style);
+                    let style = move |theme: &iced::Theme, status| {
+                        use iced::widget::text_input;
+                        let s = <iced::Theme as text_input::Catalog>::default()(theme, status);
+
+                        let crate::widget::text_input::Styles {
+                            active,
+                            hovered,
+                            focused,
+                            hover_focused,
+                            disabled,
+                        } = style.clone();
+
+                        let inner = match status {
+                            text_input::Status::Active => active,
+                            text_input::Status::Hovered => hovered.or(active),
+                            text_input::Status::Focused { is_hovered } => {
+                                let hover =
+                                    if is_hovered { hover_focused.or(hovered) } else { None };
+
+                                hover.or(focused).or(active)
+                            }
+                            text_input::Status::Disabled => disabled,
+                        };
+
+                        if let Some(Style {
+                            background,
+                            border,
+                            icon,
+                            placeholder,
+                            value,
+                            selection,
+                        }) = inner
+                        {
+                            iced::widget::text_input::Style {
+                                background: background.unwrap_or(s.background),
+                                border: border.unwrap_or(s.border),
+                                icon: icon.unwrap_or(s.icon),
+                                placeholder: placeholder.unwrap_or(s.placeholder),
+                                value: value.unwrap_or(s.value),
+                                selection: selection.unwrap_or(s.selection),
+                            }
+                        } else {
+                            s
+                        }
+                    };
+
+                    text_input = text_input.style(style);
+                }
+
+                text_input.into()
+            });
+
+            Some(f)
+        }
     }
 }
 
@@ -843,5 +1134,244 @@ impl FromApi<widget::v1::Border> for iced::Border {
         }
 
         ret
+    }
+}
+
+impl FromApi<widget::v1::mouse_area::Interaction> for iced::mouse::Interaction {
+    fn from_api(api_type: widget::v1::mouse_area::Interaction) -> Self {
+        use widget::v1::mouse_area::Interaction;
+        match api_type {
+            Interaction::None => Self::None,
+            Interaction::Idle => Self::Idle,
+            Interaction::Pointer => Self::Pointer,
+            Interaction::Grab => Self::Grab,
+            Interaction::Text => Self::Text,
+            Interaction::Crosshair => Self::Crosshair,
+            Interaction::Grabbing => Self::Grabbing,
+            Interaction::ResizeHorizontal => Self::ResizingHorizontally,
+            Interaction::ResizeVertical => Self::ResizingVertically,
+            Interaction::ResizeDiagonalUp => Self::ResizingDiagonallyUp,
+            Interaction::ResizeDiagonalDown => Self::ResizingDiagonallyDown,
+            Interaction::NotAllowed => Self::NotAllowed,
+            Interaction::ZoomIn => Self::ZoomIn,
+            Interaction::ZoomOut => Self::ZoomOut,
+            Interaction::Cell => Self::Cell,
+            Interaction::Move => Self::Move,
+            Interaction::Copy => Self::Copy,
+            Interaction::Help => Self::Help,
+        }
+    }
+}
+
+impl From<MouseAreaEvent> for snowcap_api_defs::snowcap::widget::v1::mouse_area::Event {
+    fn from(value: MouseAreaEvent) -> Self {
+        use snowcap_api_defs::snowcap::widget::v1::mouse_area::{self, event::Data};
+
+        let data = match value {
+            MouseAreaEvent::Press => Data::Press(()),
+            MouseAreaEvent::Release => Data::Release(()),
+            MouseAreaEvent::DoubleClick => Data::DoubleClick(()),
+            MouseAreaEvent::RightPress => Data::RightPress(()),
+            MouseAreaEvent::RightRelease => Data::RightRelease(()),
+            MouseAreaEvent::MiddlePress => Data::MiddlePress(()),
+            MouseAreaEvent::MiddleRelease => Data::MiddleRelease(()),
+            MouseAreaEvent::Scroll(delta) => Data::Scroll(mouse_area::ScrollEvent::from_api(delta)),
+            MouseAreaEvent::Enter => Data::Enter(()),
+            MouseAreaEvent::Move(point) => Data::Move(mouse_area::MoveEvent::from_api(point)),
+            MouseAreaEvent::Exit => Data::Exit(()),
+        };
+
+        Self { data: Some(data) }
+    }
+}
+
+impl FromApi<iced::mouse::ScrollDelta>
+    for snowcap_api_defs::snowcap::widget::v1::mouse_area::ScrollEvent
+{
+    fn from_api(api_type: iced::mouse::ScrollDelta) -> Self {
+        use iced::mouse::ScrollDelta;
+        use snowcap_api_defs::snowcap::widget::v1::mouse_area::scroll_event;
+
+        let data = match api_type {
+            ScrollDelta::Lines { x, y } => scroll_event::Data::Lines(scroll_event::Lines { x, y }),
+            ScrollDelta::Pixels { x, y } => {
+                scroll_event::Data::Pixels(scroll_event::Pixels { x, y })
+            }
+        };
+
+        Self { data: Some(data) }
+    }
+}
+
+impl FromApi<iced::Point> for snowcap_api_defs::snowcap::widget::v1::mouse_area::MoveEvent {
+    fn from_api(api_type: iced::Point) -> Self {
+        let iced::Point { x, y } = api_type;
+
+        Self { x, y }
+    }
+}
+
+impl From<TextInputEvent> for snowcap_api_defs::snowcap::widget::v1::text_input::Event {
+    fn from(value: TextInputEvent) -> Self {
+        use snowcap_api_defs::snowcap::widget::v1::text_input::event::Data;
+
+        let data = match value {
+            TextInputEvent::Input(data) => Data::Input(data),
+            TextInputEvent::Submit => Data::Submit(()),
+            TextInputEvent::Paste(data) => Data::Paste(data),
+        };
+
+        Self { data: Some(data) }
+    }
+}
+
+impl FromApi<widget::v1::text_input::Icon> for iced::widget::text_input::Icon<iced::Font> {
+    fn from_api(api_type: widget::v1::text_input::Icon) -> Self {
+        use widget::v1::text_input;
+
+        let text_input::Icon {
+            font,
+            code_point,
+            pixels,
+            spacing,
+            right_side,
+        } = api_type;
+
+        let side = if right_side {
+            iced::widget::text_input::Side::Right
+        } else {
+            iced::widget::text_input::Side::Left
+        };
+
+        Self {
+            font: font.map(iced::Font::from_api).unwrap_or_default(),
+            code_point: char::try_from(code_point).unwrap_or_default(),
+            size: pixels.map(iced::Pixels),
+            spacing,
+            side,
+        }
+    }
+}
+
+impl FromApi<widget::v1::LineHeight> for iced::widget::text::LineHeight {
+    fn from_api(api_type: widget::v1::LineHeight) -> Self {
+        use widget::v1::line_height::LineHeight;
+
+        let line_height = api_type.line_height.map(|lh| match lh {
+            LineHeight::Relative(v) => Self::Relative(v),
+            LineHeight::Absolute(v) => Self::Absolute(v.into()),
+        });
+
+        if line_height.is_none() {
+            tracing::warn!("Invalid snowcap.widget.v1.LineHeight. Using default value");
+        }
+
+        line_height.unwrap_or_default()
+    }
+}
+
+impl TryFromApi<widget::v1::Background> for iced::Background {
+    type Error = anyhow::Error;
+
+    fn try_from_api(api_type: widget::v1::Background) -> Result<Self, Self::Error> {
+        use widget::v1::background::Background;
+
+        const MESSAGE: &str = "snowcap.widget.v1.Background";
+        const FIELD: &str = "background";
+
+        let Some(background) = api_type.background else {
+            anyhow::bail!("While converting {MESSAGE}: missing field 'FIELD'")
+        };
+
+        let background = match background {
+            Background::Color(color) => Ok(Self::Color(iced::Color::from_api(color))),
+            Background::Gradient(gradient) => {
+                iced::Gradient::try_from_api(gradient).map(Self::Gradient)
+            }
+        };
+
+        background.with_context(|| format!("While converting {MESSAGE}.{FIELD}"))
+    }
+}
+
+impl TryFromApi<widget::v1::Gradient> for iced::Gradient {
+    type Error = anyhow::Error;
+    fn try_from_api(api_type: widget::v1::Gradient) -> Result<Self, Self::Error> {
+        use widget::v1::gradient::{Gradient, Linear};
+        let Some(gradient) = api_type.gradient else {
+            anyhow::bail!("Missing field 'gradient'")
+        };
+
+        match gradient {
+            Gradient::Linear(Linear { radians, stops }) => {
+                let lin =
+                    iced::gradient::Linear::new(radians).add_stops(stops.iter().map(|stop| {
+                        iced::gradient::ColorStop {
+                            offset: stop.offset,
+                            color: iced::Color::from_api(stop.color.unwrap_or_default()),
+                        }
+                    }));
+
+                Ok(iced::Gradient::Linear(lin))
+            }
+        }
+    }
+}
+
+impl FromApi<widget::v1::text_input::Style> for crate::widget::text_input::Styles {
+    fn from_api(api_type: widget::v1::text_input::Style) -> Self {
+        use crate::widget::text_input::Style;
+        use widget::v1::text_input::style::Inner;
+
+        fn convert_inner(name: &str, inner: widget::v1::text_input::style::Inner) -> Style {
+            let Inner {
+                background,
+                border,
+                icon,
+                placeholder,
+                value,
+                selection,
+            } = inner;
+
+            let background = if let Some(background) = background {
+                let from_api = TryFromApi::try_from_api(background).with_context(|| {
+                    format!("While converting 'snowcap.widget.v1.text_input.Style.{name}'")
+                });
+                match from_api {
+                    Err(e) => {
+                        tracing::error!("{e:?}");
+                        None
+                    }
+                    Ok(b) => Some(b),
+                }
+            } else {
+                None
+            };
+
+            Style {
+                background,
+                border: border.map(FromApi::from_api),
+                icon: icon.map(FromApi::from_api),
+                placeholder: placeholder.map(FromApi::from_api),
+                value: value.map(FromApi::from_api),
+                selection: selection.map(FromApi::from_api),
+            }
+        }
+
+        let widget::v1::text_input::Style {
+            active,
+            hovered,
+            focused,
+            hover_focused,
+            disabled,
+        } = api_type;
+
+        Self {
+            active: active.map(|inner| convert_inner("active", inner)),
+            hovered: hovered.map(|inner| convert_inner("hovered", inner)),
+            focused: focused.map(|inner| convert_inner("focused", inner)),
+            hover_focused: hover_focused.map(|inner| convert_inner("hover_focused", inner)),
+            disabled: disabled.map(|inner| convert_inner("disabled", inner)),
+        }
     }
 }
