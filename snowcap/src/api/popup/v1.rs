@@ -1,14 +1,17 @@
 use smithay_client_toolkit::shell::xdg::XdgPositioner;
 use snowcap_api_defs::snowcap::popup::v1::{
     CloseRequest, NewPopupRequest, NewPopupResponse, UpdatePopupRequest, UpdatePopupResponse,
-    ViewRequest, ViewResponse, popup_service_server,
+    ViewRequest, ViewResponse,
+    new_popup_request::{self, ParentId},
+    popup_service_server,
 };
 use tonic::{Request, Response, Status};
 
 use crate::{
     api::{run_unary, run_unary_no_response, widget::v1::widget_def_to_fn},
+    decoration::DecorationId,
     layer::LayerId,
-    popup::{PopupId, SnowcapPopup},
+    popup::{self, PopupId, SnowcapPopup},
 };
 
 #[tonic::async_trait]
@@ -19,8 +22,13 @@ impl popup_service_server::PopupService for super::PopupService {
     ) -> Result<Response<NewPopupResponse>, Status> {
         let request = request.into_inner();
 
-        let parent_id = request.layer_id;
-        let parent_id = LayerId(parent_id);
+        let Some(parent_id) = request.parent_id else {
+            return Err(Status::invalid_argument("no parent id"));
+        };
+
+        if matches!(parent_id, ParentId::DecoId(_)) {
+            return Err(Status::unimplemented("Decoration's popup are unavailable."));
+        }
 
         let Some(widget_def) = request.widget_def else {
             return Err(Status::invalid_argument("no widget def"));
@@ -35,9 +43,9 @@ impl popup_service_server::PopupService for super::PopupService {
                 return Err(Status::internal("Could not create xdg_positioner"));
             };
 
-            positioner.set_anchor_rect(0, 0, 1, 1);
+            positioner.set_anchor_rect(10, 10, 1, 1);
 
-            let Some(popup) = SnowcapPopup::new(state, parent_id, positioner, f) else {
+            let Some(popup) = SnowcapPopup::new(state, parent_id.into(), positioner, f) else {
                 tracing::error!("Failed to create popup");
                 return Err(Status::internal("Failed to create popup"));
             };
@@ -59,6 +67,7 @@ impl popup_service_server::PopupService for super::PopupService {
         let id = request.popup_id;
         let id = PopupId(id);
 
+        tracing::warn!("Closing {id:?}");
         run_unary_no_response(&self.sender, move |state| {
             state.popups.retain(|p| p.popup_id != id);
         })
@@ -108,5 +117,16 @@ impl popup_service_server::PopupService for super::PopupService {
             Ok(ViewResponse {})
         })
         .await
+    }
+}
+
+impl From<new_popup_request::ParentId> for popup::ParentId {
+    fn from(value: new_popup_request::ParentId) -> Self {
+        use new_popup_request::ParentId;
+        match value {
+            ParentId::LayerId(id) => popup::ParentId::Layer(LayerId(id)),
+            ParentId::DecoId(id) => popup::ParentId::Decoration(DecorationId(id)),
+            ParentId::PopupId(id) => popup::ParentId::Popup(PopupId(id)),
+        }
     }
 }

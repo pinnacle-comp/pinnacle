@@ -31,6 +31,7 @@ use crate::{
 pub struct SnowcapSurface {
     // This is an option so we can drop it first
     surface: Option<<crate::compositor::Compositor as iced_graphics::Compositor>::Surface>,
+    pub toplevel_wl_surface: Option<WlSurface>,
     pub wl_surface: WlSurface,
     compositor_state: CompositorState,
     queue_handle: QueueHandle<State>,
@@ -67,6 +68,8 @@ impl Drop for SnowcapSurface {
     fn drop(&mut self) {
         // SAFETY: This needs to be dropped first, it implicitly borrows the wl_surface
         self.surface.take();
+        // SAFETY: If a toplevel surface was set, let's drop it early.
+        self.toplevel_wl_surface.take();
 
         self.fractional_scale.destroy();
         self.wl_surface.destroy();
@@ -123,6 +126,7 @@ impl SnowcapSurface {
 
         Self {
             surface: Some(iced_surface),
+            toplevel_wl_surface: None,
             wl_surface,
             compositor_state,
             queue_handle: state.queue_handle.clone(),
@@ -384,6 +388,11 @@ impl SnowcapSurface {
         self.wl_surface
             .frame(&self.queue_handle, self.wl_surface.clone());
         self.wl_surface.commit();
+
+        if let Some(wl_surface) = self.toplevel_wl_surface.as_ref() {
+            wl_surface.frame(&self.queue_handle, wl_surface.clone());
+            wl_surface.commit();
+        }
     }
 }
 
