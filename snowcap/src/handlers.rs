@@ -419,7 +419,14 @@ impl PopupHandler for State {
         _qh: &QueueHandle<Self>,
         popup: &smithay_client_toolkit::shell::xdg::popup::Popup,
     ) {
-        self.popups.retain(|p| &p.popup != popup)
+        if let Some(popup_id) = self
+            .popups
+            .iter()
+            .find(|p| &p.popup == popup)
+            .map(|p| p.popup_id)
+        {
+            self.popup_destroy(popup_id);
+        };
     }
 }
 delegate_xdg_popup!(State);
