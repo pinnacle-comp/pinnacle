@@ -7,7 +7,11 @@ import "snowcap/widget/v1/widget.proto";
 
 message NewPopupRequest {
   snowcap.widget.v1.WidgetDef widget_def = 1;
-  uint32 layer_id = 2;
+  oneof parent_id {
+    uint32 layer_id = 2;
+    uint32 deco_id = 3;
+    uint32 popup_id = 4;
+  }
 }
 message NewPopupResponse {
   uint32 popup_id = 1;

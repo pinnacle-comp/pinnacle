@@ -7,7 +7,9 @@ use smithay_client_toolkit::{
     shell::xdg::{XdgPositioner, popup::Popup},
 };
 
-use crate::{layer::LayerId, state::State, surface::SnowcapSurface, widget::ViewFn};
+use crate::{
+    decoration::DecorationId, layer::LayerId, state::State, surface::SnowcapSurface, widget::ViewFn,
+};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Default)]
 pub struct PopupId(pub u32);
@@ -24,6 +26,13 @@ impl PopupIdCounter {
     }
 }
 
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
+pub enum ParentId {
+    Layer(LayerId),
+    Decoration(DecorationId),
+    Popup(PopupId),
+}
+
 impl State {
     pub fn popup_for_id(&mut self, id: PopupId) -> Option<&mut SnowcapPopup> {
         self.popups.iter_mut().find(|popup| popup.popup_id == id)
@@ -35,6 +44,8 @@ pub struct SnowcapPopup {
     pub popup: Popup,
 
     pub popup_id: PopupId,
+    pub parent_id: ParentId,
+    pub toplevel_id: ParentId,
 
     pub initial_configure_received: bool,
 
@@ -54,31 +65,62 @@ pub struct SnowcapPopup {
 impl SnowcapPopup {
     pub fn new(
         state: &mut State,
-        parent_id: LayerId,
+        parent_id: ParentId,
         positioner: XdgPositioner,
         widgets: ViewFn,
     ) -> Option<Self> {
-        let surface = SnowcapSurface::new(state, widgets, false);
-
-        let parent = state.layers.iter().find(|l| l.layer_id == parent_id)?;
+        let mut surface = SnowcapSurface::new(state, widgets, false);
 
         positioner.set_size(150, 1);
         positioner
             .set_constraint_adjustment(ConstraintAdjustment::SlideY | ConstraintAdjustment::SlideX);
         positioner.set_reactive();
 
-        let popup = Popup::from_surface(
-            None,
-            &positioner,
-            &state.queue_handle,
-            surface.wl_surface.clone(),
-            &state.xdg_shell,
-        )
-        .ok()?;
+        let (popup, toplevel_id) = match parent_id {
+            ParentId::Popup(id) => {
+                let p = state.popups.iter().find(|p| p.popup_id == id)?;
 
-        parent.layer.get_popup(popup.xdg_popup());
+                let popup = Popup::from_surface(
+                    Some(p.popup.xdg_surface()),
+                    &positioner,
+                    &state.queue_handle,
+                    surface.wl_surface.clone(),
+                    &state.xdg_shell,
+                )
+                .ok()?;
+
+                (popup, p.toplevel_id)
+            }
+            ParentId::Layer(id) => {
+                let l = state.layers.iter().find(|l| l.layer_id == id)?;
+                let popup = Popup::from_surface(
+                    None,
+                    &positioner,
+                    &state.queue_handle,
+                    surface.wl_surface.clone(),
+                    &state.xdg_shell,
+                )
+                .ok()?;
+
+                l.layer.get_popup(popup.xdg_popup());
+
+                (popup, parent_id)
+            }
+            _ => unreachable!(),
+        };
 
         popup.wl_surface().commit();
+
+        match toplevel_id {
+            ParentId::Layer(id) => {
+                let layer = state.layers.iter().find(|l| l.layer_id == id)?;
+                surface.toplevel_wl_surface = Some(layer.surface.wl_surface.clone());
+
+                // Popup don't receive frames unless the toplevel does.
+                layer.surface.request_frame();
+            }
+            _ => unreachable!(),
+        };
 
         let next_id = state.popup_id_counter.next();
 
@@ -86,6 +128,8 @@ impl SnowcapPopup {
             surface,
             popup,
             popup_id: next_id,
+            parent_id,
+            toplevel_id,
             initial_configure_received: false,
 
             positioner,
