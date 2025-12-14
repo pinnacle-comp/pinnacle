@@ -17,6 +17,12 @@ local layer_handle = {}
 ---@field private _update fun(msg:any)
 local LayerHandle = {}
 
+---Convert a LayerHandle into a Popup's ParentHandle
+---@return snowcap.popup.ParentHandle
+function LayerHandle:as_parent()
+    return require("snowcap.popup").parent.Layer(self)
+end
+
 ---@param id integer
 ---@param update fun(msg: any)
 ---@return snowcap.layer.LayerHandle

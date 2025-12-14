@@ -28,6 +28,7 @@ build = {
         ["snowcap.widget.operation"] = "snowcap/widget/operation.lua",
         ["snowcap.layer"] = "snowcap/layer.lua",
         ["snowcap.decoration"] = "snowcap/decoration.lua",
+        ["snowcap.popup"] = "snowcap/popup.lua",
         ["snowcap.util"] = "snowcap/util.lua",
         ["snowcap.log"] = "snowcap/log.lua",
     },

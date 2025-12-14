@@ -50,6 +50,7 @@ build = {
         ["pinnacle.snowcap.snowcap.widget.operation"] = "pinnacle/snowcap/snowcap/widget/operation.lua",
         ["pinnacle.snowcap.snowcap.layer"] = "pinnacle/snowcap/snowcap/layer.lua",
         ["pinnacle.snowcap.snowcap.decoration"] = "pinnacle/snowcap/snowcap/decoration.lua",
+        ["pinnacle.snowcap.snowcap.popup"] = "pinnacle/snowcap/snowcap/popup.lua",
         ["pinnacle.snowcap.snowcap.util"] = "pinnacle/snowcap/snowcap/util.lua",
         ["pinnacle.snowcap.snowcap.log"] = "pinnacle/snowcap/snowcap/log.lua",
     },
