@@ -1282,6 +1282,8 @@ local snowcap_layer_v1_Layer = {
 ---@class snowcap.popup.v1.NewPopupRequest
 ---@field widget_def snowcap.widget.v1.WidgetDef?
 ---@field layer_id integer?
+---@field deco_id integer?
+---@field popup_id integer?
 
 ---@class snowcap.popup.v1.NewPopupResponse
 ---@field popup_id integer?

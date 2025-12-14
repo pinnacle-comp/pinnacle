@@ -244,7 +244,7 @@ impl CompositorHandler for State {
         let popup = self
             .popups
             .iter_mut()
-            .find(|popup| &popup.surface.wl_surface == surface);
+            .find(|popup| popup.popup.wl_surface() == surface);
 
         if let Some(popup) = popup {
             popup.schedule_redraw();
@@ -401,6 +401,7 @@ impl PopupHandler for State {
         match config.kind {
             popup::ConfigureKind::Initial => {
                 popup.initial_configure_received = true;
+                popup.schedule_redraw();
             }
             popup::ConfigureKind::Reposition { token } => {
                 popup.repositioned(Some(token));
