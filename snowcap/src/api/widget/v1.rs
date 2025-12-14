@@ -15,6 +15,7 @@ use crate::{
     api::{ResponseStream, run_server_streaming_mapped},
     decoration::DecorationId,
     layer::LayerId,
+    popup::PopupId,
     util::convert::{FromApi, TryFromApi},
     widget::{MouseAreaEvent, TextInputEvent, ViewFn, WidgetEvent, WidgetId},
 };
@@ -42,6 +43,11 @@ impl widget_service_server::WidgetService for super::WidgetService {
                 get_widget_events_request::Id::DecorationId(decoration_id) => {
                     if let Some(deco) = state.decoration_for_id(DecorationId(decoration_id)) {
                         deco.surface.widget_event_sender = Some(sender);
+                    }
+                }
+                get_widget_events_request::Id::PopupId(popup_id) => {
+                    if let Some(popup) = state.popup_for_id(PopupId(popup_id)) {
+                        popup.surface.widget_event_sender = Some(sender);
                     }
                 }
             },

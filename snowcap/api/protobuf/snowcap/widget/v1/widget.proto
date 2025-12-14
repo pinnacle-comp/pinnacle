@@ -467,6 +467,7 @@ message GetWidgetEventsRequest {
   oneof id {
     uint32 layer_id = 1;
     uint32 decoration_id = 2;
+    uint32 popup_id = 3;
   }
 }
 

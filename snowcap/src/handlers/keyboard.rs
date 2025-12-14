@@ -6,7 +6,7 @@ use smithay_client_toolkit::{
         protocol::{wl_keyboard::WlKeyboard, wl_surface::WlSurface},
     },
     seat::keyboard::{KeyEvent, KeyboardHandler, Keysym, Modifiers, RawModifiers},
-    shell::{WaylandSurface, wlr_layer::LayerSurface},
+    shell::{WaylandSurface, wlr_layer::LayerSurface, xdg::popup::Popup},
 };
 
 use crate::{input::keyboard::keysym_to_iced_key_and_loc, state::State};
@@ -26,11 +26,21 @@ impl State {
     }
 
     pub(crate) fn on_key_press(&mut self, _keyboard: &WlKeyboard, event: KeyEvent, repeat: bool) {
-        let Some(KeyboardFocus::Layer(layer)) = self.keyboard_focus.as_ref() else {
-            return;
+        let surface = match self.keyboard_focus.as_ref() {
+            Some(KeyboardFocus::Layer(layer)) => self
+                .layers
+                .iter_mut()
+                .find(|l| &l.layer == layer)
+                .map(|l| &mut l.surface),
+            Some(KeyboardFocus::Popup(popup)) => self
+                .popups
+                .iter_mut()
+                .find(|l| &l.popup == popup)
+                .map(|l| &mut l.surface),
+            _ => None,
         };
 
-        let Some(snowcap_layer) = self.layers.iter_mut().find(|sn_l| &sn_l.layer == layer) else {
+        let Some(surface) = surface else {
             return;
         };
 
@@ -50,8 +60,7 @@ impl State {
             modifiers |= iced::keyboard::Modifiers::LOGO;
         }
 
-        snowcap_layer
-            .surface
+        surface
             .widgets
             .queue_event(iced::Event::Keyboard(iced::keyboard::Event::KeyPressed {
                 key: key.clone(),
@@ -82,6 +91,8 @@ impl KeyboardHandler for State {
             .find(|sn_layer| sn_layer.layer.wl_surface() == surface)
         {
             self.keyboard_focus = Some(KeyboardFocus::Layer(layer.layer.clone()));
+        } else if let Some(popup) = self.popups.iter().find(|p| p.popup.wl_surface() == surface) {
+            self.keyboard_focus = Some(KeyboardFocus::Popup(popup.popup.clone()))
         }
     }
 
@@ -93,11 +104,15 @@ impl KeyboardHandler for State {
         surface: &WlSurface,
         _serial: u32,
     ) {
-        if let Some(KeyboardFocus::Layer(layer)) = self.keyboard_focus.as_ref()
-            && layer.wl_surface() == surface
-        {
-            self.keyboard_focus = None;
-        }
+        match self.keyboard_focus.as_ref() {
+            Some(KeyboardFocus::Layer(layer)) if layer.wl_surface() == surface => {
+                self.keyboard_focus = None
+            }
+            Some(KeyboardFocus::Popup(popup)) if popup.wl_surface() == surface => {
+                self.keyboard_focus = None
+            }
+            _ => (),
+        };
     }
 
     fn press_key(
@@ -119,11 +134,21 @@ impl KeyboardHandler for State {
         _serial: u32,
         event: KeyEvent,
     ) {
-        let Some(KeyboardFocus::Layer(layer)) = self.keyboard_focus.as_ref() else {
-            return;
+        let surface = match self.keyboard_focus.as_ref() {
+            Some(KeyboardFocus::Layer(layer)) => self
+                .layers
+                .iter_mut()
+                .find(|l| &l.layer == layer)
+                .map(|l| &mut l.surface),
+            Some(KeyboardFocus::Popup(popup)) => self
+                .popups
+                .iter_mut()
+                .find(|l| &l.popup == popup)
+                .map(|l| &mut l.surface),
+            _ => None,
         };
 
-        let Some(snowcap_layer) = self.layers.iter_mut().find(|sn_l| &sn_l.layer == layer) else {
+        let Some(surface) = surface else {
             return;
         };
 
@@ -143,8 +168,7 @@ impl KeyboardHandler for State {
             modifiers |= iced::keyboard::Modifiers::LOGO;
         }
 
-        snowcap_layer
-            .surface
+        surface
             .widgets
             .queue_event(iced::Event::Keyboard(iced::keyboard::Event::KeyReleased {
                 key: key.clone(),
@@ -168,12 +192,21 @@ impl KeyboardHandler for State {
     ) {
         self.keyboard_modifiers = modifiers;
 
-        // TODO: Should we check if the modifiers actually changed ?
-        let Some(KeyboardFocus::Layer(layer)) = self.keyboard_focus.as_ref() else {
-            return;
+        let surface = match self.keyboard_focus.as_ref() {
+            Some(KeyboardFocus::Layer(layer)) => self
+                .layers
+                .iter_mut()
+                .find(|l| &l.layer == layer)
+                .map(|l| &mut l.surface),
+            Some(KeyboardFocus::Popup(popup)) => self
+                .popups
+                .iter_mut()
+                .find(|l| &l.popup == popup)
+                .map(|l| &mut l.surface),
+            _ => None,
         };
 
-        let Some(snowcap_layer) = self.layers.iter_mut().find(|sn_l| &sn_l.layer == layer) else {
+        let Some(surface) = surface else {
             return;
         };
 
@@ -191,12 +224,9 @@ impl KeyboardHandler for State {
             modifiers |= iced::keyboard::Modifiers::LOGO;
         }
 
-        snowcap_layer
-            .surface
-            .widgets
-            .queue_event(iced::Event::Keyboard(
-                iced::keyboard::Event::ModifiersChanged(modifiers),
-            ));
+        surface.widgets.queue_event(iced::Event::Keyboard(
+            iced::keyboard::Event::ModifiersChanged(modifiers),
+        ));
     }
 
     fn repeat_key(
@@ -219,4 +249,5 @@ delegate_keyboard!(State);
 
 pub enum KeyboardFocus {
     Layer(LayerSurface),
+    Popup(Popup),
 }

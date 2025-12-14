@@ -996,6 +996,7 @@ local snowcap_layer_v1_Layer = {
 ---@class snowcap.widget.v1.GetWidgetEventsRequest
 ---@field layer_id integer?
 ---@field decoration_id integer?
+---@field popup_id integer?
 
 ---@class snowcap.widget.v1.WidgetEvent
 ---@field widget_id integer?
@@ -1278,6 +1279,27 @@ local snowcap_layer_v1_Layer = {
 
 ---@class snowcap.layer.v1.ViewResponse
 
+---@class snowcap.popup.v1.NewPopupRequest
+---@field widget_def snowcap.widget.v1.WidgetDef?
+---@field layer_id integer?
+
+---@class snowcap.popup.v1.NewPopupResponse
+---@field popup_id integer?
+
+---@class snowcap.popup.v1.CloseRequest
+---@field popup_id integer?
+
+---@class snowcap.popup.v1.UpdatePopupRequest
+---@field popup_id integer?
+---@field widget_def snowcap.widget.v1.WidgetDef?
+
+---@class snowcap.popup.v1.UpdatePopupResponse
+
+---@class snowcap.popup.v1.ViewRequest
+---@field popup_id integer?
+
+---@class snowcap.popup.v1.ViewResponse
+
 ---@class snowcap.v0alpha1.Nothing
 
 ---@class snowcap.v1.Nothing
@@ -1403,6 +1425,15 @@ snowcap.layer.v1.UpdateLayerRequest = {}
 snowcap.layer.v1.UpdateLayerResponse = {}
 snowcap.layer.v1.ViewRequest = {}
 snowcap.layer.v1.ViewResponse = {}
+snowcap.popup = {}
+snowcap.popup.v1 = {}
+snowcap.popup.v1.NewPopupRequest = {}
+snowcap.popup.v1.NewPopupResponse = {}
+snowcap.popup.v1.CloseRequest = {}
+snowcap.popup.v1.UpdatePopupRequest = {}
+snowcap.popup.v1.UpdatePopupResponse = {}
+snowcap.popup.v1.ViewRequest = {}
+snowcap.popup.v1.ViewResponse = {}
 snowcap.v0alpha1 = {}
 snowcap.v0alpha1.Nothing = {}
 snowcap.v1 = {}
@@ -1730,6 +1761,75 @@ snowcap.layer.v1.LayerService.RequestView.response = ".snowcap.layer.v1.ViewResp
 ---@return string | nil error An error string, if any
 function Client:snowcap_layer_v1_LayerService_RequestView(data)
     return self:unary_request(snowcap.layer.v1.LayerService.RequestView, data)
+end
+snowcap.popup.v1.PopupService = {}
+snowcap.popup.v1.PopupService.NewPopup = {}
+snowcap.popup.v1.PopupService.NewPopup.service = "snowcap.popup.v1.PopupService"
+snowcap.popup.v1.PopupService.NewPopup.method = "NewPopup"
+snowcap.popup.v1.PopupService.NewPopup.request = ".snowcap.popup.v1.NewPopupRequest"
+snowcap.popup.v1.PopupService.NewPopup.response = ".snowcap.popup.v1.NewPopupResponse"
+
+---Performs a unary request.
+---
+---@nodiscard
+---
+---@param data snowcap.popup.v1.NewPopupRequest
+---
+---@return snowcap.popup.v1.NewPopupResponse | nil response
+---@return string | nil error An error string, if any
+function Client:snowcap_popup_v1_PopupService_NewPopup(data)
+    return self:unary_request(snowcap.popup.v1.PopupService.NewPopup, data)
+end
+snowcap.popup.v1.PopupService.Close = {}
+snowcap.popup.v1.PopupService.Close.service = "snowcap.popup.v1.PopupService"
+snowcap.popup.v1.PopupService.Close.method = "Close"
+snowcap.popup.v1.PopupService.Close.request = ".snowcap.popup.v1.CloseRequest"
+snowcap.popup.v1.PopupService.Close.response = ".google.protobuf.Empty"
+
+---Performs a unary request.
+---
+---@nodiscard
+---
+---@param data snowcap.popup.v1.CloseRequest
+---
+---@return google.protobuf.Empty | nil response
+---@return string | nil error An error string, if any
+function Client:snowcap_popup_v1_PopupService_Close(data)
+    return self:unary_request(snowcap.popup.v1.PopupService.Close, data)
+end
+snowcap.popup.v1.PopupService.UpdatePopup = {}
+snowcap.popup.v1.PopupService.UpdatePopup.service = "snowcap.popup.v1.PopupService"
+snowcap.popup.v1.PopupService.UpdatePopup.method = "UpdatePopup"
+snowcap.popup.v1.PopupService.UpdatePopup.request = ".snowcap.popup.v1.UpdatePopupRequest"
+snowcap.popup.v1.PopupService.UpdatePopup.response = ".snowcap.popup.v1.UpdatePopupResponse"
+
+---Performs a unary request.
+---
+---@nodiscard
+---
+---@param data snowcap.popup.v1.UpdatePopupRequest
+---
+---@return snowcap.popup.v1.UpdatePopupResponse | nil response
+---@return string | nil error An error string, if any
+function Client:snowcap_popup_v1_PopupService_UpdatePopup(data)
+    return self:unary_request(snowcap.popup.v1.PopupService.UpdatePopup, data)
+end
+snowcap.popup.v1.PopupService.RequestView = {}
+snowcap.popup.v1.PopupService.RequestView.service = "snowcap.popup.v1.PopupService"
+snowcap.popup.v1.PopupService.RequestView.method = "RequestView"
+snowcap.popup.v1.PopupService.RequestView.request = ".snowcap.popup.v1.ViewRequest"
+snowcap.popup.v1.PopupService.RequestView.response = ".snowcap.popup.v1.ViewResponse"
+
+---Performs a unary request.
+---
+---@nodiscard
+---
+---@param data snowcap.popup.v1.ViewRequest
+---
+---@return snowcap.popup.v1.ViewResponse | nil response
+---@return string | nil error An error string, if any
+function Client:snowcap_popup_v1_PopupService_RequestView(data)
+    return self:unary_request(snowcap.popup.v1.PopupService.RequestView, data)
 end
 return {
     google = google,
