@@ -37,6 +37,22 @@ impl State {
     pub fn popup_for_id(&mut self, id: PopupId) -> Option<&mut SnowcapPopup> {
         self.popups.iter_mut().find(|popup| popup.popup_id == id)
     }
+
+    pub fn popup_destroy(&mut self, id: PopupId) {
+        let mut to_destroy = vec![id];
+
+        while let Some(destroy_first) = to_destroy.last().and_then(|id| {
+            self.popups
+                .iter()
+                .find(|p| p.parent_id == ParentId::Popup(*id))
+        }) {
+            to_destroy.push(destroy_first.popup_id)
+        }
+
+        for popup_id in to_destroy.iter().rev() {
+            self.popups.retain(|p| &p.popup_id != popup_id)
+        }
+    }
 }
 
 pub struct SnowcapPopup {

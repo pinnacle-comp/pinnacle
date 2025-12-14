@@ -46,7 +46,6 @@ impl popup_service_server::PopupService for super::PopupService {
             positioner.set_anchor_rect(10, 10, 1, 1);
 
             let Some(popup) = SnowcapPopup::new(state, parent_id.into(), positioner, f) else {
-                tracing::error!("Failed to create popup");
                 return Err(Status::internal("Failed to create popup"));
             };
 
@@ -67,9 +66,8 @@ impl popup_service_server::PopupService for super::PopupService {
         let id = request.popup_id;
         let id = PopupId(id);
 
-        tracing::warn!("Closing {id:?}");
         run_unary_no_response(&self.sender, move |state| {
-            state.popups.retain(|p| p.popup_id != id);
+            state.popup_destroy(id);
         })
         .await
     }
