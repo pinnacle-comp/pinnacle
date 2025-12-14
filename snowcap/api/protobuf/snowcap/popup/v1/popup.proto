@@ -1,0 +1,36 @@
+syntax = "proto3";
+
+package snowcap.popup.v1;
+
+import "google/protobuf/empty.proto";
+import "snowcap/widget/v1/widget.proto";
+
+message NewPopupRequest {
+  snowcap.widget.v1.WidgetDef widget_def = 1;
+  uint32 layer_id = 2;
+}
+message NewPopupResponse {
+  uint32 popup_id = 1;
+}
+
+message CloseRequest {
+  uint32 popup_id = 1;
+}
+
+message UpdatePopupRequest {
+  uint32 popup_id = 1;
+  optional snowcap.widget.v1.WidgetDef widget_def = 2;
+}
+message UpdatePopupResponse {}
+
+message ViewRequest {
+  uint32 popup_id = 1;
+}
+message ViewResponse {}
+
+service PopupService {
+  rpc NewPopup(NewPopupRequest) returns (NewPopupResponse);
+  rpc Close(CloseRequest) returns (google.protobuf.Empty);
+  rpc UpdatePopup(UpdatePopupRequest) returns (UpdatePopupResponse);
+  rpc RequestView(ViewRequest) returns (ViewResponse);
+}
