@@ -5,6 +5,7 @@ pub mod decoration;
 pub mod handlers;
 pub mod input;
 pub mod layer;
+pub mod popup;
 pub mod runtime;
 pub mod server;
 pub mod state;
@@ -87,6 +88,9 @@ pub fn start(stop_signal_sender: Option<tokio::sync::oneshot::Sender<SnowcapHand
                         handlers::keyboard::KeyboardFocus::Layer(layer) => {
                             !state.layers.iter().any(|sn_layer| &sn_layer.layer == layer)
                         }
+                        handlers::keyboard::KeyboardFocus::Popup(popup) => {
+                            !state.popups.iter().any(|p| &p.popup == popup)
+                        }
                     });
             if keyboard_focus_is_dead {
                 state.keyboard_focus = None;
@@ -102,6 +106,11 @@ pub fn start(stop_signal_sender: Option<tokio::sync::oneshot::Sender<SnowcapHand
                 // uses a lot of vram
                 deco.update(&mut state.runtime, state.tiny_skia.as_mut().unwrap());
                 deco.draw_if_scheduled();
+            }
+
+            for popup in state.popups.iter_mut() {
+                popup.update(&mut state.runtime, state.compositor.as_mut().unwrap());
+                popup.draw_if_scheduled();
             }
         })
         .unwrap();

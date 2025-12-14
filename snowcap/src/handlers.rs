@@ -7,6 +7,7 @@ pub mod pointer;
 use smithay_client_toolkit::{
     compositor::CompositorHandler,
     delegate_compositor, delegate_layer, delegate_output, delegate_registry, delegate_seat,
+    delegate_xdg_popup, delegate_xdg_shell,
     output::{OutputHandler, OutputState},
     reexports::{
         client::{
@@ -32,6 +33,10 @@ use smithay_client_toolkit::{
     shell::{
         WaylandSurface,
         wlr_layer::{LayerShellHandler, LayerSurface, LayerSurfaceConfigure},
+        xdg::{
+            popup::{self, PopupHandler},
+            window::WindowHandler,
+        },
     },
 };
 
@@ -139,6 +144,15 @@ impl OutputHandler for State {
             layer.output_size_changed(iced::Size::new(size.0 as u32, size.1 as u32));
             layer.surface.request_frame();
         }
+
+        for popup in self
+            .popups
+            .iter_mut()
+            .filter(|p| p.wl_output.as_ref() == Some(&output))
+        {
+            popup.output_size_changed(iced::Size::new(size.0 as u32, size.1 as u32));
+            popup.surface.request_frame();
+        }
     }
 
     fn output_destroyed(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, output: WlOutput) {
@@ -224,6 +238,16 @@ impl CompositorHandler for State {
 
         if let Some(deco) = deco {
             deco.schedule_redraw();
+            return;
+        }
+
+        let popup = self
+            .popups
+            .iter_mut()
+            .find(|popup| &popup.surface.wl_surface == surface);
+
+        if let Some(popup) = popup {
+            popup.schedule_redraw();
         }
     }
 
@@ -234,16 +258,6 @@ impl CompositorHandler for State {
         surface: &WlSurface,
         output: &wl_output::WlOutput,
     ) {
-        let Some(layer) = self
-            .layers
-            .iter_mut()
-            .find(|layer| layer.layer.wl_surface() == surface)
-        else {
-            return;
-        };
-
-        layer.wl_output = Some(output.clone());
-
         let Some(output_info) = self.output_state.info(output) else {
             return;
         };
@@ -254,19 +268,39 @@ impl CompositorHandler for State {
 
         let size = iced::Size::new(size.0 as u32, size.1 as u32);
 
-        if let InitialConfigureState::PreConfigure(pending) = &mut layer.initial_configure {
-            *pending = Some(size);
-            return;
+        if let Some(layer) = self
+            .layers
+            .iter_mut()
+            .find(|layer| layer.layer.wl_surface() == surface)
+        {
+            layer.wl_output = Some(output.clone());
+
+            if let InitialConfigureState::PreConfigure(pending) = &mut layer.initial_configure {
+                *pending = Some(size);
+                return;
+            }
+
+            if layer.initial_configure == InitialConfigureState::PostConfigure {
+                return;
+            };
+
+            layer.initial_configure = InitialConfigureState::PostOutputSize;
+
+            layer.output_size_changed(size);
+            layer.surface.request_frame();
+        } else if let Some(popup) = self
+            .popups
+            .iter_mut()
+            .find(|p| p.popup.wl_surface() == surface)
+        {
+            popup.wl_output = Some(output.clone());
+
+            popup.output_size_changed(size);
+
+            if popup.initial_configure_received {
+                popup.surface.request_frame()
+            }
         }
-
-        if layer.initial_configure == InitialConfigureState::PostConfigure {
-            return;
-        };
-
-        layer.initial_configure = InitialConfigureState::PostOutputSize;
-
-        layer.output_size_changed(size);
-        layer.surface.request_frame();
     }
 
     fn surface_leave(
@@ -294,30 +328,97 @@ impl Dispatch<WpFractionalScaleV1, WlSurface> for State {
         _conn: &Connection,
         _qhandle: &QueueHandle<Self>,
     ) {
-        if let Some(layer) = state
+        let surface = if let Some(layer) = state
             .layers
             .iter_mut()
             .find(|layer| layer.layer.wl_surface() == surface)
         {
-            match event {
-                wp_fractional_scale_v1::Event::PreferredScale { scale } => {
-                    layer.surface.scale_changed(scale as f32 / 120.0);
-                    layer.surface.request_frame();
-                }
-                _ => unreachable!(),
-            }
+            &mut layer.surface
         } else if let Some(deco) = state
             .decorations
             .iter_mut()
             .find(|deco| &deco.surface.wl_surface == surface)
         {
-            match event {
-                wp_fractional_scale_v1::Event::PreferredScale { scale } => {
-                    deco.surface.scale_changed(scale as f32 / 120.0);
-                    deco.surface.request_frame();
-                }
-                _ => unreachable!(),
+            &mut deco.surface
+        } else if let Some(popup) = state
+            .popups
+            .iter_mut()
+            .find(|popup| &popup.surface.wl_surface == surface)
+        {
+            &mut popup.surface
+        } else {
+            return;
+        };
+
+        match event {
+            wp_fractional_scale_v1::Event::PreferredScale { scale } => {
+                surface.scale_changed(scale as f32 / 120.0);
+                surface.request_frame();
             }
+            _ => unreachable!(),
         }
     }
 }
+
+impl WindowHandler for State {
+    fn configure(
+        &mut self,
+        _conn: &Connection,
+        _qh: &QueueHandle<Self>,
+        _window: &smithay_client_toolkit::shell::xdg::window::Window,
+        _configure: smithay_client_toolkit::shell::xdg::window::WindowConfigure,
+        _serial: u32,
+    ) {
+        unimplemented!()
+    }
+
+    fn request_close(
+        &mut self,
+        _conn: &Connection,
+        _qh: &QueueHandle<Self>,
+        _window: &smithay_client_toolkit::shell::xdg::window::Window,
+    ) {
+        unimplemented!()
+    }
+}
+
+delegate_xdg_shell!(State);
+
+impl PopupHandler for State {
+    fn configure(
+        &mut self,
+        _conn: &Connection,
+        _qh: &QueueHandle<Self>,
+        popup: &smithay_client_toolkit::shell::xdg::popup::Popup,
+        config: smithay_client_toolkit::shell::xdg::popup::PopupConfigure,
+    ) {
+        let Some(popup) = self.popups.iter_mut().find(|p| &p.popup == popup) else {
+            return;
+        };
+
+        popup.size_changed(iced::Size::new(config.width as u32, config.height as u32));
+
+        match config.kind {
+            popup::ConfigureKind::Initial => {
+                popup.initial_configure_received = true;
+            }
+            popup::ConfigureKind::Reposition { token } => {
+                popup.repositioned(Some(token));
+            }
+            popup::ConfigureKind::Reactive => {
+                popup.repositioned(None);
+            }
+            _ => unreachable!(),
+        };
+    }
+
+    fn done(
+        &mut self,
+        _conn: &Connection,
+        _qh: &QueueHandle<Self>,
+        popup: &smithay_client_toolkit::shell::xdg::popup::Popup,
+    ) {
+        self.popups.retain(|p| &p.popup != popup)
+    }
+}
+delegate_xdg_popup!(State);
