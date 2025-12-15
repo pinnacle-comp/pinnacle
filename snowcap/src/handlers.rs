@@ -156,15 +156,35 @@ impl OutputHandler for State {
     }
 
     fn output_destroyed(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, output: WlOutput) {
-        self.layers
-            .retain(|layer| layer.wl_output.as_ref() != Some(&output));
+        let to_delete: Vec<_> = self
+            .layers
+            .iter()
+            .filter_map(|layer| {
+                if layer.wl_output.as_ref() == Some(&output) {
+                    Some(layer.layer_id)
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        for layer_id in to_delete {
+            self.layer_destroy(layer_id);
+        }
     }
 }
 delegate_output!(State);
 
 impl LayerShellHandler for State {
     fn closed(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, layer: &LayerSurface) {
-        self.layers.retain(|sn_layer| &sn_layer.layer != layer);
+        if let Some(layer_id) = self
+            .layers
+            .iter()
+            .find(|l| &l.layer == layer)
+            .map(|l| l.layer_id)
+        {
+            self.layer_destroy(layer_id);
+        }
     }
 
     fn configure(
