@@ -55,6 +55,63 @@ impl State {
     }
 }
 
+pub enum Position {
+    AtCursor,
+    Absolute {
+        x: f32,
+        y: f32,
+        width: f32,
+        height: f32,
+    },
+}
+
+impl Position {
+    fn anchor_rect_for(&self, surface: &SnowcapSurface) -> Option<iced::Rectangle<i32>> {
+        match *self {
+            Position::AtCursor => surface.pointer_location.map(|(x, y)| iced::Rectangle {
+                x: x as i32,
+                y: y as i32,
+                width: 1,
+                height: 1,
+            }),
+            Position::Absolute {
+                x,
+                y,
+                width,
+                height,
+            } => {
+                let size = surface.widgets.size();
+                let bounds = iced::Rectangle::with_size(size);
+                let anchor = iced::Rectangle {
+                    x,
+                    y,
+                    width,
+                    height,
+                };
+
+                if anchor.is_within(&bounds.into()) {
+                    Some(iced::Rectangle {
+                        x: x as i32,
+                        y: y as i32,
+                        width: width as i32,
+                        height: height as i32,
+                    })
+                } else {
+                    None
+                }
+            }
+        }
+    }
+}
+
+pub enum Error {
+    Positioner,
+    InvalidPosition,
+    ParentNotFound,
+    ToplevelNotFound,
+    CreateFailed,
+}
+
 pub struct SnowcapPopup {
     pub surface: SnowcapSurface,
     pub popup: Popup,
@@ -82,41 +139,77 @@ impl SnowcapPopup {
     pub fn new(
         state: &mut State,
         parent_id: ParentId,
-        positioner: XdgPositioner,
+        position: Position,
         widgets: ViewFn,
-    ) -> Option<Self> {
+    ) -> Result<Self, Error> {
         let mut surface = SnowcapSurface::new(state, widgets, false);
 
-        positioner.set_size(150, 1);
+        let Ok(positioner) = XdgPositioner::new(&state.xdg_shell) else {
+            return Err(Error::Positioner);
+        };
+
+        positioner.set_size(1, 1);
         positioner
             .set_constraint_adjustment(ConstraintAdjustment::SlideY | ConstraintAdjustment::SlideX);
         positioner.set_reactive();
 
         let (popup, toplevel_id) = match parent_id {
             ParentId::Popup(id) => {
-                let p = state.popups.iter().find(|p| p.popup_id == id)?;
+                let p = state
+                    .popups
+                    .iter()
+                    .find(|p| p.popup_id == id)
+                    .ok_or(Error::ParentNotFound)?;
 
-                let popup = Popup::from_surface(
+                let iced::Rectangle {
+                    x,
+                    y,
+                    width,
+                    height,
+                } = position
+                    .anchor_rect_for(&p.surface)
+                    .ok_or(Error::InvalidPosition)?;
+
+                positioner.set_anchor_rect(x, y, width, height);
+
+                let Ok(popup) = Popup::from_surface(
                     Some(p.popup.xdg_surface()),
                     &positioner,
                     &state.queue_handle,
                     surface.wl_surface.clone(),
                     &state.xdg_shell,
-                )
-                .ok()?;
+                ) else {
+                    return Err(Error::CreateFailed);
+                };
 
                 (popup, p.toplevel_id)
             }
             ParentId::Layer(id) => {
-                let l = state.layers.iter().find(|l| l.layer_id == id)?;
-                let popup = Popup::from_surface(
+                let l = state
+                    .layers
+                    .iter()
+                    .find(|l| l.layer_id == id)
+                    .ok_or(Error::ParentNotFound)?;
+
+                let iced::Rectangle {
+                    x,
+                    y,
+                    width,
+                    height,
+                } = position
+                    .anchor_rect_for(&l.surface)
+                    .ok_or(Error::InvalidPosition)?;
+                positioner.set_anchor_rect(x, y, width, height);
+
+                let Ok(popup) = Popup::from_surface(
                     None,
                     &positioner,
                     &state.queue_handle,
                     surface.wl_surface.clone(),
                     &state.xdg_shell,
-                )
-                .ok()?;
+                ) else {
+                    return Err(Error::CreateFailed);
+                };
 
                 l.layer.get_popup(popup.xdg_popup());
 
@@ -129,7 +222,11 @@ impl SnowcapPopup {
 
         match toplevel_id {
             ParentId::Layer(id) => {
-                let layer = state.layers.iter().find(|l| l.layer_id == id)?;
+                let layer = state
+                    .layers
+                    .iter()
+                    .find(|l| l.layer_id == id)
+                    .ok_or(Error::ToplevelNotFound)?;
                 surface.toplevel_wl_surface = Some(layer.surface.wl_surface.clone());
 
                 // Popup don't receive frames unless the toplevel does.
@@ -140,7 +237,7 @@ impl SnowcapPopup {
 
         let next_id = state.popup_id_counter.next();
 
-        Some(Self {
+        Ok(Self {
             surface,
             popup,
             popup_id: next_id,
