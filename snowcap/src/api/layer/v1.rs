@@ -103,7 +103,7 @@ impl layer_service_server::LayerService for super::LayerService {
         let id = LayerId(id);
 
         run_unary_no_response(&self.sender, move |state| {
-            state.layers.retain(|sn_layer| sn_layer.layer_id != id);
+            state.layer_destroy(id);
         })
         .await
     }
