@@ -1,6 +1,5 @@
-use smithay_client_toolkit::shell::xdg::XdgPositioner;
 use snowcap_api_defs::snowcap::popup::v1::{
-    CloseRequest, NewPopupRequest, NewPopupResponse, UpdatePopupRequest, UpdatePopupResponse,
+    self, CloseRequest, NewPopupRequest, NewPopupResponse, UpdatePopupRequest, UpdatePopupResponse,
     ViewRequest, ViewResponse,
     new_popup_request::{self, ParentId},
     popup_service_server,
@@ -30,6 +29,10 @@ impl popup_service_server::PopupService for super::PopupService {
             return Err(Status::unimplemented("Decoration's popup are unavailable."));
         }
 
+        let Some(position) = request.position.map(popup::Position::from) else {
+            return Err(Status::invalid_argument("no position."));
+        };
+
         let Some(widget_def) = request.widget_def else {
             return Err(Status::invalid_argument("no widget def"));
         };
@@ -39,15 +42,19 @@ impl popup_service_server::PopupService for super::PopupService {
                 return Err(Status::invalid_argument("widget def was null"));
             };
 
-            let Ok(positioner) = XdgPositioner::new(&state.xdg_shell) else {
-                return Err(Status::internal("Could not create xdg_positioner"));
-            };
+            let popup = SnowcapPopup::new(state, parent_id.into(), position, f).map_err(|e| {
+                use popup::Error;
 
-            positioner.set_anchor_rect(10, 10, 1, 1);
-
-            let Some(popup) = SnowcapPopup::new(state, parent_id.into(), positioner, f) else {
-                return Err(Status::internal("Failed to create popup"));
-            };
+                match e {
+                    Error::ParentNotFound => Status::invalid_argument("parent not found."),
+                    Error::ToplevelNotFound => {
+                        Status::invalid_argument("toplevel surface not found.")
+                    }
+                    Error::InvalidPosition => Status::invalid_argument("invalid position."),
+                    Error::Positioner => Status::internal("Failed to create positioner."),
+                    Error::CreateFailed => Status::internal("Failed to create popup."),
+                }
+            })?;
 
             let ret = Ok(NewPopupResponse {
                 popup_id: popup.popup_id.0,
@@ -125,6 +132,31 @@ impl From<new_popup_request::ParentId> for popup::ParentId {
             ParentId::LayerId(id) => popup::ParentId::Layer(LayerId(id)),
             ParentId::DecoId(id) => popup::ParentId::Decoration(DecorationId(id)),
             ParentId::PopupId(id) => popup::ParentId::Popup(PopupId(id)),
+        }
+    }
+}
+
+impl From<v1::Position> for popup::Position {
+    fn from(value: v1::Position) -> Self {
+        use v1::position::Strategy;
+
+        let Some(strategy) = value.strategy else {
+            return popup::Position::AtCursor;
+        };
+
+        match strategy {
+            Strategy::AtCursor(_) => popup::Position::AtCursor,
+            Strategy::Absolute(v1::Rectangle {
+                x,
+                y,
+                width,
+                height,
+            }) => popup::Position::Absolute {
+                x,
+                y,
+                width,
+                height,
+            },
         }
     }
 }
