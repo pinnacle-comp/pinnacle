@@ -1279,11 +1279,22 @@ local snowcap_layer_v1_Layer = {
 
 ---@class snowcap.layer.v1.ViewResponse
 
+---@class snowcap.popup.v1.Rectangle
+---@field x number?
+---@field y number?
+---@field width number?
+---@field height number?
+
+---@class snowcap.popup.v1.Position
+---@field at_cursor google.protobuf.Empty?
+---@field absolute snowcap.popup.v1.Rectangle?
+
 ---@class snowcap.popup.v1.NewPopupRequest
 ---@field widget_def snowcap.widget.v1.WidgetDef?
 ---@field layer_id integer?
 ---@field deco_id integer?
 ---@field popup_id integer?
+---@field position snowcap.popup.v1.Position?
 
 ---@class snowcap.popup.v1.NewPopupResponse
 ---@field popup_id integer?
@@ -1429,6 +1440,8 @@ snowcap.layer.v1.ViewRequest = {}
 snowcap.layer.v1.ViewResponse = {}
 snowcap.popup = {}
 snowcap.popup.v1 = {}
+snowcap.popup.v1.Rectangle = {}
+snowcap.popup.v1.Position = {}
 snowcap.popup.v1.NewPopupRequest = {}
 snowcap.popup.v1.NewPopupResponse = {}
 snowcap.popup.v1.CloseRequest = {}

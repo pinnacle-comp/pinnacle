@@ -5,6 +5,20 @@ package snowcap.popup.v1;
 import "google/protobuf/empty.proto";
 import "snowcap/widget/v1/widget.proto";
 
+message Rectangle {
+  float x = 1;
+  float y = 2;
+  float width = 3;
+  float height = 4;
+}
+
+message Position {
+  oneof strategy {
+    google.protobuf.Empty at_cursor = 1;
+    Rectangle absolute = 2;
+  }
+}
+
 message NewPopupRequest {
   snowcap.widget.v1.WidgetDef widget_def = 1;
   oneof parent_id {
@@ -12,7 +26,9 @@ message NewPopupRequest {
     uint32 deco_id = 3;
     uint32 popup_id = 4;
   }
+  Position position = 5;
 }
+
 message NewPopupResponse {
   uint32 popup_id = 1;
 }
