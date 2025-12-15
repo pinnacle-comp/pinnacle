@@ -65,6 +65,7 @@ pub fn start(stop_signal_sender: Option<tokio::sync::oneshot::Sender<SnowcapHand
             .insert_source(close_ping_source, move |_, _, state| {
                 state.layers.clear();
                 state.decorations.clear();
+                state.popups.clear();
             })
             .unwrap();
 
