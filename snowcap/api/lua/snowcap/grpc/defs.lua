@@ -681,6 +681,34 @@ local snowcap_layer_v1_Layer = {
     LAYER_OVERLAY = 4,
 }
 
+---@enum snowcap.popup.v1.Anchor
+local snowcap_popup_v1_Anchor = {
+    ANCHOR_UNSPECIFIED = 0,
+    ANCHOR_TOP = 1,
+    ANCHOR_BOTTOM = 2,
+    ANCHOR_LEFT = 3,
+    ANCHOR_RIGHT = 4,
+    ANCHOR_TOP_LEFT = 5,
+    ANCHOR_TOP_RIGHT = 6,
+    ANCHOR_BOTTOM_LEFT = 7,
+    ANCHOR_BOTTOM_RIGHT = 8,
+    ANCHOR_NONE = 9,
+}
+
+---@enum snowcap.popup.v1.Gravity
+local snowcap_popup_v1_Gravity = {
+    GRAVITY_UNSPECIFIED = 0,
+    GRAVITY_TOP = 1,
+    GRAVITY_BOTTOM = 2,
+    GRAVITY_LEFT = 3,
+    GRAVITY_RIGHT = 4,
+    GRAVITY_TOP_LEFT = 5,
+    GRAVITY_TOP_RIGHT = 6,
+    GRAVITY_BOTTOM_LEFT = 7,
+    GRAVITY_BOTTOM_RIGHT = 8,
+    GRAVITY_NONE = 9,
+}
+
 
 ---@alias google.protobuf.Empty nil
 
@@ -1295,6 +1323,8 @@ local snowcap_layer_v1_Layer = {
 ---@field deco_id integer?
 ---@field popup_id integer?
 ---@field position snowcap.popup.v1.Position?
+---@field anchor snowcap.popup.v1.Anchor?
+---@field gravity snowcap.popup.v1.Gravity?
 
 ---@class snowcap.popup.v1.NewPopupResponse
 ---@field popup_id integer?
@@ -1471,6 +1501,8 @@ snowcap.layer.v0alpha1.Layer = snowcap_layer_v0alpha1_Layer
 snowcap.layer.v1.Anchor = snowcap_layer_v1_Anchor
 snowcap.layer.v1.KeyboardInteractivity = snowcap_layer_v1_KeyboardInteractivity
 snowcap.layer.v1.Layer = snowcap_layer_v1_Layer
+snowcap.popup.v1.Anchor = snowcap_popup_v1_Anchor
+snowcap.popup.v1.Gravity = snowcap_popup_v1_Gravity
 
 snowcap.widget.v1.WidgetService = {}
 snowcap.widget.v1.WidgetService.GetWidgetEvents = {}
