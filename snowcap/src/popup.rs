@@ -2,7 +2,7 @@ use iced_runtime::core::widget;
 use smithay_client_toolkit::{
     reexports::{
         client::protocol::wl_output::WlOutput,
-        protocols::xdg::shell::client::xdg_positioner::ConstraintAdjustment,
+        protocols::xdg::shell::client::xdg_positioner::{self, ConstraintAdjustment},
     },
     shell::xdg::{XdgPositioner, popup::Popup},
 };
@@ -140,6 +140,8 @@ impl SnowcapPopup {
         state: &mut State,
         parent_id: ParentId,
         position: Position,
+        anchor: Option<xdg_positioner::Anchor>,
+        gravity: Option<xdg_positioner::Gravity>,
         widgets: ViewFn,
     ) -> Result<Self, Error> {
         let mut surface = SnowcapSurface::new(state, widgets, false);
@@ -147,6 +149,14 @@ impl SnowcapPopup {
         let Ok(positioner) = XdgPositioner::new(&state.xdg_shell) else {
             return Err(Error::Positioner);
         };
+
+        if let Some(anchor) = anchor {
+            positioner.set_anchor(anchor);
+        }
+
+        if let Some(gravity) = gravity {
+            positioner.set_gravity(gravity);
+        }
 
         positioner.set_size(1, 1);
         positioner
