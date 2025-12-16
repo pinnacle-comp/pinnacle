@@ -849,6 +849,7 @@ local snowcap_layer_v1_Layer = {
 ---@field clip boolean?
 ---@field child snowcap.widget.v1.WidgetDef?
 ---@field style snowcap.widget.v1.Container.Style?
+---@field id string?
 
 ---@class snowcap.widget.v1.Container.Style
 ---@field text_color snowcap.widget.v1.Color?

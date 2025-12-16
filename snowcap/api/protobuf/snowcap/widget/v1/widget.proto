@@ -259,6 +259,7 @@ message Container {
   optional bool clip = 8;
   WidgetDef child = 9;
   optional Style style = 10;
+  optional string id = 11;
 
   message Style {
     optional Color text_color = 1;
