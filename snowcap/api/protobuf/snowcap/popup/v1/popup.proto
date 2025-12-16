@@ -5,6 +5,32 @@ package snowcap.popup.v1;
 import "google/protobuf/empty.proto";
 import "snowcap/widget/v1/widget.proto";
 
+enum Anchor {
+  ANCHOR_UNSPECIFIED = 0;
+  ANCHOR_TOP = 1;
+  ANCHOR_BOTTOM = 2;
+  ANCHOR_LEFT = 3;
+  ANCHOR_RIGHT = 4;
+  ANCHOR_TOP_LEFT = 5;
+  ANCHOR_TOP_RIGHT = 6;
+  ANCHOR_BOTTOM_LEFT = 7;
+  ANCHOR_BOTTOM_RIGHT = 8;
+  ANCHOR_NONE = 9;
+}
+
+enum Gravity {
+  GRAVITY_UNSPECIFIED = 0;
+  GRAVITY_TOP = 1;
+  GRAVITY_BOTTOM = 2;
+  GRAVITY_LEFT = 3;
+  GRAVITY_RIGHT = 4;
+  GRAVITY_TOP_LEFT = 5;
+  GRAVITY_TOP_RIGHT = 6;
+  GRAVITY_BOTTOM_LEFT = 7;
+  GRAVITY_BOTTOM_RIGHT = 8;
+  GRAVITY_NONE = 9;
+}
+
 message Rectangle {
   float x = 1;
   float y = 2;
@@ -27,6 +53,8 @@ message NewPopupRequest {
     uint32 popup_id = 4;
   }
   Position position = 5;
+  Anchor anchor = 6;
+  Gravity gravity = 7;
 }
 
 message NewPopupResponse {
