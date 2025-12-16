@@ -1307,6 +1307,10 @@ local snowcap_popup_v1_Gravity = {
 
 ---@class snowcap.layer.v1.ViewResponse
 
+---@class snowcap.popup.v1.Offset
+---@field x number?
+---@field y number?
+
 ---@class snowcap.popup.v1.Rectangle
 ---@field x number?
 ---@field y number?
@@ -1325,6 +1329,7 @@ local snowcap_popup_v1_Gravity = {
 ---@field position snowcap.popup.v1.Position?
 ---@field anchor snowcap.popup.v1.Anchor?
 ---@field gravity snowcap.popup.v1.Gravity?
+---@field offset snowcap.popup.v1.Offset?
 
 ---@class snowcap.popup.v1.NewPopupResponse
 ---@field popup_id integer?
@@ -1470,6 +1475,7 @@ snowcap.layer.v1.ViewRequest = {}
 snowcap.layer.v1.ViewResponse = {}
 snowcap.popup = {}
 snowcap.popup.v1 = {}
+snowcap.popup.v1.Offset = {}
 snowcap.popup.v1.Rectangle = {}
 snowcap.popup.v1.Position = {}
 snowcap.popup.v1.NewPopupRequest = {}
