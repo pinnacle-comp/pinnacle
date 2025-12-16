@@ -1320,6 +1320,7 @@ local snowcap_popup_v1_Gravity = {
 ---@class snowcap.popup.v1.Position
 ---@field at_cursor google.protobuf.Empty?
 ---@field absolute snowcap.popup.v1.Rectangle?
+---@field at_widget string?
 
 ---@class snowcap.popup.v1.NewPopupRequest
 ---@field widget_def snowcap.widget.v1.WidgetDef?
