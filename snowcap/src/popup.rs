@@ -1,4 +1,7 @@
-use iced_runtime::core::widget;
+use iced_runtime::core::widget::{
+    self,
+    operation::{self, Operation, Outcome},
+};
 use smithay_client_toolkit::{
     reexports::{
         client::protocol::wl_output::WlOutput,
@@ -68,18 +71,19 @@ pub enum Position {
         width: f32,
         height: f32,
     },
+    Widget(String),
 }
 
 impl Position {
-    fn anchor_rect_for(&self, surface: &SnowcapSurface) -> Option<iced::Rectangle<i32>> {
-        match *self {
+    fn anchor_rect_for(&self, surface: &mut SnowcapSurface) -> Option<iced::Rectangle<i32>> {
+        match self {
             Position::AtCursor => surface.pointer_location.map(|(x, y)| iced::Rectangle {
                 x: x as i32,
                 y: y as i32,
                 width: 1,
                 height: 1,
             }),
-            Position::Absolute {
+            &Position::Absolute {
                 x,
                 y,
                 width,
@@ -105,7 +109,120 @@ impl Position {
                     None
                 }
             }
+            Position::Widget(id) => {
+                let mut ope = get_bounds(id.clone().into());
+
+                {
+                    let mut black_box = operation::black_box(&mut ope);
+
+                    surface.operate(&mut black_box);
+                }
+
+                match ope.finish() {
+                    Outcome::Some(bounds) => Some(bounds),
+                    Outcome::None => None,
+                    _ => unreachable!(),
+                }
+                .map(|b| {
+                    let iced::Rectangle {
+                        x,
+                        y,
+                        width,
+                        height,
+                    } = b;
+                    iced::Rectangle {
+                        x: x as i32,
+                        y: y as i32,
+                        width: width as i32,
+                        height: height as i32,
+                    }
+                })
+            }
         }
+    }
+}
+
+pub fn get_bounds(target: widget::Id) -> impl Operation<iced::Rectangle> {
+    struct GetBounds {
+        target: widget::Id,
+        bounds: Option<iced::Rectangle>,
+    }
+
+    impl Operation<iced::Rectangle> for GetBounds {
+        fn container(&mut self, id: Option<&widget::Id>, bounds: iced::Rectangle) {
+            if id.is_some_and(|id| *id == self.target) {
+                self.bounds = Some(bounds);
+            }
+        }
+
+        fn text(&mut self, id: Option<&widget::Id>, bounds: iced::Rectangle, _text: &str) {
+            if id.is_some_and(|id| *id == self.target) {
+                self.bounds = Some(bounds);
+            }
+        }
+
+        fn custom(
+            &mut self,
+            id: Option<&widget::Id>,
+            bounds: iced::Rectangle,
+            _state: &mut dyn std::any::Any,
+        ) {
+            if id.is_some_and(|id| *id == self.target) {
+                self.bounds = Some(bounds);
+            }
+        }
+
+        fn focusable(
+            &mut self,
+            id: Option<&widget::Id>,
+            bounds: iced::Rectangle,
+            _state: &mut dyn widget::operation::Focusable,
+        ) {
+            if id.is_some_and(|id| *id == self.target) {
+                self.bounds = Some(bounds);
+            }
+        }
+
+        fn scrollable(
+            &mut self,
+            id: Option<&widget::Id>,
+            bounds: iced::Rectangle,
+            _content_bounds: iced::Rectangle,
+            _translation: iced::Vector,
+            _state: &mut dyn widget::operation::Scrollable,
+        ) {
+            if id.is_some_and(|id| *id == self.target) {
+                self.bounds = Some(bounds);
+            }
+        }
+
+        fn text_input(
+            &mut self,
+            id: Option<&widget::Id>,
+            bounds: iced::Rectangle,
+            _state: &mut dyn widget::operation::TextInput,
+        ) {
+            if id.is_some_and(|id| *id == self.target) {
+                self.bounds = Some(bounds);
+            }
+        }
+
+        fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation<iced::Rectangle>)) {
+            if self.bounds.is_some() {
+                return;
+            }
+
+            operate(self);
+        }
+
+        fn finish(&self) -> Outcome<iced::Rectangle> {
+            self.bounds.map_or(Outcome::None, Outcome::Some)
+        }
+    }
+
+    GetBounds {
+        target,
+        bounds: None,
     }
 }
 
@@ -177,7 +294,7 @@ impl SnowcapPopup {
             ParentId::Popup(id) => {
                 let p = state
                     .popups
-                    .iter()
+                    .iter_mut()
                     .find(|p| p.popup_id == id)
                     .ok_or(Error::ParentNotFound)?;
 
@@ -187,7 +304,7 @@ impl SnowcapPopup {
                     width,
                     height,
                 } = position
-                    .anchor_rect_for(&p.surface)
+                    .anchor_rect_for(&mut p.surface)
                     .ok_or(Error::InvalidPosition)?;
 
                 positioner.set_anchor_rect(x, y, width, height);
@@ -207,7 +324,7 @@ impl SnowcapPopup {
             ParentId::Layer(id) => {
                 let l = state
                     .layers
-                    .iter()
+                    .iter_mut()
                     .find(|l| l.layer_id == id)
                     .ok_or(Error::ParentNotFound)?;
 
@@ -217,8 +334,9 @@ impl SnowcapPopup {
                     width,
                     height,
                 } = position
-                    .anchor_rect_for(&l.surface)
+                    .anchor_rect_for(&mut l.surface)
                     .ok_or(Error::InvalidPosition)?;
+
                 positioner.set_anchor_rect(x, y, width, height);
 
                 let Ok(popup) = Popup::from_surface(

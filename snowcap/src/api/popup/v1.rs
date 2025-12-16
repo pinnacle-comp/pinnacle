@@ -31,7 +31,7 @@ impl popup_service_server::PopupService for super::PopupService {
             return Err(Status::unimplemented("Decoration's popup are unavailable."));
         }
 
-        let Some(position) = request.position.map(popup::Position::from) else {
+        let Some(position) = request.position.clone().map(popup::Position::from) else {
             return Err(Status::invalid_argument("no position."));
         };
         let anchor = Option::from_api(request.anchor());
@@ -171,6 +171,7 @@ impl From<v1::Position> for popup::Position {
                 width,
                 height,
             },
+            Strategy::AtWidget(id) => popup::Position::Widget(id),
         }
     }
 }

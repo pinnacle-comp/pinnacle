@@ -47,6 +47,7 @@ message Position {
   oneof strategy {
     google.protobuf.Empty at_cursor = 1;
     Rectangle absolute = 2;
+    string at_widget = 3;
   }
 }
 
