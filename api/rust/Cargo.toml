@@ -1,6 +1,6 @@
 [package]
 name = "pinnacle-api"
-version = "0.2.0-alpha.1"
+version.workspace = true
 edition.workspace = true
 authors.workspace = true
 description = "The Rust configuration library for Pinnacle"

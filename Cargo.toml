@@ -15,6 +15,7 @@ exclude = [
 ]
 
 [workspace.package]
+version = "0.2.0-alpha.2"
 authors = ["Ottatop <ottatop1227@gmail.com>"]
 edition = "2024"
 repository = "https://github.com/pinnacle-comp/pinnacle/"
@@ -92,7 +93,7 @@ type_complexity = "allow"
 
 [package]
 name = "pinnacle"
-version = "0.2.0-alpha.1"
+version.workspace = true
 authors.workspace = true
 edition.workspace = true
 license = "GPL-3.0-or-later"

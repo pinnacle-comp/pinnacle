@@ -42,7 +42,7 @@ let
     license = lib.licenses.gpl3;
     maintainers = [ "pinnacle-comp" ];
   };
-  version = "0.2.0-alpha.1";
+  version = "0.2.0-alpha.2";
 
   # we need a newer version of luaposix than what's in nixpkgs
   luaposix = lua54Packages.luaposix.overrideAttrs (old: rec {
@@ -79,7 +79,7 @@ let
       ];
     };
     sourceRoot = "${src.name}/api/lua";
-    knownRockspec = ../../api/lua/rockspecs/pinnacle-api-0.2.0alpha.1-1.rockspec;
+    knownRockspec = ../../api/lua/rockspecs/pinnacle-api-0.2.0alpha.2-1.rockspec;
     propagatedBuildInputs = with lua54Packages; [
       cqueues
       http
