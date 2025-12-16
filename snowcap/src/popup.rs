@@ -55,6 +55,11 @@ impl State {
     }
 }
 
+pub struct Offset {
+    pub x: i32,
+    pub y: i32,
+}
+
 pub enum Position {
     AtCursor,
     Absolute {
@@ -142,6 +147,7 @@ impl SnowcapPopup {
         position: Position,
         anchor: Option<xdg_positioner::Anchor>,
         gravity: Option<xdg_positioner::Gravity>,
+        offset: Option<Offset>,
         widgets: ViewFn,
     ) -> Result<Self, Error> {
         let mut surface = SnowcapSurface::new(state, widgets, false);
@@ -156,6 +162,10 @@ impl SnowcapPopup {
 
         if let Some(gravity) = gravity {
             positioner.set_gravity(gravity);
+        }
+
+        if let Some(Offset { x, y }) = offset {
+            positioner.set_offset(x, y);
         }
 
         positioner.set_size(1, 1);
