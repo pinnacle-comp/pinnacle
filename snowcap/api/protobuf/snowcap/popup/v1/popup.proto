@@ -31,6 +31,11 @@ enum Gravity {
   GRAVITY_NONE = 9;
 }
 
+message Offset {
+  float x = 1;
+  float y = 2;
+}
+
 message Rectangle {
   float x = 1;
   float y = 2;
@@ -55,6 +60,7 @@ message NewPopupRequest {
   Position position = 5;
   Anchor anchor = 6;
   Gravity gravity = 7;
+  Offset offset = 8;
 }
 
 message NewPopupResponse {

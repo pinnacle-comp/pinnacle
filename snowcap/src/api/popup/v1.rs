@@ -36,6 +36,7 @@ impl popup_service_server::PopupService for super::PopupService {
         };
         let anchor = Option::from_api(request.anchor());
         let gravity = Option::from_api(request.gravity());
+        let offset = request.offset.map(popup::Offset::from);
 
         let Some(widget_def) = request.widget_def else {
             return Err(Status::invalid_argument("no widget def"));
@@ -46,20 +47,28 @@ impl popup_service_server::PopupService for super::PopupService {
                 return Err(Status::invalid_argument("widget def was null"));
             };
 
-            let popup = SnowcapPopup::new(state, parent_id.into(), position, anchor, gravity, f)
-                .map_err(|e| {
-                    use popup::Error;
+            let popup = SnowcapPopup::new(
+                state,
+                parent_id.into(),
+                position,
+                anchor,
+                gravity,
+                offset,
+                f,
+            )
+            .map_err(|e| {
+                use popup::Error;
 
-                    match e {
-                        Error::ParentNotFound => Status::invalid_argument("parent not found."),
-                        Error::ToplevelNotFound => {
-                            Status::invalid_argument("toplevel surface not found.")
-                        }
-                        Error::InvalidPosition => Status::invalid_argument("invalid position."),
-                        Error::Positioner => Status::internal("Failed to create positioner."),
-                        Error::CreateFailed => Status::internal("Failed to create popup."),
+                match e {
+                    Error::ParentNotFound => Status::invalid_argument("parent not found."),
+                    Error::ToplevelNotFound => {
+                        Status::invalid_argument("toplevel surface not found.")
                     }
-                })?;
+                    Error::InvalidPosition => Status::invalid_argument("invalid position."),
+                    Error::Positioner => Status::internal("Failed to create positioner."),
+                    Error::CreateFailed => Status::internal("Failed to create popup."),
+                }
+            })?;
 
             let ret = Ok(NewPopupResponse {
                 popup_id: popup.popup_id.0,
@@ -162,6 +171,17 @@ impl From<v1::Position> for popup::Position {
                 width,
                 height,
             },
+        }
+    }
+}
+
+impl From<v1::Offset> for popup::Offset {
+    fn from(value: v1::Offset) -> Self {
+        let v1::Offset { x, y } = value;
+
+        popup::Offset {
+            x: x as i32,
+            y: y as i32,
         }
     }
 }
