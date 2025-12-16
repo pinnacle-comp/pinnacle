@@ -1,3 +1,4 @@
+use smithay_client_toolkit::reexports::protocols::xdg::shell::client::xdg_positioner;
 use snowcap_api_defs::snowcap::popup::v1::{
     self, CloseRequest, NewPopupRequest, NewPopupResponse, UpdatePopupRequest, UpdatePopupResponse,
     ViewRequest, ViewResponse,
@@ -11,6 +12,7 @@ use crate::{
     decoration::DecorationId,
     layer::LayerId,
     popup::{self, PopupId, SnowcapPopup},
+    util::convert::FromApi,
 };
 
 #[tonic::async_trait]
@@ -32,6 +34,8 @@ impl popup_service_server::PopupService for super::PopupService {
         let Some(position) = request.position.map(popup::Position::from) else {
             return Err(Status::invalid_argument("no position."));
         };
+        let anchor = Option::from_api(request.anchor());
+        let gravity = Option::from_api(request.gravity());
 
         let Some(widget_def) = request.widget_def else {
             return Err(Status::invalid_argument("no widget def"));
@@ -42,19 +46,20 @@ impl popup_service_server::PopupService for super::PopupService {
                 return Err(Status::invalid_argument("widget def was null"));
             };
 
-            let popup = SnowcapPopup::new(state, parent_id.into(), position, f).map_err(|e| {
-                use popup::Error;
+            let popup = SnowcapPopup::new(state, parent_id.into(), position, anchor, gravity, f)
+                .map_err(|e| {
+                    use popup::Error;
 
-                match e {
-                    Error::ParentNotFound => Status::invalid_argument("parent not found."),
-                    Error::ToplevelNotFound => {
-                        Status::invalid_argument("toplevel surface not found.")
+                    match e {
+                        Error::ParentNotFound => Status::invalid_argument("parent not found."),
+                        Error::ToplevelNotFound => {
+                            Status::invalid_argument("toplevel surface not found.")
+                        }
+                        Error::InvalidPosition => Status::invalid_argument("invalid position."),
+                        Error::Positioner => Status::internal("Failed to create positioner."),
+                        Error::CreateFailed => Status::internal("Failed to create popup."),
                     }
-                    Error::InvalidPosition => Status::invalid_argument("invalid position."),
-                    Error::Positioner => Status::internal("Failed to create positioner."),
-                    Error::CreateFailed => Status::internal("Failed to create popup."),
-                }
-            })?;
+                })?;
 
             let ret = Ok(NewPopupResponse {
                 popup_id: popup.popup_id.0,
@@ -158,5 +163,47 @@ impl From<v1::Position> for popup::Position {
                 height,
             },
         }
+    }
+}
+
+impl FromApi<v1::Anchor> for Option<xdg_positioner::Anchor> {
+    fn from_api(value: v1::Anchor) -> Self {
+        use v1::Anchor;
+
+        let ret = match value {
+            Anchor::Unspecified => return None,
+            Anchor::Top => xdg_positioner::Anchor::Top,
+            Anchor::Bottom => xdg_positioner::Anchor::Bottom,
+            Anchor::Left => xdg_positioner::Anchor::Left,
+            Anchor::Right => xdg_positioner::Anchor::Right,
+            Anchor::TopLeft => xdg_positioner::Anchor::TopLeft,
+            Anchor::BottomLeft => xdg_positioner::Anchor::BottomLeft,
+            Anchor::TopRight => xdg_positioner::Anchor::TopRight,
+            Anchor::BottomRight => xdg_positioner::Anchor::BottomRight,
+            Anchor::None => xdg_positioner::Anchor::None,
+        };
+
+        Some(ret)
+    }
+}
+
+impl FromApi<v1::Gravity> for Option<xdg_positioner::Gravity> {
+    fn from_api(value: v1::Gravity) -> Self {
+        use v1::Gravity;
+
+        let ret = match value {
+            Gravity::Unspecified => return None,
+            Gravity::Top => xdg_positioner::Gravity::Top,
+            Gravity::Bottom => xdg_positioner::Gravity::Bottom,
+            Gravity::Left => xdg_positioner::Gravity::Left,
+            Gravity::Right => xdg_positioner::Gravity::Right,
+            Gravity::TopLeft => xdg_positioner::Gravity::TopLeft,
+            Gravity::BottomLeft => xdg_positioner::Gravity::BottomLeft,
+            Gravity::TopRight => xdg_positioner::Gravity::TopRight,
+            Gravity::BottomRight => xdg_positioner::Gravity::BottomRight,
+            Gravity::None => xdg_positioner::Gravity::None,
+        };
+
+        Some(ret)
     }
 }
