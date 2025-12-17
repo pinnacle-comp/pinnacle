@@ -10,7 +10,7 @@ use smithay_client_toolkit::{
         client::{
             Connection, QueueHandle,
             globals::registry_queue_init,
-            protocol::{wl_keyboard::WlKeyboard, wl_pointer::WlPointer},
+            protocol::{wl_keyboard::WlKeyboard, wl_pointer::WlPointer, wl_seat::WlSeat},
         },
         protocols::{
             ext::foreign_toplevel_list::v1::client::{
@@ -75,9 +75,10 @@ pub struct State {
     pub keyboard_focus: Option<KeyboardFocus>,
     pub keyboard_modifiers: Modifiers,
     pub keyboard: Option<WlKeyboard>, // TODO: multiple
+    pub keyboard_seat: Option<WlSeat>,
 
     pub pointer: Option<WlPointer>, // TODO: multiple
-
+    // TODO: Do we need a pointer seat as well ?
     pub layer_id_counter: LayerIdCounter,
     pub decoration_id_counter: DecorationIdCounter,
     pub popup_id_counter: PopupIdCounter,
@@ -169,19 +170,25 @@ impl State {
             .insert_source(recv, move |event, _, state| match event {
                 calloop::channel::Event::Msg((id, msg)) => {
                     //TODO handle popup
-                    let Some(layer) = state
+                    let layer = state
                         .layers
                         .iter()
-                        .find(|layer| layer.surface.window_id == id)
-                    else {
-                        return;
-                    };
+                        .find(|layer| layer.surface.window_id == id);
+
+                    let popup = state
+                        .popups
+                        .iter()
+                        .find(|popup| popup.surface.window_id == id);
 
                     match msg {
                         SnowcapMessage::Noop => (),
                         SnowcapMessage::Close => (),
                         SnowcapMessage::KeyboardKey(key) => {
-                            if let Some(sender) = layer.keyboard_key_sender.as_ref() {
+                            let sender = layer
+                                .map(|l| l.keyboard_key_sender.as_ref())
+                                .or(popup.map(|p| p.keyboard_key_sender.as_ref()));
+
+                            if let Some(Some(sender)) = sender {
                                 let _ = sender.send(key);
                             }
                         }
@@ -273,6 +280,7 @@ impl State {
             keyboard_focus: None,
             keyboard_modifiers: smithay_client_toolkit::seat::keyboard::Modifiers::default(),
             keyboard: None,
+            keyboard_seat: None,
             pointer: None,
             layer_id_counter: LayerIdCounter::default(),
             decoration_id_counter: DecorationIdCounter::default(),

@@ -37,6 +37,7 @@ impl popup_service_server::PopupService for super::PopupService {
         let anchor = Option::from_api(request.anchor());
         let gravity = Option::from_api(request.gravity());
         let offset = request.offset.map(popup::Offset::from);
+        let no_grab = request.no_grab;
 
         let Some(widget_def) = request.widget_def else {
             return Err(Status::invalid_argument("no widget def"));
@@ -54,6 +55,7 @@ impl popup_service_server::PopupService for super::PopupService {
                 anchor,
                 gravity,
                 offset,
+                !no_grab,
                 f,
             )
             .map_err(|e| {

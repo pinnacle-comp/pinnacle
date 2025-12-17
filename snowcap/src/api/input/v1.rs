@@ -10,6 +10,7 @@ use tonic::{Request, Response, Status};
 use crate::{
     api::{ResponseStream, run_server_streaming, run_server_streaming_mapped},
     layer::LayerId,
+    popup::PopupId,
 };
 
 #[tonic::async_trait]
@@ -33,6 +34,11 @@ impl input_service_server::InputService for super::InputService {
                 Target::Layer(id) => {
                     if let Some(layer) = state.layer_for_id(id) {
                         layer.keyboard_key_sender = Some(sender);
+                    }
+                }
+                Target::Popup(id) => {
+                    if let Some(popup) = state.popup_for_id(id) {
+                        popup.keyboard_key_sender = Some(sender);
                     }
                 }
             },
@@ -68,6 +74,7 @@ impl input_service_server::InputService for super::InputService {
 
 enum Target {
     Layer(LayerId),
+    Popup(PopupId),
 }
 
 impl From<input::v1::keyboard_key_request::Target> for Target {
@@ -76,6 +83,7 @@ impl From<input::v1::keyboard_key_request::Target> for Target {
 
         match value {
             api::Target::LayerId(id) => Target::Layer(LayerId(id)),
+            api::Target::PopupId(id) => Target::Popup(PopupId(id)),
         }
     }
 }
