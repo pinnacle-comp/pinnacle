@@ -22,10 +22,16 @@ pub struct KeyboardKey {
 
 impl State {
     pub(crate) fn on_key_repeat(&mut self, keyboard: &WlKeyboard, event: KeyEvent) {
-        self.on_key_press(keyboard, event, true);
+        self.on_key_press(keyboard, event, true, None);
     }
 
-    pub(crate) fn on_key_press(&mut self, _keyboard: &WlKeyboard, event: KeyEvent, repeat: bool) {
+    pub(crate) fn on_key_press(
+        &mut self,
+        _keyboard: &WlKeyboard,
+        event: KeyEvent,
+        repeat: bool,
+        serial: Option<u32>,
+    ) {
         let surface = match self.keyboard_focus.as_ref() {
             Some(KeyboardFocus::Layer(layer)) => self
                 .layers
@@ -43,6 +49,10 @@ impl State {
         let Some(surface) = surface else {
             return;
         };
+
+        if let Some(serial) = serial {
+            surface.focus_serial = Some(serial);
+        }
 
         let (key, location) = keysym_to_iced_key_and_loc(event.keysym);
 
@@ -81,17 +91,23 @@ impl KeyboardHandler for State {
         _qh: &QueueHandle<Self>,
         _keyboard: &WlKeyboard,
         surface: &WlSurface,
-        _serial: u32,
+        serial: u32,
         _raw: &[u32],
         _keysyms: &[Keysym],
     ) {
         if let Some(layer) = self
             .layers
-            .iter()
+            .iter_mut()
             .find(|sn_layer| sn_layer.layer.wl_surface() == surface)
         {
+            layer.surface.focus_serial = Some(serial);
             self.keyboard_focus = Some(KeyboardFocus::Layer(layer.layer.clone()));
-        } else if let Some(popup) = self.popups.iter().find(|p| p.popup.wl_surface() == surface) {
+        } else if let Some(popup) = self
+            .popups
+            .iter_mut()
+            .find(|p| p.popup.wl_surface() == surface)
+        {
+            popup.surface.focus_serial = Some(serial);
             self.keyboard_focus = Some(KeyboardFocus::Popup(popup.popup.clone()))
         }
     }
@@ -106,7 +122,7 @@ impl KeyboardHandler for State {
     ) {
         match self.keyboard_focus.as_ref() {
             Some(KeyboardFocus::Layer(layer)) if layer.wl_surface() == surface => {
-                self.keyboard_focus = None
+                self.keyboard_focus = None;
             }
             Some(KeyboardFocus::Popup(popup)) if popup.wl_surface() == surface => {
                 self.keyboard_focus = None
@@ -120,10 +136,10 @@ impl KeyboardHandler for State {
         _conn: &Connection,
         _qh: &QueueHandle<Self>,
         keyboard: &WlKeyboard,
-        _serial: u32,
+        serial: u32,
         event: KeyEvent,
     ) {
-        self.on_key_press(keyboard, event, false)
+        self.on_key_press(keyboard, event, false, Some(serial))
     }
 
     fn release_key(
@@ -131,7 +147,7 @@ impl KeyboardHandler for State {
         _conn: &Connection,
         _qh: &QueueHandle<Self>,
         _keyboard: &WlKeyboard,
-        _serial: u32,
+        serial: u32,
         event: KeyEvent,
     ) {
         let surface = match self.keyboard_focus.as_ref() {
@@ -151,6 +167,8 @@ impl KeyboardHandler for State {
         let Some(surface) = surface else {
             return;
         };
+
+        surface.focus_serial = Some(serial);
 
         let (key, location) = keysym_to_iced_key_and_loc(event.keysym);
 
@@ -185,7 +203,7 @@ impl KeyboardHandler for State {
         _conn: &Connection,
         _qh: &QueueHandle<Self>,
         _keyboard: &WlKeyboard,
-        _serial: u32,
+        serial: u32,
         modifiers: Modifiers,
         _raw_modifiers: RawModifiers,
         _layout: u32,
@@ -209,6 +227,8 @@ impl KeyboardHandler for State {
         let Some(surface) = surface else {
             return;
         };
+
+        surface.focus_serial = Some(serial);
 
         let mut modifiers = iced::keyboard::Modifiers::empty();
         if self.keyboard_modifiers.ctrl {
@@ -242,7 +262,7 @@ impl KeyboardHandler for State {
         // I'm leaving this commented for now because I don't know whether only one or both
         // function will get called when support is added.
         //
-        // self.on_key_repeat(keyboard, event, true)
+        // self.on_key_repeat(keyboard, event, true, Some(serial))
     }
 }
 delegate_keyboard!(State);

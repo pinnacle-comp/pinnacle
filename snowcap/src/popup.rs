@@ -9,9 +9,11 @@ use smithay_client_toolkit::{
     },
     shell::xdg::{XdgPositioner, popup::Popup},
 };
+use tokio::sync::mpsc::UnboundedSender;
 
 use crate::{
-    decoration::DecorationId, layer::LayerId, state::State, surface::SnowcapSurface, widget::ViewFn,
+    decoration::DecorationId, handlers::keyboard::KeyboardKey, layer::LayerId, state::State,
+    surface::SnowcapSurface, widget::ViewFn,
 };
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Default)]
@@ -255,6 +257,8 @@ pub struct SnowcapPopup {
 
     _current_size: iced::Size<u32>,
     pending_size: Option<iced::Size<u32>>,
+
+    pub keyboard_key_sender: Option<UnboundedSender<KeyboardKey>>,
 }
 
 impl SnowcapPopup {
@@ -265,6 +269,7 @@ impl SnowcapPopup {
         anchor: Option<xdg_positioner::Anchor>,
         gravity: Option<xdg_positioner::Gravity>,
         offset: Option<Offset>,
+        grab_keyboard: bool,
         widgets: ViewFn,
     ) -> Result<Self, Error> {
         let mut surface = SnowcapSurface::new(state, widgets, false);
@@ -290,7 +295,7 @@ impl SnowcapPopup {
             .set_constraint_adjustment(ConstraintAdjustment::SlideY | ConstraintAdjustment::SlideX);
         positioner.set_reactive();
 
-        let (popup, toplevel_id) = match parent_id {
+        let (popup, toplevel_id, focus_serial) = match parent_id {
             ParentId::Popup(id) => {
                 let p = state
                     .popups
@@ -319,7 +324,7 @@ impl SnowcapPopup {
                     return Err(Error::CreateFailed);
                 };
 
-                (popup, p.toplevel_id)
+                (popup, p.toplevel_id, p.surface.focus_serial)
             }
             ParentId::Layer(id) => {
                 let l = state
@@ -351,11 +356,23 @@ impl SnowcapPopup {
 
                 l.layer.get_popup(popup.xdg_popup());
 
-                (popup, parent_id)
+                (popup, parent_id, l.surface.focus_serial)
             }
             _ => unreachable!(),
         };
 
+        if grab_keyboard {
+            if let Some(serial) = focus_serial
+                && let Some(seat) = state.seat.as_ref()
+            {
+                popup.xdg_popup().grab(seat, serial);
+            } else {
+                tracing::error!(
+                    "Could not grab keyboard for popup with parent {:?}",
+                    parent_id
+                );
+            }
+        }
         popup.wl_surface().commit();
 
         match toplevel_id {
@@ -399,6 +416,8 @@ impl SnowcapPopup {
                 height: 1,
             },
             pending_size: None,
+
+            keyboard_key_sender: None,
         })
     }
 
