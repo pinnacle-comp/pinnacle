@@ -255,7 +255,8 @@ pub struct SnowcapPopup {
     reposition_token: u32,
     pending_reposition: Option<u32>,
 
-    _current_size: iced::Size<u32>,
+    recompute_size: bool,
+    current_size: iced::Size<u32>,
     pending_size: Option<iced::Size<u32>>,
 
     pub keyboard_key_sender: Option<UnboundedSender<KeyboardKey>>,
@@ -269,6 +270,7 @@ impl SnowcapPopup {
         anchor: Option<xdg_positioner::Anchor>,
         gravity: Option<xdg_positioner::Gravity>,
         offset: Option<Offset>,
+        constraints_adjustment: Option<ConstraintAdjustment>,
         grab_keyboard: bool,
         widgets: ViewFn,
     ) -> Result<Self, Error> {
@@ -290,9 +292,10 @@ impl SnowcapPopup {
             positioner.set_offset(x, y);
         }
 
+        if let Some(adjustment) = constraints_adjustment {
+            positioner.set_constraint_adjustment(adjustment);
+        }
         positioner.set_size(1, 1);
-        positioner
-            .set_constraint_adjustment(ConstraintAdjustment::SlideY | ConstraintAdjustment::SlideX);
         positioner.set_reactive();
 
         let (popup, toplevel_id, focus_serial) = match parent_id {
@@ -411,7 +414,8 @@ impl SnowcapPopup {
             reposition_token: 0,
             pending_reposition: None,
 
-            _current_size: iced::Size {
+            recompute_size: false,
+            current_size: iced::Size {
                 width: 1,
                 height: 1,
             },
@@ -432,6 +436,7 @@ impl SnowcapPopup {
     pub fn update_properties(&mut self, widgets: Option<ViewFn>) {
         if let Some(widgets) = widgets {
             self.surface.view_changed(widgets);
+            self.recompute_size = true;
         }
 
         self.surface.request_frame();
@@ -452,6 +457,10 @@ impl SnowcapPopup {
         runtime: &mut crate::runtime::Runtime,
         compositor: &mut crate::compositor::Compositor,
     ) {
+        if let Some(pending_size) = self.pending_size.take() {
+            self.current_size = pending_size;
+        }
+
         if let Some(pending_output_size) = self.pending_output_size.take() {
             self.output_size = pending_output_size;
         }
@@ -461,20 +470,29 @@ impl SnowcapPopup {
         let resized = self.surface.update(runtime, compositor);
 
         if resized {
-            self.positioner.set_size(
-                self.surface.widgets.size().width as i32,
-                self.surface.widgets.size().height as i32,
-            );
+            let iced::Size { width, height } = self.surface.widgets.size();
+            self.current_size = iced::Size::new(width, height);
 
-            let token = self.reposition_token;
-            self.reposition_token += 1;
-            self.pending_reposition = Some(token);
-            self.popup.reposition(&self.positioner, token);
+            // INFO: Our size may have increased. Let's inform the server.
+            if self.recompute_size {
+                self.positioner.set_size(width as i32, height as i32);
+
+                let token = self.reposition_token;
+                self.reposition_token += 1;
+                self.pending_reposition = Some(token);
+                self.popup.reposition(&self.positioner, token);
+            }
         }
+
+        self.recompute_size = false;
     }
 
     pub fn widget_bounds(&self) -> iced::Size<u32> {
-        self.output_size
+        if self.recompute_size {
+            self.output_size
+        } else {
+            self.current_size
+        }
     }
 
     pub fn size_changed(&mut self, new_size: iced::Size<u32>) {
@@ -483,6 +501,7 @@ impl SnowcapPopup {
 
     pub fn output_size_changed(&mut self, new_size: iced::Size<u32>) {
         self.pending_output_size = Some(new_size);
+        self.recompute_size = true;
     }
 
     pub fn repositioned(&mut self, token: Option<u32>) {

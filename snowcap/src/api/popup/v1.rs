@@ -40,6 +40,9 @@ impl popup_service_server::PopupService for super::PopupService {
         let gravity = Option::from_api(request.gravity());
         let offset = request.offset.map(popup::Offset::from);
         let no_grab = request.no_grab;
+        let constraints_adjust = request
+            .constraints_adjust
+            .map(xdg_positioner::ConstraintAdjustment::from_api);
 
         let Some(widget_def) = request.widget_def else {
             return Err(Status::invalid_argument("no widget def"));
@@ -58,7 +61,15 @@ impl popup_service_server::PopupService for super::PopupService {
             }
 
             let popup = SnowcapPopup::new(
-                state, parent_id, position, anchor, gravity, offset, !no_grab, f,
+                state,
+                parent_id,
+                position,
+                anchor,
+                gravity,
+                offset,
+                constraints_adjust,
+                !no_grab,
+                f,
             )
             .map_err(|e| {
                 use popup::Error;
@@ -230,5 +241,51 @@ impl FromApi<v1::Gravity> for Option<xdg_positioner::Gravity> {
         };
 
         Some(ret)
+    }
+}
+
+impl FromApi<v1::ConstraintsAdjust> for xdg_positioner::ConstraintAdjustment {
+    fn from_api(api_type: v1::ConstraintsAdjust) -> Self {
+        let v1::ConstraintsAdjust {
+            none,
+            slide_x,
+            slide_y,
+            flip_x,
+            flip_y,
+            resize_x,
+            resize_y,
+        } = api_type;
+
+        let mut ret = Self::None;
+
+        if none {
+            return ret;
+        };
+
+        if slide_x {
+            ret |= Self::SlideX;
+        }
+
+        if slide_y {
+            ret |= Self::SlideY;
+        }
+
+        if flip_x {
+            ret |= Self::FlipX;
+        }
+
+        if flip_y {
+            ret |= Self::FlipY;
+        }
+
+        if resize_x {
+            ret |= Self::ResizeX;
+        }
+
+        if resize_y {
+            ret |= Self::ResizeY;
+        }
+
+        ret
     }
 }
