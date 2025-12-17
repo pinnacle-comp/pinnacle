@@ -81,7 +81,7 @@ pub struct State {
     pub keyboard: Option<WlKeyboard>, // TODO: multiple
 
     pub pointer: Option<WlPointer>, // TODO: multiple
-
+    // TODO: Do we need a pointer seat as well ?
     pub layer_id_counter: LayerIdCounter,
     pub decoration_id_counter: DecorationIdCounter,
     pub popup_id_counter: PopupIdCounter,
@@ -171,20 +171,25 @@ impl State {
         loop_handle
             .insert_source(recv, move |event, _, state| match event {
                 calloop::channel::Event::Msg((id, msg)) => {
-                    //TODO handle popup
-                    let Some(layer) = state
+                    let layer = state
                         .layers
                         .iter()
-                        .find(|layer| layer.surface.window_id == id)
-                    else {
-                        return;
-                    };
+                        .find(|layer| layer.surface.window_id == id);
+
+                    let popup = state
+                        .popups
+                        .iter()
+                        .find(|popup| popup.surface.window_id == id);
 
                     match msg {
                         SnowcapMessage::Noop => (),
                         SnowcapMessage::Close => (),
                         SnowcapMessage::KeyboardKey(key) => {
-                            if let Some(sender) = layer.keyboard_key_sender.as_ref() {
+                            let sender = layer
+                                .map(|l| l.keyboard_key_sender.as_ref())
+                                .or(popup.map(|p| p.keyboard_key_sender.as_ref()));
+
+                            if let Some(Some(sender)) = sender {
                                 let _ = sender.send(key);
                             }
                         }
