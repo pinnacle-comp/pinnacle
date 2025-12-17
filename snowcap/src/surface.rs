@@ -55,6 +55,7 @@ pub struct SnowcapSurface {
     clipboard: WaylandClipboard,
 
     pub pointer_location: Option<(f64, f64)>,
+    pub focus_serial: Option<u32>,
 
     pub window_id: iced::window::Id,
 
@@ -143,6 +144,7 @@ impl SnowcapSurface {
             renderer,
             clipboard,
             pointer_location: None,
+            focus_serial: None,
             viewport,
             fractional_scale,
             window_id: iced::window::Id::unique(),

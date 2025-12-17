@@ -81,6 +81,7 @@ impl SeatHandler for State {
                 .unwrap();
 
             self.keyboard = Some(keyboard);
+            self.keyboard_seat = Some(seat.clone());
         }
 
         if capability == Capability::Pointer && self.pointer.is_none() {
@@ -100,6 +101,7 @@ impl SeatHandler for State {
             && let Some(keyboard) = self.keyboard.take()
         {
             keyboard.release();
+            self.keyboard_seat = None;
         }
 
         if capability == Capability::Pointer
