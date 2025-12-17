@@ -1113,7 +1113,7 @@ local snowcap_layer_v1_Layer = {
 ---@field super boolean?
 
 ---@class snowcap.input.v1.KeyboardKeyRequest
----@field id integer?
+---@field layer_id integer?
 
 ---@class snowcap.input.v1.KeyboardKeyResponse
 ---@field key integer?

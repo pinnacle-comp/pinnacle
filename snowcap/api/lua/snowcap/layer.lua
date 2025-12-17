@@ -164,7 +164,7 @@ end
 ---@param on_event fun(handle: snowcap.layer.LayerHandle, event: snowcap.input.KeyEvent)
 function LayerHandle:on_key_event(on_event)
     local err = client:snowcap_input_v1_InputService_KeyboardKey(
-        { id = self.id },
+        { layer_id = self.id },
         function(response)
             ---@cast response snowcap.input.v1.KeyboardKeyResponse
 
