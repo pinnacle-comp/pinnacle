@@ -10,7 +10,9 @@ message Modifiers {
 }
 
 message KeyboardKeyRequest {
-  uint32 id = 1;
+  oneof target {
+    uint32 layer_id = 1;
+  }
 }
 
 message KeyboardKeyResponse {
