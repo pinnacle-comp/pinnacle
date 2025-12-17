@@ -3,7 +3,7 @@
 use std::{collections::HashMap, num::NonZeroU32};
 
 use snowcap_api_defs::snowcap::{
-    input::v1::KeyboardKeyRequest,
+    input::v1::{KeyboardKeyRequest, keyboard_key_request::Target},
     layer::{
         self,
         v1::{CloseRequest, NewLayerRequest, OperateLayerRequest, UpdateLayerRequest, ViewRequest},
@@ -349,7 +349,7 @@ where
     ) {
         let mut stream = match Client::input()
             .keyboard_key(KeyboardKeyRequest {
-                id: self.id.to_inner(),
+                target: Some(Target::LayerId(self.id.to_inner())),
             })
             .block_on_tokio()
         {
