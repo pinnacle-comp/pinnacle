@@ -62,6 +62,7 @@ message NewPopupRequest {
   Anchor anchor = 6;
   Gravity gravity = 7;
   Offset offset = 8;
+  bool no_grab = 9;
 }
 
 message NewPopupResponse {

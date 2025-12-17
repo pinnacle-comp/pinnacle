@@ -24,8 +24,9 @@ impl PointerHandler for State {
             };
 
             let iced_event = match event.kind {
-                PointerEventKind::Enter { serial: _ } => {
+                PointerEventKind::Enter { serial } => {
                     surface.pointer_location = Some(event.position);
+                    surface.focus_serial = Some(serial);
                     iced::Event::Mouse(iced::mouse::Event::CursorEntered)
                 }
                 PointerEventKind::Leave { serial: _ } => {
@@ -44,17 +45,23 @@ impl PointerHandler for State {
                 PointerEventKind::Press {
                     time: _,
                     button,
-                    serial: _,
-                } => iced::Event::Mouse(iced::mouse::Event::ButtonPressed(button_to_iced_button(
-                    button,
-                ))),
+                    serial,
+                } => {
+                    surface.focus_serial = Some(serial);
+                    iced::Event::Mouse(iced::mouse::Event::ButtonPressed(button_to_iced_button(
+                        button,
+                    )))
+                }
                 PointerEventKind::Release {
                     time: _,
                     button,
-                    serial: _,
-                } => iced::Event::Mouse(iced::mouse::Event::ButtonReleased(button_to_iced_button(
-                    button,
-                ))),
+                    serial,
+                } => {
+                    surface.focus_serial = Some(serial);
+                    iced::Event::Mouse(iced::mouse::Event::ButtonReleased(button_to_iced_button(
+                        button,
+                    )))
+                }
                 PointerEventKind::Axis {
                     time: _,
                     horizontal,

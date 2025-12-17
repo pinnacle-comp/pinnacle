@@ -1143,6 +1143,7 @@ local snowcap_popup_v1_Gravity = {
 
 ---@class snowcap.input.v1.KeyboardKeyRequest
 ---@field layer_id integer?
+---@field popup_id integer?
 
 ---@class snowcap.input.v1.KeyboardKeyResponse
 ---@field key integer?
@@ -1331,6 +1332,7 @@ local snowcap_popup_v1_Gravity = {
 ---@field anchor snowcap.popup.v1.Anchor?
 ---@field gravity snowcap.popup.v1.Gravity?
 ---@field offset snowcap.popup.v1.Offset?
+---@field no_grab boolean?
 
 ---@class snowcap.popup.v1.NewPopupResponse
 ---@field popup_id integer?
