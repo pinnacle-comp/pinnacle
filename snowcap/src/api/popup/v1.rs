@@ -31,6 +31,8 @@ impl popup_service_server::PopupService for super::PopupService {
             return Err(Status::unimplemented("Decoration's popup are unavailable."));
         }
 
+        let parent_id: popup::ParentId = parent_id.into();
+
         let Some(position) = request.position.clone().map(popup::Position::from) else {
             return Err(Status::invalid_argument("no position."));
         };
@@ -48,15 +50,15 @@ impl popup_service_server::PopupService for super::PopupService {
                 return Err(Status::invalid_argument("widget def was null"));
             };
 
+            let existing = state.popups.iter().any(|p| p.parent_id == parent_id);
+            if existing {
+                return Err(Status::failed_precondition(
+                    "Another popup with the same parent already exists",
+                ));
+            }
+
             let popup = SnowcapPopup::new(
-                state,
-                parent_id.into(),
-                position,
-                anchor,
-                gravity,
-                offset,
-                !no_grab,
-                f,
+                state, parent_id, position, anchor, gravity, offset, !no_grab, f,
             )
             .map_err(|e| {
                 use popup::Error;
