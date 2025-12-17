@@ -43,6 +43,16 @@ message Rectangle {
   float height = 4;
 }
 
+message ConstraintsAdjust {
+  bool none = 1;
+  bool slide_x = 2;
+  bool slide_y = 3;
+  bool flip_x = 4;
+  bool flip_y = 5;
+  bool resize_x = 6;
+  bool resize_y = 7;
+}
+
 message Position {
   oneof strategy {
     google.protobuf.Empty at_cursor = 1;
@@ -62,7 +72,8 @@ message NewPopupRequest {
   Anchor anchor = 6;
   Gravity gravity = 7;
   Offset offset = 8;
-  bool no_grab = 9;
+  ConstraintsAdjust constraints_adjust = 9;
+  bool no_grab = 10;
 }
 
 message NewPopupResponse {

@@ -1318,6 +1318,15 @@ local snowcap_popup_v1_Gravity = {
 ---@field width number?
 ---@field height number?
 
+---@class snowcap.popup.v1.ConstraintsAdjust
+---@field none boolean?
+---@field slide_x boolean?
+---@field slide_y boolean?
+---@field flip_x boolean?
+---@field flip_y boolean?
+---@field resize_x boolean?
+---@field resize_y boolean?
+
 ---@class snowcap.popup.v1.Position
 ---@field at_cursor google.protobuf.Empty?
 ---@field absolute snowcap.popup.v1.Rectangle?
@@ -1332,6 +1341,7 @@ local snowcap_popup_v1_Gravity = {
 ---@field anchor snowcap.popup.v1.Anchor?
 ---@field gravity snowcap.popup.v1.Gravity?
 ---@field offset snowcap.popup.v1.Offset?
+---@field constraints_adjust snowcap.popup.v1.ConstraintsAdjust?
 ---@field no_grab boolean?
 
 ---@class snowcap.popup.v1.NewPopupResponse
@@ -1480,6 +1490,7 @@ snowcap.popup = {}
 snowcap.popup.v1 = {}
 snowcap.popup.v1.Offset = {}
 snowcap.popup.v1.Rectangle = {}
+snowcap.popup.v1.ConstraintsAdjust = {}
 snowcap.popup.v1.Position = {}
 snowcap.popup.v1.NewPopupRequest = {}
 snowcap.popup.v1.NewPopupResponse = {}
