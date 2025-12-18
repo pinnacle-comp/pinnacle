@@ -1353,6 +1353,11 @@ local snowcap_popup_v1_Gravity = {
 ---@class snowcap.popup.v1.UpdatePopupRequest
 ---@field popup_id integer?
 ---@field widget_def snowcap.widget.v1.WidgetDef?
+---@field position snowcap.popup.v1.Position?
+---@field anchor snowcap.popup.v1.Anchor?
+---@field gravity snowcap.popup.v1.Gravity?
+---@field offset snowcap.popup.v1.Offset?
+---@field constraints_adjust snowcap.popup.v1.ConstraintsAdjust?
 
 ---@class snowcap.popup.v1.UpdatePopupResponse
 
