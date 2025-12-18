@@ -87,6 +87,11 @@ message CloseRequest {
 message UpdatePopupRequest {
   uint32 popup_id = 1;
   optional snowcap.widget.v1.WidgetDef widget_def = 2;
+  optional Position position = 5;
+  optional Anchor anchor = 6;
+  optional Gravity gravity = 7;
+  optional Offset offset = 8;
+  optional ConstraintsAdjust constraints_adjust = 9;
 }
 message UpdatePopupResponse {}
 
