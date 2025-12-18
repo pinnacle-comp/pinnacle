@@ -117,14 +117,66 @@ impl popup_service_server::PopupService for super::PopupService {
         let id = request.popup_id;
         let id = PopupId(id);
 
+        let position = request.position.clone().map(popup::Position::from);
+        let anchor = Option::from_api(request.anchor());
+        let gravity = Option::from_api(request.gravity());
+        let offset = request.offset.map(popup::Offset::from);
+        let constraints_adjust = request
+            .constraints_adjust
+            .map(xdg_positioner::ConstraintAdjustment::from_api);
+
         let widget_def = request.widget_def;
 
         run_unary(&self.sender, move |state| {
+            let mut new_anchor_rect = None;
+
+            let Some(parent_id) = state.popup_for_id(id).map(|p| p.parent_id) else {
+                return Ok(UpdatePopupResponse {});
+            };
+
+            if let Some(position) = position {
+                let anchor_rect = match parent_id {
+                    popup::ParentId::Popup(id) => {
+                        let p = state
+                            .popups
+                            .iter_mut()
+                            .find(|p| p.popup_id == id)
+                            .ok_or(Status::internal("parent not found."))?;
+
+                        position
+                            .anchor_rect_for(&mut p.surface)
+                            .ok_or(Status::invalid_argument("invalid position."))?
+                    }
+                    popup::ParentId::Layer(id) => {
+                        let l = state
+                            .layers
+                            .iter_mut()
+                            .find(|l| l.layer_id == id)
+                            .ok_or(Status::internal("parent not found."))?;
+
+                        position
+                            .anchor_rect_for(&mut l.surface)
+                            .ok_or(Status::invalid_argument("invalid position."))?
+                    }
+                    // Decoration as parent is not implemented at the moment.
+                    popup::ParentId::Decoration(_) => unreachable!(),
+                };
+
+                new_anchor_rect = Some(anchor_rect);
+            }
+
             let Some(popup) = state.popup_for_id(id) else {
                 return Ok(UpdatePopupResponse {});
             };
 
-            popup.update_properties(widget_def.and_then(widget_def_to_fn));
+            popup.update_properties(
+                new_anchor_rect,
+                anchor,
+                gravity,
+                offset,
+                constraints_adjust,
+                widget_def.and_then(widget_def_to_fn),
+            );
 
             Ok(UpdatePopupResponse {})
         })
