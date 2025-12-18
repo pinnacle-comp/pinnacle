@@ -77,7 +77,7 @@ pub enum Position {
 }
 
 impl Position {
-    fn anchor_rect_for(&self, surface: &mut SnowcapSurface) -> Option<iced::Rectangle<i32>> {
+    pub fn anchor_rect_for(&self, surface: &mut SnowcapSurface) -> Option<iced::Rectangle<i32>> {
         match self {
             Position::AtCursor => surface.pointer_location.map(|(x, y)| iced::Rectangle {
                 x: x as i32,
@@ -425,6 +425,13 @@ impl SnowcapPopup {
         })
     }
 
+    fn send_reposition(&mut self) {
+        let token = self.reposition_token;
+        self.reposition_token += 1;
+        self.pending_reposition = Some(token);
+        self.popup.reposition(&self.positioner, token);
+    }
+
     pub fn request_view(&mut self) {
         self.surface.request_view();
     }
@@ -433,12 +440,57 @@ impl SnowcapPopup {
         self.surface.schedule_redraw();
     }
 
-    pub fn update_properties(&mut self, widgets: Option<ViewFn>) {
-        if let Some(widgets) = widgets {
-            self.surface.view_changed(widgets);
-            self.recompute_size = true;
+    pub fn update_properties(
+        &mut self,
+        anchor_rect: Option<iced::Rectangle<i32>>,
+        anchor: Option<xdg_positioner::Anchor>,
+        gravity: Option<xdg_positioner::Gravity>,
+        offset: Option<Offset>,
+        constraints_adjustment: Option<ConstraintAdjustment>,
+        widgets: Option<ViewFn>,
+    ) {
+        let mut update_pos = false;
+
+        if let Some(iced::Rectangle {
+            x,
+            y,
+            width,
+            height,
+        }) = anchor_rect
+        {
+            self.positioner.set_anchor_rect(x, y, width, height);
+            update_pos = true;
         }
 
+        if let Some(anchor) = anchor {
+            self.positioner.set_anchor(anchor);
+            update_pos = true;
+        }
+
+        if let Some(gravity) = gravity {
+            self.positioner.set_gravity(gravity);
+            update_pos = true;
+        }
+
+        if let Some(Offset { x, y }) = offset {
+            self.positioner.set_offset(x, y);
+            update_pos = true;
+        }
+
+        if let Some(adjustment) = constraints_adjustment {
+            self.positioner.set_constraint_adjustment(adjustment);
+            update_pos = true;
+        }
+
+        if let Some(widgets) = widgets {
+            self.surface.view_changed(widgets);
+        }
+
+        if update_pos {
+            self.send_reposition();
+        }
+
+        self.recompute_size = true;
         self.surface.request_frame();
     }
 
@@ -477,10 +529,7 @@ impl SnowcapPopup {
             if self.recompute_size {
                 self.positioner.set_size(width as i32, height as i32);
 
-                let token = self.reposition_token;
-                self.reposition_token += 1;
-                self.pending_reposition = Some(token);
-                self.popup.reposition(&self.positioner, token);
+                self.send_reposition();
             }
         }
 
