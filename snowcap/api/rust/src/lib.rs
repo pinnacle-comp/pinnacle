@@ -15,6 +15,7 @@ mod client;
 pub mod decoration;
 pub mod input;
 pub mod layer;
+pub mod popup;
 pub mod widget;
 
 use client::Client;
