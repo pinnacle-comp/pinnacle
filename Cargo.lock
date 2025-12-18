@@ -4489,6 +4489,7 @@ dependencies = [
 name = "snowcap-api"
 version = "0.1.0"
 dependencies = [
+ "bitflags 2.10.0",
  "from_variants",
  "futures",
  "hyper-util",
