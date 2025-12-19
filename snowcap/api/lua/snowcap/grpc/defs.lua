@@ -1350,6 +1350,12 @@ local snowcap_popup_v1_Gravity = {
 ---@class snowcap.popup.v1.CloseRequest
 ---@field popup_id integer?
 
+---@class snowcap.popup.v1.OperatePopupRequest
+---@field popup_id integer?
+---@field operation snowcap.operation.v1.Operation?
+
+---@class snowcap.popup.v1.OperatePopupResponse
+
 ---@class snowcap.popup.v1.UpdatePopupRequest
 ---@field popup_id integer?
 ---@field widget_def snowcap.widget.v1.WidgetDef?
@@ -1500,6 +1506,8 @@ snowcap.popup.v1.Position = {}
 snowcap.popup.v1.NewPopupRequest = {}
 snowcap.popup.v1.NewPopupResponse = {}
 snowcap.popup.v1.CloseRequest = {}
+snowcap.popup.v1.OperatePopupRequest = {}
+snowcap.popup.v1.OperatePopupResponse = {}
 snowcap.popup.v1.UpdatePopupRequest = {}
 snowcap.popup.v1.UpdatePopupResponse = {}
 snowcap.popup.v1.ViewRequest = {}
@@ -1868,6 +1876,23 @@ snowcap.popup.v1.PopupService.Close.response = ".google.protobuf.Empty"
 ---@return string | nil error An error string, if any
 function Client:snowcap_popup_v1_PopupService_Close(data)
     return self:unary_request(snowcap.popup.v1.PopupService.Close, data)
+end
+snowcap.popup.v1.PopupService.OperatePopup = {}
+snowcap.popup.v1.PopupService.OperatePopup.service = "snowcap.popup.v1.PopupService"
+snowcap.popup.v1.PopupService.OperatePopup.method = "OperatePopup"
+snowcap.popup.v1.PopupService.OperatePopup.request = ".snowcap.popup.v1.OperatePopupRequest"
+snowcap.popup.v1.PopupService.OperatePopup.response = ".snowcap.popup.v1.OperatePopupResponse"
+
+---Performs a unary request.
+---
+---@nodiscard
+---
+---@param data snowcap.popup.v1.OperatePopupRequest
+---
+---@return snowcap.popup.v1.OperatePopupResponse | nil response
+---@return string | nil error An error string, if any
+function Client:snowcap_popup_v1_PopupService_OperatePopup(data)
+    return self:unary_request(snowcap.popup.v1.PopupService.OperatePopup, data)
 end
 snowcap.popup.v1.PopupService.UpdatePopup = {}
 snowcap.popup.v1.PopupService.UpdatePopup.service = "snowcap.popup.v1.PopupService"
