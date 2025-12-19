@@ -1,7 +1,8 @@
+use anyhow::Context;
 use smithay_client_toolkit::reexports::protocols::xdg::shell::client::xdg_positioner;
 use snowcap_api_defs::snowcap::popup::v1::{
-    self, CloseRequest, NewPopupRequest, NewPopupResponse, UpdatePopupRequest, UpdatePopupResponse,
-    ViewRequest, ViewResponse,
+    self, CloseRequest, NewPopupRequest, NewPopupResponse, OperatePopupRequest,
+    OperatePopupResponse, UpdatePopupRequest, UpdatePopupResponse, ViewRequest, ViewResponse,
     new_popup_request::{self, ParentId},
     popup_service_server,
 };
@@ -12,7 +13,7 @@ use crate::{
     decoration::DecorationId,
     layer::LayerId,
     popup::{self, PopupId, SnowcapPopup},
-    util::convert::FromApi,
+    util::convert::{FromApi, TryFromApi},
 };
 
 #[tonic::async_trait]
@@ -104,6 +105,43 @@ impl popup_service_server::PopupService for super::PopupService {
 
         run_unary_no_response(&self.sender, move |state| {
             state.popup_destroy(id);
+        })
+        .await
+    }
+
+    async fn operate_popup(
+        &self,
+        request: Request<OperatePopupRequest>,
+    ) -> Result<Response<OperatePopupResponse>, Status> {
+        let OperatePopupRequest {
+            popup_id,
+            operation,
+        } = request.into_inner();
+
+        let id = PopupId(popup_id);
+
+        run_unary(&self.sender, move |state| {
+            let Some(popup) = state.popup_for_id(id) else {
+                return Ok(OperatePopupResponse {});
+            };
+
+            let Some(operation) = operation else {
+                return Ok(OperatePopupResponse {});
+            };
+
+            let operation =
+                Box::try_from_api(operation).context("While processing OperatePopupRequest");
+            let mut operation = match operation {
+                Err(e) => {
+                    tracing::error!("{e:?}");
+                    return Ok(OperatePopupResponse {});
+                }
+                Ok(o) => o,
+            };
+
+            popup.operate(&mut operation);
+
+            Ok(OperatePopupResponse {})
         })
         .await
     }
