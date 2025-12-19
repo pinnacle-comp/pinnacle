@@ -1,6 +1,7 @@
 use snowcap_api_defs::snowcap::decoration::v1::{
     CloseRequest, CloseResponse, NewDecorationRequest, NewDecorationResponse,
-    UpdateDecorationRequest, UpdateDecorationResponse, decoration_service_server,
+    UpdateDecorationRequest, UpdateDecorationResponse, ViewRequest, ViewResponse,
+    decoration_service_server,
 };
 use tonic::{Request, Response, Status};
 use tracing::warn;
@@ -122,6 +123,32 @@ impl decoration_service_server::DecorationService for super::DecorationService {
             );
 
             Ok(UpdateDecorationResponse {})
+        })
+        .await
+    }
+
+    async fn request_view(
+        &self,
+        request: Request<ViewRequest>,
+    ) -> Result<Response<ViewResponse>, Status> {
+        let request = request.into_inner();
+
+        let id = request.decoration_id;
+        let id = DecorationId(id);
+
+        run_unary(&self.sender, move |state| {
+            let Some(deco) = state
+                .decorations
+                .iter_mut()
+                .find(|deco| deco.decoration_id == id)
+            else {
+                return Ok(ViewResponse {});
+            };
+
+            deco.request_view();
+            deco.schedule_redraw();
+
+            Ok(ViewResponse {})
         })
         .await
     }
