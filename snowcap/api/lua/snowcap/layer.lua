@@ -122,12 +122,8 @@ function layer.new_widget(args)
         layer_id = layer_id,
     }, function(response)
         for _, event in ipairs(response.widget_events) do
-            local widget_id = event.widget_id or 0
-            local msg = nil
-
-            if event.button then
-                msg = callbacks[widget_id]
-            end
+            ---@diagnostic disable-next-line:invisible
+            local msg = widget._message_from_event(callbacks, event)
 
             if msg then
                 local ok, update_err = pcall(function()
