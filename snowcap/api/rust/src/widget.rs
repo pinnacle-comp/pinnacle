@@ -104,11 +104,36 @@ pub struct WidgetDef<Msg> {
     pub widget: Widget<Msg>,
 }
 
+/// Holds pending messages for any Widget
+#[derive(Debug, Clone, PartialEq)]
+pub enum WidgetMessage<Msg> {
+    Button(Msg),
+}
+
+pub fn message_from_event<Msg>(
+    callbacks: &HashMap<WidgetId, WidgetMessage<Msg>>,
+    event: widget::v1::WidgetEvent,
+) -> Option<Msg>
+where
+    Msg: Clone + Send + 'static,
+{
+    use widget::v1::widget_event::Event;
+
+    let id = WidgetId(event.widget_id);
+    let event = event.event?;
+
+    match event {
+        Event::Button(_event) => callbacks.get(&id).cloned().map(|f| match f {
+            WidgetMessage::Button(msg) => msg,
+        }),
+    }
+}
+
 impl<Msg> WidgetDef<Msg> {
     pub(crate) fn collect_messages(
         &self,
-        callbacks: &mut HashMap<WidgetId, Msg>,
-        with_widget: fn(&WidgetDef<Msg>, &mut HashMap<WidgetId, Msg>),
+        callbacks: &mut HashMap<WidgetId, WidgetMessage<Msg>>,
+        with_widget: fn(&WidgetDef<Msg>, &mut HashMap<WidgetId, WidgetMessage<Msg>>),
     ) {
         with_widget(self, callbacks);
         match &self.widget {
@@ -136,6 +161,19 @@ impl<Msg> WidgetDef<Msg> {
             Widget::InputRegion(input_region) => {
                 input_region.child.collect_messages(callbacks, with_widget);
             }
+        }
+    }
+}
+
+impl<Msg: Clone> WidgetDef<Msg> {
+    pub(crate) fn message_collector(&self, callbacks: &mut HashMap<WidgetId, WidgetMessage<Msg>>) {
+        if let Widget::Button(button) = &self.widget {
+            callbacks.extend(
+                button
+                    .on_press
+                    .clone()
+                    .map(|(id, msg)| (id, WidgetMessage::Button(msg))),
+            );
         }
     }
 }

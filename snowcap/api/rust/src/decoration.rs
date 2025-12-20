@@ -7,7 +7,7 @@ use snowcap_api_defs::snowcap::{
         self,
         v1::{CloseRequest, NewDecorationRequest, UpdateDecorationRequest, ViewRequest},
     },
-    widget::v1::{GetWidgetEventsRequest, get_widget_events_request, widget_event},
+    widget::v1::{GetWidgetEventsRequest, get_widget_events_request},
 };
 use tokio::sync::mpsc::UnboundedSender;
 use tokio_stream::StreamExt;
@@ -16,7 +16,7 @@ use tracing::error;
 use crate::{
     BlockOnTokio,
     client::Client,
-    widget::{Program, Widget, WidgetId},
+    widget::{self, Program, WidgetDef, WidgetId, WidgetMessage},
 };
 
 /// The bounds of a window or decoration.
@@ -75,15 +75,11 @@ where
     Msg: Clone + Send + 'static,
     P: Program<Message = Msg> + Send + 'static,
 {
-    let mut callbacks = HashMap::<WidgetId, Msg>::new();
+    let mut callbacks = HashMap::<WidgetId, WidgetMessage<Msg>>::new();
 
     let widget_def = program.view();
 
-    widget_def.collect_messages(&mut callbacks, |def, cbs| {
-        if let Widget::Button(button) = &def.widget {
-            cbs.extend(button.on_press.clone());
-        }
-    });
+    widget_def.collect_messages(&mut callbacks, WidgetDef::message_collector);
 
     let response = Client::decoration()
         .new_decoration(NewDecorationRequest {
@@ -111,24 +107,12 @@ where
             tokio::select! {
                 Some(Ok(response)) = event_stream.next() => {
                     for widget_event in response.widget_events {
-                        let id = WidgetId(widget_event.widget_id);
-                        let Some(event) = widget_event.event else {
+                        let Some(msg) = widget::message_from_event(&callbacks, widget_event) else {
                             continue;
                         };
 
-                        let msg = match event {
-                            widget_event::Event::Button(_event) => {
-                                callbacks.get(&id).cloned()
-                            }
-                        };
-
-                        let Some(msg) = msg else {
-                            continue;
-                        };
-
-                        program.update(msg.clone());
+                        program.update(msg);
                     }
-
                 }
                 Some(msg) = msg_recv.recv() => {
                     program.update(msg);
@@ -149,11 +133,7 @@ where
 
             callbacks.clear();
 
-            widget_def.collect_messages(&mut callbacks, |def, cbs| {
-                if let Widget::Button(button) = &def.widget {
-                    cbs.extend(button.on_press.clone());
-                }
-            });
+            widget_def.collect_messages(&mut callbacks, WidgetDef::message_collector);
 
             Client::decoration()
                 .update_decoration(UpdateDecorationRequest {
