@@ -642,4 +642,19 @@ function widget._collect_callbacks(callbacks, wgt)
     end
 end
 
+---@private
+---@lcat nodoc
+---@param callbacks any[]
+---@param event snowcap.widget.v1.WidgetEvent
+function widget._message_from_event(callbacks, event)
+    local widget_id = event.widget_id or 0
+    local msg = nil
+
+    if event.button then
+        msg = callbacks[widget_id]
+    end
+
+    return msg
+end
+
 return widget
