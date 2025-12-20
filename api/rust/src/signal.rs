@@ -216,9 +216,9 @@ signals! {
                 }
             },
         }
-        /// The window got keyboard focus.
+        /// An output got focused.
         ///
-        /// Callbacks receive the newly focused window.
+        /// Callbacks receive the newly focused output.
         OutputFocused = {
             enum_name = Focused,
             callback_type = SingleOutputFn,
