@@ -75,6 +75,7 @@ message NewPopupRequest {
   Offset offset = 8;
   ConstraintsAdjust constraints_adjust = 9;
   bool no_grab = 10;
+  bool no_replace = 11;
 }
 
 message NewPopupResponse {
