@@ -11,6 +11,7 @@ use tonic::{Request, Response, Status};
 use crate::{
     api::{run_unary, run_unary_no_response, widget::v1::widget_def_to_fn},
     decoration::DecorationId,
+    handlers::keyboard::KeyboardFocus,
     layer::LayerId,
     popup::{self, PopupId, SnowcapPopup},
     util::convert::{FromApi, TryFromApi},
@@ -40,7 +41,6 @@ impl popup_service_server::PopupService for super::PopupService {
         let anchor = Option::from_api(request.anchor());
         let gravity = Option::from_api(request.gravity());
         let offset = request.offset.map(popup::Offset::from);
-        let no_grab = request.no_grab;
         let constraints_adjust = request
             .constraints_adjust
             .map(xdg_positioner::ConstraintAdjustment::from_api);
@@ -49,16 +49,74 @@ impl popup_service_server::PopupService for super::PopupService {
             return Err(Status::invalid_argument("no widget def"));
         };
 
+        let grab_keyboard = !request.no_grab;
+        let replace = !request.no_replace;
+
         run_unary(&self.sender, move |state| {
             let Some(f) = crate::api::widget::v1::widget_def_to_fn(widget_def) else {
                 return Err(Status::invalid_argument("widget def was null"));
             };
 
-            let existing = state.popups.iter().any(|p| p.parent_id == parent_id);
-            if existing {
+            let existing = state
+                .popups
+                .iter()
+                .find(|p| p.parent_id == parent_id)
+                .map(|p| p.popup_id);
+            if let Some(existing) = existing
+                && replace
+            {
+                state.popup_destroy(existing);
+            } else if existing.is_some() {
                 return Err(Status::failed_precondition(
                     "Another popup with the same parent already exists",
                 ));
+            }
+
+            // INFO: We can only grab keyboard if the parent popup has it. This behavior is
+            // per-keyboard, but the compositor may not have discarded it already, depending on
+            // what action opened the new popup. Since it's a hard error to do so which may crash
+            // snowcap, let's dismiss it here.
+            if grab_keyboard
+                && let Some(focused_popup) = state
+                    .keyboard_focus
+                    .as_ref()
+                    .and_then(|focus| {
+                        if let KeyboardFocus::Popup(popup) = focus {
+                            Some(popup)
+                        } else {
+                            None
+                        }
+                    })
+                    .and_then(|popup| state.popups.iter().find(|p| &p.popup == popup))
+            {
+                let focused_toplevel_id = Some(focused_popup.toplevel_id);
+                let toplevel_id = match parent_id {
+                    popup::ParentId::Popup(popup_id) => state
+                        .popups
+                        .iter()
+                        .find(|p| p.popup_id == popup_id)
+                        .map(|p| p.toplevel_id),
+                    _ => Some(parent_id),
+                };
+
+                if toplevel_id != focused_toplevel_id {
+                    if replace {
+                        if let Some(root_id) = state
+                            .popups
+                            .iter()
+                            .find(|p| Some(p.parent_id) == focused_toplevel_id)
+                            .map(|p| p.popup_id)
+                        {
+                            state.popup_destroy(root_id);
+                        } else {
+                            return Err(Status::internal("Unable to remove focused popup tree."));
+                        }
+                    } else {
+                        return Err(Status::failed_precondition(
+                            "Another with already has the keyboard grab.",
+                        ));
+                    }
+                }
             }
 
             let popup = SnowcapPopup::new(
@@ -69,7 +127,7 @@ impl popup_service_server::PopupService for super::PopupService {
                 gravity,
                 offset,
                 constraints_adjust,
-                !no_grab,
+                grab_keyboard,
                 f,
             )
             .map_err(|e| {
