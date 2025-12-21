@@ -1343,6 +1343,7 @@ local snowcap_popup_v1_Gravity = {
 ---@field offset snowcap.popup.v1.Offset?
 ---@field constraints_adjust snowcap.popup.v1.ConstraintsAdjust?
 ---@field no_grab boolean?
+---@field no_replace boolean?
 
 ---@class snowcap.popup.v1.NewPopupResponse
 ---@field popup_id integer?
