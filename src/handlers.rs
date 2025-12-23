@@ -44,12 +44,9 @@ use smithay::{
         pointer::{self, CursorImageStatus, PointerHandle},
     },
     output::{Mode, Output, Scale},
-    reexports::{
-        wayland_protocols::xdg::shell::server::xdg_positioner::ConstraintAdjustment,
-        wayland_server::{
-            Client, Resource,
-            protocol::{wl_buffer::WlBuffer, wl_output::WlOutput, wl_surface::WlSurface},
-        },
+    reexports::wayland_server::{
+        Client, Resource,
+        protocol::{wl_buffer::WlBuffer, wl_output::WlOutput, wl_surface::WlSurface},
     },
     utils::{Logical, Point, Rectangle},
     wayland::{
@@ -1049,13 +1046,6 @@ impl Pinnacle {
             .window_for_surface(&root)
             .map(|win| win.total_decoration_offset())
             .unwrap_or_default();
-
-        if parent == root {
-            // Slide toplevel popup x's instead of flipping; this mimics Awesome
-            positioner
-                .constraint_adjustment
-                .remove(ConstraintAdjustment::FlipX);
-        }
 
         // The anchor rectangle is relative to the window's wl surface.
         // If there is a decoration, we need to offset the anchor rect
