@@ -401,6 +401,8 @@ impl CompositorHandler for State {
     fn destroyed(&mut self, surface: &WlSurface) {
         let _span = tracy_client::span!("CompositorHandler::destroyed");
 
+        self.pinnacle.dmabuf_hooks.remove(surface);
+
         let Some(root_surface) = self.pinnacle.root_surface_cache.get(surface) else {
             return;
         };

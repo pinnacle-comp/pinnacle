@@ -570,7 +570,9 @@ impl Pinnacle {
             if let Some(hook) = hook {
                 compositor::remove_pre_commit_hook(toplevel.wl_surface(), hook);
             }
-            self.add_default_dmabuf_pre_commit_hook(toplevel.wl_surface());
+            if unmap {
+                self.add_default_dmabuf_pre_commit_hook(toplevel.wl_surface());
+            }
         }
 
         let maybe_output = window.output(self);
