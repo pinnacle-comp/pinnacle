@@ -122,12 +122,8 @@ function layer.new_widget(args)
         layer_id = layer_id,
     }, function(response)
         for _, event in ipairs(response.widget_events) do
-            local widget_id = event.widget_id or 0
-            local msg = nil
-
-            if event.button then
-                msg = callbacks[widget_id]
-            end
+            ---@diagnostic disable-next-line:invisible
+            local msg = widget._message_from_event(callbacks, event)
 
             if msg then
                 local ok, update_err = pcall(function()
@@ -153,14 +149,9 @@ function layer.new_widget(args)
     return layer_handle.new(layer_id, function(msg)
         args.program:update(msg)
 
-        local widget_def = args.program:view()
-        callbacks = {}
-
-        widget._traverse_widget_tree(widget_def, callbacks, widget._collect_callbacks)
-
-        local _, err = client:snowcap_layer_v1_LayerService_UpdateLayer({
+        ---@diagnostic disable-next-line: redefined-local
+        local _, err = client:snowcap_layer_v1_LayerService_RequestView({
             layer_id = layer_id,
-            widget_def = widget.widget_def_into_api(widget_def),
         })
 
         if err then
@@ -169,14 +160,48 @@ function layer.new_widget(args)
     end)
 end
 
----@param on_press fun(mods: snowcap.input.Modifiers, key: snowcap.Key)
-function LayerHandle:on_key_press(on_press)
+---Do something when a key event is received.
+---@param on_event fun(handle: snowcap.layer.LayerHandle, event: snowcap.input.KeyEvent)
+function LayerHandle:on_key_event(on_event)
     local err = client:snowcap_input_v1_InputService_KeyboardKey(
-        { id = self.id },
+        { layer_id = self.id },
         function(response)
             ---@cast response snowcap.input.v1.KeyboardKeyResponse
 
-            if not response.pressed then
+            local mods = response.modifiers or {}
+            mods.shift = mods.shift or false
+            mods.ctrl = mods.ctrl or false
+            mods.alt = mods.alt or false
+            mods.super = mods.super or false
+
+            ---@cast mods snowcap.input.Modifiers
+
+            ---@type snowcap.input.KeyEvent
+            local event = {
+                key = response.key or 0,
+                mods = mods,
+                pressed = response.pressed,
+                captured = response.captured,
+                text = response.text,
+            }
+
+            on_event(self, event)
+        end
+    )
+
+    if err then
+        log.error(err)
+    end
+end
+
+---@param on_press fun(mods: snowcap.input.Modifiers, key: snowcap.Key)
+function LayerHandle:on_key_press(on_press)
+    local err = client:snowcap_input_v1_InputService_KeyboardKey(
+        { layer_id = self.id },
+        function(response)
+            ---@cast response snowcap.input.v1.KeyboardKeyResponse
+
+            if not response.pressed or response.captured then
                 return
             end
 
@@ -234,6 +259,19 @@ end
 
 function LayerHandle:send_message(message)
     self._update(message)
+end
+
+---Sends an `Operation` to this layer.
+---@param operation snowcap.widget.operation.Operation
+function LayerHandle:operate(operation)
+    local _, err = client:snowcap_layer_v1_LayerService_OperateLayer({
+        layer_id = self.id,
+        operation = require("snowcap.widget.operation")._to_api(operation),
+    })
+
+    if err then
+        log.error(err)
+    end
 end
 
 layer.anchor = anchor

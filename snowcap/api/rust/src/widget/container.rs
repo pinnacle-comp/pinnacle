@@ -14,6 +14,7 @@ pub struct Container<Msg> {
     pub clip: Option<bool>,
     pub child: WidgetDef<Msg>,
     pub style: Option<Style>,
+    pub id: Option<String>,
 }
 
 impl<Msg> Container<Msg> {
@@ -29,6 +30,14 @@ impl<Msg> Container<Msg> {
             vertical_alignment: None,
             clip: None,
             style: None,
+            id: None,
+        }
+    }
+
+    pub fn id(self, id: impl ToString) -> Self {
+        Self {
+            id: Some(id.to_string()),
+            ..self
         }
     }
 
@@ -113,6 +122,7 @@ impl<Msg> From<Container<Msg>> for widget::v1::Container {
             clip: value.clip,
             child: Some(Box::new(value.child.into())),
             style: value.style.map(From::from),
+            id: value.id,
         }
     }
 }

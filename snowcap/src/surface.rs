@@ -2,7 +2,7 @@ use std::{mem, ptr::NonNull, time::Instant};
 
 use iced::window::RedrawRequest;
 use iced_graphics::{Compositor, shell::Notifier};
-use iced_runtime::user_interface;
+use iced_runtime::{core::widget, user_interface};
 use raw_window_handle::{
     HasDisplayHandle, HasWindowHandle, RawDisplayHandle, RawWindowHandle, WaylandDisplayHandle,
     WaylandWindowHandle,
@@ -31,6 +31,7 @@ use crate::{
 pub struct SnowcapSurface {
     // This is an option so we can drop it first
     surface: Option<<crate::compositor::Compositor as iced_graphics::Compositor>::Surface>,
+    pub toplevel_wl_surface: Option<WlSurface>,
     pub wl_surface: WlSurface,
     compositor_state: CompositorState,
     queue_handle: QueueHandle<State>,
@@ -47,12 +48,14 @@ pub struct SnowcapSurface {
 
     redraw_scheduled: bool,
     pending_view: Option<ViewFn>,
+    view_requested: bool,
     waiting_view: bool,
     layout_invalidated: bool,
     pub widgets: SnowcapWidgetProgram,
     clipboard: WaylandClipboard,
 
     pub pointer_location: Option<(f64, f64)>,
+    pub focus_serial: Option<u32>,
 
     pub window_id: iced::window::Id,
 
@@ -66,6 +69,8 @@ impl Drop for SnowcapSurface {
     fn drop(&mut self) {
         // SAFETY: This needs to be dropped first, it implicitly borrows the wl_surface
         self.surface.take();
+        // SAFETY: If a toplevel surface was set, let's drop it early.
+        self.toplevel_wl_surface.take();
 
         self.fractional_scale.destroy();
         self.wl_surface.destroy();
@@ -122,6 +127,7 @@ impl SnowcapSurface {
 
         Self {
             surface: Some(iced_surface),
+            toplevel_wl_surface: None,
             wl_surface,
             compositor_state,
             queue_handle: state.queue_handle.clone(),
@@ -130,6 +136,7 @@ impl SnowcapSurface {
             pending_output_scale: None,
             bounds: iced::Size::default(),
             pending_bounds: None,
+            view_requested: false,
             waiting_view: false,
             pending_view: None,
             layout_invalidated: false,
@@ -137,6 +144,7 @@ impl SnowcapSurface {
             renderer,
             clipboard,
             pointer_location: None,
+            focus_serial: None,
             viewport,
             fractional_scale,
             window_id: iced::window::Id::unique(),
@@ -159,6 +167,10 @@ impl SnowcapSurface {
 
     pub fn invalidate_layout(&mut self) {
         self.layout_invalidated = true;
+    }
+
+    pub fn request_view(&mut self) {
+        self.view_requested = true;
     }
 
     pub fn schedule_redraw(&mut self) {
@@ -335,7 +347,7 @@ impl SnowcapSurface {
             });
         }
 
-        if !messages.is_empty()
+        if (!messages.is_empty() || self.view_requested)
             && let Some(sender) = self.widget_event_sender.as_ref()
         {
             let widget_events: Vec<_> = messages
@@ -349,6 +361,7 @@ impl SnowcapSurface {
                 })
                 .collect();
 
+            self.view_requested = false;
             self.waiting_view = true;
             let _ = sender.send(widget_events);
         }
@@ -369,10 +382,19 @@ impl SnowcapSurface {
         resized
     }
 
+    pub fn operate(&mut self, operation: &mut dyn widget::Operation) {
+        self.widgets.operate(&mut self.renderer, operation);
+    }
+
     pub fn request_frame(&self) {
         self.wl_surface
             .frame(&self.queue_handle, self.wl_surface.clone());
         self.wl_surface.commit();
+
+        if let Some(wl_surface) = self.toplevel_wl_surface.as_ref() {
+            wl_surface.frame(&self.queue_handle, wl_surface.clone());
+            wl_surface.commit();
+        }
     }
 }
 
