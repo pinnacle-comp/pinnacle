@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-pinnacle-api = { git = "http://github.com/pinnacle-comp/pinnacle", default-features = false }
+pinnacle-api = { git = "http://github.com/pinnacle-comp/pinnacle", default-features = false, tag = "v0.2.0" }
 
 [features]
 default = ["snowcap"]
