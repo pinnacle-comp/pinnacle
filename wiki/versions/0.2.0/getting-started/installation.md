@@ -79,7 +79,7 @@ Then we need to configure your users to launch pinnacle properly:
         clientPackage = pkgs.pinnacle.buildRustConfig {
           name = "pinnacle-config";
           src = path/to/pinnacle/rust/config;
-          version = "0.2.0-alpha.2";
+          version = "0.2.0";
         };
         systemd = {
           enable = true;
