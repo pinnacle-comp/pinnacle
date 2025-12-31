@@ -431,7 +431,12 @@ impl SpaceElement for WindowElement {
 
         {
             let mut overlap_state = overlap_state.borrow_mut();
-            overlap_state.overlaps.retain(|weak, _| weak != output);
+            let weak = output.downgrade();
+            overlap_state.overlaps.remove(&weak);
+
+            // A `SpaceElement::refresh` may not take place directly after this,
+            // so remove here just in case.
+            overlap_state.current_output.take_if(|op| op == &weak);
         }
 
         self.0.output_leave(output)
@@ -457,9 +462,7 @@ impl SpaceElement for WindowElement {
                 .max_by_key(|(_, overlap)| overlap.size.w * overlap.size.h)
                 .map(|(output, _)| output.clone());
 
-            if let Some(new_output) = new_output {
-                overlap_state.current_output.replace(new_output);
-            }
+            overlap_state.current_output = new_output;
         }
 
         self.0.refresh();
