@@ -37,8 +37,14 @@ message UpdateDecorationRequest {
 }
 message UpdateDecorationResponse {}
 
+message ViewRequest {
+  uint32 decoration_id = 1;
+}
+message ViewResponse {}
+
 service DecorationService {
   rpc NewDecoration(NewDecorationRequest) returns (NewDecorationResponse);
   rpc Close(CloseRequest) returns (CloseResponse);
   rpc UpdateDecoration(UpdateDecorationRequest) returns (UpdateDecorationResponse);
+  rpc RequestView(ViewRequest) returns (ViewResponse);
 }
