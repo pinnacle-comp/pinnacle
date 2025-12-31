@@ -1,3 +1,4 @@
+use iced_runtime::core::widget;
 use smithay_client_toolkit::reexports::{
     protocols::ext::foreign_toplevel_list::v1::client::ext_foreign_toplevel_handle_v1::ExtForeignToplevelHandleV1,
 };
@@ -128,6 +129,10 @@ impl SnowcapDecoration {
         })
     }
 
+    pub fn request_view(&mut self) {
+        self.surface.request_view();
+    }
+
     pub fn schedule_redraw(&mut self) {
         self.surface.schedule_redraw();
     }
@@ -161,6 +166,10 @@ impl SnowcapDecoration {
     pub fn draw_if_scheduled(&mut self) {
         let _span = tracy_client::span!("SnowcapDecoration::draw_if_scheduled");
         self.surface.draw_if_scheduled();
+    }
+
+    pub fn operate(&mut self, operation: &mut dyn widget::Operation) {
+        self.surface.operate(operation)
     }
 
     pub fn update(

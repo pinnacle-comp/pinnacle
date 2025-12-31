@@ -83,12 +83,8 @@ function decoration.new_widget(args)
         decoration_id = decoration_id,
     }, function(response)
         for _, event in ipairs(response.widget_events) do
-            local widget_id = event.widget_id or 0
-            local msg = nil
-
-            if event.button then
-                msg = callbacks[widget_id]
-            end
+            ---@diagnostic disable-next-line:invisible
+            local msg = widget._message_from_event(callbacks, event)
 
             if msg then
                 local ok, update_err = pcall(function()
@@ -142,6 +138,19 @@ end
 ---@param message any
 function DecorationHandle:send_message(message)
     self.update(message)
+end
+
+---Sends an `Operation` to this decoration.
+---@param operation snowcap.widget.operation.Operation
+function DecorationHandle:operate(operation)
+    local _, err = client:snowcap_decoration_v1_DecorationService_OperateDecoration({
+        decoration_id = self.id,
+        operation = require("snowcap.widget.operation")._to_api(operation),
+    })
+
+    if err then
+        log.error(err)
+    end
 end
 
 ---Sets the z-index at which this decoration will render.
