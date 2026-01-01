@@ -3,7 +3,7 @@
 This page details breaking changes and steps to update your config
 across major versions.
 
-## v0.2.0 (Unreleased)
+## v0.2.0
 
 ### Layout changes
 

@@ -7,7 +7,7 @@
 
 </div>
 
-![image](https://github.com/pinnacle-comp/pinnacle/assets/120758733/a0e9ce93-30bb-4359-9b61-78ad4c4134d9)
+<img width="2560" height="1440" alt="pinnacle image" src="https://github.com/user-attachments/assets/30cd3ee4-9293-4f9f-93fe-2d8edca953f2" />
 
 ## About
 Pinnacle is a Wayland compositor built in Rust using [Smithay](https://github.com/Smithay/smithay).
@@ -29,8 +29,7 @@ for Wayland.
 Read the [wiki](https://pinnacle-comp.github.io/pinnacle/getting-started/introduction.html) to get started.
 
 ## Roadmap
-- See [#308](https://github.com/pinnacle-comp/pinnacle/issues/308)
-
+- See [#403](https://github.com/pinnacle-comp/pinnacle/issues/403)
 
 ## API references
 <b>Lua: https://pinnacle-comp.github.io/lua-reference<br>

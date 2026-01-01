@@ -177,6 +177,12 @@ impl Udev {
         let udev_dispatcher = Dispatcher::new(udev_backend, move |event, _, state: &mut State| {
             let udev = state.backend.udev_mut();
             let pinnacle = &mut state.pinnacle;
+
+            if !udev.session.is_active() {
+                debug!(?event, "Skipping udev event as session is inactive");
+                return;
+            }
+
             match event {
                 // GPU connected
                 UdevEvent::Added { device_id, path } => {

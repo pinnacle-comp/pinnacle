@@ -3,7 +3,7 @@
 This page details breaking changes and steps to update your config
 across major versions.
 
-## v0.2.0 (Unreleased)
+## v0.2.0
 
 ### Layout changes
 
@@ -132,6 +132,14 @@ across major versions.
   behavior mirrors Sway more than it does Awesome, and this may be changed
   to be closer to the way Awesome behaves in the future.
 
+
+### Other API changes
+
+#### Rust
+
+- `FocusBorder::decorate` now returns a result. It is possible for the
+  passed window to not exist. Previously, this would panic. This is no
+  longer the case.
 
 ## v0.1.0
 

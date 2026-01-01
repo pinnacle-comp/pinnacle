@@ -1,3 +1,7 @@
+# TODOS:
+- Wiki for decorations
+- Update readme for decorations
+
 - Provide scale and transform on new window/layer
     - AKA wl-compositor v6
 - Properly stack x11 windows relative to each other

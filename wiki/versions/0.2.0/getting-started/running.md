@@ -43,7 +43,7 @@ try Pinnacle out.
 
 ## Key and mousebinds
 
-You can press `Super`+`S` to bring up the bind overlay. Below are the default binds.
+You can press `Super`+`S` to bring up the bind overlay. Below are some of the default binds.
 
 `Mod` is `Super` when running in a tty and `Alt` when running as a nested window.
 
