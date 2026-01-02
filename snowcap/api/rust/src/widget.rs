@@ -8,9 +8,11 @@ pub mod container;
 pub mod font;
 pub mod image;
 pub mod input_region;
+pub mod operation;
 pub mod row;
 pub mod scrollable;
 pub mod text;
+pub mod text_input;
 
 use std::{
     collections::HashMap,
@@ -25,6 +27,7 @@ use row::Row;
 use scrollable::Scrollable;
 use snowcap_api_defs::snowcap::widget;
 use text::Text;
+use text_input::TextInput;
 
 use crate::widget::input_region::InputRegion;
 
@@ -103,11 +106,42 @@ pub struct WidgetDef<Msg> {
     pub widget: Widget<Msg>,
 }
 
+/// Holds pending messages for any Widget
+#[derive(Debug, Clone, PartialEq)]
+pub enum WidgetMessage<Msg> {
+    Button(Msg),
+    TextInput(text_input::Callbacks<Msg>),
+}
+
+pub fn message_from_event<Msg>(
+    callbacks: &HashMap<WidgetId, WidgetMessage<Msg>>,
+    event: widget::v1::WidgetEvent,
+) -> Option<Msg>
+where
+    Msg: Clone + Send + 'static,
+{
+    use widget::v1::widget_event::Event;
+
+    let id = WidgetId(event.widget_id);
+    let event = event.event?;
+
+    match event {
+        Event::Button(_event) => callbacks.get(&id).cloned().map(|f| match f {
+            WidgetMessage::Button(msg) => msg,
+            _ => unreachable!(),
+        }),
+        Event::TextInput(event) => callbacks.get(&id).cloned().and_then(|f| match f {
+            WidgetMessage::TextInput(callbacks) => callbacks.process_event(event.into()),
+            _ => unreachable!(),
+        }),
+    }
+}
+
 impl<Msg> WidgetDef<Msg> {
     pub(crate) fn collect_messages(
         &self,
-        callbacks: &mut HashMap<WidgetId, Msg>,
-        with_widget: fn(&WidgetDef<Msg>, &mut HashMap<WidgetId, Msg>),
+        callbacks: &mut HashMap<WidgetId, WidgetMessage<Msg>>,
+        with_widget: fn(&WidgetDef<Msg>, &mut HashMap<WidgetId, WidgetMessage<Msg>>),
     ) {
         with_widget(self, callbacks);
         match &self.widget {
@@ -135,6 +169,28 @@ impl<Msg> WidgetDef<Msg> {
             Widget::InputRegion(input_region) => {
                 input_region.child.collect_messages(callbacks, with_widget);
             }
+            Widget::TextInput(_) => (),
+        }
+    }
+}
+
+impl<Msg: Clone> WidgetDef<Msg> {
+    pub(crate) fn message_collector(&self, callbacks: &mut HashMap<WidgetId, WidgetMessage<Msg>>) {
+        if let Widget::Button(button) = &self.widget {
+            callbacks.extend(
+                button
+                    .on_press
+                    .clone()
+                    .map(|(id, msg)| (id, WidgetMessage::Button(msg))),
+            );
+        }
+
+        if let Widget::TextInput(text_input) = &self.widget {
+            callbacks.extend(
+                text_input
+                    .widget_id
+                    .map(|id| (id, WidgetMessage::TextInput(text_input.callbacks.clone()))),
+            );
         }
     }
 }
@@ -160,6 +216,7 @@ pub enum Widget<Msg> {
     Button(Box<Button<Msg>>),
     Image(Image),
     InputRegion(Box<InputRegion<Msg>>),
+    TextInput(Box<TextInput<Msg>>),
 }
 
 impl<Msg, T: Into<Widget<Msg>>> From<T> for WidgetDef<Msg> {
@@ -190,6 +247,9 @@ impl<Msg> From<Widget<Msg>> for widget::v1::widget_def::Widget {
             Widget::Image(image) => widget::v1::widget_def::Widget::Image(image.into()),
             Widget::InputRegion(input_region) => {
                 widget::v1::widget_def::Widget::InputRegion(Box::new((*input_region).into()))
+            }
+            Widget::TextInput(text_input) => {
+                widget::v1::widget_def::Widget::TextInput(Box::new((*text_input).into()))
             }
         }
     }
@@ -367,6 +427,28 @@ impl From<Radius> for widget::v1::Radius {
             top_right: value.top_right,
             bottom_right: value.bottom_right,
             bottom_left: value.bottom_left,
+        }
+    }
+}
+
+/// The height of a line of text in a paragraph.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum LineHeight {
+    /// A factor of the size of the text.
+    Relative(f32),
+    /// An absolute height in logical pixels.
+    Absolute(f32),
+}
+
+impl From<LineHeight> for widget::v1::LineHeight {
+    fn from(value: LineHeight) -> Self {
+        let line_height = match value {
+            LineHeight::Relative(v) => widget::v1::line_height::LineHeight::Relative(v),
+            LineHeight::Absolute(v) => widget::v1::line_height::LineHeight::Absolute(v),
+        };
+
+        Self {
+            line_height: Some(line_height),
         }
     }
 }
