@@ -1,6 +1,8 @@
 pub mod decoration;
 pub mod input;
 pub mod layer;
+pub mod operation;
+pub mod popup;
 pub mod widget;
 
 use std::pin::Pin;

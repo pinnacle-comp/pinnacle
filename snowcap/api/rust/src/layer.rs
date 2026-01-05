@@ -3,12 +3,12 @@
 use std::{collections::HashMap, num::NonZeroU32};
 
 use snowcap_api_defs::snowcap::{
-    input::v1::KeyboardKeyRequest,
+    input::v1::{KeyboardKeyRequest, keyboard_key_request::Target},
     layer::{
         self,
-        v1::{CloseRequest, NewLayerRequest, UpdateLayerRequest},
+        v1::{CloseRequest, NewLayerRequest, OperateLayerRequest, UpdateLayerRequest, ViewRequest},
     },
-    widget::v1::{GetWidgetEventsRequest, get_widget_events_request, widget_event},
+    widget::v1::{GetWidgetEventsRequest, get_widget_events_request},
 };
 use tokio::sync::mpsc::UnboundedSender;
 use tokio_stream::StreamExt;
@@ -18,8 +18,9 @@ use xkbcommon::xkb::Keysym;
 use crate::{
     BlockOnTokio,
     client::Client,
-    input::Modifiers,
-    widget::{Program, Widget, WidgetId},
+    input::{KeyEvent, Modifiers},
+    popup::{self, AsParent},
+    widget::{self, Program, WidgetDef, WidgetId, WidgetMessage},
 };
 
 // TODO: change to bitflag
@@ -145,15 +146,11 @@ where
     Msg: Clone + Send + 'static,
     P: Program<Message = Msg> + Send + 'static,
 {
-    let mut callbacks = HashMap::<WidgetId, Msg>::new();
+    let mut callbacks = HashMap::<WidgetId, WidgetMessage<Msg>>::new();
 
     let widget_def = program.view();
 
-    widget_def.collect_messages(&mut callbacks, |def, cbs| {
-        if let Widget::Button(button) = &def.widget {
-            cbs.extend(button.on_press.clone());
-        }
-    });
+    widget_def.collect_messages(&mut callbacks, WidgetDef::message_collector);
 
     let response = Client::layer()
         .new_layer(NewLayerRequest {
@@ -184,26 +181,24 @@ where
             tokio::select! {
                 Some(Ok(response)) = event_stream.next() => {
                     for widget_event in response.widget_events {
-                        let id = WidgetId(widget_event.widget_id);
-                        let Some(event) = widget_event.event else {
+                        let Some(msg) = widget::message_from_event(&callbacks, widget_event) else {
                             continue;
                         };
 
-                        let msg = match event {
-                            widget_event::Event::Button(_event) => {
-                                callbacks.get(&id).cloned()
-                            },
-                        };
-
-                        let Some(msg) = msg else {
-                            continue;
-                        };
-
-                        program.update(msg.clone());
+                        program.update(msg);
                     }
                 }
                 Some(msg) = msg_recv.recv() => {
-                    program.update(msg.clone());
+                    program.update(msg);
+
+                    if let Err(status) = Client::layer()
+                        .request_view(ViewRequest { layer_id })
+                        .block_on_tokio()
+                    {
+                        error!("Failed to request view for {layer_id}: {status}");
+                    }
+
+                    continue;
                 }
                 else => break,
             };
@@ -212,11 +207,7 @@ where
 
             callbacks.clear();
 
-            widget_def.collect_messages(&mut callbacks, |def, cbs| {
-                if let Widget::Button(button) = &def.widget {
-                    cbs.extend(button.on_press.clone());
-                }
-            });
+            widget_def.collect_messages(&mut callbacks, WidgetDef::message_collector);
 
             Client::layer()
                 .update_layer(UpdateLayerRequest {
@@ -337,6 +328,50 @@ where
         let _ = self.msg_sender.send(message);
     }
 
+    /// Sends an [`Operation`] to this Layer.
+    ///
+    /// [`Operation`]: widget::operation::Operation
+    pub fn operate(&self, operation: widget::operation::Operation) {
+        if let Err(status) = Client::layer()
+            .operate_layer(OperateLayerRequest {
+                layer_id: self.id.to_inner(),
+                operation: Some(operation.into()),
+            })
+            .block_on_tokio()
+        {
+            error!("Failed to send operation to {self:?}: {status}");
+        }
+    }
+
+    /// Do something when a key event is received
+    pub fn on_key_event(
+        &self,
+        mut on_event: impl FnMut(LayerHandle<Msg>, KeyEvent) + Send + 'static,
+    ) {
+        let mut stream = match Client::input()
+            .keyboard_key(KeyboardKeyRequest {
+                target: Some(Target::LayerId(self.id.to_inner())),
+            })
+            .block_on_tokio()
+        {
+            Ok(stream) => stream.into_inner(),
+            Err(status) => {
+                error!("Failed to set `on_key_event` handler: {status}");
+                return;
+            }
+        };
+
+        let handle = self.clone();
+
+        tokio::spawn(async move {
+            while let Some(Ok(response)) = stream.next().await {
+                let event = KeyEvent::from(response);
+
+                on_event(handle.clone(), event);
+            }
+        });
+    }
+
     /// Do something on key press.
     pub fn on_key_press(
         &self,
@@ -344,7 +379,7 @@ where
     ) {
         let mut stream = match Client::input()
             .keyboard_key(KeyboardKeyRequest {
-                id: self.id.to_inner(),
+                target: Some(Target::LayerId(self.id.to_inner())),
             })
             .block_on_tokio()
         {
@@ -359,7 +394,7 @@ where
 
         tokio::spawn(async move {
             while let Some(Ok(response)) = stream.next().await {
-                if !response.pressed {
+                if !response.pressed || response.captured {
                     continue;
                 }
 
@@ -369,5 +404,11 @@ where
                 on_press(handle.clone(), key, mods);
             }
         });
+    }
+}
+
+impl<Msg> AsParent for LayerHandle<Msg> {
+    fn as_parent(&self) -> crate::popup::Parent {
+        popup::Parent(popup::ParentInner::Layer(self.id))
     }
 }

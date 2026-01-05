@@ -1,6 +1,8 @@
+use anyhow::Context;
 use snowcap_api_defs::snowcap::decoration::v1::{
     CloseRequest, CloseResponse, NewDecorationRequest, NewDecorationResponse,
-    UpdateDecorationRequest, UpdateDecorationResponse, decoration_service_server,
+    OperateDecorationRequest, OperateDecorationResponse, UpdateDecorationRequest,
+    UpdateDecorationResponse, ViewRequest, ViewResponse, decoration_service_server,
 };
 use tonic::{Request, Response, Status};
 use tracing::warn;
@@ -8,6 +10,7 @@ use tracing::warn;
 use crate::{
     api::{run_unary, widget::v1::widget_def_to_fn},
     decoration::{DecorationId, SnowcapDecoration},
+    util::convert::TryFromApi,
 };
 
 #[tonic::async_trait]
@@ -81,6 +84,46 @@ impl decoration_service_server::DecorationService for super::DecorationService {
         .await
     }
 
+    async fn operate_decoration(
+        &self,
+        request: Request<OperateDecorationRequest>,
+    ) -> Result<Response<OperateDecorationResponse>, Status> {
+        let OperateDecorationRequest {
+            decoration_id,
+            operation,
+        } = request.into_inner();
+
+        let id = DecorationId(decoration_id);
+
+        run_unary(&self.sender, move |state| {
+            let Some(decoration) = state
+                .decorations
+                .iter_mut()
+                .find(|decoration| decoration.decoration_id == id)
+            else {
+                return Ok(OperateDecorationResponse {});
+            };
+            let Some(operation) = operation else {
+                return Ok(OperateDecorationResponse {});
+            };
+
+            let operation =
+                Box::try_from_api(operation).context("While processing OperateLayerRequest");
+            let mut operation = match operation {
+                Err(e) => {
+                    tracing::error!("{e:?}");
+                    return Ok(OperateDecorationResponse {});
+                }
+                Ok(o) => o,
+            };
+
+            decoration.operate(&mut operation);
+
+            Ok(OperateDecorationResponse {})
+        })
+        .await
+    }
+
     async fn update_decoration(
         &self,
         request: Request<UpdateDecorationRequest>,
@@ -122,6 +165,32 @@ impl decoration_service_server::DecorationService for super::DecorationService {
             );
 
             Ok(UpdateDecorationResponse {})
+        })
+        .await
+    }
+
+    async fn request_view(
+        &self,
+        request: Request<ViewRequest>,
+    ) -> Result<Response<ViewResponse>, Status> {
+        let request = request.into_inner();
+
+        let id = request.decoration_id;
+        let id = DecorationId(id);
+
+        run_unary(&self.sender, move |state| {
+            let Some(deco) = state
+                .decorations
+                .iter_mut()
+                .find(|deco| deco.decoration_id == id)
+            else {
+                return Ok(ViewResponse {});
+            };
+
+            deco.request_view();
+            deco.schedule_redraw();
+
+            Ok(ViewResponse {})
         })
         .await
     }
