@@ -11,11 +11,58 @@ use smithay_client_toolkit::{
 
 use crate::{input::keyboard::keysym_to_iced_key_and_loc, state::State};
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub struct KeyboardKey {
     pub key: Keysym,
     pub modifiers: Modifiers,
     pub pressed: bool,
+    pub captured: bool,
+    pub text: Option<String>,
+}
+
+impl State {
+    pub(crate) fn on_key_repeat(&mut self, keyboard: &WlKeyboard, event: KeyEvent) {
+        self.on_key_press(keyboard, event, true);
+    }
+
+    pub(crate) fn on_key_press(&mut self, _keyboard: &WlKeyboard, event: KeyEvent, repeat: bool) {
+        let Some(KeyboardFocus::Layer(layer)) = self.keyboard_focus.as_ref() else {
+            return;
+        };
+
+        let Some(snowcap_layer) = self.layers.iter_mut().find(|sn_l| &sn_l.layer == layer) else {
+            return;
+        };
+
+        let (key, location) = keysym_to_iced_key_and_loc(event.keysym);
+
+        let mut modifiers = iced::keyboard::Modifiers::empty();
+        if self.keyboard_modifiers.ctrl {
+            modifiers |= iced::keyboard::Modifiers::CTRL;
+        }
+        if self.keyboard_modifiers.alt {
+            modifiers |= iced::keyboard::Modifiers::ALT;
+        }
+        if self.keyboard_modifiers.shift {
+            modifiers |= iced::keyboard::Modifiers::SHIFT;
+        }
+        if self.keyboard_modifiers.logo {
+            modifiers |= iced::keyboard::Modifiers::LOGO;
+        }
+
+        snowcap_layer
+            .surface
+            .widgets
+            .queue_event(iced::Event::Keyboard(iced::keyboard::Event::KeyPressed {
+                key: key.clone(),
+                location,
+                modifiers,
+                text: event.utf8.map(Into::into),
+                modified_key: key, // TODO:
+                physical_key: Physical::Unidentified(NativeCode::Xkb(event.keysym.raw())),
+                repeat,
+            }));
+    }
 }
 
 impl KeyboardHandler for State {
@@ -57,46 +104,11 @@ impl KeyboardHandler for State {
         &mut self,
         _conn: &Connection,
         _qh: &QueueHandle<Self>,
-        _keyboard: &WlKeyboard,
+        keyboard: &WlKeyboard,
         _serial: u32,
         event: KeyEvent,
     ) {
-        let Some(KeyboardFocus::Layer(layer)) = self.keyboard_focus.as_ref() else {
-            return;
-        };
-
-        let Some(snowcap_layer) = self.layers.iter_mut().find(|sn_l| &sn_l.layer == layer) else {
-            return;
-        };
-
-        let (key, location) = keysym_to_iced_key_and_loc(event.keysym);
-
-        let mut modifiers = iced::keyboard::Modifiers::empty();
-        if self.keyboard_modifiers.ctrl {
-            modifiers |= iced::keyboard::Modifiers::CTRL;
-        }
-        if self.keyboard_modifiers.alt {
-            modifiers |= iced::keyboard::Modifiers::ALT;
-        }
-        if self.keyboard_modifiers.shift {
-            modifiers |= iced::keyboard::Modifiers::SHIFT;
-        }
-        if self.keyboard_modifiers.logo {
-            modifiers |= iced::keyboard::Modifiers::LOGO;
-        }
-
-        snowcap_layer
-            .surface
-            .widgets
-            .queue_event(iced::Event::Keyboard(iced::keyboard::Event::KeyPressed {
-                key: key.clone(),
-                location,
-                modifiers,
-                text: None,
-                modified_key: key, // TODO:
-                physical_key: Physical::Unidentified(NativeCode::Xkb(event.keysym.raw())),
-                repeat: false,
-            }));
+        self.on_key_press(keyboard, event, false)
     }
 
     fn release_key(
@@ -154,8 +166,37 @@ impl KeyboardHandler for State {
         _raw_modifiers: RawModifiers,
         _layout: u32,
     ) {
-        // TODO: per wl_keyboard
         self.keyboard_modifiers = modifiers;
+
+        // TODO: Should we check if the modifiers actually changed ?
+        let Some(KeyboardFocus::Layer(layer)) = self.keyboard_focus.as_ref() else {
+            return;
+        };
+
+        let Some(snowcap_layer) = self.layers.iter_mut().find(|sn_l| &sn_l.layer == layer) else {
+            return;
+        };
+
+        let mut modifiers = iced::keyboard::Modifiers::empty();
+        if self.keyboard_modifiers.ctrl {
+            modifiers |= iced::keyboard::Modifiers::CTRL;
+        }
+        if self.keyboard_modifiers.alt {
+            modifiers |= iced::keyboard::Modifiers::ALT;
+        }
+        if self.keyboard_modifiers.shift {
+            modifiers |= iced::keyboard::Modifiers::SHIFT;
+        }
+        if self.keyboard_modifiers.logo {
+            modifiers |= iced::keyboard::Modifiers::LOGO;
+        }
+
+        snowcap_layer
+            .surface
+            .widgets
+            .queue_event(iced::Event::Keyboard(
+                iced::keyboard::Event::ModifiersChanged(modifiers),
+            ));
     }
 
     fn repeat_key(
@@ -166,7 +207,12 @@ impl KeyboardHandler for State {
         _serial: u32,
         _event: KeyEvent,
     ) {
-        // TODO:
+        // TODO: Smithay does not support wl_keyboard v10. Until that happen, this will not be
+        // called.
+        // I'm leaving this commented for now because I don't know whether only one or both
+        // function will get called when support is added.
+        //
+        // self.on_key_repeat(keyboard, event, true)
     }
 }
 delegate_keyboard!(State);
