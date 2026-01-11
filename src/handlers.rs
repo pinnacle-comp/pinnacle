@@ -403,23 +403,18 @@ impl CompositorHandler for State {
 
         self.pinnacle.dmabuf_hooks.remove(surface);
 
-        let Some(root_surface) = self.pinnacle.root_surface_cache.get(surface) else {
-            return;
-        };
-        let Some(window) = self.pinnacle.window_for_surface(root_surface) else {
-            return;
-        };
-        let Some(output) = window.output(&self.pinnacle) else {
-            return;
-        };
-
-        self.backend.with_renderer(|renderer| {
-            window.capture_snapshot_and_store(
-                renderer,
-                output.current_scale().fractional_scale().into(),
-                1.0,
-            );
-        });
+        if let Some(root_surface) = self.pinnacle.root_surface_cache.get(surface)
+            && let Some(window) = self.pinnacle.window_for_surface(root_surface)
+            && let Some(output) = window.output(&self.pinnacle)
+        {
+            self.backend.with_renderer(|renderer| {
+                window.capture_snapshot_and_store(
+                    renderer,
+                    output.current_scale().fractional_scale().into(),
+                    1.0,
+                );
+            });
+        }
 
         self.pinnacle
             .root_surface_cache
