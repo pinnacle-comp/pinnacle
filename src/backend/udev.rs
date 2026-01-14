@@ -55,6 +55,7 @@ use smithay::{
         input::Libinput,
         rustix::fs::OFlags,
         wayland_protocols::wp::{
+            content_type::v1::server::wp_content_type_v1::Type as ContentType,
             linux_dmabuf::zv1::server::zwp_linux_dmabuf_feedback_v1,
             presentation_time::server::wp_presentation_feedback,
         },
@@ -65,6 +66,8 @@ use smithay::{
     },
     utils::{DeviceFd, Rectangle, Transform},
     wayland::{
+        compositor,
+        content_type::ContentTypeSurfaceCachedState,
         dmabuf::{self, DmabufFeedback, DmabufFeedbackBuilder, DmabufGlobal},
         presentation::Refresh,
         shm::shm_format_to_fourcc,
@@ -685,6 +688,14 @@ fn get_surface_dmabuf_feedback(
     Some(SurfaceDmabufFeedback {
         render_feedback,
         scanout_feedback,
+    })
+}
+
+fn get_surface_content_type(surface: &WlSurface) -> ContentType {
+    compositor::with_states(surface, |states| {
+        let mut guard = states.cached_state.get::<ContentTypeSurfaceCachedState>();
+        let current = guard.current();
+        *current.content_type()
     })
 }
 
@@ -1521,9 +1532,6 @@ impl Udev {
             //
             // However, this would cause the cursor to freeze if the window doesn't refresh.
             // Therefore we're forcing the cursor to refresh at at least 24 fps.
-            //
-            // TODO: This is probably not the best behavior for videos. We should use content-type
-            // to improve that.
 
             const _24_FPS: Duration = Duration::from_nanos(1_000_000_000 / 24);
 
@@ -1537,9 +1545,28 @@ impl Udev {
                     .current_location()
                     .to_i32_round(),
             );
+
             let cursor_over_fs_window = window_under
                 .is_some_and(|(win, _)| win.with_state(|state| state.layout_mode.is_fullscreen()));
-            if !too_long_since_last_present && cursor_over_fs_window {
+
+            let is_xwayland = window_under.is_some_and(|(win, _)| win.is_x11());
+
+            let content_type = window_under
+                .and_then(|(win, _)| {
+                    win.toplevel()
+                        .map(|toplevel| get_surface_content_type(toplevel.wl_surface()))
+                })
+                .unwrap_or(ContentType::None);
+
+            let should_throttle = match content_type {
+                ContentType::Photo | ContentType::Video | ContentType::Game => true,
+
+                // If XWayland it is likely a game so we use legacy behavior
+                ContentType::None => is_xwayland,
+                _ => false,
+            };
+
+            if !too_long_since_last_present && cursor_over_fs_window && should_throttle {
                 // FIXME: With a non-1 scale, the cursor no longer resides on the cursor plane,
                 // making this useless
 

@@ -26,10 +26,11 @@ use smithay::{
         input::TabletToolDescriptor,
         renderer::utils::{self, with_renderer_surface_state},
     },
-    delegate_compositor, delegate_cursor_shape, delegate_data_control, delegate_data_device,
-    delegate_ext_data_control, delegate_fractional_scale, delegate_keyboard_shortcuts_inhibit,
-    delegate_layer_shell, delegate_output, delegate_pointer_constraints, delegate_pointer_gestures,
-    delegate_presentation, delegate_primary_selection, delegate_relative_pointer, delegate_seat,
+    delegate_compositor, delegate_content_type, delegate_cursor_shape, delegate_data_control,
+    delegate_data_device, delegate_ext_data_control, delegate_fractional_scale,
+    delegate_keyboard_shortcuts_inhibit, delegate_layer_shell, delegate_output,
+    delegate_pointer_constraints, delegate_pointer_gestures, delegate_presentation,
+    delegate_primary_selection, delegate_relative_pointer, delegate_seat,
     delegate_security_context, delegate_shm, delegate_single_pixel_buffer, delegate_tablet_manager,
     delegate_viewporter, delegate_xwayland_keyboard_grab, delegate_xwayland_shell,
     desktop::{
@@ -1027,6 +1028,8 @@ delegate_xwayland_keyboard_grab!(State);
 delegate_pointer_gestures!(State);
 
 delegate_single_pixel_buffer!(State);
+
+delegate_content_type!(State);
 
 impl Pinnacle {
     fn position_popup(&self, popup: &PopupSurface) -> anyhow::Result<()> {
