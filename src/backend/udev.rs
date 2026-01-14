@@ -1558,15 +1558,16 @@ impl Udev {
                 })
                 .unwrap_or(ContentType::None);
 
-            let should_throttle = match content_type {
-                ContentType::Photo | ContentType::Video | ContentType::Game => true,
+            // Only skip cursor updates for games.
+            //
+            // We don't do this for `Photo`s because they're static and don't stutter when
+            // the refresh rate jumps, nor for `Video`s because we don't expect the mouse
+            // to be moved much while video is playing.
+            //
+            // We assume xwayland windows may be a game for this purpose.
+            let should_skip = content_type == ContentType::Game || is_xwayland;
 
-                // If XWayland it is likely a game so we use legacy behavior
-                ContentType::None => is_xwayland,
-                _ => false,
-            };
-
-            if !too_long_since_last_present && cursor_over_fs_window && should_throttle {
+            if !too_long_since_last_present && cursor_over_fs_window && should_skip {
                 // FIXME: With a non-1 scale, the cursor no longer resides on the cursor plane,
                 // making this useless
 
