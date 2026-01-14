@@ -64,6 +64,7 @@ use smithay::{
             self, CompositorClientState, CompositorHandler, CompositorState, SurfaceData,
             with_surface_tree_downward,
         },
+        content_type::ContentTypeState,
         cursor_shape::CursorShapeManagerState,
         dmabuf::DmabufState,
         foreign_toplevel_list::ForeignToplevelListState,
@@ -178,6 +179,7 @@ pub struct Pinnacle {
     pub wl_drm_state: WlDrmState,
     pub image_capture_source_state: ImageCaptureSourceState,
     pub image_copy_capture_state: ImageCopyCaptureState,
+    pub content_type_state: ContentTypeState,
 
     pub lock_state: LockState,
 
@@ -488,6 +490,7 @@ impl Pinnacle {
                 &display_handle,
                 filter_restricted_client,
             ),
+            content_type_state: ContentTypeState::new::<State>(&display_handle),
 
             lock_state: LockState::default(),
 
