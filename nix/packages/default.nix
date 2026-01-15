@@ -56,7 +56,6 @@ let
       bit32
       std-normalize
       libxcrypt
-      pkg-config
     ];
     meta.broken = disabled;
   });
