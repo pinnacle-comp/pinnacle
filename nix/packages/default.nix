@@ -6,6 +6,7 @@
   wayland,
   lua54Packages,
   lua5_4,
+  extraLuaPackages ? [],
   protobuf,
   seatd,
   systemdLibs,
@@ -94,9 +95,8 @@ let
     '';
   };
   buildLuaConfig = args: callPackage ./pinnacle-lua-config (args // { inherit lua-client-api; });
-  lua = lua5_4.withPackages (ps: [ lua-client-api ps.cjson ]);
 in
-rustPlatform.buildRustPackage {
+rustPlatform.buildRustPackage (finalAttrs: {
   inherit meta version;
 
   pname = "pinnacle-server";
@@ -158,7 +158,7 @@ rustPlatform.buildRustPackage {
       lib.makeBinPath [
         rustc
         cargo
-        lua
+        finalAttrs.passthru.luaEnv
         xwayland
       ]
     }
@@ -178,8 +178,16 @@ rustPlatform.buildRustPackage {
   ];
 
   passthru = {
+    luaEnv = lua5_4.withPackages (
+      ps:
+      [
+        lua-client-api
+        ps.cjson
+      ]
+      ++ extraLuaPackages
+    );
     inherit buildRustConfig buildLuaConfig;
     providedSessions = [ "pinnacle" ];
     lua-client-api = lua-client-api;
   };
-}
+})
