@@ -104,6 +104,7 @@
 ---@field scroller_border snowcap.widget.Border?
 
 ---@class snowcap.widget.Container
+---@field id string?
 ---@field padding snowcap.widget.Padding?
 ---@field width snowcap.widget.Length?
 ---@field height snowcap.widget.Length?
@@ -329,6 +330,7 @@ end
 local function container_into_api(def)
     ---@type snowcap.widget.v1.Container
     return {
+        id = def.id,
         padding = def.padding --[[@as snowcap.widget.v1.Padding]],
         width = def.width --[[@as snowcap.widget.v1.Length]],
         height = def.height --[[@as snowcap.widget.v1.Length]],
@@ -587,5 +589,22 @@ function widget._collect_callbacks(callbacks, wgt)
         callbacks[wgt.button.widget_id] = wgt.button.on_press
     end
 end
+
+---@private
+---@lcat nodoc
+---@param callbacks any[]
+---@param event snowcap.widget.v1.WidgetEvent
+function widget._message_from_event(callbacks, event)
+    local widget_id = event.widget_id or 0
+    local msg = nil
+
+    if event.button then
+        msg = callbacks[widget_id]
+    end
+
+    return msg
+end
+
+widget.operation = require("snowcap.widget.operation")
 
 return widget

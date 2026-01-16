@@ -15,7 +15,9 @@ function protobuf.build_protos()
         "snowcap/input/" .. version .. "/input.proto",
         "snowcap/layer/" .. version .. "/layer.proto",
         "snowcap/widget/" .. version .. "/widget.proto",
+        "snowcap/operation/" .. version .. "/operation.proto",
         "snowcap/decoration/" .. version .. "/decoration.proto",
+        "snowcap/popup/" .. version .. "/popup.proto",
         "google/protobuf/empty.proto",
     }
 
