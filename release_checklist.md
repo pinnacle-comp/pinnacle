@@ -11,3 +11,7 @@ Keeping this here because I'm inevitably going to forget
 - [ ] If changes in Rust API, bump that version
 - [ ] If wiki has changes, move to new version
 - [ ] Bump and test AUR PKGBUILD
+    - [ ] Bump version
+    - [ ] updpkgsums
+    - [ ] makepkg --printsrcinfo > .SRCINFO
+    - [ ] UPDATE GIT INFO FOR VERGEN
