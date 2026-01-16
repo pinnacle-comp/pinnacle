@@ -122,12 +122,8 @@ function layer.new_widget(args)
         layer_id = layer_id,
     }, function(response)
         for _, event in ipairs(response.widget_events) do
-            local widget_id = event.widget_id or 0
-            local msg = nil
-
-            if event.button then
-                msg = callbacks[widget_id]
-            end
+            ---@diagnostic disable-next-line:invisible
+            local msg = widget._message_from_event(callbacks, event)
 
             if msg then
                 local ok, update_err = pcall(function()
@@ -229,6 +225,19 @@ end
 
 function LayerHandle:send_message(message)
     self._update(message)
+end
+
+---Sends an `Operation` to this layer.
+---@param operation snowcap.widget.operation.Operation
+function LayerHandle:operate(operation)
+    local _, err = client:snowcap_layer_v1_LayerService_OperateLayer({
+        layer_id = self.id,
+        operation = require("snowcap.widget.operation")._to_api(operation),
+    })
+
+    if err then
+        log.error(err)
+    end
 end
 
 layer.anchor = anchor
