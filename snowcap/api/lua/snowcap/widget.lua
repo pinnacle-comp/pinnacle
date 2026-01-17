@@ -98,9 +98,11 @@
 ---@field horizontal_rail snowcap.widget.scrollable.Rail?
 
 ---@class snowcap.widget.scrollable.Rail
----@field background_color snowcap.widget.Color?
+---@field background_color snowcap.widget.Color? Deprecated in favor of background.
+---@field background snowcap.widget.Background?
 ---@field border snowcap.widget.Border?
----@field scroller_color snowcap.widget.Color?
+---@field scroller_color snowcap.widget.Color? Deprecated in favor of scroller_background.
+---@field scroller_background snowcap.widget.Background?
 ---@field scroller_border snowcap.widget.Border?
 
 ---@class snowcap.widget.Container
@@ -117,7 +119,8 @@
 
 ---@class snowcap.widget.container.Style
 ---@field text_color snowcap.widget.Color?
----@field background_color snowcap.widget.Color?
+---@field background_color snowcap.widget.Color? Deprecated in favor of background.
+---@field background snowcap.widget.Background?
 ---@field border snowcap.widget.Border?
 
 ---@class snowcap.widget.Button
@@ -138,7 +141,8 @@
 
 ---@class snowcap.widget.button.Style
 ---@field text_color snowcap.widget.Color?
----@field background_color snowcap.widget.Color?
+---@field background_color snowcap.widget.Color? Deprecated in favor of background.
+---@field background snowcap.widget.Background?
 ---@field border snowcap.widget.Border?
 
 ---@class snowcap.widget.Image
@@ -198,6 +202,65 @@ local alignment = {
     START = 1,
     CENTER = 2,
     END = 3,
+}
+
+---A fill which transitions colors progressively.
+---@class snowcap.widget.Gradient
+---A linear gradient that interpolates colors along a direction at a specific angle.
+---@field linear snowcap.widget.gradient.Linear?
+
+---A linear gradient.
+---@class snowcap.widget.gradient.Linear
+---How the `Gradient` is angled.
+---@field radians number
+---`ColorStop` to interpolates.
+---
+---ColorStops should be sorted by increasing offsets.
+---ColorStops offsets should be in the range 0.0..=1.0.
+---Up to 8 ColorStops are supported.
+---@field stops snowcap.widget.gradient.ColorStop[]
+
+---A point along a gradient vector where the specified `Color` is unmixed.
+---@class snowcap.widget.gradient.ColorStop
+---Offset along the gradient vector.
+---@field offset number
+---The color of the gradient at the specified `offset`.
+---@field color snowcap.widget.Color
+
+---The background of some element.
+---@class snowcap.widget.Background
+---A solid color.
+---@field color snowcap.widget.Color?
+---Interpolate between several colors.
+---@field gradient snowcap.widget.Gradient?
+
+---Builders for `Background`.
+---@class snowcap.widget.background
+---Builds a `Background` from a solid `Color`.
+---@field Color fun(color: snowcap.widget.Color): snowcap.widget.Background
+---Builds a `Background` from a generic `Gradient`.
+---@field Gradient fun(gradient: snowcap.widget.Gradient): snowcap.widget.Background
+---Builds a `Background` from a `Linear` gradient.
+---@field Linear fun(radians: number, stops: snowcap.widget.gradient.ColorStop[]): snowcap.widget.Background
+local background = {
+    ---@type fun(color: snowcap.widget.Color): snowcap.widget.Background
+    Color = function(color)
+        return { color = color }
+    end,
+    ---@type fun(gradient: snowcap.widget.Gradient): snowcap.widget.Background
+    Gradient = function(gradient)
+        return { gradient = gradient }
+    end,
+    ---@type fun(radians: number, stops: snowcap.widget.gradient.ColorStop[]): snowcap.widget.Background
+    Linear = function(radians, stops)
+        ---@type snowcap.widget.gradient.Linear
+        local linear = { radians = radians, stops = stops or {} }
+
+        ---@type snowcap.widget.Gradient
+        local gradient = { linear = linear }
+
+        return { gradient = gradient }
+    end,
 }
 
 ---@class snowcap.widget.Color
@@ -301,6 +364,7 @@ local font = {
 local widget = {
     length = length,
     alignment = alignment,
+    background = background,
     color = color,
     font = font,
     image = {
@@ -499,10 +563,66 @@ function widget.row(row)
     }
 end
 
+---@param style snowcap.widget.container.Style?
+local function container_style_fixup(style)
+    if not style then
+        return
+    end
+
+    if not style.background and style.background_color then
+        style.background = background.Color(style.background_color)
+    end
+
+    if style.background_color then
+        require("snowcap.log").warn(
+            "container.Style.background_color is deprecated. Use container.Style.background."
+        )
+
+        style.background_color = nil
+    end
+end
+
+---@param style snowcap.widget.scrollable.Rail?
+local function rail_style_fixup(style)
+    if not style then
+        return
+    end
+
+    local Log = require("snowcap.log")
+
+    if not style.background and style.background_color then
+        style.background = background.Color(style.background_color)
+    end
+
+    if style.background_color then
+        Log.warn(
+            "scrollable.Rail.background_color is deprecated. Use scrollable.Rail.background instead."
+        )
+        style.background_color = nil
+    end
+
+    if not style.scroller_background and style.scroller_color then
+        style.scroller_background = background.Color(style.scroller_color)
+    end
+
+    if style.scroller_color then
+        Log.warn(
+            "scrollable.Rail.scroller_color is deprecated. Use scrollable.Rail.scroller_background instead."
+        )
+        style.scroller_color = nil
+    end
+end
+
 ---@param scrollable snowcap.widget.Scrollable
 ---
 ---@return snowcap.widget.WidgetDef
 function widget.scrollable(scrollable)
+    if scrollable.style then
+        container_style_fixup(scrollable.style.container_style)
+        rail_style_fixup(scrollable.style.horizontal_rail)
+        rail_style_fixup(scrollable.style.vertical_rail)
+    end
+
     return {
         scrollable = scrollable,
     }
@@ -512,6 +632,8 @@ end
 ---
 ---@return snowcap.widget.WidgetDef
 function widget.container(container)
+    container_style_fixup(container.style)
+
     return {
         container = container,
     }
@@ -521,6 +643,25 @@ end
 ---
 ---@return snowcap.widget.WidgetDef
 function widget.button(button)
+    local Log = require("snowcap.log")
+
+    if button.style then
+        for k, v in pairs(button.style) do
+            if not v.background and v.background_color then
+                v.background = background.Color(v.background_color)
+            end
+
+            if v.background_color then
+                Log.warn(
+                    ("button.styles.%s.background_color is deprecated. Use button.style.%s.background instead."):format(
+                        k
+                    )
+                )
+                v.background_color = nil
+            end
+        end
+    end
+
     if button.on_press then
         button.widget_id = widget_id_counter
         widget_id_counter = widget_id_counter + 1

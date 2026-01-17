@@ -1,5 +1,7 @@
 use snowcap_api_defs::snowcap::widget;
 
+use crate::widget::Background;
+
 use super::{Border, Color, Length, Padding, Widget, WidgetDef, WidgetId};
 
 #[derive(Clone)]
@@ -115,7 +117,7 @@ impl<Msg> From<Button<Msg>> for widget::v1::Button {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Default)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct Styles {
     pub active: Option<Style>,
     pub hovered: Option<Style>,
@@ -148,11 +150,13 @@ impl From<Styles> for widget::v1::button::Style {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Default)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct Style {
     pub text_color: Option<Color>,
+    #[deprecated(note = "Deprecated in favor of 'background'")]
     pub background_color: Option<Color>,
     pub border: Option<Border>,
+    pub background: Option<Background>,
 }
 
 impl Style {
@@ -167,9 +171,10 @@ impl Style {
         }
     }
 
+    #[deprecated(note = "Deprecated in favor of 'background'")]
     pub fn background_color(self, color: Color) -> Self {
         Self {
-            background_color: Some(color),
+            background: Some(Background::Color(color)),
             ..self
         }
     }
@@ -180,14 +185,27 @@ impl Style {
             ..self
         }
     }
+
+    pub fn background(self, background: Background) -> Self {
+        Self {
+            background: Some(background),
+            ..self
+        }
+    }
 }
 
 impl From<Style> for widget::v1::button::style::Inner {
+    #[allow(deprecated)]
     fn from(value: Style) -> Self {
+        let background = value
+            .background
+            .or(value.background_color.map(Background::Color));
+
         Self {
             text_color: value.text_color.map(From::from),
-            background_color: value.background_color.map(From::from),
+            background_color: None,
             border: value.border.map(From::from),
+            background: background.map(From::from),
         }
     }
 }

@@ -1,5 +1,7 @@
 use snowcap_api_defs::snowcap::widget;
 
+use crate::widget::Background;
+
 use super::{Border, Color, Length, Widget, WidgetDef, container};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -125,7 +127,7 @@ impl From<Scrollbar> for widget::v1::scrollable::Scrollbar {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Default)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct Style {
     pub container_style: Option<container::Style>,
     pub vertical_rail: Option<Rail>,
@@ -142,20 +144,35 @@ impl From<Style> for widget::v1::scrollable::Style {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Default)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct Rail {
+    #[deprecated(note = "Deprecated in favor of 'background'")]
     pub background_color: Option<Color>,
+    pub background: Option<Background>,
     pub border: Option<Border>,
+    #[deprecated(note = "Deprecated in favor of 'scroller_background'")]
     pub scroller_color: Option<Color>,
+    pub scroller_background: Option<Background>,
     pub scroller_border: Option<Border>,
 }
 
 impl From<Rail> for widget::v1::scrollable::Rail {
+    #[allow(deprecated)]
     fn from(value: Rail) -> Self {
+        let background = value
+            .background
+            .or(value.background_color.map(Background::Color));
+
+        let scroller_background = value
+            .scroller_background
+            .or(value.scroller_color.map(Background::Color));
+
         Self {
-            background_color: value.background_color.map(From::from),
+            background_color: None,
+            background: background.map(From::from),
             border: value.border.map(From::from),
-            scroller_color: value.scroller_color.map(From::from),
+            scroller_color: None,
+            scroller_background: scroller_background.map(From::from),
             scroller_border: value.scroller_border.map(From::from),
         }
     }

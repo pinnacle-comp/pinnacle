@@ -671,6 +671,21 @@ local snowcap_layer_v1_Layer = {
 ---@field blue number?
 ---@field alpha number?
 
+---@class snowcap.widget.v1.Gradient
+---@field linear snowcap.widget.v1.Gradient.Linear?
+
+---@class snowcap.widget.v1.Gradient.ColorStop
+---@field offset number?
+---@field color snowcap.widget.v1.Color?
+
+---@class snowcap.widget.v1.Gradient.Linear
+---@field radians number?
+---@field stops snowcap.widget.v1.Gradient.ColorStop[]?
+
+---@class snowcap.widget.v1.Background
+---@field color snowcap.widget.v1.Color?
+---@field gradient snowcap.widget.v1.Gradient?
+
 ---@class snowcap.widget.v1.Font
 ---@field family snowcap.widget.v1.Font.Family?
 ---@field weight snowcap.widget.v1.Font.Weight?
@@ -771,6 +786,8 @@ local snowcap_layer_v1_Layer = {
 ---@field border snowcap.widget.v1.Border?
 ---@field scroller_color snowcap.widget.v1.Color?
 ---@field scroller_border snowcap.widget.v1.Border?
+---@field background snowcap.widget.v1.Background?
+---@field scroller_background snowcap.widget.v1.Background?
 
 ---@class snowcap.widget.v1.Scrollable.Direction
 ---@field vertical snowcap.widget.v1.Scrollable.Scrollbar?
@@ -799,6 +816,7 @@ local snowcap_layer_v1_Layer = {
 ---@field text_color snowcap.widget.v1.Color?
 ---@field background_color snowcap.widget.v1.Color?
 ---@field border snowcap.widget.v1.Border?
+---@field background snowcap.widget.v1.Background?
 
 ---@class snowcap.widget.v1.InputRegion
 ---@field add boolean?
@@ -825,6 +843,7 @@ local snowcap_layer_v1_Layer = {
 ---@field text_color snowcap.widget.v1.Color?
 ---@field background_color snowcap.widget.v1.Color?
 ---@field border snowcap.widget.v1.Border?
+---@field background snowcap.widget.v1.Background?
 
 ---@class snowcap.widget.v1.Button.Event
 
@@ -1092,6 +1111,10 @@ snowcap.widget.v1 = {}
 snowcap.widget.v1.Padding = {}
 snowcap.widget.v1.Length = {}
 snowcap.widget.v1.Color = {}
+snowcap.widget.v1.Gradient = {}
+snowcap.widget.v1.Gradient.ColorStop = {}
+snowcap.widget.v1.Gradient.Linear = {}
+snowcap.widget.v1.Background = {}
 snowcap.widget.v1.Font = {}
 snowcap.widget.v1.Font.Family = {}
 snowcap.widget.v1.Radius = {}
