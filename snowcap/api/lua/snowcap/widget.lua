@@ -200,6 +200,65 @@ local alignment = {
     END = 3,
 }
 
+---A fill which transitions colors progressively.
+---@class snowcap.widget.Gradient
+---A linear gradient that interpolates colors along a direction at a specific angle.
+---@field linear snowcap.widget.gradient.Linear?
+
+---A linear gradient.
+---@class snowcap.widget.gradient.Linear
+---How the `Gradient` is angled.
+---@field radians number
+---`ColorStop` to interpolates.
+---
+---ColorStops should be sorted by increasing offsets.
+---ColorStops offsets should be in the range 0.0..=1.0.
+---Up to 8 ColorStops are supported.
+---@field stops snowcap.widget.gradient.ColorStop[]
+
+---A point along a gradient vector where the specified `Color` is unmixed.
+---@class snowcap.widget.gradient.ColorStop
+---Offset along the gradient vector.
+---@field offset number
+---The color of the gradient at the specified `offset`.
+---@field color snowcap.widget.Color
+
+---The background of some element.
+---@class snowcap.widget.Background
+---A solid color.
+---@field color snowcap.widget.Color?
+---Interpolate between several colors.
+---@field gradient snowcap.widget.Gradient?
+
+---Builders for `Background`.
+---@class snowcap.widget.background
+---Builds a `Background` from a solid `Color`.
+---@field Color fun(color: snowcap.widget.Color): snowcap.widget.Background
+---Builds a `Background` from a generic `Gradient`.
+---@field Gradient fun(gradient: snowcap.widget.Gradient): snowcap.widget.Background
+---Builds a `Background` from a `Linear` gradient.
+---@field Linear fun(radians: number, stops: snowcap.widget.gradient.ColorStop[]): snowcap.widget.Background
+local background = {
+    ---@type fun(color: snowcap.widget.Color): snowcap.widget.Background
+    Color = function(color)
+        return { color = color }
+    end,
+    ---@type fun(gradient: snowcap.widget.Gradient): snowcap.widget.Background
+    Gradient = function(gradient)
+        return { gradient = gradient }
+    end,
+    ---@type fun(radians: number, stops: snowcap.widget.gradient.ColorStop[]): snowcap.widget.Background
+    Linear = function(radians, stops)
+        ---@type snowcap.widget.gradient.Linear
+        local linear = { radians = radians, stops = stops or {} }
+
+        ---@type snowcap.widget.Gradient
+        local gradient = { linear = linear }
+
+        return { gradient = gradient }
+    end,
+}
+
 ---@class snowcap.widget.Color
 ---@field red number?
 ---@field green number?
@@ -301,6 +360,7 @@ local font = {
 local widget = {
     length = length,
     alignment = alignment,
+    background = background,
     color = color,
     font = font,
     image = {
