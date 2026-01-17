@@ -1,3 +1,4 @@
+use anyhow::Context;
 use iced::widget::{
     Column, Container, Row, Scrollable, button, image::FilterMethod, scrollable::Scrollbar,
 };
@@ -14,7 +15,7 @@ use crate::{
     api::{ResponseStream, run_server_streaming_mapped},
     decoration::DecorationId,
     layer::LayerId,
-    util::convert::FromApi,
+    util::convert::{FromApi, TryFromApi},
     widget::{ViewFn, WidgetEvent, WidgetId},
 };
 
@@ -843,5 +844,53 @@ impl FromApi<widget::v1::Border> for iced::Border {
         }
 
         ret
+    }
+}
+
+impl TryFromApi<widget::v1::Background> for iced::Background {
+    type Error = anyhow::Error;
+
+    fn try_from_api(api_type: widget::v1::Background) -> Result<Self, Self::Error> {
+        use widget::v1::background::Background;
+
+        const MESSAGE: &str = "snowcap.widget.v1.Background";
+        const FIELD: &str = "background";
+
+        let Some(background) = api_type.background else {
+            anyhow::bail!("While converting {MESSAGE}: missing field '{FIELD}'")
+        };
+
+        let background = match background {
+            Background::Color(color) => Ok(Self::Color(iced::Color::from_api(color))),
+            Background::Gradient(gradient) => {
+                iced::Gradient::try_from_api(gradient).map(Self::Gradient)
+            }
+        };
+
+        background.with_context(|| format!("While converting {MESSAGE}.{FIELD}"))
+    }
+}
+
+impl TryFromApi<widget::v1::Gradient> for iced::Gradient {
+    type Error = anyhow::Error;
+    fn try_from_api(api_type: widget::v1::Gradient) -> Result<Self, Self::Error> {
+        use widget::v1::gradient::{Gradient, Linear};
+        let Some(gradient) = api_type.gradient else {
+            anyhow::bail!("Missing field 'gradient'")
+        };
+
+        match gradient {
+            Gradient::Linear(Linear { radians, stops }) => {
+                let lin =
+                    iced::gradient::Linear::new(radians).add_stops(stops.iter().map(|stop| {
+                        iced::gradient::ColorStop {
+                            offset: stop.offset,
+                            color: iced::Color::from_api(stop.color.unwrap_or_default()),
+                        }
+                    }));
+
+                Ok(iced::Gradient::Linear(lin))
+            }
+        }
     }
 }
