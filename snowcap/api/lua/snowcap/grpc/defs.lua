@@ -786,6 +786,8 @@ local snowcap_layer_v1_Layer = {
 ---@field border snowcap.widget.v1.Border?
 ---@field scroller_color snowcap.widget.v1.Color?
 ---@field scroller_border snowcap.widget.v1.Border?
+---@field background snowcap.widget.v1.Background?
+---@field scroller_background snowcap.widget.v1.Background?
 
 ---@class snowcap.widget.v1.Scrollable.Direction
 ---@field vertical snowcap.widget.v1.Scrollable.Scrollbar?
@@ -814,6 +816,7 @@ local snowcap_layer_v1_Layer = {
 ---@field text_color snowcap.widget.v1.Color?
 ---@field background_color snowcap.widget.v1.Color?
 ---@field border snowcap.widget.v1.Border?
+---@field background snowcap.widget.v1.Background?
 
 ---@class snowcap.widget.v1.InputRegion
 ---@field add boolean?
@@ -840,6 +843,7 @@ local snowcap_layer_v1_Layer = {
 ---@field text_color snowcap.widget.v1.Color?
 ---@field background_color snowcap.widget.v1.Color?
 ---@field border snowcap.widget.v1.Border?
+---@field background snowcap.widget.v1.Background?
 
 ---@class snowcap.widget.v1.Button.Event
 

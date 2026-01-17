@@ -11,7 +11,7 @@ use snowcap_api::{
     decoration::{DecorationHandle, NewDecorationError},
     layer::{ExclusiveZone, KeyboardInteractivity, ZLayer},
     widget::{
-        Alignment, Border, Color, Length, Padding, Program, Radius, WidgetDef,
+        Alignment, Background, Border, Color, Length, Padding, Program, Radius, WidgetDef,
         button::{self, Button, Styles},
         column::Column,
         container::Container,
@@ -77,12 +77,13 @@ impl Program for QuitPrompt {
         .horizontal_alignment(Alignment::Center)
         .style(snowcap_api::widget::container::Style {
             text_color: None,
-            background_color: Some(self.background_color),
+            background: Some(Background::Color(self.background_color)),
             border: Some(snowcap_api::widget::Border {
                 color: Some(self.border_color),
                 width: Some(self.border_thickness),
                 radius: Some(self.border_radius.into()),
             }),
+            ..Default::default()
         });
 
         widget.into()
@@ -387,12 +388,13 @@ impl Program for BindOverlay {
         .horizontal_alignment(Alignment::Center)
         .style(snowcap_api::widget::container::Style {
             text_color: None,
-            background_color: Some(self.background_color),
+            background: Some(Background::Color(self.background_color)),
             border: Some(snowcap_api::widget::Border {
                 color: Some(self.border_color),
                 width: Some(self.border_thickness),
                 radius: Some(self.border_radius.into()),
             }),
+            ..Default::default()
         });
 
         widget.into()
@@ -526,12 +528,13 @@ impl Program for ConfigCrashedMessage {
         .horizontal_alignment(Alignment::Center)
         .style(snowcap_api::widget::container::Style {
             text_color: None,
-            background_color: Some(self.background_color),
+            background: Some(Background::Color(self.background_color)),
             border: Some(snowcap_api::widget::Border {
                 color: Some(self.border_color),
                 width: Some(self.border_thickness),
                 radius: Some(self.border_radius.into()),
             }),
+            ..Default::default()
         });
 
         widget.into()
@@ -841,7 +844,7 @@ impl Program for FocusBorder {
                     .padding(Padding::from(4.0))
                     .style(
                         Styles {
-                            active: Some(button::Style::new().background_color({
+                            active: Some(button::Style::new().background(Background::Color({
                                 let mut color = if self.focused {
                                     self.focused_color
                                 } else {
@@ -851,8 +854,8 @@ impl Program for FocusBorder {
                                 color.green += 0.3;
                                 color.blue += 0.3;
                                 color
-                            })),
-                            hovered: Some(button::Style::new().background_color({
+                            }))),
+                            hovered: Some(button::Style::new().background(Background::Color({
                                 let mut color = if self.focused {
                                     self.focused_color
                                 } else {
@@ -862,8 +865,8 @@ impl Program for FocusBorder {
                                 color.green += 0.4;
                                 color.blue += 0.4;
                                 color
-                            })),
-                            pressed: Some(button::Style::new().background_color({
+                            }))),
+                            pressed: Some(button::Style::new().background(Background::Color({
                                 let mut color = if self.focused {
                                     self.focused_color
                                 } else {
@@ -873,7 +876,7 @@ impl Program for FocusBorder {
                                 color.green += 0.5;
                                 color.blue += 0.5;
                                 color
-                            })),
+                            }))),
                             disabled: None,
                         }
                         .border(Border {
@@ -901,7 +904,7 @@ impl Program for FocusBorder {
                     .padding(Padding::from(4.0))
                     .style(
                         Styles {
-                            active: Some(button::Style::new().background_color({
+                            active: Some(button::Style::new().background(Background::Color({
                                 let mut color = if self.focused {
                                     self.focused_color
                                 } else {
@@ -911,8 +914,8 @@ impl Program for FocusBorder {
                                 color.green += 0.3;
                                 color.blue += 0.3;
                                 color
-                            })),
-                            hovered: Some(button::Style::new().background_color({
+                            }))),
+                            hovered: Some(button::Style::new().background(Background::Color({
                                 let mut color = if self.focused {
                                     self.focused_color
                                 } else {
@@ -922,8 +925,8 @@ impl Program for FocusBorder {
                                 color.green += 0.4;
                                 color.blue += 0.4;
                                 color
-                            })),
-                            pressed: Some(button::Style::new().background_color({
+                            }))),
+                            pressed: Some(button::Style::new().background(Background::Color({
                                 let mut color = if self.focused {
                                     self.focused_color
                                 } else {
@@ -933,7 +936,7 @@ impl Program for FocusBorder {
                                 color.green += 0.5;
                                 color.blue += 0.5;
                                 color
-                            })),
+                            }))),
                             disabled: None,
                         }
                         .border(Border {
@@ -952,12 +955,13 @@ impl Program for FocusBorder {
             )
             .style(snowcap_api::widget::container::Style {
                 text_color: None,
-                background_color: Some(if self.focused {
+                background: Some(Background::Color(if self.focused {
                     self.focused_color
                 } else {
                     self.unfocused_color
-                }),
+                })),
                 border: None,
+                ..Default::default()
             })
             .padding(Padding {
                 top: self.thickness as f32,
@@ -979,7 +983,7 @@ impl Program for FocusBorder {
         .padding(Padding::from(self.thickness as f32))
         .style(
             snowcap_api::widget::container::Style::new()
-                .background_color(Color::from([0.0, 0.0, 0.0, 0.0]))
+                .background(Background::Color(Color::from([0.0, 0.0, 0.0, 0.0])))
                 .border(snowcap_api::widget::Border {
                     color: Some(if self.focused {
                         self.focused_color
