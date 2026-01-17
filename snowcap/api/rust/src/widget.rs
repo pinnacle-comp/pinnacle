@@ -11,6 +11,7 @@ pub mod input_region;
 pub mod row;
 pub mod scrollable;
 pub mod text;
+pub mod utils;
 
 use std::{
     collections::HashMap,
@@ -26,7 +27,7 @@ use scrollable::Scrollable;
 use snowcap_api_defs::snowcap::widget;
 use text::Text;
 
-use crate::widget::input_region::InputRegion;
+use crate::widget::{input_region::InputRegion, utils::Radians};
 
 /// A unique identifier for a widget.
 #[derive(Copy, Clone, Default, Debug, PartialEq, Eq, Hash)]
@@ -367,6 +368,162 @@ impl From<Radius> for widget::v1::Radius {
             top_right: value.top_right,
             bottom_right: value.bottom_right,
             bottom_left: value.bottom_left,
+        }
+    }
+}
+
+/// The background of some element.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Background {
+    /// A solid color.
+    Color(Color),
+    /// Interpolate between several colors.
+    Gradient(Gradient),
+}
+
+impl From<Color> for Background {
+    fn from(color: Color) -> Self {
+        Self::Color(color)
+    }
+}
+
+impl From<Gradient> for Background {
+    fn from(gradient: Gradient) -> Self {
+        Self::Gradient(gradient)
+    }
+}
+
+impl From<Linear> for Background {
+    fn from(linear: Linear) -> Self {
+        Self::Gradient(Gradient::Linear(linear))
+    }
+}
+
+impl From<Background> for widget::v1::Background {
+    fn from(value: Background) -> Self {
+        let background = match value {
+            Background::Color(c) => widget::v1::background::Background::Color(c.into()),
+            Background::Gradient(g) => widget::v1::background::Background::Gradient(g.into()),
+        };
+
+        Self {
+            background: Some(background),
+        }
+    }
+}
+
+/// A fill which transitions colors progressively.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Gradient {
+    /// A linear gradient that interpolates colors along a direction at a specific angle.
+    Linear(Linear),
+}
+
+impl From<Gradient> for widget::v1::Gradient {
+    fn from(value: Gradient) -> Self {
+        let gradient = match value {
+            Gradient::Linear(l) => widget::v1::gradient::Gradient::Linear(l.into()),
+        };
+
+        Self {
+            gradient: Some(gradient),
+        }
+    }
+}
+
+/// A linear gradient
+#[derive(Debug, Clone, PartialEq)]
+pub struct Linear {
+    /// How the [`Gradient`] is angled.
+    pub radians: Radians,
+    /// [`ColorStop`] to interpolates.
+    pub stops: Vec<ColorStop>,
+}
+
+impl Linear {
+    /// Create a new [`Linear`] gradient with the given angle in [`Radians`].
+    pub fn new(angle: impl Into<Radians>) -> Self {
+        Self {
+            radians: angle.into(),
+            stops: Default::default(),
+        }
+    }
+
+    /// Adds a new [`ColorStop`], defined by an offset and a color.
+    ///
+    /// `offset`s not within the 0.0..=1.0 range will be ignored.
+    /// Any stop added after the 8th will be ignored.
+    ///
+    /// If a new stop with an equivalent offset is added, it will replace the previous one.
+    /// Equivalence is defined by `||old - new|| <= f32::EPSILON`
+    pub fn add_stop(self, offset: f32, color: Color) -> Self {
+        let Self { radians, mut stops } = self;
+
+        if offset.is_finite() && (0.0..=1.0).contains(&offset) {
+            let search = stops.binary_search_by(|stop| {
+                if (stop.offset - offset).abs() <= f32::EPSILON {
+                    std::cmp::Ordering::Equal
+                } else {
+                    stop.offset.partial_cmp(&offset).unwrap()
+                }
+            });
+
+            let stop = ColorStop { offset, color };
+
+            match search {
+                Ok(pos) => stops[pos] = stop,
+                Err(pos) => {
+                    if stops.len() < 8 {
+                        stops.insert(pos, stop)
+                    } else {
+                        tracing::warn!("Linear::stops is full. Ignoring {stop:?}");
+                    }
+                }
+            }
+        } else {
+            tracing::warn!("Offset should be in the range 0.0..=1.0");
+        }
+
+        Self { radians, stops }
+    }
+
+    /// Adds multiple [`ColorStop`] to the gradient.
+    pub fn add_stops(mut self, stops: impl IntoIterator<Item = ColorStop>) -> Self {
+        for ColorStop { offset, color } in stops {
+            self = self.add_stop(offset, color);
+        }
+
+        self
+    }
+}
+
+impl From<Linear> for widget::v1::gradient::Linear {
+    fn from(value: Linear) -> Self {
+        let Linear { radians, stops } = value;
+
+        Self {
+            radians: radians.0,
+            stops: stops.into_iter().map(From::from).collect(),
+        }
+    }
+}
+
+/// A point along a gradient vector where the specified [`Color`] is unmixed.
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub struct ColorStop {
+    /// Offset along the gradient vector.
+    pub offset: f32,
+    /// The color of the gradient at the specified `offset`.
+    pub color: Color,
+}
+
+impl From<ColorStop> for widget::v1::gradient::ColorStop {
+    fn from(value: ColorStop) -> Self {
+        let ColorStop { offset, color } = value;
+
+        Self {
+            offset,
+            color: Some(color.into()),
         }
     }
 }
