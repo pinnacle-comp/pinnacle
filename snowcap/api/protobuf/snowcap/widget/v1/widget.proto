@@ -34,6 +34,29 @@ message Color {
   float alpha = 4;
 }
 
+message Gradient {
+  message ColorStop {
+    float offset = 1;
+    Color color = 2;
+  }
+
+  message Linear {
+    float radians = 1;
+    repeated ColorStop stops = 2;
+  }
+
+  oneof gradient {
+    Linear linear = 1;
+  }
+}
+
+message Background {
+  oneof background {
+    Color color = 1;
+    Gradient gradient = 2;
+  }
+}
+
 message Font {
   message Family {
     oneof family {
