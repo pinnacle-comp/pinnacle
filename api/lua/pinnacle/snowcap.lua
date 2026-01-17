@@ -98,7 +98,7 @@ function QuitPrompt:view()
         valign = Widget.alignment.CENTER,
         halign = Widget.alignment.CENTER,
         style = {
-            background_color = self.background_color,
+            background = Widget.background.Color(self.background_color),
             border = {
                 width = self.border_thickness,
                 color = self.border_color,
@@ -513,7 +513,7 @@ function BindOverlay:view()
         valign = Widget.alignment.CENTER,
         halign = Widget.alignment.CENTER,
         style = {
-            background_color = self.background_color,
+            background = Widget.background.Color(self.background_color),
             border = {
                 width = self.border_thickness,
                 color = self.border_color,
@@ -644,7 +644,7 @@ function FocusBorder:view()
     if self.include_titlebar then
         local titlebar = Widget.container({
             style = {
-                background_color = self.focused and self.focused_color or self.unfocused_color,
+                background = Widget.background.Color(self.focused and self.focused_color or self.unfocused_color),
             },
             padding = {
                 top = self.thickness,
@@ -676,7 +676,7 @@ function FocusBorder:view()
                         },
                         style = {
                             active = {
-                                background_color = brighten(0.3),
+                                background = Widget.background.Color(brighten(0.3)),
                                 border = {
                                     radius = {
                                         bottom_left = 1000,
@@ -687,7 +687,7 @@ function FocusBorder:view()
                                 },
                             },
                             hovered = {
-                                background_color = brighten(0.4),
+                                background = Widget.background.Color(brighten(0.4)),
                                 border = {
                                     radius = {
                                         bottom_left = 1000,
@@ -698,7 +698,7 @@ function FocusBorder:view()
                                 },
                             },
                             pressed = {
-                                background_color = brighten(0.5),
+                                background = Widget.background.Color(brighten(0.5)),
                                 border = {
                                     radius = {
                                         bottom_left = 1000,
@@ -733,7 +733,7 @@ function FocusBorder:view()
                         },
                         style = {
                             active = {
-                                background_color = brighten(0.3),
+                                background = Widget.background.Color(brighten(0.3)),
                                 border = {
                                     radius = {
                                         bottom_left = 1000,
@@ -744,7 +744,7 @@ function FocusBorder:view()
                                 },
                             },
                             hovered = {
-                                background_color = brighten(0.4),
+                                background = Widget.background.Color(brighten(0.4)),
                                 border = {
                                     radius = {
                                         bottom_left = 1000,
@@ -755,7 +755,7 @@ function FocusBorder:view()
                                 },
                             },
                             pressed = {
-                                background_color = brighten(0.5),
+                                background = Widget.background.Color(brighten(0.5)),
                                 border = {
                                     radius = {
                                         bottom_left = 1000,
@@ -798,12 +798,12 @@ function FocusBorder:view()
                 top = self.thickness,
             },
             style = {
-                background_color = {
+                background = Widget.background.Color({
                     red = 0,
                     green = 0,
                     blue = 0,
                     alpha = 0,
-                },
+                }),
                 border = {
                     color = self.focused and self.focused_color or self.unfocused_color,
                     width = self.thickness,

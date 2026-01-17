@@ -98,9 +98,9 @@
 ---@field horizontal_rail snowcap.widget.scrollable.Rail?
 
 ---@class snowcap.widget.scrollable.Rail
----@field background_color snowcap.widget.Color?
+---@field background snowcap.widget.Background?
 ---@field border snowcap.widget.Border?
----@field scroller_color snowcap.widget.Color?
+---@field scroller_background snowcap.widget.Background?
 ---@field scroller_border snowcap.widget.Border?
 
 ---@class snowcap.widget.Container
@@ -117,7 +117,7 @@
 
 ---@class snowcap.widget.container.Style
 ---@field text_color snowcap.widget.Color?
----@field background_color snowcap.widget.Color?
+---@field background snowcap.widget.Background?
 ---@field border snowcap.widget.Border?
 
 ---@class snowcap.widget.Button
@@ -138,7 +138,7 @@
 
 ---@class snowcap.widget.button.Style
 ---@field text_color snowcap.widget.Color?
----@field background_color snowcap.widget.Color?
+---@field background snowcap.widget.Background?
 ---@field border snowcap.widget.Border?
 
 ---@class snowcap.widget.Image

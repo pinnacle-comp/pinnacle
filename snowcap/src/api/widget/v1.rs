@@ -283,20 +283,27 @@ pub fn widget_def_to_fn(def: WidgetDef) -> Option<ViewFn> {
                     scrollable = scrollable
                         .direction(iced::widget::scrollable::Direction::from_api(direction));
                 }
+                let style = style.clone();
                 scrollable = scrollable.style(move |theme, status| {
                     let mut s = iced::widget::scrollable::default(theme, status);
-                    if let Some(container_style) = style.as_ref().and_then(|s| s.container_style) {
+                    if let Some(container_style) =
+                        style.as_ref().and_then(|s| s.container_style.clone())
+                    {
                         s.container = FromApi::from_api(container_style);
                     }
-                    if let Some(v_rail) = style.as_ref().and_then(|s| s.vertical_rail) {
+                    if let Some(v_rail) = style.as_ref().and_then(|s| s.vertical_rail.clone()) {
+                        #[expect(deprecated, reason = "background_color and scroller_color are being deprecated in favor of backgrounds.")]
                         let widget::v1::scrollable::Rail {
                             background_color,
                             border,
                             scroller_color,
                             scroller_border,
+                            background,
+                            scroller_background,
                         } = v_rail;
 
                         if let Some(color) = background_color {
+                            tracing::warn!("Rail::background_color is deprecated. Use Rail::background instead");
                             s.vertical_rail.background =
                                 Some(iced::Background::Color(FromApi::from_api(color)));
                         }
@@ -304,22 +311,35 @@ pub fn widget_def_to_fn(def: WidgetDef) -> Option<ViewFn> {
                             s.vertical_rail.border = FromApi::from_api(border);
                         }
                         if let Some(scroller_color) = scroller_color {
+                            tracing::warn!("Rail::scroller_color is deprecated. Use Rail::scroller_background instead.");
                             s.vertical_rail.scroller.background =
                                 iced::Background::Color(FromApi::from_api(scroller_color));
                         }
                         if let Some(scroller_border) = scroller_border {
                             s.vertical_rail.scroller.border = FromApi::from_api(scroller_border);
                         }
+                        if let Some(background) = background {
+                            s.horizontal_rail.background = FromApi::from_api(background);
+                        }
+                        if let Some(scroller_background) = scroller_background
+                            && let Some(background) = FromApi::from_api(scroller_background)
+                        {
+                            s.horizontal_rail.scroller.background = background;
+                        }
                     }
-                    if let Some(h_rail) = style.as_ref().and_then(|s| s.horizontal_rail) {
+                    if let Some(h_rail) = style.as_ref().and_then(|s| s.horizontal_rail.clone()) {
+                        #[expect(deprecated, reason = "background_color and scroller_color are being deprecated in favor of backgrounds.")]
                         let widget::v1::scrollable::Rail {
                             background_color,
                             border,
                             scroller_color,
                             scroller_border,
+                            background,
+                            scroller_background,
                         } = h_rail;
 
                         if let Some(color) = background_color {
+                            tracing::warn!("Rail::background_color is deprecated. Use container::Style::background instead");
                             s.horizontal_rail.background =
                                 Some(iced::Background::Color(FromApi::from_api(color)));
                         }
@@ -327,11 +347,20 @@ pub fn widget_def_to_fn(def: WidgetDef) -> Option<ViewFn> {
                             s.horizontal_rail.border = FromApi::from_api(border);
                         }
                         if let Some(scroller_color) = scroller_color {
+                            tracing::warn!("Rail::scroller_color is deprecated. Use container::Style::scroller_background instead.");
                             s.horizontal_rail.scroller.background =
                                 iced::Background::Color(FromApi::from_api(scroller_color));
                         }
                         if let Some(scroller_border) = scroller_border {
                             s.horizontal_rail.scroller.border = FromApi::from_api(scroller_border);
+                        }
+                        if let Some(background) = background {
+                            s.horizontal_rail.background = FromApi::from_api(background);
+                        }
+                        if let Some(scroller_background) = scroller_background
+                            && let Some(background) = FromApi::from_api(scroller_background)
+                        {
+                            s.horizontal_rail.scroller.background = background;
                         }
                     }
 
@@ -401,9 +430,14 @@ pub fn widget_def_to_fn(def: WidgetDef) -> Option<ViewFn> {
                     widget::v1::Alignment::End => iced::alignment::Vertical::Bottom,
                 });
 
-                let text_color_clone = style.and_then(|s| s.text_color);
-                let background_color_clone = style.and_then(|s| s.background_color);
-                let border_color_clone = style.and_then(|s| s.border);
+                let text_color_clone = style.as_ref().and_then(|s| s.text_color);
+                #[expect(
+                    deprecated,
+                    reason = "background_color is being deprecated in favor of background."
+                )]
+                let background_color_clone = style.as_ref().and_then(|s| s.background_color);
+                let border_color_clone = style.as_ref().and_then(|s| s.border);
+                let background_clone = style.as_ref().and_then(|s| s.background.clone());
 
                 let style = move |theme: &iced::Theme| {
                     let mut style =
@@ -414,6 +448,9 @@ pub fn widget_def_to_fn(def: WidgetDef) -> Option<ViewFn> {
                     }
 
                     if let Some(background_color) = background_color_clone {
+                        tracing::warn!(
+                            "container::Style::background_color is deprecated. Use container::Style::background instead."
+                        );
                         style.background = Some(iced::Color::from_api(background_color).into());
                     }
 
@@ -427,6 +464,10 @@ pub fn widget_def_to_fn(def: WidgetDef) -> Option<ViewFn> {
 
                     if let Some(width) = border_color_clone.and_then(|b| b.width) {
                         style.border.width = width;
+                    }
+
+                    if let Some(background) = background_clone.clone() {
+                        style.background = FromApi::from_api(background);
                     }
 
                     style
@@ -479,30 +520,46 @@ pub fn widget_def_to_fn(def: WidgetDef) -> Option<ViewFn> {
                     ));
                 }
 
-                let style = move |theme: &iced::Theme, status| {
-                    let mut s = <iced::Theme as button::Catalog>::default()(theme, status);
+                let style = {
+                    let style = style.clone();
+                    move |theme: &iced::Theme, status| {
+                        let mut s = <iced::Theme as button::Catalog>::default()(theme, status);
+                        let style = style.clone();
 
-                    let inner = match status {
-                        button::Status::Active => style.and_then(|s| s.active),
-                        button::Status::Hovered => style.and_then(|s| s.hovered),
-                        button::Status::Pressed => style.and_then(|s| s.pressed),
-                        button::Status::Disabled => style.and_then(|s| s.disabled),
-                    };
+                        let inner = match status {
+                            button::Status::Active => style.and_then(|s| s.active),
+                            button::Status::Hovered => style.and_then(|s| s.hovered),
+                            button::Status::Pressed => style.and_then(|s| s.pressed),
+                            button::Status::Disabled => style.and_then(|s| s.disabled),
+                        };
 
-                    if let Some(style) = inner {
-                        if let Some(text_color) = style.text_color {
-                            s.text_color = FromApi::from_api(text_color);
+                        if let Some(style) = inner {
+                            if let Some(text_color) = style.text_color {
+                                s.text_color = FromApi::from_api(text_color);
+                            }
+                            #[expect(
+                                deprecated,
+                                reason = "background_color is being deprecated in favor of background."
+                            )]
+                            if let Some(background_color) = style.background_color {
+                                tracing::warn!(
+                                    "button::Style::background_color is deprecated. Use button::Style::background instead."
+                                );
+                                s.background = Some(iced::Background::Color(FromApi::from_api(
+                                    background_color,
+                                )));
+                            }
+                            if let Some(border) = style.border {
+                                s.border = FromApi::from_api(border);
+                            }
+
+                            if let Some(background) = style.background {
+                                s.background = FromApi::from_api(background);
+                            }
                         }
-                        if let Some(background_color) = style.background_color {
-                            s.background =
-                                Some(iced::Background::Color(FromApi::from_api(background_color)));
-                        }
-                        if let Some(border) = style.border {
-                            s.border = FromApi::from_api(border);
-                        }
+
+                        s
                     }
-
-                    s
                 };
 
                 button = button.style(style);
@@ -803,20 +860,33 @@ impl FromApi<widget::v1::container::Style> for iced::widget::container::Style {
     fn from_api(api_type: widget::v1::container::Style) -> Self {
         let mut ret = Self::default();
 
+        // background color is deprecated on the protocol.
+        #[expect(
+            deprecated,
+            reason = "background_color is being deprecated in favor of background."
+        )]
         let widget::v1::container::Style {
             text_color,
             background_color,
             border,
+            background,
         } = api_type;
 
         if let Some(color) = text_color {
             ret.text_color = Some(FromApi::from_api(color));
         }
         if let Some(color) = background_color {
+            tracing::warn!(
+                "container::Style::background_color is deprecated. Use container::Style::background instead"
+            );
             ret.background = Some(iced::Background::Color(FromApi::from_api(color)));
         }
         if let Some(border) = border {
             ret.border = FromApi::from_api(border);
+        }
+
+        if let Some(background) = background {
+            ret.background = FromApi::from_api(background);
         }
 
         ret
@@ -847,27 +917,29 @@ impl FromApi<widget::v1::Border> for iced::Border {
     }
 }
 
-impl TryFromApi<widget::v1::Background> for iced::Background {
-    type Error = anyhow::Error;
-
-    fn try_from_api(api_type: widget::v1::Background) -> Result<Self, Self::Error> {
+impl FromApi<widget::v1::Background> for Option<iced::Background> {
+    fn from_api(api_type: widget::v1::Background) -> Self {
         use widget::v1::background::Background;
 
         const MESSAGE: &str = "snowcap.widget.v1.Background";
         const FIELD: &str = "background";
 
-        let Some(background) = api_type.background else {
-            anyhow::bail!("While converting {MESSAGE}: missing field '{FIELD}'")
-        };
+        let background = api_type.background?;
 
         let background = match background {
-            Background::Color(color) => Ok(Self::Color(iced::Color::from_api(color))),
+            Background::Color(color) => Ok(iced::Background::Color(iced::Color::from_api(color))),
             Background::Gradient(gradient) => {
-                iced::Gradient::try_from_api(gradient).map(Self::Gradient)
+                iced::Gradient::try_from_api(gradient).map(iced::Background::Gradient)
             }
         };
 
-        background.with_context(|| format!("While converting {MESSAGE}.{FIELD}"))
+        match background.with_context(|| format!("While converting {MESSAGE}.{FIELD}")) {
+            Ok(b) => Some(b),
+            Err(e) => {
+                tracing::error!("{}", e);
+                None
+            }
+        }
     }
 }
 
