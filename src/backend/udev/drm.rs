@@ -47,7 +47,7 @@ pub fn drm_mode_from_modeinfo(
     .unwrap();
     let mut name_buf = [0u8; 32];
     let _ = name_buf.as_mut_slice().write_all(name.as_bytes_with_nul());
-    let name: [i8; 32] = bytemuck::cast(name_buf);
+    let name = bytemuck::cast(name_buf);
 
     drm_mode_modeinfo {
         clock: clock as u32,
@@ -103,7 +103,7 @@ fn generate_cvt_mode(hdisplay: i32, vdisplay: i32, vrefresh: Option<f64>) -> drm
     let name = CString::new(format!("{hdisplay}x{vdisplay}")).unwrap();
     let mut name_buf = [0u8; 32];
     let _ = name_buf.as_mut_slice().write_all(name.as_bytes_with_nul());
-    let name: [i8; 32] = bytemuck::cast(name_buf);
+    let name = bytemuck::cast(name_buf);
 
     drm_mode_modeinfo {
         clock: f64::round(timing.act_pixel_freq * 1000.0) as u32,
