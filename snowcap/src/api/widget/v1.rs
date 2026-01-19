@@ -319,12 +319,12 @@ pub fn widget_def_to_fn(def: WidgetDef) -> Option<ViewFn> {
                             s.vertical_rail.scroller.border = FromApi::from_api(scroller_border);
                         }
                         if let Some(background) = background {
-                            s.horizontal_rail.background = FromApi::from_api(background);
+                            s.vertical_rail.background = TryFromApi::try_from_api(background).inspect_err(|e| tracing::error!("{e}")).ok();
                         }
                         if let Some(scroller_background) = scroller_background
-                            && let Some(background) = FromApi::from_api(scroller_background)
+                            && let Some(background) = TryFromApi::try_from_api(scroller_background).inspect_err(|e| tracing::error!("{e}")).ok()
                         {
-                            s.horizontal_rail.scroller.background = background;
+                            s.vertical_rail.scroller.background = background;
                         }
                     }
                     if let Some(h_rail) = style.as_ref().and_then(|s| s.horizontal_rail.clone()) {
@@ -355,10 +355,10 @@ pub fn widget_def_to_fn(def: WidgetDef) -> Option<ViewFn> {
                             s.horizontal_rail.scroller.border = FromApi::from_api(scroller_border);
                         }
                         if let Some(background) = background {
-                            s.horizontal_rail.background = FromApi::from_api(background);
+                            s.horizontal_rail.background = TryFromApi::try_from_api(background).inspect_err(|e| tracing::error!("{e}")).ok();
                         }
                         if let Some(scroller_background) = scroller_background
-                            && let Some(background) = FromApi::from_api(scroller_background)
+                            && let Some(background) = TryFromApi::try_from_api(scroller_background).inspect_err(|e| tracing::error!("{e}")).ok()
                         {
                             s.horizontal_rail.scroller.background = background;
                         }
@@ -467,7 +467,9 @@ pub fn widget_def_to_fn(def: WidgetDef) -> Option<ViewFn> {
                     }
 
                     if let Some(background) = background_clone.clone() {
-                        style.background = FromApi::from_api(background);
+                        style.background = TryFromApi::try_from_api(background)
+                            .inspect_err(|e| tracing::error!("{e}"))
+                            .ok();
                     }
 
                     style
@@ -554,7 +556,9 @@ pub fn widget_def_to_fn(def: WidgetDef) -> Option<ViewFn> {
                             }
 
                             if let Some(background) = style.background {
-                                s.background = FromApi::from_api(background);
+                                s.background = TryFromApi::try_from_api(background)
+                                    .inspect_err(|e| tracing::error!("{e}"))
+                                    .ok();
                             }
                         }
 
@@ -886,7 +890,9 @@ impl FromApi<widget::v1::container::Style> for iced::widget::container::Style {
         }
 
         if let Some(background) = background {
-            ret.background = FromApi::from_api(background);
+            ret.background = TryFromApi::try_from_api(background)
+                .inspect_err(|e| tracing::error!("{e}"))
+                .ok();
         }
 
         ret
@@ -917,14 +923,18 @@ impl FromApi<widget::v1::Border> for iced::Border {
     }
 }
 
-impl FromApi<widget::v1::Background> for Option<iced::Background> {
-    fn from_api(api_type: widget::v1::Background) -> Self {
+impl TryFromApi<widget::v1::Background> for iced::Background {
+    type Error = anyhow::Error;
+
+    fn try_from_api(api_type: widget::v1::Background) -> anyhow::Result<Self> {
         use widget::v1::background::Background;
 
         const MESSAGE: &str = "snowcap.widget.v1.Background";
         const FIELD: &str = "background";
 
-        let background = api_type.background?;
+        let Some(background) = api_type.background else {
+            anyhow::bail!("Missing field 'background'");
+        };
 
         let background = match background {
             Background::Color(color) => Ok(iced::Background::Color(iced::Color::from_api(color))),
@@ -933,13 +943,7 @@ impl FromApi<widget::v1::Background> for Option<iced::Background> {
             }
         };
 
-        match background.with_context(|| format!("While converting {MESSAGE}.{FIELD}")) {
-            Ok(b) => Some(b),
-            Err(e) => {
-                tracing::error!("{}", e);
-                None
-            }
-        }
+        background.with_context(|| format!("While converting {MESSAGE}.{FIELD}"))
     }
 }
 
