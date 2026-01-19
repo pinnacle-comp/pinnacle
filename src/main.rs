@@ -3,10 +3,7 @@
 use std::{
     env,
     io::{BufRead, BufReader},
-    sync::{
-        Arc,
-        atomic::{AtomicBool, Ordering},
-    },
+    sync::atomic::Ordering,
     time::Duration,
 };
 
