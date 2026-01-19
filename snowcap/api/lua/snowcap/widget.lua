@@ -234,18 +234,12 @@ local alignment = {
 ---@class snowcap.widget.background
 ---Builds a `Background` from a solid `Color`.
 ---@field Color fun(color: snowcap.widget.Color): snowcap.widget.Background
----Builds a `Background` from a generic `Gradient`.
----@field Gradient fun(gradient: snowcap.widget.Gradient): snowcap.widget.Background
 ---Builds a `Background` from a `Linear` gradient.
 ---@field Linear fun(radians: number, stops: snowcap.widget.gradient.ColorStop[]): snowcap.widget.Background
 local background = {
     ---@type fun(color: snowcap.widget.Color): snowcap.widget.Background
     Color = function(color)
         return { color = color }
-    end,
-    ---@type fun(gradient: snowcap.widget.Gradient): snowcap.widget.Background
-    Gradient = function(gradient)
-        return { gradient = gradient }
     end,
     ---@type fun(radians: number, stops: snowcap.widget.gradient.ColorStop[]): snowcap.widget.Background
     Linear = function(radians, stops)
