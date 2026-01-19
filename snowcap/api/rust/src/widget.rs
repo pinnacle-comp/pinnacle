@@ -459,30 +459,7 @@ impl Linear {
     pub fn add_stop(self, offset: f32, color: Color) -> Self {
         let Self { radians, mut stops } = self;
 
-        if offset.is_finite() && (0.0..=1.0).contains(&offset) {
-            let search = stops.binary_search_by(|stop| {
-                if (stop.offset - offset).abs() <= f32::EPSILON {
-                    std::cmp::Ordering::Equal
-                } else {
-                    stop.offset.partial_cmp(&offset).unwrap()
-                }
-            });
-
-            let stop = ColorStop { offset, color };
-
-            match search {
-                Ok(pos) => stops[pos] = stop,
-                Err(pos) => {
-                    if stops.len() < 8 {
-                        stops.insert(pos, stop)
-                    } else {
-                        tracing::warn!("Linear::stops is full. Ignoring {stop:?}");
-                    }
-                }
-            }
-        } else {
-            tracing::warn!("Offset should be in the range 0.0..=1.0");
-        }
+        stops.push(ColorStop { offset, color });
 
         Self { radians, stops }
     }
