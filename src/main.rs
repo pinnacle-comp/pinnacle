@@ -262,10 +262,8 @@ async fn main() -> anyhow::Result<()> {
     }
 
     if !startup_config.no_xwayland {
-        let finished_flag = Arc::new(AtomicBool::new(false));
-
-        match state.pinnacle.insert_xwayland_source(finished_flag.clone()) {
-            Ok(()) => {
+        match state.pinnacle.insert_xwayland_source() {
+            Ok(finished_flag) => {
                 // Wait for xwayland to start so the config gets DISPLAY
                 while !finished_flag.load(Ordering::Relaxed) {
                     event_loop.dispatch(None, &mut state)?;

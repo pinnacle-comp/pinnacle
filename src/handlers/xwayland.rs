@@ -618,8 +618,8 @@ impl Pinnacle {
     /// Spawns an [`XWayland`] instance and inserts its event source into
     /// the event loop.
     ///
-    /// Receives a boolean flag that becomes true once this finishes.
-    pub fn insert_xwayland_source(&mut self, flag: Arc<AtomicBool>) -> anyhow::Result<()> {
+    /// On success, returns a boolean flag that becomes true once this finishes.
+    pub fn insert_xwayland_source(&mut self) -> anyhow::Result<Arc<AtomicBool>> {
         let _span = tracy_client::span!("Pinnacle::insert_xwayland_source");
 
         // TODO: xwayland keyboard grab state
@@ -634,8 +634,11 @@ impl Pinnacle {
             |_| (),
         )?;
 
-        self.loop_handle
-            .insert_source(xwayland, move |event, _, state| {
+        let spawned_flag = Arc::new(AtomicBool::new(false));
+
+        self.loop_handle.insert_source(xwayland, {
+            let spawned_flag = spawned_flag.clone();
+            move |event, _, state| {
                 match event {
                     XWaylandEvent::Ready {
                         x11_socket,
@@ -692,10 +695,11 @@ impl Pinnacle {
                     }
                 }
 
-                flag.store(true, Ordering::Relaxed);
-            })?;
+                spawned_flag.store(true, Ordering::Relaxed);
+            }
+        })?;
 
-        Ok(())
+        Ok(spawned_flag)
     }
 
     // Yoinked from le cosmic:
