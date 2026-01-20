@@ -27,7 +27,7 @@ use futures::FutureExt;
 use pinnacle_api_defs::pinnacle::{
     tag::v1::{
         AddRequest, GetActiveRequest, GetNameRequest, GetOutputNameRequest, GetRequest,
-        RemoveRequest, SetActiveRequest, MoveToOutputRequest, SwitchToRequest,
+        MoveToOutputRequest, RemoveRequest, SetActiveRequest, SwitchToRequest,
     },
     util::v1::SetOrToggle,
 };
