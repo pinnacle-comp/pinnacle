@@ -2,6 +2,7 @@ pub mod v1;
 
 use std::mem;
 
+use indexmap::IndexSet;
 use tracing::warn;
 
 use crate::{
@@ -149,14 +150,82 @@ pub fn remove(state: &mut State, tags_to_remove: Vec<Tag>) {
     }
 }
 
-pub fn move_to_output(state: &mut State, tags_to_move: Vec<Tag>, output_name: OutputName) {
+/// A unique id for a [`Tag`].
+#[derive(Debug, PartialEq, Clone)]
+pub enum TagMoveToOutputError {
+    OutputDoesNotExist(OutputName),
+    SameWindowOnTwoOutputs(Vec<Tag>),
+}
+
+impl core::fmt::Display for TagMoveToOutputError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TagMoveToOutputError::OutputDoesNotExist(output) => write!(
+                f,
+                "Tried to move tags to output {} but it doesn't exist",
+                output.0
+            ),
+            TagMoveToOutputError::SameWindowOnTwoOutputs(tags) => write!(
+                f,
+                "executing this operation would put the same windows in tags {:?} on two separate outputs at once. This is forbidden.",
+                tags.iter().map(|tag| tag.name())
+            ),
+        }
+    }
+}
+
+pub fn move_to_output<T>(
+    state: &mut State,
+    tags_to_move: T,
+    output_name: OutputName,
+) -> Result<(), TagMoveToOutputError>
+where
+    T: IntoIterator<Item = Tag>,
+{
     let Some(new_output) = output_name.output(&state.pinnacle) else {
-        warn!(
-            "Tried to move tags to output {} but it doesn't exist",
-            output_name.0
-        );
-        return;
+        return Err(TagMoveToOutputError::OutputDoesNotExist(output_name));
     };
+
+    let tags_to_move: IndexSet<Tag> = tags_to_move.into_iter().collect();
+    let mut to_evaluate_tags = IndexSet::new();
+
+    for window in state.pinnacle.windows.iter() {
+        window.with_state(|state| {
+            // is window affected by move
+            let mut affected = false;
+            let mut contains_other_tags = false;
+
+            for tag in state.tags.iter() {
+                let contains = tags_to_move.contains(tag);
+                affected = contains || affected;
+                contains_other_tags = !contains || contains_other_tags;
+
+                if affected && contains_other_tags {
+                    to_evaluate_tags.insert(tag.clone());
+                }
+            }
+        })
+    }
+
+    let mut tags_on_other_output = Vec::new();
+
+    for output in state.pinnacle.outputs.iter() {
+        if output.name() != output_name.0 {
+            output.with_state(|state| {
+                for tag in to_evaluate_tags
+                    .extract_if(.., |to_evalaute_tag| state.tags.contains(to_evalaute_tag))
+                {
+                    tags_on_other_output.push(tag);
+                }
+            })
+        }
+    }
+
+    if !tags_on_other_output.is_empty() {
+        return Err(TagMoveToOutputError::SameWindowOnTwoOutputs(
+            tags_on_other_output,
+        ));
+    }
 
     for output in state.pinnacle.outputs.clone() {
         let mut changed = false;
@@ -182,4 +251,5 @@ pub fn move_to_output(state: &mut State, tags_to_move: Vec<Tag>, output_name: Ou
     }
 
     state.pinnacle.update_xwayland_stacking_order();
+    Ok(())
 }

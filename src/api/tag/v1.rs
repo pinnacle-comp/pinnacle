@@ -2,7 +2,7 @@ use pinnacle_api_defs::pinnacle::{
     tag::v1::{
         self, AddRequest, AddResponse, GetActiveRequest, GetActiveResponse, GetNameRequest,
         GetNameResponse, GetOutputNameRequest, GetOutputNameResponse, GetRequest, GetResponse,
-        RemoveRequest, SetActiveRequest, MoveToOutputRequest, SwitchToRequest,
+        MoveToOutputRequest, RemoveRequest, SetActiveRequest, SwitchToRequest,
     },
     util::v1::SetOrToggle,
 };
