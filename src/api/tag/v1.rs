@@ -2,7 +2,8 @@ use pinnacle_api_defs::pinnacle::{
     tag::v1::{
         self, AddRequest, AddResponse, GetActiveRequest, GetActiveResponse, GetNameRequest,
         GetNameResponse, GetOutputNameRequest, GetOutputNameResponse, GetRequest, GetResponse,
-        MoveToOutputRequest, RemoveRequest, SetActiveRequest, SwitchToRequest,
+        MoveToOutputRequest, MoveToOutputResponse, RemoveRequest, SetActiveRequest,
+        SwitchToRequest,
     },
     util::v1::SetOrToggle,
 };
@@ -139,7 +140,10 @@ impl v1::tag_service_server::TagService for super::TagService {
         .await
     }
 
-    async fn move_to_output(&self, request: Request<MoveToOutputRequest>) -> TonicResult<()> {
+    async fn move_to_output(
+        &self,
+        request: Request<MoveToOutputRequest>,
+    ) -> TonicResult<MoveToOutputResponse> {
         let request = request.into_inner();
 
         let output_name = OutputName(request.output_name);
@@ -151,8 +155,25 @@ impl v1::tag_service_server::TagService for super::TagService {
                 .flat_map(|id| id.tag(&state.pinnacle))
                 .collect::<Vec<_>>();
 
-            crate::api::tag::move_to_output(state, tags_to_move, output_name);
-            Ok(())
+            use crate::api::tag::TagMoveToOutputError;
+            use pinnacle_api_defs::pinnacle::tag::v1::{
+                MoveToOutputSameWindowOnTwoOutputs, move_to_output_response,
+            };
+
+            let kind = match crate::api::tag::move_to_output(state, tags_to_move, output_name) {
+                Ok(()) => None,
+                Err(TagMoveToOutputError::OutputDoesNotExist(output_name)) => Some(
+                    move_to_output_response::Kind::OutputDoesNotExist(output_name.0),
+                ),
+                Err(TagMoveToOutputError::SameWindowOnTwoOutputs(tags)) => {
+                    Some(move_to_output_response::Kind::SameWindowOnTwoOutputs(
+                        MoveToOutputSameWindowOnTwoOutputs {
+                            tag_ids: tags.into_iter().map(|tag| tag.id().to_inner()).collect(),
+                        },
+                    ))
+                }
+            };
+            Ok(MoveToOutputResponse { kind })
         })
         .await
     }
