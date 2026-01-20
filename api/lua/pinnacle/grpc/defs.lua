@@ -1342,6 +1342,13 @@ local pinnacle_v1_Backend = {
 ---@field output_name string?
 ---@field tag_ids integer[]?
 
+---@class pinnacle.tag.v1.MoveToOutputResponse
+---@field output_does_not_exist string?
+---@field same_window_on_two_outputs pinnacle.tag.v1.MoveToOutputSameWindowOnTwoOutputs?
+
+---@class pinnacle.tag.v1.MoveToOutputSameWindowOnTwoOutputs
+---@field tag_ids integer[]?
+
 ---@class pinnacle.tag.v1.GetActiveRequest
 ---@field tag_id integer?
 
@@ -1605,6 +1612,8 @@ pinnacle.tag.v1.AddRequest = {}
 pinnacle.tag.v1.AddResponse = {}
 pinnacle.tag.v1.RemoveRequest = {}
 pinnacle.tag.v1.MoveToOutputRequest = {}
+pinnacle.tag.v1.MoveToOutputResponse = {}
+pinnacle.tag.v1.MoveToOutputSameWindowOnTwoOutputs = {}
 pinnacle.tag.v1.GetActiveRequest = {}
 pinnacle.tag.v1.GetActiveResponse = {}
 pinnacle.tag.v1.GetNameRequest = {}
@@ -3562,7 +3571,7 @@ pinnacle.tag.v1.TagService.MoveToOutput = {}
 pinnacle.tag.v1.TagService.MoveToOutput.service = "pinnacle.tag.v1.TagService"
 pinnacle.tag.v1.TagService.MoveToOutput.method = "MoveToOutput"
 pinnacle.tag.v1.TagService.MoveToOutput.request = ".pinnacle.tag.v1.MoveToOutputRequest"
-pinnacle.tag.v1.TagService.MoveToOutput.response = ".google.protobuf.Empty"
+pinnacle.tag.v1.TagService.MoveToOutput.response = ".pinnacle.tag.v1.MoveToOutputResponse"
 
 ---Performs a unary request.
 ---
@@ -3570,7 +3579,7 @@ pinnacle.tag.v1.TagService.MoveToOutput.response = ".google.protobuf.Empty"
 ---
 ---@param data pinnacle.tag.v1.MoveToOutputRequest
 ---
----@return google.protobuf.Empty | nil response
+---@return pinnacle.tag.v1.MoveToOutputResponse | nil response
 ---@return string | nil error An error string, if any
 function Client:pinnacle_tag_v1_TagService_MoveToOutput(data)
     return self:unary_request(pinnacle.tag.v1.TagService.MoveToOutput, data)

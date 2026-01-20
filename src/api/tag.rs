@@ -150,7 +150,6 @@ pub fn remove(state: &mut State, tags_to_remove: Vec<Tag>) {
     }
 }
 
-/// A unique id for a [`Tag`].
 #[derive(Debug, PartialEq, Clone)]
 pub enum TagMoveToOutputError {
     OutputDoesNotExist(OutputName),
