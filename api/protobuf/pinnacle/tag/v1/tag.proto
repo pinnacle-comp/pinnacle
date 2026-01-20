@@ -27,6 +27,16 @@ message MoveToOutputRequest {
     repeated uint32 tag_ids = 2;
 }
 
+message MoveToOutputResponse {
+    oneof kind {
+      string output_does_not_exist = 2;
+      MoveToOutputSameWindowOnTwoOutputs same_window_on_two_outputs = 3;
+    }
+}
+message MoveToOutputSameWindowOnTwoOutputs {
+    repeated uint32 tag_ids = 1;
+}
+
 // Tag properties
 
 message GetActiveRequest {
@@ -73,5 +83,5 @@ service TagService {
 
     rpc SetActive(SetActiveRequest) returns (google.protobuf.Empty);
     rpc SwitchTo(SwitchToRequest) returns (google.protobuf.Empty);
-    rpc MoveToOutput(MoveToOutputRequest) returns (google.protobuf.Empty);
+    rpc MoveToOutput(MoveToOutputRequest) returns (MoveToOutputResponse);
 }
