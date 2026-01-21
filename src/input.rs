@@ -18,7 +18,9 @@ use smithay::{
         input::{
             AbsolutePositionEvent, Axis, AxisSource, ButtonState, Device, DeviceCapability, Event,
             GestureBeginEvent, GestureEndEvent, InputBackend, InputEvent, KeyState,
-            KeyboardKeyEvent, PointerAxisEvent, PointerButtonEvent, PointerMotionEvent, TouchEvent,
+            KeyboardKeyEvent, PointerAxisEvent, PointerButtonEvent, PointerMotionEvent,
+            ProximityState, TabletToolButtonEvent, TabletToolEvent, TabletToolProximityEvent,
+            TabletToolTipEvent, TabletToolTipState, TouchEvent,
         },
         renderer::utils::with_renderer_surface_state,
         winit::WinitVirtualDevice,
@@ -41,6 +43,7 @@ use smithay::{
         pointer_constraints::{PointerConstraint, with_pointer_constraint},
         seat::WaylandFocus,
         shell::wlr_layer,
+        tablet_manager::{TabletDescriptor, TabletSeatTrait},
     },
 };
 use tracing::{error, info};
@@ -311,6 +314,11 @@ impl State {
             InputEvent::TouchFrame { event } => self.on_touch_frame::<B>(event),
             InputEvent::TouchCancel { event } => self.on_touch_cancel::<B>(event),
 
+            InputEvent::TabletToolProximity { event } => self.on_tablet_tool_proximity::<B>(event),
+            InputEvent::TabletToolTip { event } => self.on_tablet_tool_tip::<B>(event),
+            InputEvent::TabletToolAxis { event } => self.on_tablet_tool_axis::<B>(event),
+            InputEvent::TabletToolButton { event } => self.on_tablet_tool_button::<B>(event),
+
             // TODO: rest of input events
             _ => (),
         }
@@ -383,6 +391,13 @@ impl State {
         {
             self.pinnacle.seat.add_touch();
         }
+
+        if device.has_capability(DeviceCapability::TabletTool) {
+            self.pinnacle.seat.tablet_seat().add_tablet::<Self>(
+                &self.pinnacle.display_handle,
+                &TabletDescriptor::from(&device),
+            );
+        }
     }
 
     fn on_device_removed(&mut self, device: impl Device) {
@@ -396,6 +411,16 @@ impl State {
                 .all(|device| !device.has_capability(DeviceCapability::Touch.into()))
         {
             self.pinnacle.seat.remove_touch();
+        }
+
+        if device.has_capability(DeviceCapability::TabletTool) {
+            let tablet_seat = self.pinnacle.seat.tablet_seat();
+
+            tablet_seat.remove_tablet(&TabletDescriptor::from(&device));
+
+            if tablet_seat.count_tablets() == 0 {
+                tablet_seat.clear_tools();
+            }
         }
     }
 
@@ -1011,7 +1036,7 @@ impl State {
             return;
         };
 
-        let Some(touch_loc) = self.transform_touch_coords(&event) else {
+        let Some(touch_loc) = self.transform_device_coords(&event) else {
             return;
         };
 
@@ -1037,7 +1062,7 @@ impl State {
             return;
         };
 
-        let Some(touch_loc) = self.transform_touch_coords(&event) else {
+        let Some(touch_loc) = self.transform_device_coords(&event) else {
             return;
         };
 
@@ -1085,6 +1110,134 @@ impl State {
         touch.cancel(self);
     }
 
+    fn on_tablet_tool_proximity<I: InputBackend>(&mut self, event: I::TabletToolProximityEvent)
+    where
+        I::Device: 'static,
+    {
+        let Some(loc) = self.transform_device_coords(&event) else {
+            return;
+        };
+
+        let focus = self.pinnacle.pointer_contents_under(loc);
+
+        // TODO: pointer movement
+        // self.pinnacle.set_pointer_contents(focus.clone());
+        //
+        // let pointer = self.pinnacle.seat.get_pointer().unwrap();
+        // pointer.motion(
+        //     self,
+        //     focus.focus_under,
+        //     &MotionEvent {
+        //         location: loc,
+        //         serial: SERIAL_COUNTER.next_serial(),
+        //         time: event.time_msec(),
+        //     },
+        // );
+        // pointer.frame(self);
+
+        let tablet_seat = self.pinnacle.seat.tablet_seat();
+
+        let tablet = tablet_seat.get_tablet(&TabletDescriptor::from(&event.device()));
+        let dh = self.pinnacle.display_handle.clone();
+        let tool = tablet_seat.add_tool::<Self>(self, &dh, &event.tool());
+
+        if let Some(tablet) = tablet {
+            match event.state() {
+                ProximityState::In => {
+                    if let Some(under) = focus.focus_under.and_then(|(foc, loc)| {
+                        foc.wl_surface().map(|surf| (surf.into_owned(), loc))
+                    }) {
+                        tool.proximity_in(
+                            loc,
+                            under,
+                            &tablet,
+                            SERIAL_COUNTER.next_serial(),
+                            event.time_msec(),
+                        );
+                    }
+                }
+                ProximityState::Out => tool.proximity_out(event.time_msec()),
+            }
+        }
+    }
+
+    fn on_tablet_tool_tip<I: InputBackend>(&mut self, event: I::TabletToolTipEvent) {
+        let Some(tool) = self.pinnacle.seat.tablet_seat().get_tool(&event.tool()) else {
+            return;
+        };
+
+        match event.tip_state() {
+            TabletToolTipState::Down => {
+                tool.tip_down(SERIAL_COUNTER.next_serial(), event.time_msec());
+            }
+            TabletToolTipState::Up => {
+                tool.tip_up(event.time_msec());
+            }
+        }
+    }
+
+    fn on_tablet_tool_axis<I: InputBackend>(&mut self, event: I::TabletToolAxisEvent)
+    where
+        I::Device: 'static,
+    {
+        let Some(loc) = self.transform_device_coords(&event) else {
+            return;
+        };
+
+        let focus = self.pinnacle.pointer_contents_under(loc);
+
+        // TODO: pointer motion
+
+        let tablet_seat = self.pinnacle.seat.tablet_seat();
+
+        let tablet = tablet_seat.get_tablet(&TabletDescriptor::from(&event.device()));
+        let tool = tablet_seat.get_tool(&event.tool());
+
+        if let Some((tablet, tool)) = tablet.zip(tool) {
+            if event.pressure_has_changed() {
+                tool.pressure(event.pressure());
+            }
+            if event.distance_has_changed() {
+                tool.distance(event.distance());
+            }
+            if event.tilt_has_changed() {
+                tool.tilt(event.tilt());
+            }
+            if event.slider_has_changed() {
+                tool.slider_position(event.slider_position());
+            }
+            if event.rotation_has_changed() {
+                tool.rotation(event.rotation());
+            }
+            if event.wheel_has_changed() {
+                tool.wheel(event.wheel_delta(), event.wheel_delta_discrete());
+            }
+
+            tool.motion(
+                loc,
+                focus
+                    .focus_under
+                    .and_then(|(foc, loc)| foc.wl_surface().map(|surf| (surf.into_owned(), loc))),
+                &tablet,
+                SERIAL_COUNTER.next_serial(),
+                event.time_msec(),
+            );
+        }
+    }
+
+    fn on_tablet_tool_button<I: InputBackend>(&mut self, event: I::TabletToolButtonEvent) {
+        let Some(tool) = self.pinnacle.seat.tablet_seat().get_tool(&event.tool()) else {
+            return;
+        };
+
+        tool.button(
+            event.button(),
+            event.button_state(),
+            SERIAL_COUNTER.next_serial(),
+            event.time_msec(),
+        );
+    }
+
     fn map_region_for_device<D: Device + 'static>(
         &self,
         device: &D,
@@ -1106,7 +1259,10 @@ impl State {
         }
     }
 
-    fn transform_touch_coords<I: InputBackend>(
+    /// Transforms coordinates from device space to compositor space.
+    ///
+    /// Returns `None` if there are no enabled outputs.
+    fn transform_device_coords<I: InputBackend>(
         &self,
         event: &impl AbsolutePositionEvent<I>,
     ) -> Option<Point<f64, Logical>>
