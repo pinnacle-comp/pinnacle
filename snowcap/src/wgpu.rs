@@ -36,7 +36,7 @@ impl Compositor {
 
         let adapter = instance
             .request_adapter(&wgpu::RequestAdapterOptions {
-                power_preference: wgpu::PowerPreference::default(),
+                power_preference: wgpu::PowerPreference::from_env().unwrap_or_default(),
                 force_fallback_adapter: false,
                 compatible_surface: None,
             })

@@ -154,22 +154,32 @@ impl Udev {
         let (session, notifier) = LibSeatSession::new()?;
 
         // Get the primary gpu
-        let primary_gpu = udev::primary_gpu(session.seat())
-            .context("unable to get primary gpu path")?
-            .and_then(|x| {
-                DrmNode::from_path(x)
-                    .ok()?
-                    .node_with_type(NodeType::Render)?
-                    .ok()
-            })
-            .unwrap_or_else(|| {
-                udev::all_gpus(session.seat())
-                    .expect("failed to get gpu paths")
-                    .into_iter()
-                    .find_map(|x| DrmNode::from_path(x).ok())
-                    .expect("No GPU!")
-            });
-        info!("Using {} as primary gpu", primary_gpu);
+        let primary_gpu = if let Some(device) = std::env::var("PINNACLE_DRM_DEVICES")
+            .ok()
+            .and_then(|var| var.split(":").next().map(String::from))
+        {
+            info!("attempting to set primary device as {device}");
+
+            DrmNode::from_path(device)?
+                .node_with_type(NodeType::Render)
+                .expect("unable to set primary drm device")?
+        } else {
+            udev::primary_gpu(session.seat())
+                .context("unable to get primary gpu path")?
+                .and_then(|x| {
+                    DrmNode::from_path(x)
+                        .ok()?
+                        .node_with_type(NodeType::Render)?
+                        .ok()
+                })
+                .unwrap_or_else(|| {
+                    udev::all_gpus(session.seat())
+                        .expect("failed to get gpu paths")
+                        .into_iter()
+                        .find_map(|x| DrmNode::from_path(x).ok())
+                        .expect("No GPU!")
+                })
+        };
 
         let gpu_manager =
             GpuManager::new(GbmGlesBackend::with_context_priority(ContextPriority::High))?;
@@ -323,10 +333,14 @@ impl Udev {
                                         .as_source_ref()
                                         .device_list()
                                         .flat_map(|(id, path)| {
-                                            Some((
-                                                DrmNode::from_dev_id(id).ok()?,
-                                                path.to_path_buf(),
-                                            ))
+                                            if should_use_drm_device(path) {
+                                                Some((
+                                                    DrmNode::from_dev_id(id).ok()?,
+                                                    path.to_path_buf(),
+                                                ))
+                                            } else {
+                                                None
+                                            }
                                         })
                                         .collect::<HashMap<_, _>>();
 
@@ -782,6 +796,11 @@ impl Udev {
         path: &Path,
     ) -> anyhow::Result<()> {
         debug!(?node, ?path, "Udev::device_added");
+
+        if !should_use_drm_device(path) {
+            debug!("Skipping adding device {}", path.display());
+            return Ok(());
+        }
 
         // Try to open the device
         let fd = self
@@ -2114,4 +2133,19 @@ fn handle_pending_screencopy<'a>(
             Err(err) => error!("Failed to submit screencopy: {err}"),
         }
     }
+}
+
+#[allow(dead_code, unused_variables)]
+fn should_use_drm_device<P: AsRef<Path>>(device_path: P) -> bool {
+    if let Ok(var) = std::env::var("PINNACLE_DRM_DEVICES") {
+        let device_path = device_path.as_ref();
+
+        return var
+            .split(":")
+            .map(String::from)
+            .map(std::path::PathBuf::from)
+            .any(|p| p == device_path);
+    }
+
+    true
 }
