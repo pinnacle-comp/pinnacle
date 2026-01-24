@@ -32,7 +32,10 @@ use xkbcommon::xkb::Keysym;
 
 use crate::{
     decoration::{DecorationIdCounter, SnowcapDecoration},
-    handlers::{foreign_toplevel_list::ForeignToplevelListHandleData, keyboard::KeyboardFocus},
+    handlers::{
+        foreign_toplevel_list::ForeignToplevelListHandleData,
+        foreign_toplevel_management::ZwlrForeignToplevelManagementState, keyboard::KeyboardFocus,
+    },
     layer::{LayerIdCounter, SnowcapLayer},
     runtime::{CalloopSenderSink, CurrentTokioExecutor},
     server::GrpcServerState,
@@ -81,6 +84,8 @@ pub struct State {
 
     pub foreign_toplevel_list_handles:
         Vec<(ExtForeignToplevelHandleV1, ForeignToplevelListHandleData)>,
+
+    pub zwlr_foreign_toplevel_mgmt_state: ZwlrForeignToplevelManagementState,
 }
 
 impl State {
@@ -107,6 +112,8 @@ impl State {
             globals.bind(&queue_handle, 1..=1, ()).unwrap();
         let foreign_toplevel_list: ExtForeignToplevelListV1 =
             globals.bind(&queue_handle, 1..=1, ()).unwrap();
+        let zwlr_foreign_toplevel_mgmt_state =
+            ZwlrForeignToplevelManagementState::new(&globals, &queue_handle);
 
         let wayland_source = WaylandSource::new(conn.clone(), event_queue);
 
@@ -263,6 +270,8 @@ impl State {
             layer_id_counter: LayerIdCounter::default(),
             decoration_id_counter: DecorationIdCounter::default(),
             foreign_toplevel_list_handles: Vec::new(),
+
+            zwlr_foreign_toplevel_mgmt_state,
         };
 
         Ok(state)

@@ -4460,6 +4460,7 @@ name = "snowcap"
 version = "0.0.1"
 dependencies = [
  "anyhow",
+ "bitflags 2.10.0",
  "futures",
  "iced",
  "iced_futures",
