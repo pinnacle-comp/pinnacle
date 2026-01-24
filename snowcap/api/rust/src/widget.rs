@@ -2,16 +2,19 @@
 
 #![allow(missing_docs)] // TODO:
 
+pub mod base;
 pub mod button;
 pub mod column;
 pub mod container;
 pub mod font;
 pub mod image;
 pub mod input_region;
+pub mod message;
 pub mod mouse_area;
 pub mod operation;
 pub mod row;
 pub mod scrollable;
+pub mod signal;
 pub mod text;
 pub mod text_input;
 pub mod utils;
@@ -32,7 +35,10 @@ use snowcap_api_defs::snowcap::widget;
 use text::Text;
 use text_input::TextInput;
 
-use crate::widget::{input_region::InputRegion, utils::Radians};
+use crate::{
+    signal::Signaler,
+    widget::{input_region::InputRegion, utils::Radians},
+};
 
 /// A unique identifier for a widget.
 #[derive(Copy, Clone, Default, Debug, PartialEq, Eq, Hash)]
@@ -609,12 +615,77 @@ impl From<LineHeight> for widget::v1::LineHeight {
     }
 }
 
-// INFO: experimentation
-
+/// A complete widget program.
+///
+/// A `Program` builds a widget for display by Snowcap and updates itself
+/// from messages generated from interactions with the widget and from other
+/// external sources.
 pub trait Program {
+    /// The type of messages that this widget program receives.
     type Message;
 
+    /// Updates this widget program with the received message.
+    ///
+    /// Returns whether the view should be recreated.
     fn update(&mut self, msg: Self::Message);
 
+    /// Creates a widget definition for display by Snowcap.
     fn view(&self) -> WidgetDef<Self::Message>;
+
+    /// Returns a possibly held [`Signaler`].
+    ///
+    /// Usually this is from a [`WidgetBase`] stored in the
+    /// implementing struct. If your struct does not use a
+    /// [`WidgetBase`], `None` should be returned.
+    ///
+    /// [`WidgetBase`]: crate::widget::base::WidgetBase
+    fn signaler(&self) -> Option<Signaler>;
+}
+
+impl<Msg> Program for Box<dyn Program<Message = Msg>> {
+    type Message = Msg;
+
+    fn update(&mut self, msg: Self::Message) {
+        (**self).update(msg);
+    }
+
+    fn view(&self) -> WidgetDef<Self::Message> {
+        (**self).view()
+    }
+
+    fn signaler(&self) -> Option<Signaler> {
+        (**self).signaler()
+    }
+}
+
+impl<Msg> Program for Box<dyn Program<Message = Msg> + Send> {
+    type Message = Msg;
+
+    fn update(&mut self, msg: Self::Message) {
+        (**self).update(msg);
+    }
+
+    fn view(&self) -> WidgetDef<Self::Message> {
+        (**self).view()
+    }
+
+    fn signaler(&self) -> Option<Signaler> {
+        (**self).signaler()
+    }
+}
+
+impl<Msg> Program for Box<dyn Program<Message = Msg> + Send + Sync> {
+    type Message = Msg;
+
+    fn update(&mut self, msg: Self::Message) {
+        (**self).update(msg);
+    }
+
+    fn view(&self) -> WidgetDef<Self::Message> {
+        (**self).view()
+    }
+
+    fn signaler(&self) -> Option<Signaler> {
+        (**self).signaler()
+    }
 }

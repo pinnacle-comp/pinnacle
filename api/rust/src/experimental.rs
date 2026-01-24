@@ -28,6 +28,10 @@ pub mod input_grab {
                 .height(snowcap_api::widget::Length::Fixed(1.0))
                 .into()
         }
+
+        fn signaler(&self) -> Option<snowcap_api::signal::Signaler> {
+            None
+        }
     }
 
     /// A handle to an input grab.

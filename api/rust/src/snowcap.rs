@@ -10,6 +10,7 @@ use indexmap::IndexMap;
 use snowcap_api::{
     decoration::{DecorationHandle, NewDecorationError},
     layer::{ExclusiveZone, KeyboardInteractivity, ZLayer},
+    signal::Signaler,
     widget::{
         Alignment, Background, Border, Color, Length, Padding, Program, Radius, WidgetDef,
         button::{self, Button, Styles},
@@ -86,6 +87,10 @@ impl Program for QuitPrompt {
         });
 
         widget.into()
+    }
+
+    fn signaler(&self) -> Option<Signaler> {
+        None
     }
 }
 
@@ -397,6 +402,10 @@ impl Program for BindOverlay {
 
         widget.into()
     }
+
+    fn signaler(&self) -> Option<Signaler> {
+        None
+    }
 }
 
 impl BindOverlay {
@@ -535,6 +544,10 @@ impl Program for ConfigCrashedMessage {
         });
 
         widget.into()
+    }
+
+    fn signaler(&self) -> Option<Signaler> {
+        None
     }
 }
 
@@ -994,5 +1007,9 @@ impl Program for FocusBorder {
         row = row.push(focus_border);
 
         row.into()
+    }
+
+    fn signaler(&self) -> Option<Signaler> {
+        None
     }
 }

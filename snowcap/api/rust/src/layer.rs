@@ -19,7 +19,7 @@ use crate::{
     BlockOnTokio,
     client::Client,
     input::{KeyEvent, Modifiers},
-    widget::{self, Program, WidgetDef, WidgetId, WidgetMessage},
+    widget::{self, Program, WidgetDef, WidgetId, WidgetMessage, signal},
 };
 
 // TODO: change to bitflag
@@ -173,7 +173,35 @@ where
         .block_on_tokio()?
         .into_inner();
 
-    let (msg_send, mut msg_recv) = tokio::sync::mpsc::unbounded_channel::<Msg>();
+    let (msg_send, mut msg_recv) = tokio::sync::mpsc::unbounded_channel::<Option<Msg>>();
+
+    if let Some(mut signaler) = program.signaler() {
+        signaler.connect({
+            let msg_send = msg_send.clone();
+
+            move |msg: signal::Message<Msg>| {
+                if let Err(err) = msg_send.send(Some(msg.into_inner())) {
+                    error!("Failed to send emitted msg: {err}");
+                    crate::signal::HandlerPolicy::Discard
+                } else {
+                    crate::signal::HandlerPolicy::Keep
+                }
+            }
+        });
+
+        signaler.connect({
+            let msg_send = msg_send.clone();
+
+            move |_: signal::RedrawNeeded| {
+                if let Err(err) = msg_send.send(None) {
+                    error!("Failed to send redraw signal: {err}");
+                    crate::signal::HandlerPolicy::Discard
+                } else {
+                    crate::signal::HandlerPolicy::Keep
+                }
+            }
+        });
+    }
 
     tokio::spawn(async move {
         loop {
@@ -188,7 +216,9 @@ where
                     }
                 }
                 Some(msg) = msg_recv.recv() => {
-                    program.update(msg);
+                    if let Some(msg) = msg {
+                        program.update(msg);
+                    }
 
                     if let Err(status) = Client::layer()
                         .request_view(ViewRequest { layer_id })
@@ -232,7 +262,7 @@ where
 #[derive(Clone)]
 pub struct LayerHandle<Msg> {
     id: WidgetId,
-    msg_sender: UnboundedSender<Msg>,
+    msg_sender: UnboundedSender<Option<Msg>>,
 }
 
 impl<Msg> std::fmt::Debug for LayerHandle<Msg> {
@@ -324,7 +354,12 @@ where
 
     /// Sends a message to this Layer [`Program`].
     pub fn send_message(&self, message: Msg) {
-        let _ = self.msg_sender.send(message);
+        let _ = self.msg_sender.send(Some(message));
+    }
+
+    /// Forces this layer to redraw.
+    pub fn force_redraw(&self) {
+        let _ = self.msg_sender.send(None);
     }
 
     /// Sends an [`Operation`] to this Layer.
