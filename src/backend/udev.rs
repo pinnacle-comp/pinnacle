@@ -2135,16 +2135,11 @@ fn handle_pending_screencopy<'a>(
     }
 }
 
-#[allow(dead_code, unused_variables)]
 fn should_use_drm_device<P: AsRef<Path>>(device_path: P) -> bool {
     if let Ok(var) = std::env::var("PINNACLE_DRM_DEVICES") {
         let device_path = device_path.as_ref();
 
-        return var
-            .split(":")
-            .map(String::from)
-            .map(std::path::PathBuf::from)
-            .any(|p| p == device_path);
+        return var.split(":").map(Path::new).any(|p| p == device_path);
     }
 
     true
