@@ -7,7 +7,7 @@ use snowcap_api_defs::snowcap::widget;
 use super::{Widget, WidgetDef, WidgetId};
 
 /// Emits messages on mouse events.
-#[derive(Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct MouseArea<Msg> {
     pub child: WidgetDef<Msg>,
     pub interaction: Option<Interaction>,
@@ -182,25 +182,6 @@ impl<Msg> MouseArea<Msg> {
             },
             ..self
         }
-    }
-}
-
-impl<Msg: std::fmt::Debug> std::fmt::Debug for MouseArea<Msg> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("MouseArea")
-            .field("child", &self.child)
-            .field("interaction", &self.interaction)
-            .field("callbacks", &self.callbacks)
-            .finish()
-    }
-}
-
-impl<Msg: PartialEq> PartialEq for MouseArea<Msg> {
-    fn eq(&self, other: &Self) -> bool {
-        self.child == other.child
-            && self.interaction == other.interaction
-            && self.callbacks == other.callbacks
-            && self.widget_id == other.widget_id
     }
 }
 

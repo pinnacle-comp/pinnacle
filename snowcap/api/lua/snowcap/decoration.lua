@@ -109,14 +109,10 @@ function decoration.new_widget(args)
 
     return decoration_handle.new(decoration_id, function(msg)
         args.program:update(msg)
-        local widget_def = args.program:view()
-        callbacks = {}
 
-        widget._traverse_widget_tree(widget_def, callbacks, widget._collect_callbacks)
-
-        local _, err = client:snowcap_decoration_v1_DecorationService_UpdateDecoration({
+        ---@diagnostic disable-next-line: redefined-local
+        local _, err = client:snowcap_decoration_v1_DecorationService_RequestView({
             decoration_id = decoration_id,
-            widget_def = widget.widget_def_into_api(widget_def),
         })
 
         if err then
