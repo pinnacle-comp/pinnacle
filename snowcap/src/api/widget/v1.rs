@@ -61,6 +61,7 @@ impl widget_service_server::WidgetService for super::WidgetService {
                                 WidgetEvent::TextInput(evt) => {
                                     widget_event::Event::TextInput(evt.into())
                                 }
+                                WidgetEvent::WlrTaskList(_) => todo!(),
                             }),
                         })
                         .collect(),

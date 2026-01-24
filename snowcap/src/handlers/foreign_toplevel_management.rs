@@ -119,7 +119,6 @@ impl Dispatch<ZwlrForeignToplevelManagerV1, ()> for State {
         _conn: &smithay_client_toolkit::reexports::client::Connection,
         _qhandle: &smithay_client_toolkit::reexports::client::QueueHandle<Self>,
     ) {
-        // TODO:
     }
 
     event_created_child!(State, ZwlrForeignToplevelManagerV1, [
@@ -190,11 +189,52 @@ impl Dispatch<ZwlrForeignToplevelHandleV1, ForeignToplevelData> for State {
 }
 
 impl State {
-    pub fn new_zwlr_toplevel(&mut self, _handle: ZwlrForeignToplevelHandleV1) {}
+    pub fn new_zwlr_toplevel(&mut self, handle: ZwlrForeignToplevelHandleV1) {
+        use crate::widget::wlr_tasklist::operation;
 
-    pub fn zwlr_toplevel_updated(&mut self, _handle: ZwlrForeignToplevelHandleV1) {}
+        for layer in &mut self.layers {
+            let mut operation = operation::new_toplevel(handle.clone());
+            layer.operate(&mut operation);
+        }
 
-    pub fn zwlr_toplevel_closed(&mut self, _handle: ZwlrForeignToplevelHandleV1) {}
+        for deco in &mut self.decorations {
+            let mut operation = operation::new_toplevel(handle.clone());
+            deco.operate(&mut operation);
+        }
+
+        self.shell.request_redraw();
+    }
+
+    pub fn zwlr_toplevel_updated(&mut self, handle: ZwlrForeignToplevelHandleV1) {
+        use crate::widget::wlr_tasklist::operation;
+        for layer in &mut self.layers {
+            let mut operation = operation::update_toplevel(handle.clone());
+            layer.operate(&mut operation);
+        }
+
+        for deco in &mut self.decorations {
+            let mut operation = operation::update_toplevel(handle.clone());
+            deco.operate(&mut operation);
+        }
+
+        self.shell.request_redraw()
+    }
+
+    pub fn zwlr_toplevel_closed(&mut self, handle: ZwlrForeignToplevelHandleV1) {
+        use crate::widget::wlr_tasklist::operation;
+
+        for layer in &mut self.layers {
+            let mut operation = operation::remove_toplevel(handle.clone());
+            layer.operate(&mut operation);
+        }
+
+        for deco in &mut self.decorations {
+            let mut operation = operation::remove_toplevel(handle.clone());
+            deco.operate(&mut operation);
+        }
+
+        self.shell.request_redraw();
+    }
 }
 
 impl ForeignToplevelData {

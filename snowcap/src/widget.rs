@@ -1,11 +1,16 @@
 pub mod input_region;
+pub mod wlr_tasklist;
 
 use iced::{Color, Theme, event::Status};
 use iced_graphics::Viewport;
 use iced_wgpu::core::{Clipboard, layout::Limits, widget};
 use smithay_client_toolkit::reexports::client::{QueueHandle, protocol::wl_surface::WlSurface};
 
-use crate::{handlers::keyboard::KeyboardKey, state::State, widget::input_region::Collect};
+use crate::{
+    handlers::keyboard::KeyboardKey,
+    state::State,
+    widget::{input_region::Collect, wlr_tasklist::WlrTaskListEvent},
+};
 
 pub type Element = iced::Element<'static, SnowcapMessage, iced::Theme, crate::compositor::Renderer>;
 pub type UserInterface =
@@ -218,6 +223,7 @@ pub enum WidgetEvent {
     Button,
     MouseArea(MouseAreaEvent),
     TextInput(TextInputEvent),
+    WlrTaskList(WlrTaskListEvent),
 }
 
 #[derive(Debug, Clone)]
