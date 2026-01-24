@@ -154,17 +154,26 @@ impl Udev {
         let (session, notifier) = LibSeatSession::new()?;
 
         // Get the primary gpu
-        let primary_gpu = if let Some(device) = std::env::var("PINNACLE_DRM_DEVICES")
+        let primary_gpu = std::env::var("PINNACLE_DRM_DEVICES")
             .ok()
             .and_then(|var| var.split(":").next().map(String::from))
-        {
-            info!("attempting to set primary device as {device}");
+            .and_then(|device| {
+                info!("Attempting to set primary device as {device}");
 
-            DrmNode::from_path(device)?
-                .node_with_type(NodeType::Render)
-                .expect("unable to set primary drm device")?
-        } else {
-            udev::primary_gpu(session.seat())
+                match DrmNode::from_path(device) {
+                    Ok(drm_node) => drm_node
+                        .node_with_type(NodeType::Render)
+                        .and_then(|node| node.ok()),
+                    Err(err) => {
+                        warn!("Unable to use specified device {err}, falling back");
+                        None
+                    }
+                }
+            });
+
+        let primary_gpu = match primary_gpu {
+            Some(primary) => primary,
+            None => udev::primary_gpu(session.seat())
                 .context("unable to get primary gpu path")?
                 .and_then(|x| {
                     DrmNode::from_path(x)
@@ -178,7 +187,7 @@ impl Udev {
                         .into_iter()
                         .find_map(|x| DrmNode::from_path(x).ok())
                         .expect("No GPU!")
-                })
+                }),
         };
 
         let gpu_manager =
