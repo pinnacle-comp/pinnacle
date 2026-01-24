@@ -7,7 +7,8 @@
 //! ```
 //! use snowcap_api::{
 //!     layer,
-//!     widget::{self, container::Container, operation, text_input::TextInput, Length, Program}
+//!     widget::{self, container::Container, operation, text_input::TextInput, Length, Program},
+//!     signal,
 //! };
 //!
 //! /// Example Program for [`TextInput`]
@@ -81,6 +82,10 @@
 //!             .width(Length::Fixed(220.0));
 //!
 //!         widget.into()
+//!     }
+//!
+//!     fn signaler(&self) -> Option<signal::Signaler> {
+//!         None
 //!     }
 //! }
 //! ```
