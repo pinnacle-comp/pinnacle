@@ -20,7 +20,7 @@ use crate::{
     BlockOnTokio,
     client::Client,
     popup::{self, AsParent},
-    widget::{self, Program, WidgetDef, WidgetId, WidgetMessage},
+    widget::{self, Program, WidgetDef, WidgetId, WidgetMessage, signal},
 };
 
 /// The bounds of a window or decoration.
@@ -104,7 +104,35 @@ where
         .block_on_tokio()?
         .into_inner();
 
-    let (msg_send, mut msg_recv) = tokio::sync::mpsc::unbounded_channel::<Msg>();
+    let (msg_send, mut msg_recv) = tokio::sync::mpsc::unbounded_channel::<Option<Msg>>();
+
+    if let Some(signaler) = program.signaler() {
+        signaler.connect({
+            let msg_send = msg_send.clone();
+
+            move |msg: signal::Message<Msg>| {
+                if let Err(err) = msg_send.send(Some(msg.into_inner())) {
+                    error!("Failed to send emitted msg: {err}");
+                    crate::signal::HandlerPolicy::Discard
+                } else {
+                    crate::signal::HandlerPolicy::Keep
+                }
+            }
+        });
+
+        signaler.connect({
+            let msg_send = msg_send.clone();
+
+            move |_: signal::RedrawNeeded| {
+                if let Err(err) = msg_send.send(None) {
+                    error!("Failed to send redraw signal: {err}");
+                    crate::signal::HandlerPolicy::Discard
+                } else {
+                    crate::signal::HandlerPolicy::Keep
+                }
+            }
+        });
+    }
 
     tokio::spawn(async move {
         loop {
@@ -119,7 +147,9 @@ where
                     }
                 }
                 Some(msg) = msg_recv.recv() => {
-                    program.update(msg);
+                    if let Some(msg) = msg {
+                        program.update(msg);
+                    }
 
                     if let Err(status) = Client::decoration()
                         .request_view(ViewRequest { decoration_id })
@@ -162,7 +192,7 @@ where
 #[derive(Clone)]
 pub struct DecorationHandle<Msg> {
     id: WidgetId,
-    msg_sender: UnboundedSender<Msg>,
+    msg_sender: UnboundedSender<Option<Msg>>,
 }
 
 impl<Msg> std::fmt::Debug for DecorationHandle<Msg> {
@@ -188,7 +218,12 @@ impl<Msg> DecorationHandle<Msg> {
 
     /// Sends a message to this decoration's [`Program`].
     pub fn send_message(&self, message: Msg) {
-        let _ = self.msg_sender.send(message);
+        let _ = self.msg_sender.send(Some(message));
+    }
+
+    /// Forces this decoration to redraw.
+    pub fn force_redraw(&self) {
+        let _ = self.msg_sender.send(None);
     }
 
     /// Sends an [`Operation`] to this Decoration.
