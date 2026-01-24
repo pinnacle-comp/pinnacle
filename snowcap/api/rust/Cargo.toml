@@ -6,6 +6,7 @@ rust-version.workspace = true
 
 [dependencies]
 bitflags = { workspace = true }
+dyn-clone = "1.0.20"
 from_variants = "1.0.2"
 futures = { workspace = true }
 hyper-util = { workspace = true }
