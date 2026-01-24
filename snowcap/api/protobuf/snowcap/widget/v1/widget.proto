@@ -160,6 +160,7 @@ message WidgetDef {
     InputRegion input_region = 9;
     MouseArea mouse_area = 10;
     TextInput text_input = 11;
+    WlrTaskList wlr_task_list = 12;
   }
 }
 
@@ -453,6 +454,37 @@ message TextInput {
   }
 }
 
+message WlrTaskList {
+  optional uint32 widget_id = 1;
+  bool on_enter = 2;
+  bool on_update = 3;
+  bool on_leave = 4;
+  WidgetDef child = 5;
+
+  message Event {
+    oneof data {
+      WlrTaskData enter = 1;
+      WlrTaskData update = 2;
+      uint64 leave = 3;
+    }
+  }
+
+  message WlrTaskData {
+    uint64 id = 1;
+    optional string title = 2;
+    optional string app_id = 3;
+    optional WlrTaskState state = 4;
+    repeated string outputs = 5;
+  }
+
+  message WlrTaskState {
+    bool maximized = 1;
+    bool minimized = 2;
+    bool activated = 3;
+    bool fullscreen = 4;
+  }
+}
+
 message GetWidgetEventsRequest {
   oneof id {
     uint32 layer_id = 1;
@@ -467,6 +499,7 @@ message WidgetEvent {
     Button.Event button = 2;
     MouseArea.Event mouse_area = 3;
     TextInput.Event text_input = 4;
+    WlrTaskList.Event wlr_task_list = 5;
   }
 }
 

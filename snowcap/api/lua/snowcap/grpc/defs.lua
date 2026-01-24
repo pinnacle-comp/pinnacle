@@ -764,6 +764,7 @@ local snowcap_layer_v1_Layer = {
 ---@field input_region snowcap.widget.v1.InputRegion?
 ---@field mouse_area snowcap.widget.v1.MouseArea?
 ---@field text_input snowcap.widget.v1.TextInput?
+---@field wlr_task_list snowcap.widget.v1.WlrTaskList?
 
 ---@class snowcap.widget.v1.Text
 ---@field text string?
@@ -982,6 +983,31 @@ local snowcap_layer_v1_Layer = {
 ---@field submit google.protobuf.Empty?
 ---@field paste string?
 
+---@class snowcap.widget.v1.WlrTaskList
+---@field widget_id integer?
+---@field on_enter boolean?
+---@field on_update boolean?
+---@field on_leave boolean?
+---@field child snowcap.widget.v1.WidgetDef?
+
+---@class snowcap.widget.v1.WlrTaskList.Event
+---@field enter snowcap.widget.v1.WlrTaskList.WlrTaskData?
+---@field update snowcap.widget.v1.WlrTaskList.WlrTaskData?
+---@field leave integer?
+
+---@class snowcap.widget.v1.WlrTaskList.WlrTaskData
+---@field id integer?
+---@field title string?
+---@field app_id string?
+---@field state snowcap.widget.v1.WlrTaskList.WlrTaskState?
+---@field outputs string[]?
+
+---@class snowcap.widget.v1.WlrTaskList.WlrTaskState
+---@field maximized boolean?
+---@field minimized boolean?
+---@field activated boolean?
+---@field fullscreen boolean?
+
 ---@class snowcap.widget.v1.GetWidgetEventsRequest
 ---@field layer_id integer?
 ---@field decoration_id integer?
@@ -991,6 +1017,7 @@ local snowcap_layer_v1_Layer = {
 ---@field button snowcap.widget.v1.Button.Event?
 ---@field mouse_area snowcap.widget.v1.MouseArea.Event?
 ---@field text_input snowcap.widget.v1.TextInput.Event?
+---@field wlr_task_list snowcap.widget.v1.WlrTaskList.Event?
 
 ---@class snowcap.widget.v1.GetWidgetEventsResponse
 ---@field widget_events snowcap.widget.v1.WidgetEvent[]?
@@ -1321,6 +1348,10 @@ snowcap.widget.v1.TextInput.Icon = {}
 snowcap.widget.v1.TextInput.Style = {}
 snowcap.widget.v1.TextInput.Style.Inner = {}
 snowcap.widget.v1.TextInput.Event = {}
+snowcap.widget.v1.WlrTaskList = {}
+snowcap.widget.v1.WlrTaskList.Event = {}
+snowcap.widget.v1.WlrTaskList.WlrTaskData = {}
+snowcap.widget.v1.WlrTaskList.WlrTaskState = {}
 snowcap.widget.v1.GetWidgetEventsRequest = {}
 snowcap.widget.v1.WidgetEvent = {}
 snowcap.widget.v1.GetWidgetEventsResponse = {}
