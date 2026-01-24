@@ -19,9 +19,12 @@ use smithay_client_toolkit::{
     },
 };
 
-use crate::handlers::foreign_toplevel_management::{
-    ForeignToplevelData, ForeignToplevelInfo, ToplevelState,
-    WeakZwlrForeignToplevelManagementState, ZwlrForeignToplevelManagementState,
+use crate::{
+    handlers::foreign_toplevel_management::{
+        ForeignToplevelData, ForeignToplevelInfo, ToplevelState,
+        WeakZwlrForeignToplevelManagementState, ZwlrForeignToplevelManagementState,
+    },
+    widget::output::OutputState,
 };
 
 pub mod operation {
@@ -283,6 +286,8 @@ pub struct WlrTaskList<'a, Message, Theme = iced::Theme, Renderer = iced::Render
 /// Local state of the [`WlrTaskList`].
 #[derive(Default)]
 pub struct State {
+    output_state: OutputState,
+
     toplevel_list: HashMap<u64, Weak<ZwlrForeignToplevelHandleV1>>,
     seat: Option<Weak<WlSeat>>,
 
@@ -470,6 +475,7 @@ where
 
         state.seat = self.seat.clone();
 
+        operation.custom(None, layout.bounds(), &mut state.output_state);
         operation.custom(None, layout.bounds(), state);
 
         operation.traverse(&mut |operation| {

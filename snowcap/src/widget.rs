@@ -1,4 +1,5 @@
 pub mod input_region;
+pub mod output;
 pub mod wlr_tasklist;
 
 use iced::{Color, Theme, event::Status};

@@ -234,6 +234,8 @@ impl CompositorHandler for State {
         surface: &WlSurface,
         output: &wl_output::WlOutput,
     ) {
+        use crate::widget::output;
+
         let Some(layer) = self
             .layers
             .iter_mut()
@@ -243,6 +245,9 @@ impl CompositorHandler for State {
         };
 
         layer.wl_output = Some(output.clone());
+
+        let mut oper = output::operation::enter_output(output.clone());
+        layer.operate(&mut oper);
 
         let Some(output_info) = self.output_state.info(output) else {
             return;
@@ -273,9 +278,19 @@ impl CompositorHandler for State {
         &mut self,
         _conn: &Connection,
         _qh: &QueueHandle<Self>,
-        _surface: &WlSurface,
-        _output: &wl_output::WlOutput,
+        surface: &WlSurface,
+        output: &wl_output::WlOutput,
     ) {
+        use crate::widget::output;
+
+        if let Some(layer) = self
+            .layers
+            .iter_mut()
+            .find(|layer| layer.layer.wl_surface() == surface)
+        {
+            let mut oper = output::operation::leave_output(output.clone());
+            layer.operate(&mut oper);
+        }
     }
 }
 delegate_compositor!(State);
