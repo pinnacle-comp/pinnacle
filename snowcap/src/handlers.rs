@@ -51,8 +51,13 @@ impl SeatHandler for State {
         &mut self.seat_state
     }
 
-    fn new_seat(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _seat: WlSeat) {
-        // TODO:
+    fn new_seat(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, seat: WlSeat) {
+        // TODO: For now we only support one seat. This is good enough as most compositor only
+        // support one seat as well, but could be improved either by picking the best seat (the one
+        // with the most desirable capabilities), or having the user pick a seat by name.
+        if self.seat.is_none() {
+            self.seat = Some(seat);
+        }
     }
 
     fn new_capability(
