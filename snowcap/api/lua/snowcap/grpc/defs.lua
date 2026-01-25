@@ -492,6 +492,15 @@ local snowcap_widget_v1_Alignment = {
     ALIGNMENT_END = 3,
 }
 
+---@enum snowcap.widget.v1.Wrapping
+local snowcap_widget_v1_Wrapping = {
+    WRAPPING_UNSPECIFIED = 0,
+    WRAPPING_NONE = 1,
+    WRAPPING_WORD = 2,
+    WRAPPING_GLYPH = 3,
+    WRAPPING_WORD_OR_GLYPH = 4,
+}
+
 ---@enum snowcap.widget.v1.Font.Weight
 local snowcap_widget_v1_Font_Weight = {
     WEIGHT_UNSPECIFIED = 0,
@@ -772,6 +781,7 @@ local snowcap_layer_v1_Layer = {
 ---@field horizontal_alignment snowcap.widget.v1.Alignment?
 ---@field vertical_alignment snowcap.widget.v1.Alignment?
 ---@field style snowcap.widget.v1.Text.Style?
+---@field wrapping snowcap.widget.v1.Wrapping?
 
 ---@class snowcap.widget.v1.Text.Style
 ---@field color snowcap.widget.v1.Color?
@@ -1397,6 +1407,7 @@ snowcap.v0alpha1.Nothing = {}
 snowcap.v1 = {}
 snowcap.v1.Nothing = {}
 snowcap.widget.v1.Alignment = snowcap_widget_v1_Alignment
+snowcap.widget.v1.Wrapping = snowcap_widget_v1_Wrapping
 snowcap.widget.v1.Font.Weight = snowcap_widget_v1_Font_Weight
 snowcap.widget.v1.Font.Stretch = snowcap_widget_v1_Font_Stretch
 snowcap.widget.v1.Font.Style = snowcap_widget_v1_Font_Style

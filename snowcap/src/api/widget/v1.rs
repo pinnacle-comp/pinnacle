@@ -76,6 +76,7 @@ pub fn widget_def_to_fn(def: WidgetDef) -> Option<ViewFn> {
         widget_def::Widget::Text(text_def) => {
             let horizontal_alignment = text_def.horizontal_alignment();
             let vertical_alignment = text_def.vertical_alignment();
+            let wrapping = text_def.wrapping();
 
             let widget::v1::Text {
                 text,
@@ -84,6 +85,7 @@ pub fn widget_def_to_fn(def: WidgetDef) -> Option<ViewFn> {
                 horizontal_alignment: _,
                 vertical_alignment: _,
                 style,
+                wrapping: _,
             } = text_def;
 
             let f: ViewFn = Box::new(move || {
@@ -127,6 +129,20 @@ pub fn widget_def_to_fn(def: WidgetDef) -> Option<ViewFn> {
                     widget::v1::Alignment::End => {
                         text = text.align_y(iced::alignment::Vertical::Bottom)
                     }
+                }
+
+                let wrapping = match wrapping {
+                    widget::v1::Wrapping::Unspecified => None,
+                    widget::v1::Wrapping::None => Some(iced::widget::text::Wrapping::None),
+                    widget::v1::Wrapping::Word => Some(iced::widget::text::Wrapping::Word),
+                    widget::v1::Wrapping::Glyph => Some(iced::widget::text::Wrapping::Glyph),
+                    widget::v1::Wrapping::WordOrGlyph => {
+                        Some(iced::widget::text::Wrapping::WordOrGlyph)
+                    }
+                };
+
+                if let Some(wrapping) = wrapping {
+                    text = text.wrapping(wrapping);
                 }
 
                 if let Some(font) = style.as_ref().and_then(|s| s.font.clone()) {
