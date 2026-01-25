@@ -10,7 +10,7 @@ use smithay_client_toolkit::{
         client::{
             Connection, QueueHandle,
             globals::registry_queue_init,
-            protocol::{wl_keyboard::WlKeyboard, wl_pointer::WlPointer},
+            protocol::{wl_keyboard::WlKeyboard, wl_pointer::WlPointer, wl_seat::WlSeat},
         },
         protocols::{
             ext::foreign_toplevel_list::v1::client::{
@@ -68,6 +68,7 @@ pub struct State {
     pub layers: Vec<SnowcapLayer>,
     pub decorations: Vec<SnowcapDecoration>,
 
+    pub seat: Option<WlSeat>,
     // TODO: per wl_keyboard
     pub keyboard_focus: Option<KeyboardFocus>,
     pub keyboard_modifiers: Modifiers,
@@ -254,6 +255,7 @@ impl State {
             tiny_skia: None,
             layers: Vec::new(),
             decorations: Vec::new(),
+            seat: None,
             keyboard_focus: None,
             keyboard_modifiers: smithay_client_toolkit::seat::keyboard::Modifiers::default(),
             keyboard: None,
