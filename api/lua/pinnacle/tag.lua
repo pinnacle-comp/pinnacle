@@ -194,6 +194,40 @@ function tag.remove(tags)
     end
 end
 
+---Move existing tags to the specified output.
+---
+---#### Example
+---```lua
+---local tag_to_move = Tag.get("1")
+---Tag.move_to_output(Output.get_by_name("HDMI-1"), tag_to_move)
+---```
+---
+---@param output pinnacle.output.OutputHandle The output to add tags to.
+---@param tags pinnacle.tag.TagHandle The names of the new tags.
+---
+---@return boolean ok `true` on success.
+---@return pinnacle.tag.v1.MoveToOutputResponse|nil err Error on failure.
+function tag.move_to_output(output, tags)
+    ---@type integer[]
+    local ids = {}
+
+    for _, tg in ipairs(tags) do
+        table.insert(ids, tg.id)
+    end
+
+    local response, err = client:pinnacle_tag_v1_TagService_MoveToOutput({
+        output_name = output.name,
+        tag_ids = ids,
+    })
+
+    if err then
+        log.error(err)
+        return false, response
+    end
+
+    return true, nil
+end
+
 local signal_name_to_SignalName = {
     active = "TagActive",
     created = "TagCreated",
@@ -320,6 +354,31 @@ function TagHandle:toggle_active()
     if err then
         log.error(err)
     end
+end
+
+---Move existing tags to the specified output.
+---
+---@see pinnacle.tag.move_to_output - for further information
+---@param output pinnacle.output.OutputHandle The output to add tags to.
+---
+---@return boolean ok `true` on success.
+---@return pinnacle.tag.v1.MoveToOutputResponse|nil err Error on failure.
+function TagHandle:move_to_output(output)
+    ---@type integer[]
+    local ids = {}
+    table.insert(ids, self.id)
+
+    local response, err = client:pinnacle_tag_v1_TagService_MoveToOutput({
+        output_name = output.name,
+        tag_ids = ids,
+    })
+
+    if err then
+        log.error(err)
+        return false, response
+    end
+
+    return true, nil
 end
 
 ---Gets whether or not this tag is active.

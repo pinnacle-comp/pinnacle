@@ -27,7 +27,8 @@ use futures::FutureExt;
 use pinnacle_api_defs::pinnacle::{
     tag::v1::{
         AddRequest, GetActiveRequest, GetNameRequest, GetOutputNameRequest, GetRequest,
-        RemoveRequest, SetActiveRequest, SwitchToRequest,
+        MoveToOutputRequest, RemoveRequest, SetActiveRequest, SwitchToRequest,
+        move_to_output_response::Kind,
     },
     util::v1::SetOrToggle,
 };
@@ -181,6 +182,58 @@ pub fn remove(tags: impl IntoIterator<Item = TagHandle>) {
         .unwrap();
 }
 
+/// Error that happends during moving a tag to a different output.
+#[derive(Debug, PartialEq, Clone)]
+pub enum TagMoveToOutputError {
+    /// The requested output to move the tag to, does not exist
+    OutputDoesNotExist(OutputHandle),
+
+    /// Moving the Tag to another output would result in having the same window in multiple tags.
+    /// It contains a list of tags that share the same Windows.
+    SameWindowOnTwoOutputs(Vec<TagHandle>),
+}
+
+/// Move existing tags to the specified output.
+///
+/// # Examples
+///
+/// ```no_run
+/// # use pinnacle_api::output;
+/// # use pinnacle_api::tag;
+/// let output = output::get_by_name("eDP-1")?;
+/// let tag_to_move = tag::get("1")?;
+/// tag::move_to_output(&output, [tag_to_move]);
+/// ```
+pub fn move_to_output<I>(output: &OutputHandle, tag_handles: I) -> Result<(), TagMoveToOutputError>
+where
+    I: IntoIterator<Item = TagHandle>,
+{
+    let output_name = output.name();
+    let tag_ids = tag_handles.into_iter().map(|h| h.id).collect();
+
+    let kind = Client::tag()
+        .move_to_output(MoveToOutputRequest {
+            output_name,
+            tag_ids,
+        })
+        .block_on_tokio()
+        .unwrap()
+        .into_inner()
+        .kind;
+
+    match kind {
+        None => Ok(()),
+        Some(Kind::OutputDoesNotExist(output_name)) => Err(
+            TagMoveToOutputError::OutputDoesNotExist(OutputHandle::from_name(output_name)),
+        ),
+        Some(Kind::SameWindowOnTwoOutputs(tags)) => {
+            Err(TagMoveToOutputError::SameWindowOnTwoOutputs(
+                tags.tag_ids.into_iter().map(TagHandle::from_id).collect(),
+            ))
+        }
+    }
+}
+
 /// Connects to a [`TagSignal`].
 ///
 /// # Examples
@@ -314,6 +367,13 @@ impl TagHandle {
             })
             .block_on_tokio()
             .unwrap();
+    }
+
+    /// Move existing tags to the specified output.
+    ///
+    /// See [super::tag::move_to_output] for further information
+    pub fn move_to_output(&self, output: &OutputHandle) -> Result<(), TagMoveToOutputError> {
+        move_to_output(output, [self.clone()])
     }
 
     /// Removes this tag from its output.
