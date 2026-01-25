@@ -1,6 +1,9 @@
 //! A widget to represent a list of open window.
 
-use std::hash::{DefaultHasher, Hash, Hasher};
+use std::{
+    collections::HashMap,
+    hash::{DefaultHasher, Hash, Hasher},
+};
 
 use anyhow::Context;
 use iced::{Length, Size};
@@ -11,7 +14,7 @@ use iced_wgpu::core::{
 use smithay_client_toolkit::{
     output::OutputData,
     reexports::{
-        client::{Proxy, Weak},
+        client::{Proxy, Weak, protocol::wl_seat::WlSeat},
         protocols_wlr::foreign_toplevel::v1::client::zwlr_foreign_toplevel_handle_v1::ZwlrForeignToplevelHandleV1,
     },
 };
@@ -105,6 +108,144 @@ pub mod operation {
 
         RemoveToplevel { handle }
     }
+
+    pub fn toplevel_set_maximized(id: u64, maximized: bool) -> impl Operation {
+        struct ToplevelSetMaximized {
+            id: u64,
+            maximized: bool,
+        }
+
+        impl Operation for ToplevelSetMaximized {
+            fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation<()>)) {
+                operate(self);
+            }
+
+            fn custom(
+                &mut self,
+                _id: Option<&iced::widget::Id>,
+                _bounds: iced::Rectangle,
+                state: &mut dyn std::any::Any,
+            ) {
+                let Some(state) = state.downcast_mut::<super::State>() else {
+                    return;
+                };
+
+                state.toplevel_set_maximized(self.id, self.maximized);
+            }
+        }
+
+        ToplevelSetMaximized { id, maximized }
+    }
+
+    pub fn toplevel_set_minimized(id: u64, minimized: bool) -> impl Operation {
+        struct ToplevelSetMinimized {
+            id: u64,
+            minimized: bool,
+        }
+
+        impl Operation for ToplevelSetMinimized {
+            fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation<()>)) {
+                operate(self);
+            }
+
+            fn custom(
+                &mut self,
+                _id: Option<&iced::widget::Id>,
+                _bounds: iced::Rectangle,
+                state: &mut dyn std::any::Any,
+            ) {
+                let Some(state) = state.downcast_mut::<super::State>() else {
+                    return;
+                };
+
+                state.toplevel_set_minimized(self.id, self.minimized);
+            }
+        }
+
+        ToplevelSetMinimized { id, minimized }
+    }
+
+    pub fn toplevel_set_fullscreen(id: u64, fullscreen: bool) -> impl Operation {
+        struct ToplevelSetFullscreen {
+            id: u64,
+            fullscreen: bool,
+        }
+
+        impl Operation for ToplevelSetFullscreen {
+            fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation<()>)) {
+                operate(self);
+            }
+
+            fn custom(
+                &mut self,
+                _id: Option<&iced::widget::Id>,
+                _bounds: iced::Rectangle,
+                state: &mut dyn std::any::Any,
+            ) {
+                let Some(state) = state.downcast_mut::<super::State>() else {
+                    return;
+                };
+
+                state.toplevel_set_fullscreen(self.id, self.fullscreen);
+            }
+        }
+
+        ToplevelSetFullscreen { id, fullscreen }
+    }
+
+    pub fn toplevel_activate(id: u64) -> impl Operation {
+        struct ToplevelActivate {
+            id: u64,
+        }
+
+        impl Operation for ToplevelActivate {
+            fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation<()>)) {
+                operate(self);
+            }
+
+            fn custom(
+                &mut self,
+                _id: Option<&iced::widget::Id>,
+                _bounds: iced::Rectangle,
+                state: &mut dyn std::any::Any,
+            ) {
+                let Some(state) = state.downcast_mut::<super::State>() else {
+                    return;
+                };
+
+                state.toplevel_activate(self.id);
+            }
+        }
+
+        ToplevelActivate { id }
+    }
+
+    pub fn toplevel_close(id: u64) -> impl Operation {
+        struct ToplevelClose {
+            id: u64,
+        }
+
+        impl Operation for ToplevelClose {
+            fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation<()>)) {
+                operate(self);
+            }
+
+            fn custom(
+                &mut self,
+                _id: Option<&iced::widget::Id>,
+                _bounds: iced::Rectangle,
+                state: &mut dyn std::any::Any,
+            ) {
+                let Some(state) = state.downcast_mut::<super::State>() else {
+                    return;
+                };
+
+                state.toplevel_close(self.id);
+            }
+        }
+
+        ToplevelClose { id }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -126,7 +267,13 @@ pub enum WlrTaskListEvent {
 /// Emits events on window changes.
 pub struct WlrTaskList<'a, Message, Theme = iced::Theme, Renderer = iced::Renderer> {
     content: Element<'a, Message, Theme, Renderer>,
+
+    // FIXME: Ok, this feels like bad design 101. Ideally, we'd want a service that would maintain
+    // both the protocol state and seat, but I'm currently undecided on how to do it, or how to
+    // handle multi-seat if that becomes a thing.
     wlr_state: WeakZwlrForeignToplevelManagementState,
+    seat: Option<Weak<WlSeat>>,
+
     on_enter: Option<Box<dyn Fn(WlrTaskState) -> Message + 'a>>,
     on_update: Option<Box<dyn Fn(WlrTaskState) -> Message + 'a>>,
     on_leave: Option<Box<dyn Fn(u64) -> Message + 'a>>,
@@ -136,7 +283,8 @@ pub struct WlrTaskList<'a, Message, Theme = iced::Theme, Renderer = iced::Render
 /// Local state of the [`WlrTaskList`].
 #[derive(Default)]
 pub struct State {
-    toplevel_list: Vec<Weak<ZwlrForeignToplevelHandleV1>>,
+    toplevel_list: HashMap<u64, Weak<ZwlrForeignToplevelHandleV1>>,
+    seat: Option<Weak<WlSeat>>,
 
     pending_enter: Vec<(WlrTaskState, Weak<ZwlrForeignToplevelHandleV1>)>,
     pending_update: Vec<(WlrTaskState, Weak<ZwlrForeignToplevelHandleV1>)>,
@@ -163,12 +311,12 @@ impl State {
             return;
         }
 
-        let Ok(task_state) = handle.clone().try_into() else {
+        let Ok(task_state): Result<WlrTaskState, anyhow::Error> = handle.clone().try_into() else {
             return;
         };
 
         let weak = handle.downgrade();
-        if self.toplevel_list.contains(&weak) {
+        if self.toplevel_list.contains_key(&task_state.id) {
             self.pending_update.push((task_state, weak));
         } else {
             self.pending_enter.push((task_state, weak));
@@ -183,6 +331,53 @@ impl State {
         let id = make_id_from_handle(&handle);
 
         self.pending_leave.push((id, handle.downgrade()));
+    }
+
+    fn toplevel_set_maximized(&mut self, id: u64, maximized: bool) {
+        if let Some(handle) = self.toplevel_list.get(&id).and_then(|v| v.upgrade().ok()) {
+            if maximized {
+                handle.set_maximized();
+            } else {
+                handle.unset_maximized();
+            }
+        }
+    }
+
+    fn toplevel_set_minimized(&mut self, id: u64, minimized: bool) {
+        if let Some(handle) = self.toplevel_list.get(&id).and_then(|v| v.upgrade().ok()) {
+            if minimized {
+                handle.set_minimized();
+            } else {
+                handle.unset_minimized();
+            }
+        }
+    }
+
+    fn toplevel_set_fullscreen(&mut self, id: u64, fullscreen: bool) {
+        if let Some(handle) = self.toplevel_list.get(&id).and_then(|v| v.upgrade().ok()) {
+            if fullscreen {
+                handle.set_fullscreen(None);
+            } else {
+                handle.unset_fullscreen();
+            }
+        }
+    }
+
+    fn toplevel_activate(&mut self, id: u64) {
+        let Some(seat) = self.seat.as_ref().and_then(|s| s.upgrade().ok()) else {
+            tracing::warn!("Activate was called, but the widget doesn't have an associated seat.");
+            return;
+        };
+
+        if let Some(handle) = self.toplevel_list.get(&id).and_then(|v| v.upgrade().ok()) {
+            handle.activate(&seat);
+        }
+    }
+
+    fn toplevel_close(&mut self, id: u64) {
+        if let Some(handle) = self.toplevel_list.get(&id).and_then(|v| v.upgrade().ok()) {
+            handle.close();
+        }
     }
 }
 
@@ -211,12 +406,14 @@ impl<'a, Message, Theme, Renderer> WlrTaskList<'a, Message, Theme, Renderer> {
     pub fn new(
         content: impl Into<Element<'a, Message, Theme, Renderer>>,
         wlr_state: ZwlrForeignToplevelManagementState,
+        seat: Option<Weak<WlSeat>>,
     ) -> Self {
         let wlr_state = wlr_state.downgrade();
 
         WlrTaskList {
             content: content.into(),
             wlr_state,
+            seat,
             on_enter: None,
             on_update: None,
             on_leave: None,
@@ -271,6 +468,8 @@ where
     ) {
         let state = tree.state.downcast_mut::<State>();
 
+        state.seat = self.seat.clone();
+
         operation.custom(None, layout.bounds(), state);
 
         operation.traverse(&mut |operation| {
@@ -323,8 +522,10 @@ where
         if let Some(on_enter) = self.on_enter.as_ref() {
             for (pending, weak) in state.pending_enter.drain(..) {
                 if weak.upgrade().is_ok() {
+                    let id = pending.id;
+
                     shell.publish((on_enter)(pending));
-                    state.toplevel_list.push(weak);
+                    state.toplevel_list.insert(id, weak);
                 }
             }
         }
@@ -340,10 +541,10 @@ where
         }
 
         if let Some(on_leave) = self.on_leave.as_ref() {
-            for (pending, weak) in state.pending_leave.drain(..) {
+            for (pending, _) in state.pending_leave.drain(..) {
                 shell.publish((on_leave)(pending));
 
-                state.toplevel_list.retain(|handle| handle != &weak);
+                state.toplevel_list.remove(&pending);
             }
         }
     }

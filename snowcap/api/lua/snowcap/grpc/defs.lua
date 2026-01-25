@@ -1056,9 +1056,35 @@ local snowcap_layer_v1_Layer = {
 ---@class snowcap.operation.v1.TextInput.SelectAll
 ---@field id string?
 
+---@class snowcap.operation.v1.WlrTaskList
+---@field maximize snowcap.operation.v1.WlrTaskList.MaximizeToplevel?
+---@field minimize snowcap.operation.v1.WlrTaskList.MinimizeToplevel?
+---@field fullscreen snowcap.operation.v1.WlrTaskList.FullscreenToplevel?
+---@field activate snowcap.operation.v1.WlrTaskList.ActivateToplevel?
+---@field close snowcap.operation.v1.WlrTaskList.CloseToplevel?
+
+---@class snowcap.operation.v1.WlrTaskList.MaximizeToplevel
+---@field id integer?
+---@field maximize boolean?
+
+---@class snowcap.operation.v1.WlrTaskList.MinimizeToplevel
+---@field id integer?
+---@field minimize boolean?
+
+---@class snowcap.operation.v1.WlrTaskList.FullscreenToplevel
+---@field id integer?
+---@field fullscreen boolean?
+
+---@class snowcap.operation.v1.WlrTaskList.ActivateToplevel
+---@field id integer?
+
+---@class snowcap.operation.v1.WlrTaskList.CloseToplevel
+---@field id integer?
+
 ---@class snowcap.operation.v1.Operation
 ---@field focusable snowcap.operation.v1.Focusable?
 ---@field text_input snowcap.operation.v1.TextInput?
+---@field wlr_task_list snowcap.operation.v1.WlrTaskList?
 
 ---@class snowcap.decoration.v1.Bounds
 ---@field left integer?
@@ -1367,6 +1393,12 @@ snowcap.operation.v1.TextInput.MoveCursor = {}
 snowcap.operation.v1.TextInput.MoveCursorFront = {}
 snowcap.operation.v1.TextInput.MoveCursorEnd = {}
 snowcap.operation.v1.TextInput.SelectAll = {}
+snowcap.operation.v1.WlrTaskList = {}
+snowcap.operation.v1.WlrTaskList.MaximizeToplevel = {}
+snowcap.operation.v1.WlrTaskList.MinimizeToplevel = {}
+snowcap.operation.v1.WlrTaskList.FullscreenToplevel = {}
+snowcap.operation.v1.WlrTaskList.ActivateToplevel = {}
+snowcap.operation.v1.WlrTaskList.CloseToplevel = {}
 snowcap.operation.v1.Operation = {}
 snowcap.decoration = {}
 snowcap.decoration.v1 = {}

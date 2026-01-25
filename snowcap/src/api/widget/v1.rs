@@ -2,6 +2,7 @@ use anyhow::Context;
 use iced::widget::{
     Column, Container, Row, Scrollable, button, image::FilterMethod, scrollable::Scrollbar,
 };
+use smithay_client_toolkit::reexports::client::{Proxy, protocol::wl_seat::WlSeat};
 use snowcap_api_defs::snowcap::widget::{
     self,
     v1::{
@@ -985,6 +986,7 @@ pub fn widget_def_to_fn(def: WidgetDef, state: &State) -> Option<ViewFn> {
 
             let child_widget_fn = child.and_then(|def| widget_def_to_fn(*def, state));
             let wlr_state = state.zwlr_foreign_toplevel_mgmt_state.clone();
+            let seat = state.seat.as_ref().map(WlSeat::downgrade);
 
             let f: ViewFn = Box::new(move || {
                 let mut wlr_task_list = wlr_tasklist::WlrTaskList::new(
@@ -993,6 +995,7 @@ pub fn widget_def_to_fn(def: WidgetDef, state: &State) -> Option<ViewFn> {
                         .map(|child| child())
                         .unwrap_or_else(|| iced::widget::Row::new().into()),
                     wlr_state.clone(),
+                    seat.clone(),
                 );
 
                 if let Some(widget_id) = widget_id {
