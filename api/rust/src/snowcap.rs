@@ -7,6 +7,7 @@
 use std::sync::{Arc, OnceLock};
 
 use indexmap::IndexMap;
+use pinnacle_api_defs::pinnacle::input::v1::GestureDirection;
 use snowcap_api::{
     decoration::{DecorationHandle, NewDecorationError},
     layer::{ExclusiveZone, KeyboardInteractivity, ZLayer},
@@ -202,12 +203,42 @@ impl Program for BindOverlay {
             }
         }
 
+        #[derive(PartialEq, Eq, Hash)]
+        struct GesturebindRepr {
+            mods: Mod,
+            direction: String,
+            fingers: String,
+            layer: Option<String>,
+        }
+
+        impl std::fmt::Display for GesturebindRepr {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                let mods = format_mods(self.mods);
+
+                let layer = self
+                    .layer
+                    .as_ref()
+                    .map(|layer| format!("[{layer}] "))
+                    .unwrap_or_default();
+
+                let bind = mods
+                    .as_deref()
+                    .into_iter()
+                    .chain([self.direction.as_str(), self.fingers.as_str()])
+                    .collect::<Vec<_>>()
+                    .join(" + ");
+                write!(f, "{layer}{bind}")
+            }
+        }
+
         #[derive(Default)]
         struct GroupBinds {
             /// keybinds to descriptions
             keybinds: IndexMap<KeybindRepr, Vec<String>>,
             /// mousebinds to descriptions
             mousebinds: IndexMap<MousebindRepr, Vec<String>>,
+            /// gesturebinds to descriptions
+            gesturebinds: IndexMap<GesturebindRepr, Vec<String>>,
         }
 
         let bind_infos = crate::input::bind_infos();
@@ -254,6 +285,25 @@ impl Program for BindOverlay {
                         layer,
                     };
                     let descs = group.mousebinds.entry(repr).or_default();
+                    if !desc.is_empty() {
+                        descs.push(desc);
+                    }
+                }
+                BindInfoKind::Gesture { direction, fingers } => {
+                    let repr = GesturebindRepr {
+                        mods,
+                        direction: match direction {
+                            GestureDirection::Down => "Down",
+                            GestureDirection::Left => "Left",
+                            GestureDirection::Right => "Right",
+                            GestureDirection::Up => "Up",
+                        }
+                        .to_string(),
+                        fingers: format!("{fingers:?} fingers"),
+                        layer,
+                    };
+
+                    let descs = group.gesturebinds.entry(repr).or_default();
                     if !desc.is_empty() {
                         descs.push(desc);
                     }

@@ -8,11 +8,13 @@ use std::{any::Any, time::Duration};
 use crate::{
     api::signal::Signal as _,
     focus::pointer::{PointerContents, PointerFocusTarget},
+    input::bind::Edge,
     state::{Pinnacle, WithState},
     window::WindowElement,
 };
 use bind::BindState;
 use libinput::LibinputState;
+use pinnacle_api::input::{GestureDirection, GestureFingers};
 use smithay::{
     backend::{
         input::{
@@ -51,9 +53,16 @@ use tracing::{error, info};
 use crate::state::State;
 
 #[derive(Default, Debug)]
+pub struct GestureState {
+    pub delta: Option<(f64, f64)>,
+    pub fingers: u32,
+}
+
+#[derive(Default, Debug)]
 pub struct InputState {
     pub bind_state: BindState,
     pub libinput_state: LibinputState,
+    pub gesture_state: GestureState,
 }
 
 impl InputState {
@@ -909,6 +918,11 @@ impl State {
             return;
         };
 
+        self.pinnacle.input_state.gesture_state = GestureState {
+            delta: Some((0., 0.)),
+            fingers: event.fingers(),
+        };
+
         pointer.gesture_swipe_begin(
             self,
             &GestureSwipeBeginEvent {
@@ -926,6 +940,10 @@ impl State {
 
         use smithay::backend::input::GestureSwipeUpdateEvent as _;
 
+        let delta = event.delta();
+
+        self.pinnacle.input_state.gesture_state.delta = Some((delta.x, delta.y));
+
         pointer.gesture_swipe_update(
             self,
             &GestureSwipeUpdateEvent {
@@ -939,6 +957,63 @@ impl State {
         let Some(pointer) = self.pinnacle.seat.get_pointer() else {
             return;
         };
+        let Some(keyboard) = self.pinnacle.seat.get_keyboard() else {
+            return;
+        };
+
+        let mods = keyboard.modifier_state();
+
+        let current_layer = self.pinnacle.input_state.bind_state.current_layer();
+
+        if let Some((x, y)) = self.pinnacle.input_state.gesture_state.delta {
+            let direction = if x.abs() > y.abs() {
+                if x < 0.0 {
+                    Some(GestureDirection::Left)
+                } else if x > 0.0 {
+                    Some(GestureDirection::Right)
+                } else {
+                    None
+                }
+            } else if x.abs() < y.abs() {
+                if y < 0.0 {
+                    Some(GestureDirection::Up)
+                } else if y > 0.0 {
+                    Some(GestureDirection::Down)
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+
+            info!(
+                "[pre] on_gesture_swipe_end(): {direction:?}:{}",
+                self.pinnacle.input_state.gesture_state.fingers
+            );
+
+            let fingers = match self.pinnacle.input_state.gesture_state.fingers {
+                3 => Some(GestureFingers::Three),
+                4 => Some(GestureFingers::Four),
+                _ => None,
+            };
+
+            if let Some(fingers) = fingers
+                && let Some(direction) = direction
+            {
+                let bind_action = self.pinnacle.input_state.bind_state.gesturebinds.gesture(
+                    direction,
+                    fingers,
+                    mods,
+                    Edge::Release,
+                    current_layer,
+                    !self.pinnacle.lock_state.is_unlocked(),
+                );
+
+                info!("on_gesture_swipe_end(): {direction:?}:{fingers:?} = {bind_action:?}");
+            }
+        }
+
+        self.pinnacle.input_state.gesture_state.delta = None;
 
         pointer.gesture_swipe_end(
             self,

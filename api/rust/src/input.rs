@@ -10,7 +10,8 @@ use num_enum::{FromPrimitive, IntoPrimitive};
 use pinnacle_api_defs::pinnacle::input::{
     self,
     v1::{
-        BindProperties, BindRequest, EnterBindLayerRequest, GetBindInfosRequest,
+        BindProperties, BindRequest, EnterBindLayerRequest, GesturebindOnBeginRequest,
+        GesturebindOnFinishRequest, GesturebindStreamRequest, GetBindInfosRequest,
         KeybindOnPressRequest, KeybindStreamRequest, MousebindOnPressRequest,
         MousebindStreamRequest, SetBindPropertiesRequest, SetRepeatRateRequest, SetXcursorRequest,
         SetXkbConfigRequest, SetXkbKeymapRequest, SwitchXkbLayoutRequest,
@@ -29,6 +30,8 @@ use crate::{
 pub mod libinput;
 
 pub use xkbcommon::xkb::Keysym;
+
+pub use pinnacle_api_defs::pinnacle::input::v1::{GestureDirection, GestureFingers};
 
 /// A mouse button.
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, FromPrimitive, IntoPrimitive)]
@@ -174,6 +177,16 @@ impl BindLayer {
     /// Creates a mousebind on this layer.
     pub fn mousebind(&self, mods: Mod, button: MouseButton) -> Mousebind {
         new_mousebind(mods, button, self).block_on_tokio()
+    }
+
+    /// Creates a gesturebind on this layer.
+    pub fn gesturebind(
+        &self,
+        mods: Mod,
+        direction: GestureDirection,
+        fingers: GestureFingers,
+    ) -> Gesturebind {
+        new_gesturebind(mods, direction, fingers, self).block_on_tokio()
     }
 
     /// Enters this layer, causing only its binds to be in effect.
@@ -524,6 +537,138 @@ async fn new_mousebind_stream(
     send
 }
 
+// Gesturebinds
+
+type GesturebindCallback = (Box<dyn FnMut() + Send + 'static>, Edge);
+
+/// A Gesturebind.
+pub struct Gesturebind {
+    bind_id: u32,
+    callback_sender: Option<UnboundedSender<GesturebindCallback>>,
+}
+
+bind_impl!(Gesturebind);
+
+/// Creates a gesturebind on the [`DEFAULT`][BindLayer::DEFAULT] bind layer.
+pub fn gesturebind(mods: Mod, direction: GestureDirection, fingers: GestureFingers) -> Gesturebind {
+    BindLayer::DEFAULT.gesturebind(mods, direction, fingers)
+}
+
+impl Gesturebind {
+    /// Runs a closure whenever this mousebind is pressed.
+    pub fn on_begin<F: FnMut() + Send + 'static>(&mut self, on_begin: F) -> &mut Self {
+        let sender = self
+            .callback_sender
+            .get_or_insert_with(|| new_gesturebind_stream(self.bind_id).block_on_tokio());
+        let _ = sender.send((Box::new(on_begin), Edge::Press));
+
+        Client::input()
+            .gesturebind_on_begin(GesturebindOnBeginRequest {
+                bind_id: self.bind_id,
+            })
+            .block_on_tokio()
+            .unwrap();
+
+        self
+    }
+
+    /// Runs a closure whenever this mousebind is released.
+    pub fn on_finish<F: FnMut() + Send + 'static>(&mut self, on_finish: F) -> &mut Self {
+        let sender = self
+            .callback_sender
+            .get_or_insert_with(|| new_mousebind_stream(self.bind_id).block_on_tokio());
+        let _ = sender.send((Box::new(on_finish), Edge::Release));
+
+        Client::input()
+            .gesturebind_on_finish(GesturebindOnFinishRequest {
+                bind_id: self.bind_id,
+            })
+            .block_on_tokio()
+            .unwrap();
+
+        self
+    }
+}
+
+async fn new_gesturebind(
+    mods: Mod,
+    direction: GestureDirection,
+    fingers: GestureFingers,
+    layer: &BindLayer,
+) -> Gesturebind {
+    let ignore_mods = mods.api_ignore_mods();
+    let mods = mods.api_mods();
+
+    let bind_id = Client::input()
+        .bind(BindRequest {
+            bind: Some(input::v1::Bind {
+                mods: mods.into_iter().map(|m| m.into()).collect(),
+                ignore_mods: ignore_mods.into_iter().map(|m| m.into()).collect(),
+                layer_name: layer.name.clone(),
+                properties: Some(BindProperties::default()),
+                bind: Some(input::v1::bind::Bind::Gesture(input::v1::Gesturebind {
+                    direction: direction.into(),
+                    fingers: fingers.into(),
+                })),
+            }),
+        })
+        .await
+        .unwrap()
+        .into_inner()
+        .bind_id;
+
+    Gesturebind {
+        bind_id,
+        callback_sender: None,
+    }
+}
+
+async fn new_gesturebind_stream(
+    bind_id: u32,
+) -> UnboundedSender<(Box<dyn FnMut() + Send + 'static>, Edge)> {
+    let mut from_server = Client::input()
+        .gesturebind_stream(GesturebindStreamRequest { bind_id })
+        .await
+        .unwrap()
+        .into_inner();
+
+    let (send, mut recv) = unbounded_channel();
+
+    tokio::spawn(async move {
+        let mut on_presses = Vec::<Box<dyn FnMut() + Send + 'static>>::new();
+        let mut on_releases = Vec::<Box<dyn FnMut() + Send + 'static>>::new();
+
+        loop {
+            tokio::select! {
+                Some(Ok(response)) = from_server.next() => {
+                    match response.edge() {
+                        input::v1::Edge::Unspecified => (),
+                        input::v1::Edge::Press => {
+                            for on_press in on_presses.iter_mut() {
+                                on_press();
+                            }
+                        }
+                        input::v1::Edge::Release => {
+                            for on_release in on_releases.iter_mut() {
+                                on_release();
+                            }
+                        }
+                    }
+                }
+                Some((cb, edge)) = recv.recv() => {
+                    match edge {
+                        Edge::Press => on_presses.push(cb),
+                        Edge::Release => on_releases.push(cb),
+                    }
+                }
+                else => break,
+            }
+        }
+    });
+
+    send
+}
+
 /// A struct that lets you define xkeyboard config options.
 ///
 /// See `xkeyboard-config(7)` for more information.
@@ -699,6 +844,13 @@ pub enum BindInfoKind {
         /// Which mouse button this bind uses.
         button: MouseButton,
     },
+    /// This is a gesturebind.
+    Gesture {
+        /// Direction of the gesture.
+        direction: GestureDirection,
+        /// Fingers used in the gesture.
+        fingers: GestureFingers,
+    },
 }
 
 /// Sets the keyboard's repeat rate.
@@ -844,6 +996,12 @@ pub fn bind_infos() -> impl Iterator<Item = BindInfo> {
             },
             input::v1::bind::Bind::Mouse(mousebind) => BindInfoKind::Mouse {
                 button: MouseButton::from(mousebind.button),
+            },
+            input::v1::bind::Bind::Gesture(gesturebind) => BindInfoKind::Gesture {
+                direction: GestureDirection::try_from(gesturebind.direction)
+                    .expect("invalid gesture direction value"),
+                fingers: GestureFingers::try_from(gesturebind.fingers)
+                    .expect("invalid gesture finger value"),
             },
         };
 

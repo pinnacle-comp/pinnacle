@@ -2,6 +2,8 @@ use pinnacle_api_defs::pinnacle::input::{
     self,
     v1::{
         AccelProfile, BindInfo, BindRequest, BindResponse, ClickMethod, EnterBindLayerRequest,
+        GestureDirection, GestureFingers, GesturebindOnBeginRequest, GesturebindOnFinishRequest,
+        GesturebindRequest, GesturebindStreamRequest, GesturebindStreamResponse,
         GetBindInfosRequest, GetBindInfosResponse, GetBindLayerStackRequest,
         GetBindLayerStackResponse, GetDeviceCapabilitiesRequest, GetDeviceCapabilitiesResponse,
         GetDeviceInfoRequest, GetDeviceInfoResponse, GetDeviceTypeRequest, GetDeviceTypeResponse,
@@ -37,6 +39,7 @@ use super::InputService;
 impl input::v1::input_service_server::InputService for InputService {
     type KeybindStreamStream = ResponseStream<KeybindStreamResponse>;
     type MousebindStreamStream = ResponseStream<MousebindStreamResponse>;
+    type GesturebindStreamStream = ResponseStream<GesturebindStreamResponse>;
 
     async fn bind(&self, request: Request<BindRequest>) -> TonicResult<BindResponse> {
         let request = request.into_inner();
@@ -160,6 +163,30 @@ impl input::v1::input_service_server::InputService for InputService {
 
                     bind_id
                 }
+                input::v1::bind::Bind::Gesture(gesturebind) => {
+                    let direction = GestureDirection::try_from(gesturebind.direction)
+                        .expect("invalid gesture direction value");
+                    let fingers = GestureFingers::try_from(gesturebind.fingers)
+                        .expect("invalid gesture fingers value");
+                    let bind_id = state
+                        .pinnacle
+                        .input_state
+                        .bind_state
+                        .gesturebinds
+                        .add_gesturebind(
+                            direction,
+                            fingers,
+                            mods,
+                            layer,
+                            group,
+                            desc,
+                            quit,
+                            reload_config,
+                            allow_when_locked,
+                        );
+
+                    bind_id
+                }
             };
 
             Ok(BindResponse { bind_id })
@@ -235,6 +262,7 @@ impl input::v1::input_service_server::InputService for InputService {
             match input::v1::bind::Bind::Key(input::v1::Keybind::default()) {
                 input::v1::bind::Bind::Key(_) => (),
                 input::v1::bind::Bind::Mouse(_) => (),
+                input::v1::bind::Bind::Gesture(_) => (),
             }
 
             let push_mods = |mods: &mut Vec<input::v1::Modifier>,
@@ -517,6 +545,53 @@ impl input::v1::input_service_server::InputService for InputService {
         .await
     }
 
+    async fn gesturebind_stream(
+        &self,
+        request: Request<GesturebindStreamRequest>,
+    ) -> TonicResult<Self::GesturebindStreamStream> {
+        let request = request.into_inner();
+
+        let bind_id = request.bind_id;
+
+        run_server_streaming(&self.sender, move |state, sender| {
+            let Some(bind) = state
+                .pinnacle
+                .input_state
+                .bind_state
+                .gesturebinds
+                .id_map
+                .get(&bind_id)
+            else {
+                return Err(Status::not_found(format!("bind {bind_id} was not found")));
+            };
+
+            let Some(mut recv) = bind.borrow_mut().recv.take() else {
+                return Err(Status::already_exists(format!(
+                    "bind {bind_id} already has a stream set up"
+                )));
+            };
+
+            tokio::spawn(async move {
+                while let Some(edge) = recv.recv().await {
+                    let msg = Ok(GesturebindStreamResponse {
+                        edge: match edge {
+                            Edge::Press => input::v1::Edge::Press,
+                            Edge::Release => input::v1::Edge::Release,
+                        }
+                        .into(),
+                    });
+                    if sender.send(msg).is_err() {
+                        break;
+                    }
+                    tokio::task::yield_now().await;
+                }
+            });
+
+            Ok(())
+        })
+        .await
+    }
+
     async fn keybind_on_press(&self, request: Request<KeybindOnPressRequest>) -> TonicResult<()> {
         let bind_id = request.into_inner().bind_id;
 
@@ -544,6 +619,54 @@ impl input::v1::input_service_server::InputService for InputService {
                 .bind_state
                 .mousebinds
                 .set_mousebind_has_on_press(bind_id);
+        })
+        .await
+    }
+
+    async fn gesturebind_on_begin(
+        &self,
+        request: Request<GesturebindOnBeginRequest>,
+    ) -> TonicResult<()> {
+        let bind_id = request.into_inner().bind_id;
+
+        run_unary_no_response(&self.sender, move |state| {
+            state
+                .pinnacle
+                .input_state
+                .bind_state
+                .gesturebinds
+                .set_gesturebind_has_on_begin(bind_id);
+        })
+        .await
+    }
+
+    async fn gesturebind_on_finish(
+        &self,
+        request: Request<GesturebindOnFinishRequest>,
+    ) -> TonicResult<()> {
+        let bind_id = request.into_inner().bind_id;
+
+        run_unary_no_response(&self.sender, move |state| {
+            state
+                .pinnacle
+                .input_state
+                .bind_state
+                .gesturebinds
+                .set_gesturebind_has_on_begin(bind_id);
+        })
+        .await
+    }
+
+    async fn gesturebind(&self, request: Request<GesturebindRequest>) -> TonicResult<()> {
+        let bind_id = request.into_inner().bind_id;
+
+        run_unary_no_response(&self.sender, move |state| {
+            state
+                .pinnacle
+                .input_state
+                .bind_state
+                .gesturebinds
+                .set_gesturebind_has_on_begin(bind_id);
         })
         .await
     }
