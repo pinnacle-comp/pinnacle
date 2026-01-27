@@ -575,7 +575,7 @@ impl Gesturebinds {
                 };
 
                 if !gesturebind.borrow().bind_data.mods.matches(mods) {
-                    return BindAction::Forward;
+                    continue;
                 }
 
                 if gesturebind.borrow().bind_data.is_quit_bind {
