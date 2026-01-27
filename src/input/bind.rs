@@ -559,112 +559,44 @@ impl Gesturebinds {
         fingers: GestureFingers,
         mods: ModifiersState,
         edge: Edge,
-        current_layer: Option<String>,
+        _current_layer: Option<String>,
         is_locked: bool,
     ) -> BindAction {
-        tracing::info!(
-            "checking gesture for {direction:?}:{fingers:?} with {mods:?} and edge={edge:?}"
-        );
-
         let Some(gesturebinds) = self.gesture_map.get_mut(&(direction, fingers)) else {
-            tracing::info!("no gesture found in map");
             return BindAction::Forward;
         };
 
         if edge == Edge::Release {
-            let last_triggered_binds_on_press = self
-                .last_pressed_triggered_binds
-                .remove(&(direction, fingers));
-            let bind_action = if let Some(bind_ids) = last_triggered_binds_on_press {
-                let mut bind_action = BindAction::Forward;
-                for bind_id in bind_ids {
-                    let gesturebind = self.id_map.entry(bind_id);
-                    let Entry::Occupied(gb_entry) = gesturebind else {
-                        continue;
-                    };
-                    if gb_entry.get().borrow().bind_data.is_quit_bind {
-                        return BindAction::Quit;
-                    }
-                    if gb_entry.get().borrow().bind_data.is_reload_config_bind {
-                        return BindAction::ReloadConfig;
-                    }
-                    if is_locked && !gb_entry.get().borrow().bind_data.allow_when_locked {
-                        return BindAction::Forward;
-                    }
-                    if gb_entry.get().borrow().has_on_begin {
-                        bind_action = BindAction::Suppress;
-                    }
-                    let sent = gb_entry.get().borrow().sender.send(Edge::Release).is_ok();
-                    if !sent {
-                        gb_entry.shift_remove();
-                    }
+            let mut bind_action = BindAction::Forward;
+
+            for gesturebind in gesturebinds {
+                let Some(gesturebind) = gesturebind.upgrade() else {
+                    continue;
+                };
+
+                if !gesturebind.borrow().bind_data.mods.matches(mods) {
+                    return BindAction::Forward;
                 }
-                bind_action
-            } else {
-                tracing::info!("not the last triggered bind on press");
-                BindAction::Forward
-            };
+
+                if gesturebind.borrow().bind_data.is_quit_bind {
+                    return BindAction::Quit;
+                }
+                if gesturebind.borrow().bind_data.is_reload_config_bind {
+                    return BindAction::ReloadConfig;
+                }
+                if is_locked && !gesturebind.borrow().bind_data.allow_when_locked {
+                    return BindAction::Forward;
+                }
+                if gesturebind.borrow().has_on_begin {
+                    bind_action = BindAction::Suppress;
+                }
+                let _sent = gesturebind.borrow().sender.send(Edge::Release).is_ok();
+            }
+
             return bind_action;
         }
 
-        let mut bind_action = BindAction::Forward;
-
-        let mut should_clear_releases = false;
-
-        gesturebinds.retain(|mousebind| {
-            let Some(mousebind) = mousebind.upgrade() else {
-                return false;
-            };
-
-            let mousebind = mousebind.borrow();
-
-            let same_layer = current_layer == mousebind.bind_data.layer;
-
-            if let BindAction::Quit | BindAction::ReloadConfig = bind_action {
-                return true;
-            }
-
-            if mousebind.bind_data.mods.matches(mods) {
-                if mousebind.has_on_begin {
-                    should_clear_releases = true;
-                }
-
-                match edge {
-                    Edge::Press => {
-                        self.last_pressed_triggered_binds
-                            .entry((direction, fingers))
-                            .or_default()
-                            .push(mousebind.bind_data.id);
-                    }
-                    Edge::Release => unreachable!(),
-                }
-
-                let mut retain = true;
-
-                if mousebind.bind_data.is_quit_bind {
-                    bind_action = BindAction::Quit;
-                } else if mousebind.bind_data.is_reload_config_bind {
-                    bind_action = BindAction::ReloadConfig;
-                } else if mousebind.has_on_begin
-                    && same_layer
-                    && (!is_locked || mousebind.bind_data.allow_when_locked)
-                {
-                    retain = mousebind.sender.send(edge).is_ok();
-                    bind_action = BindAction::Suppress;
-                };
-
-                retain
-            } else {
-                true
-            }
-        });
-
-        if should_clear_releases {
-            self.last_pressed_triggered_binds
-                .retain(|gesture, _| *gesture == (direction, fingers));
-        }
-
-        bind_action
+        BindAction::Forward
     }
 
     pub fn add_gesturebind(
@@ -723,5 +655,12 @@ impl Gesturebinds {
             return;
         };
         gesturebind.borrow_mut().has_on_begin = true;
+    }
+
+    pub fn set_gesturebind_has_on_finish(&self, gesturebind_id: u32) {
+        let Some(gesturebind) = self.id_map.get(&gesturebind_id) else {
+            return;
+        };
+        gesturebind.borrow_mut().has_on_begin = false;
     }
 }

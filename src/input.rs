@@ -986,11 +986,6 @@ impl State {
                 None
             };
 
-            info!(
-                "[pre] on_gesture_swipe_end(): {direction:?}:{}",
-                self.pinnacle.input_state.gesture_state.fingers
-            );
-
             let fingers = match self.pinnacle.input_state.gesture_state.fingers {
                 3 => Some(GestureFingers::Three),
                 4 => Some(GestureFingers::Four),
@@ -1000,7 +995,7 @@ impl State {
             if let Some(fingers) = fingers
                 && let Some(direction) = direction
             {
-                let bind_action = self.pinnacle.input_state.bind_state.gesturebinds.gesture(
+                let _bind_action = self.pinnacle.input_state.bind_state.gesturebinds.gesture(
                     direction,
                     fingers,
                     mods,
@@ -1008,8 +1003,6 @@ impl State {
                     current_layer,
                     !self.pinnacle.lock_state.is_unlocked(),
                 );
-
-                info!("on_gesture_swipe_end(): {direction:?}:{fingers:?} = {bind_action:?}");
             }
         }
 

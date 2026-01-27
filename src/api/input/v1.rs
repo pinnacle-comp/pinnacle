@@ -652,7 +652,7 @@ impl input::v1::input_service_server::InputService for InputService {
                 .input_state
                 .bind_state
                 .gesturebinds
-                .set_gesturebind_has_on_begin(bind_id);
+                .set_gesturebind_has_on_finish(bind_id);
         })
         .await
     }

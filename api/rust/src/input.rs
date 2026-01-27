@@ -576,7 +576,7 @@ impl Gesturebind {
     pub fn on_finish<F: FnMut() + Send + 'static>(&mut self, on_finish: F) -> &mut Self {
         let sender = self
             .callback_sender
-            .get_or_insert_with(|| new_mousebind_stream(self.bind_id).block_on_tokio());
+            .get_or_insert_with(|| new_gesturebind_stream(self.bind_id).block_on_tokio());
         let _ = sender.send((Box::new(on_finish), Edge::Release));
 
         Client::input()
