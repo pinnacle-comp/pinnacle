@@ -414,13 +414,17 @@ impl XdgShellHandler for State {
         {
             match &mut unmapped.state {
                 UnmappedState::WaitingForTags { client_requests } => {
-                    client_requests.layout_mode = Some(FullscreenOrMaximized::Maximized);
+                    client_requests
+                        .layout_mode
+                        .take_if(|mode| matches!(mode, FullscreenOrMaximized::Maximized));
                 }
                 UnmappedState::WaitingForRules {
                     rules: _,
                     client_requests,
                 } => {
-                    client_requests.layout_mode = Some(FullscreenOrMaximized::Maximized);
+                    client_requests
+                        .layout_mode
+                        .take_if(|mode| matches!(mode, FullscreenOrMaximized::Maximized));
                 }
                 UnmappedState::PostInitialConfigure { .. } => {
                     let window = unmapped.window.clone();
