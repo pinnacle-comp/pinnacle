@@ -128,6 +128,14 @@ message Border {
   optional Radius radius = 3;
 }
 
+enum Wrapping {
+  WRAPPING_UNSPECIFIED = 0;
+  WRAPPING_NONE = 1;
+  WRAPPING_WORD = 2;
+  WRAPPING_GLYPH = 3;
+  WRAPPING_WORD_OR_GLYPH = 4;
+}
+
 message Theme {
   optional Palette palette = 1;
 
@@ -170,6 +178,7 @@ message Text {
   optional Alignment horizontal_alignment = 4;
   optional Alignment vertical_alignment = 5;
   optional Style style = 6;
+  optional Wrapping wrapping = 7;
 
   message Style {
     optional Color color = 1;
