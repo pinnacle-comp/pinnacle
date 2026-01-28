@@ -101,6 +101,10 @@ enum GestureDirection {
   LEFT = 1;
   RIGHT = 2;
   UP = 3;
+  DOWN_AND_LEFT = 4;
+  DOWN_AND_RIGHT = 5;
+  UP_AND_LEFT = 6;
+  UP_AND_RIGHT = 7;
 }
 
 enum GestureFingers {
@@ -108,9 +112,16 @@ enum GestureFingers {
   FOUR = 1;
 }
 
+enum GestureType {
+  HOLD = 0;
+  PINCH = 1;
+  SWIPE = 2;
+}
+
 message Gesturebind {
   GestureDirection direction = 1;
   GestureFingers fingers = 2;
+  GestureType gesture_type = 3;
 }
 
 message GesturebindStreamRequest {

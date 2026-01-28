@@ -31,7 +31,7 @@ pub mod libinput;
 
 pub use xkbcommon::xkb::Keysym;
 
-pub use pinnacle_api_defs::pinnacle::input::v1::{GestureDirection, GestureFingers};
+pub use pinnacle_api_defs::pinnacle::input::v1::{GestureDirection, GestureFingers, GestureType};
 
 /// A mouse button.
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, FromPrimitive, IntoPrimitive)]
@@ -185,8 +185,9 @@ impl BindLayer {
         mods: Mod,
         direction: GestureDirection,
         fingers: GestureFingers,
+        gesture_type: GestureType,
     ) -> Gesturebind {
-        new_gesturebind(mods, direction, fingers, self).block_on_tokio()
+        new_gesturebind(mods, direction, fingers, gesture_type, self).block_on_tokio()
     }
 
     /// Enters this layer, causing only its binds to be in effect.
@@ -550,8 +551,13 @@ pub struct Gesturebind {
 bind_impl!(Gesturebind);
 
 /// Creates a gesturebind on the [`DEFAULT`][BindLayer::DEFAULT] bind layer.
-pub fn gesturebind(mods: Mod, direction: GestureDirection, fingers: GestureFingers) -> Gesturebind {
-    BindLayer::DEFAULT.gesturebind(mods, direction, fingers)
+pub fn gesturebind(
+    mods: Mod,
+    direction: GestureDirection,
+    fingers: GestureFingers,
+    gesture_type: GestureType,
+) -> Gesturebind {
+    BindLayer::DEFAULT.gesturebind(mods, direction, fingers, gesture_type)
 }
 
 impl Gesturebind {
@@ -594,6 +600,7 @@ async fn new_gesturebind(
     mods: Mod,
     direction: GestureDirection,
     fingers: GestureFingers,
+    gesture_type: GestureType,
     layer: &BindLayer,
 ) -> Gesturebind {
     let ignore_mods = mods.api_ignore_mods();
@@ -609,6 +616,7 @@ async fn new_gesturebind(
                 bind: Some(input::v1::bind::Bind::Gesture(input::v1::Gesturebind {
                     direction: direction.into(),
                     fingers: fingers.into(),
+                    gesture_type: gesture_type.into(),
                 })),
             }),
         })

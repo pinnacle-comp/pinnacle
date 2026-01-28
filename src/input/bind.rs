@@ -559,7 +559,7 @@ impl Gesturebinds {
         fingers: GestureFingers,
         mods: ModifiersState,
         edge: Edge,
-        _current_layer: Option<String>,
+        current_layer: Option<String>,
         is_locked: bool,
     ) -> BindAction {
         let Some(gesturebinds) = self.gesture_map.get_mut(&(direction, fingers)) else {
@@ -575,6 +575,10 @@ impl Gesturebinds {
                 };
 
                 if !gesturebind.borrow().bind_data.mods.matches(mods) {
+                    continue;
+                }
+
+                if gesturebind.borrow().bind_data.layer != current_layer {
                     continue;
                 }
 

@@ -966,24 +966,29 @@ impl State {
         let current_layer = self.pinnacle.input_state.bind_state.current_layer();
 
         if let Some((x, y)) = self.pinnacle.input_state.gesture_state.delta {
-            let direction = if x.abs() > y.abs() {
-                if x < 0.0 {
-                    Some(GestureDirection::Left)
-                } else if x > 0.0 {
-                    Some(GestureDirection::Right)
+            let direction = {
+                use std::f64::consts::PI;
+
+                let angle = y.atan2(x);
+                let angle_deg = (angle * 180.0 / PI + 360.0) % 360.0;
+
+                if !(22.5..337.5).contains(&angle_deg) {
+                    GestureDirection::Right
+                } else if (22.5..67.5).contains(&angle_deg) {
+                    GestureDirection::DownAndRight
+                } else if (67.5..112.5).contains(&angle_deg) {
+                    GestureDirection::Down
+                } else if (112.5..157.5).contains(&angle_deg) {
+                    GestureDirection::DownAndLeft
+                } else if (157.5..202.5).contains(&angle_deg) {
+                    GestureDirection::Left
+                } else if (202.5..247.5).contains(&angle_deg) {
+                    GestureDirection::UpAndLeft
+                } else if (247.5..292.5).contains(&angle_deg) {
+                    GestureDirection::Up
                 } else {
-                    None
+                    GestureDirection::UpAndRight
                 }
-            } else if x.abs() < y.abs() {
-                if y < 0.0 {
-                    Some(GestureDirection::Up)
-                } else if y > 0.0 {
-                    Some(GestureDirection::Down)
-                } else {
-                    None
-                }
-            } else {
-                None
             };
 
             let fingers = match self.pinnacle.input_state.gesture_state.fingers {
@@ -992,9 +997,7 @@ impl State {
                 _ => None,
             };
 
-            if let Some(fingers) = fingers
-                && let Some(direction) = direction
-            {
+            if let Some(fingers) = fingers {
                 let _bind_action = self.pinnacle.input_state.bind_state.gesturebinds.gesture(
                     direction,
                     fingers,

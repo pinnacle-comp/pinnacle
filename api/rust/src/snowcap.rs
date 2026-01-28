@@ -297,6 +297,10 @@ impl Program for BindOverlay {
                             GestureDirection::Left => "Left",
                             GestureDirection::Right => "Right",
                             GestureDirection::Up => "Up",
+                            GestureDirection::DownAndLeft => "Down and Left",
+                            GestureDirection::DownAndRight => "Down and Right",
+                            GestureDirection::UpAndLeft => "Up and Left",
+                            GestureDirection::UpAndRight => "Up and Right",
                         }
                         .to_string(),
                         fingers: format!("{fingers:?} fingers"),
