@@ -6,6 +6,7 @@ rust-version.workspace = true
 
 [dependencies]
 anyhow = { workspace = true }
+bitflags = { workspace = true }
 iced = { version = "0.14.0", default-features = false, features = [
     "wgpu",
     "tokio",

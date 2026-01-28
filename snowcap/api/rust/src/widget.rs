@@ -142,6 +142,7 @@ where
             WidgetMessage::TextInput(callbacks) => callbacks.process_event(event.into()),
             _ => unreachable!(),
         }),
+        Event::WlrTaskList(_event) => todo!(),
     }
 }
 

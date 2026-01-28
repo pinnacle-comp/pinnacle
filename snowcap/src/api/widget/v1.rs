@@ -2,6 +2,7 @@ use anyhow::Context;
 use iced::widget::{
     Column, Container, Row, Scrollable, button, image::FilterMethod, scrollable::Scrollbar,
 };
+use smithay_client_toolkit::reexports::client::{Proxy, protocol::wl_seat::WlSeat};
 use snowcap_api_defs::snowcap::widget::{
     self,
     v1::{
@@ -14,9 +15,11 @@ use tonic::{Request, Response, Status};
 use crate::{
     api::{ResponseStream, run_server_streaming_mapped},
     decoration::DecorationId,
+    handlers::foreign_toplevel_management::ToplevelState,
     layer::LayerId,
+    state::State,
     util::convert::{FromApi, TryFromApi},
-    widget::{MouseAreaEvent, TextInputEvent, ViewFn, WidgetEvent, WidgetId},
+    widget::{MouseAreaEvent, TextInputEvent, ViewFn, WidgetEvent, WidgetId, wlr_tasklist},
 };
 
 #[tonic::async_trait]
@@ -61,6 +64,9 @@ impl widget_service_server::WidgetService for super::WidgetService {
                                 WidgetEvent::TextInput(evt) => {
                                     widget_event::Event::TextInput(evt.into())
                                 }
+                                WidgetEvent::WlrTaskList(evt) => {
+                                    widget_event::Event::WlrTaskList(evt.into())
+                                }
                             }),
                         })
                         .collect(),
@@ -70,7 +76,7 @@ impl widget_service_server::WidgetService for super::WidgetService {
     }
 }
 
-pub fn widget_def_to_fn(def: WidgetDef) -> Option<ViewFn> {
+pub fn widget_def_to_fn(def: WidgetDef, state: &State) -> Option<ViewFn> {
     let def = def.widget?;
     match def {
         widget_def::Widget::Text(text_def) => {
@@ -165,7 +171,7 @@ pub fn widget_def_to_fn(def: WidgetDef) -> Option<ViewFn> {
         }) => {
             let children_widget_fns = children
                 .into_iter()
-                .flat_map(widget_def_to_fn)
+                .flat_map(|child| widget_def_to_fn(child, state))
                 .collect::<Vec<_>>();
 
             let f: ViewFn = Box::new(move || {
@@ -222,7 +228,7 @@ pub fn widget_def_to_fn(def: WidgetDef) -> Option<ViewFn> {
         }) => {
             let children_widget_fns = children
                 .into_iter()
-                .flat_map(widget_def_to_fn)
+                .flat_map(|child| widget_def_to_fn(child, state))
                 .collect::<Vec<_>>();
 
             let f: ViewFn = Box::new(move || {
@@ -285,7 +291,7 @@ pub fn widget_def_to_fn(def: WidgetDef) -> Option<ViewFn> {
                 style,
             } = *scrollable_def;
 
-            let child_widget_fn = child.and_then(|def| widget_def_to_fn(*def));
+            let child_widget_fn = child.and_then(|def| widget_def_to_fn(*def, state));
 
             let f: ViewFn = Box::new(move || {
                 let mut scrollable = Scrollable::new(
@@ -411,7 +417,7 @@ pub fn widget_def_to_fn(def: WidgetDef) -> Option<ViewFn> {
                 style,
             } = *container_def;
 
-            let child_widget_fn = child.and_then(|def| widget_def_to_fn(*def));
+            let child_widget_fn = child.and_then(|def| widget_def_to_fn(*def, state));
 
             let f: ViewFn = Box::new(move || {
                 let mut container = Container::new(
@@ -515,7 +521,7 @@ pub fn widget_def_to_fn(def: WidgetDef) -> Option<ViewFn> {
                 widget_id,
             } = *button;
 
-            let child_widget_fn = child.and_then(|def| widget_def_to_fn(*def));
+            let child_widget_fn = child.and_then(|def| widget_def_to_fn(*def, state));
 
             let f: ViewFn = Box::new(move || {
                 let mut button = iced::widget::Button::new(
@@ -678,7 +684,7 @@ pub fn widget_def_to_fn(def: WidgetDef) -> Option<ViewFn> {
                 child,
             } = *input_region;
 
-            let child_widget_fn = child.and_then(|def| widget_def_to_fn(*def));
+            let child_widget_fn = child.and_then(|def| widget_def_to_fn(*def, state));
 
             let f: ViewFn = Box::new(move || {
                 let mut input_region = crate::widget::input_region::InputRegion::new(
@@ -719,7 +725,7 @@ pub fn widget_def_to_fn(def: WidgetDef) -> Option<ViewFn> {
                 widget_id,
             } = *mouse_area;
 
-            let child_widget_fn = child.and_then(|def| widget_def_to_fn(*def));
+            let child_widget_fn = child.and_then(|def| widget_def_to_fn(*def, state));
 
             let f: ViewFn = Box::new(move || {
                 let mut mouse_area = iced::widget::MouseArea::new(
@@ -981,6 +987,69 @@ pub fn widget_def_to_fn(def: WidgetDef) -> Option<ViewFn> {
                 }
 
                 text_input.into()
+            });
+
+            Some(f)
+        }
+        widget_def::Widget::WlrTaskList(wlr_task_list) => {
+            let widget::v1::WlrTaskList {
+                widget_id,
+                on_enter,
+                on_update,
+                on_leave,
+                child,
+            } = *wlr_task_list;
+
+            let child_widget_fn = child.and_then(|def| widget_def_to_fn(*def, state));
+            let wlr_state = state.zwlr_foreign_toplevel_mgmt_state.clone();
+            let seat = state.seat.as_ref().map(WlSeat::downgrade);
+
+            let f: ViewFn = Box::new(move || {
+                let mut wlr_task_list = wlr_tasklist::WlrTaskList::new(
+                    child_widget_fn
+                        .as_ref()
+                        .map(|child| child())
+                        .unwrap_or_else(|| iced::widget::Row::new().into()),
+                    wlr_state.clone(),
+                    seat.clone(),
+                );
+
+                if let Some(widget_id) = widget_id {
+                    if on_enter {
+                        wlr_task_list = wlr_task_list.on_enter(move |task| {
+                            crate::widget::SnowcapMessage::WidgetEvent(
+                                WidgetId(widget_id),
+                                WidgetEvent::WlrTaskList(
+                                    wlr_tasklist::WlrTaskListEvent::ToplevelEnter(task),
+                                ),
+                            )
+                        })
+                    }
+
+                    if on_update {
+                        wlr_task_list = wlr_task_list.on_update(move |task| {
+                            crate::widget::SnowcapMessage::WidgetEvent(
+                                WidgetId(widget_id),
+                                WidgetEvent::WlrTaskList(
+                                    wlr_tasklist::WlrTaskListEvent::ToplevelUpdate(task),
+                                ),
+                            )
+                        })
+                    }
+
+                    if on_leave {
+                        wlr_task_list = wlr_task_list.on_leave(move |id| {
+                            crate::widget::SnowcapMessage::WidgetEvent(
+                                WidgetId(widget_id),
+                                WidgetEvent::WlrTaskList(
+                                    wlr_tasklist::WlrTaskListEvent::ToplevelLeave(id),
+                                ),
+                            )
+                        })
+                    }
+                }
+
+                wlr_task_list.into()
             });
 
             Some(f)
@@ -1455,6 +1524,56 @@ impl FromApi<widget::v1::text_input::Style> for crate::widget::text_input::Style
             focused: focused.map(convert_inner),
             hover_focused: hover_focused.map(convert_inner),
             disabled: disabled.map(convert_inner),
+        }
+    }
+}
+
+impl From<wlr_tasklist::WlrTaskListEvent>
+    for snowcap_api_defs::snowcap::widget::v1::wlr_task_list::Event
+{
+    fn from(value: wlr_tasklist::WlrTaskListEvent) -> Self {
+        use snowcap_api_defs::snowcap::widget::v1::wlr_task_list::event::Data;
+        use wlr_tasklist::WlrTaskListEvent;
+
+        let data = match value {
+            WlrTaskListEvent::ToplevelEnter(task) => Data::Enter(task.into()),
+            WlrTaskListEvent::ToplevelUpdate(task) => Data::Update(task.into()),
+            WlrTaskListEvent::ToplevelLeave(id) => Data::Leave(id),
+        };
+
+        Self { data: Some(data) }
+    }
+}
+
+impl From<wlr_tasklist::WlrTaskState>
+    for snowcap_api_defs::snowcap::widget::v1::wlr_task_list::WlrTaskData
+{
+    fn from(value: wlr_tasklist::WlrTaskState) -> Self {
+        let wlr_tasklist::WlrTaskState {
+            id,
+            title,
+            app_id,
+            state,
+            outputs,
+        } = value;
+
+        Self {
+            id,
+            title: Some(title),
+            app_id: Some(app_id),
+            state: Some(state.into()),
+            outputs,
+        }
+    }
+}
+
+impl From<ToplevelState> for snowcap_api_defs::snowcap::widget::v1::wlr_task_list::WlrTaskState {
+    fn from(value: ToplevelState) -> Self {
+        Self {
+            maximized: value.contains(ToplevelState::Maximized),
+            minimized: value.contains(ToplevelState::Minimized),
+            activated: value.contains(ToplevelState::Activated),
+            fullscreen: value.contains(ToplevelState::Fullscreen),
         }
     }
 }

@@ -10,7 +10,7 @@ use smithay_client_toolkit::{
         client::{
             Connection, QueueHandle,
             globals::registry_queue_init,
-            protocol::{wl_keyboard::WlKeyboard, wl_pointer::WlPointer},
+            protocol::{wl_keyboard::WlKeyboard, wl_pointer::WlPointer, wl_seat::WlSeat},
         },
         protocols::{
             ext::foreign_toplevel_list::v1::client::{
@@ -32,7 +32,10 @@ use xkbcommon::xkb::Keysym;
 
 use crate::{
     decoration::{DecorationIdCounter, SnowcapDecoration},
-    handlers::{foreign_toplevel_list::ForeignToplevelListHandleData, keyboard::KeyboardFocus},
+    handlers::{
+        foreign_toplevel_list::ForeignToplevelListHandleData,
+        foreign_toplevel_management::ZwlrForeignToplevelManagementState, keyboard::KeyboardFocus,
+    },
     layer::{LayerIdCounter, SnowcapLayer},
     runtime::{CalloopSenderSink, CurrentTokioExecutor},
     server::GrpcServerState,
@@ -68,6 +71,7 @@ pub struct State {
     pub layers: Vec<SnowcapLayer>,
     pub decorations: Vec<SnowcapDecoration>,
 
+    pub seat: Option<WlSeat>,
     // TODO: per wl_keyboard
     pub keyboard_focus: Option<KeyboardFocus>,
     pub keyboard_modifiers: Modifiers,
@@ -80,6 +84,8 @@ pub struct State {
 
     pub foreign_toplevel_list_handles:
         Vec<(ExtForeignToplevelHandleV1, ForeignToplevelListHandleData)>,
+
+    pub zwlr_foreign_toplevel_mgmt_state: ZwlrForeignToplevelManagementState,
 }
 
 impl State {
@@ -106,6 +112,8 @@ impl State {
             globals.bind(&queue_handle, 1..=1, ()).unwrap();
         let foreign_toplevel_list: ExtForeignToplevelListV1 =
             globals.bind(&queue_handle, 1..=1, ()).unwrap();
+        let zwlr_foreign_toplevel_mgmt_state =
+            ZwlrForeignToplevelManagementState::new(&globals, &queue_handle);
 
         let wayland_source = WaylandSource::new(conn.clone(), event_queue);
 
@@ -254,6 +262,7 @@ impl State {
             tiny_skia: None,
             layers: Vec::new(),
             decorations: Vec::new(),
+            seat: None,
             keyboard_focus: None,
             keyboard_modifiers: smithay_client_toolkit::seat::keyboard::Modifiers::default(),
             keyboard: None,
@@ -261,6 +270,8 @@ impl State {
             layer_id_counter: LayerIdCounter::default(),
             decoration_id_counter: DecorationIdCounter::default(),
             foreign_toplevel_list_handles: Vec::new(),
+
+            zwlr_foreign_toplevel_mgmt_state,
         };
 
         Ok(state)

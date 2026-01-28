@@ -31,7 +31,7 @@ impl decoration_service_server::DecorationService for super::DecorationService {
         let z_index = request.z_index;
 
         run_unary(&self.sender, move |state| {
-            let Some(f) = crate::api::widget::v1::widget_def_to_fn(widget_def) else {
+            let Some(f) = crate::api::widget::v1::widget_def_to_fn(widget_def, state) else {
                 return Err(Status::invalid_argument("widget def was null"));
             };
 
@@ -139,6 +139,8 @@ impl decoration_service_server::DecorationService for super::DecorationService {
         let z_index = request.z_index;
 
         run_unary(&self.sender, move |state| {
+            let widget_def = widget_def.and_then(|def| widget_def_to_fn(def, state));
+
             let Some(deco) = state
                 .decorations
                 .iter_mut()
@@ -148,7 +150,7 @@ impl decoration_service_server::DecorationService for super::DecorationService {
             };
 
             deco.update_properties(
-                widget_def.and_then(widget_def_to_fn),
+                widget_def,
                 bounds.map(|bounds| crate::decoration::Bounds {
                     left: bounds.left,
                     right: bounds.right,

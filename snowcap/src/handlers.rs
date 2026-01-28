@@ -51,8 +51,13 @@ impl SeatHandler for State {
         &mut self.seat_state
     }
 
-    fn new_seat(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _seat: WlSeat) {
-        // TODO:
+    fn new_seat(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, seat: WlSeat) {
+        // TODO: For now we only support one seat. This is good enough as most compositor only
+        // support one seat as well, but could be improved either by picking the best seat (the one
+        // with the most desirable capabilities), or having the user pick a seat by name.
+        if self.seat.is_none() {
+            self.seat = Some(seat);
+        }
     }
 
     fn new_capability(
@@ -229,6 +234,8 @@ impl CompositorHandler for State {
         surface: &WlSurface,
         output: &wl_output::WlOutput,
     ) {
+        use crate::widget::output;
+
         let Some(layer) = self
             .layers
             .iter_mut()
@@ -238,6 +245,9 @@ impl CompositorHandler for State {
         };
 
         layer.wl_output = Some(output.clone());
+
+        let mut oper = output::operation::enter_output(output.clone());
+        layer.operate(&mut oper);
 
         let Some(output_info) = self.output_state.info(output) else {
             return;
@@ -268,9 +278,19 @@ impl CompositorHandler for State {
         &mut self,
         _conn: &Connection,
         _qh: &QueueHandle<Self>,
-        _surface: &WlSurface,
-        _output: &wl_output::WlOutput,
+        surface: &WlSurface,
+        output: &wl_output::WlOutput,
     ) {
+        use crate::widget::output;
+
+        if let Some(layer) = self
+            .layers
+            .iter_mut()
+            .find(|layer| layer.layer.wl_surface() == surface)
+        {
+            let mut oper = output::operation::leave_output(output.clone());
+            layer.operate(&mut oper);
+        }
     }
 }
 delegate_compositor!(State);

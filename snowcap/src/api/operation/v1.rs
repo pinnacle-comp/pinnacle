@@ -31,6 +31,7 @@ impl TryFromApi<operation::v1::operation::Target> for Box<dyn widget::Operation 
         match api_type {
             Target::Focusable(focusable) => TryFromApi::try_from_api(focusable),
             Target::TextInput(text_input) => TryFromApi::try_from_api(text_input),
+            Target::WlrTaskList(tasklist) => TryFromApi::try_from_api(tasklist),
         }
     }
 }
@@ -94,6 +95,45 @@ impl FromApi<operation::v1::text_input::Op> for Box<dyn widget::Operation + 'sta
             }
             Op::SelectAll(text_input::SelectAll { id }) => {
                 Box::new(widget::operation::text_input::select_all(id.into()))
+            }
+        }
+    }
+}
+
+impl TryFromApi<operation::v1::WlrTaskList> for Box<dyn widget::Operation + 'static> {
+    type Error = anyhow::Error;
+
+    fn try_from_api(api_type: operation::v1::WlrTaskList) -> Result<Self, Self::Error> {
+        const MESSAGE: &str = "snowcap.operation.v1.WlrTaskList";
+
+        let Some(op) = api_type.op else {
+            anyhow::bail!("While converting {MESSAGE}: missing field 'op'");
+        };
+
+        Ok(FromApi::from_api(op))
+    }
+}
+
+impl FromApi<operation::v1::wlr_task_list::Op> for Box<dyn widget::Operation + 'static> {
+    fn from_api(api_type: operation::v1::wlr_task_list::Op) -> Self {
+        use crate::widget::wlr_tasklist;
+        use operation::v1::wlr_task_list::{self as api, Op};
+
+        match api_type {
+            Op::Maximize(api::MaximizeToplevel { id, maximize }) => Box::new(
+                wlr_tasklist::operation::toplevel_set_maximized(id, maximize),
+            ),
+            Op::Minimize(api::MinimizeToplevel { id, minimize }) => Box::new(
+                wlr_tasklist::operation::toplevel_set_minimized(id, minimize),
+            ),
+            Op::Fullscreen(api::FullscreenToplevel { id, fullscreen }) => Box::new(
+                wlr_tasklist::operation::toplevel_set_fullscreen(id, fullscreen),
+            ),
+            Op::Activate(api::ActivateToplevel { id }) => {
+                Box::new(wlr_tasklist::operation::toplevel_activate(id))
+            }
+            Op::Close(api::CloseToplevel { id }) => {
+                Box::new(wlr_tasklist::operation::toplevel_close(id))
             }
         }
     }

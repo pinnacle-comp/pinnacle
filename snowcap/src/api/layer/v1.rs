@@ -71,7 +71,7 @@ impl layer_service_server::LayerService for super::LayerService {
         };
 
         run_unary(&self.sender, move |state| {
-            let Some(f) = crate::api::widget::v1::widget_def_to_fn(widget_def) else {
+            let Some(f) = crate::api::widget::v1::widget_def_to_fn(widget_def, state) else {
                 return Err(Status::invalid_argument("widget def was null"));
             };
 
@@ -199,6 +199,8 @@ impl layer_service_server::LayerService for super::LayerService {
         let widget_def = request.widget_def;
 
         run_unary(&self.sender, move |state| {
+            let widget_def = widget_def.and_then(|def| widget_def_to_fn(def, state));
+
             let Some(layer) = state.layers.iter_mut().find(|layer| layer.layer_id == id) else {
                 return Ok(UpdateLayerResponse {});
             };
@@ -208,7 +210,7 @@ impl layer_service_server::LayerService for super::LayerService {
                 anchor,
                 exclusive_zone,
                 keyboard_interactivity,
-                widget_def.and_then(widget_def_to_fn),
+                widget_def,
             );
 
             Ok(UpdateLayerResponse {})

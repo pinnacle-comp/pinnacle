@@ -41,9 +41,43 @@ message TextInput {
   }
 }
 
+message WlrTaskList {
+  message MaximizeToplevel {
+    uint64 id = 1;
+    bool maximize = 2;
+  }
+
+  message MinimizeToplevel {
+    uint64 id = 1;
+    bool minimize = 2;
+  }
+
+  message FullscreenToplevel {
+    uint64 id = 1;
+    bool fullscreen = 2;
+  }
+
+  message ActivateToplevel {
+    uint64 id = 1;
+  }
+
+  message CloseToplevel {
+    uint64 id = 1;
+  }
+
+  oneof op {
+    MaximizeToplevel maximize = 1;
+    MinimizeToplevel minimize = 2;
+    FullscreenToplevel fullscreen = 3;
+    ActivateToplevel activate = 4;
+    CloseToplevel close = 5;
+  }
+}
+
 message Operation {
   oneof target {
     Focusable focusable = 1;
     TextInput text_input = 2;
+    WlrTaskList wlr_task_list = 3;
   }
 }
