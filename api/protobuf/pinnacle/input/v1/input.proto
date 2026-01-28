@@ -107,11 +107,6 @@ enum GestureDirection {
   UP_AND_RIGHT = 7;
 }
 
-enum GestureFingers {
-  THREE = 0;
-  FOUR = 1;
-}
-
 enum GestureType {
   HOLD = 0;
   PINCH = 1;
@@ -120,7 +115,7 @@ enum GestureType {
 
 message Gesturebind {
   GestureDirection direction = 1;
-  GestureFingers fingers = 2;
+  uint32 fingers = 2;
   GestureType gesture_type = 3;
 }
 

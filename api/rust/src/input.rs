@@ -31,7 +31,7 @@ pub mod libinput;
 
 pub use xkbcommon::xkb::Keysym;
 
-pub use pinnacle_api_defs::pinnacle::input::v1::{GestureDirection, GestureFingers, GestureType};
+pub use pinnacle_api_defs::pinnacle::input::v1::{GestureDirection, GestureType};
 
 /// A mouse button.
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, FromPrimitive, IntoPrimitive)]
@@ -184,7 +184,7 @@ impl BindLayer {
         &self,
         mods: Mod,
         direction: GestureDirection,
-        fingers: GestureFingers,
+        fingers: u32,
         gesture_type: GestureType,
     ) -> Gesturebind {
         new_gesturebind(mods, direction, fingers, gesture_type, self).block_on_tokio()
@@ -554,7 +554,7 @@ bind_impl!(Gesturebind);
 pub fn gesturebind(
     mods: Mod,
     direction: GestureDirection,
-    fingers: GestureFingers,
+    fingers: u32,
     gesture_type: GestureType,
 ) -> Gesturebind {
     BindLayer::DEFAULT.gesturebind(mods, direction, fingers, gesture_type)
@@ -599,7 +599,7 @@ impl Gesturebind {
 async fn new_gesturebind(
     mods: Mod,
     direction: GestureDirection,
-    fingers: GestureFingers,
+    fingers: u32,
     gesture_type: GestureType,
     layer: &BindLayer,
 ) -> Gesturebind {
@@ -615,7 +615,7 @@ async fn new_gesturebind(
                 properties: Some(BindProperties::default()),
                 bind: Some(input::v1::bind::Bind::Gesture(input::v1::Gesturebind {
                     direction: direction.into(),
-                    fingers: fingers.into(),
+                    fingers,
                     gesture_type: gesture_type.into(),
                 })),
             }),
@@ -857,7 +857,7 @@ pub enum BindInfoKind {
         /// Direction of the gesture.
         direction: GestureDirection,
         /// Fingers used in the gesture.
-        fingers: GestureFingers,
+        fingers: u32,
     },
 }
 
@@ -1008,8 +1008,7 @@ pub fn bind_infos() -> impl Iterator<Item = BindInfo> {
             input::v1::bind::Bind::Gesture(gesturebind) => BindInfoKind::Gesture {
                 direction: GestureDirection::try_from(gesturebind.direction)
                     .expect("invalid gesture direction value"),
-                fingers: GestureFingers::try_from(gesturebind.fingers)
-                    .expect("invalid gesture finger value"),
+                fingers: gesturebind.fingers
             },
         };
 

@@ -14,7 +14,7 @@ use crate::{
 };
 use bind::BindState;
 use libinput::LibinputState;
-use pinnacle_api::input::{GestureDirection, GestureFingers};
+use pinnacle_api::input::GestureDirection;
 use smithay::{
     backend::{
         input::{
@@ -991,22 +991,16 @@ impl State {
                 }
             };
 
-            let fingers = match self.pinnacle.input_state.gesture_state.fingers {
-                3 => Some(GestureFingers::Three),
-                4 => Some(GestureFingers::Four),
-                _ => None,
-            };
+            let fingers = self.pinnacle.input_state.gesture_state.fingers;
 
-            if let Some(fingers) = fingers {
-                let _bind_action = self.pinnacle.input_state.bind_state.gesturebinds.gesture(
-                    direction,
-                    fingers,
-                    mods,
-                    Edge::Release,
-                    current_layer,
-                    !self.pinnacle.lock_state.is_unlocked(),
-                );
-            }
+            let _bind_action = self.pinnacle.input_state.bind_state.gesturebinds.gesture(
+                direction,
+                fingers,
+                mods,
+                Edge::Release,
+                current_layer,
+                !self.pinnacle.lock_state.is_unlocked(),
+            );
         }
 
         self.pinnacle.input_state.gesture_state.delta = None;

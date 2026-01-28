@@ -2,7 +2,7 @@ use pinnacle_api_defs::pinnacle::input::{
     self,
     v1::{
         AccelProfile, BindInfo, BindRequest, BindResponse, ClickMethod, EnterBindLayerRequest,
-        GestureDirection, GestureFingers, GesturebindOnBeginRequest, GesturebindOnFinishRequest,
+        GestureDirection, GesturebindOnBeginRequest, GesturebindOnFinishRequest,
         GesturebindRequest, GesturebindStreamRequest, GesturebindStreamResponse,
         GetBindInfosRequest, GetBindInfosResponse, GetBindLayerStackRequest,
         GetBindLayerStackResponse, GetDeviceCapabilitiesRequest, GetDeviceCapabilitiesResponse,
@@ -166,8 +166,7 @@ impl input::v1::input_service_server::InputService for InputService {
                 input::v1::bind::Bind::Gesture(gesturebind) => {
                     let direction = GestureDirection::try_from(gesturebind.direction)
                         .expect("invalid gesture direction value");
-                    let fingers = GestureFingers::try_from(gesturebind.fingers)
-                        .expect("invalid gesture fingers value");
+                    let fingers = gesturebind.fingers;
                     let bind_id = state
                         .pinnacle
                         .input_state

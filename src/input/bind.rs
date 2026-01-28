@@ -6,7 +6,7 @@ use std::{
 };
 
 use indexmap::{IndexMap, map::Entry};
-use pinnacle_api_defs::pinnacle::input::v1::{GestureDirection, GestureFingers};
+use pinnacle_api_defs::pinnacle::input::v1::GestureDirection;
 use smithay::input::keyboard::ModifiersState;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use xkbcommon::xkb::Keysym;
@@ -534,7 +534,7 @@ impl Mousebinds {
 pub struct Gesturebind {
     pub bind_data: BindData,
     pub direction: GestureDirection,
-    pub fingers: GestureFingers,
+    pub fingers: u32,
     sender: UnboundedSender<Edge>,
     pub recv: Option<UnboundedReceiver<Edge>>,
     pub has_on_begin: bool,
@@ -543,9 +543,9 @@ pub struct Gesturebind {
 #[derive(Debug, Default)]
 pub struct Gesturebinds {
     pub id_map: IndexMap<u32, Rc<RefCell<Gesturebind>>>,
-    gesture_map: IndexMap<(GestureDirection, GestureFingers), Vec<Weak<RefCell<Gesturebind>>>>,
+    gesture_map: IndexMap<(GestureDirection, u32), Vec<Weak<RefCell<Gesturebind>>>>,
 
-    pub last_pressed_triggered_binds: HashMap<(GestureDirection, GestureFingers), Vec<u32>>,
+    pub last_pressed_triggered_binds: HashMap<(GestureDirection, u32), Vec<u32>>,
 }
 
 // TODO: may be able to dedup with Keybinds above
@@ -556,7 +556,7 @@ impl Gesturebinds {
     pub fn gesture(
         &mut self,
         direction: GestureDirection,
-        fingers: GestureFingers,
+        fingers: u32,
         mods: ModifiersState,
         edge: Edge,
         current_layer: Option<String>,
@@ -606,7 +606,7 @@ impl Gesturebinds {
     pub fn add_gesturebind(
         &mut self,
         direction: GestureDirection,
-        fingers: GestureFingers,
+        fingers: u32,
         mods: ModMask,
         layer: Option<String>,
         group: String,
