@@ -1078,6 +1078,11 @@ impl State {
             return;
         };
 
+        self.pinnacle.input_state.gesture_state = GestureState {
+            delta: Some((0., 0.)),
+            fingers: event.fingers(),
+        };
+
         pointer.gesture_hold_begin(
             self,
             &GestureHoldBeginEvent {
@@ -1092,6 +1097,29 @@ impl State {
         let Some(pointer) = self.pinnacle.seat.get_pointer() else {
             return;
         };
+        let Some(keyboard) = self.pinnacle.seat.get_keyboard() else {
+            return;
+        };
+
+        let mods = keyboard.modifier_state();
+
+        let current_layer = self.pinnacle.input_state.bind_state.current_layer();
+
+        if self.pinnacle.input_state.gesture_state.delta.is_some() {
+            let fingers = self.pinnacle.input_state.gesture_state.fingers;
+
+            let _bind_action = self.pinnacle.input_state.bind_state.gesturebinds.gesture(
+                GestureDirection::Up, // Direction doesn't matter for pinches
+                fingers,
+                GestureType::Hold,
+                mods,
+                Edge::Release,
+                current_layer,
+                !self.pinnacle.lock_state.is_unlocked(),
+            );
+        }
+
+        self.pinnacle.input_state.gesture_state.delta = None;
 
         pointer.gesture_hold_end(
             self,
