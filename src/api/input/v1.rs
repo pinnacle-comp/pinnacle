@@ -1,3 +1,4 @@
+use pinnacle_api::input::GestureType;
 use pinnacle_api_defs::pinnacle::input::{
     self,
     v1::{
@@ -167,6 +168,8 @@ impl input::v1::input_service_server::InputService for InputService {
                     let direction = GestureDirection::try_from(gesturebind.direction)
                         .expect("invalid gesture direction value");
                     let fingers = gesturebind.fingers;
+                    let gesture_type = GestureType::try_from(gesturebind.gesture_type)
+                        .expect("invalid gesture type");
                     let bind_id = state
                         .pinnacle
                         .input_state
@@ -175,6 +178,7 @@ impl input::v1::input_service_server::InputService for InputService {
                         .add_gesturebind(
                             direction,
                             fingers,
+                            gesture_type,
                             mods,
                             layer,
                             group,

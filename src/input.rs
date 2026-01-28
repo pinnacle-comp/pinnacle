@@ -14,7 +14,7 @@ use crate::{
 };
 use bind::BindState;
 use libinput::LibinputState;
-use pinnacle_api::input::GestureDirection;
+use pinnacle_api::input::{GestureDirection, GestureType};
 use smithay::{
     backend::{
         input::{
@@ -965,37 +965,15 @@ impl State {
 
         let current_layer = self.pinnacle.input_state.bind_state.current_layer();
 
-        if let Some((x, y)) = self.pinnacle.input_state.gesture_state.delta {
-            let direction = {
-                use std::f64::consts::PI;
-
-                let angle = y.atan2(x);
-                let angle_deg = (angle * 180.0 / PI + 360.0) % 360.0;
-
-                if !(22.5..337.5).contains(&angle_deg) {
-                    GestureDirection::Right
-                } else if (22.5..67.5).contains(&angle_deg) {
-                    GestureDirection::DownAndRight
-                } else if (67.5..112.5).contains(&angle_deg) {
-                    GestureDirection::Down
-                } else if (112.5..157.5).contains(&angle_deg) {
-                    GestureDirection::DownAndLeft
-                } else if (157.5..202.5).contains(&angle_deg) {
-                    GestureDirection::Left
-                } else if (202.5..247.5).contains(&angle_deg) {
-                    GestureDirection::UpAndLeft
-                } else if (247.5..292.5).contains(&angle_deg) {
-                    GestureDirection::Up
-                } else {
-                    GestureDirection::UpAndRight
-                }
-            };
+        if let Some(delta) = self.pinnacle.input_state.gesture_state.delta {
+            let direction = delta_to_direction(delta);
 
             let fingers = self.pinnacle.input_state.gesture_state.fingers;
 
             let _bind_action = self.pinnacle.input_state.bind_state.gesturebinds.gesture(
                 direction,
                 fingers,
+                GestureType::Swipe,
                 mods,
                 Edge::Release,
                 current_layer,
@@ -1020,6 +998,11 @@ impl State {
             return;
         };
 
+        self.pinnacle.input_state.gesture_state = GestureState {
+            delta: Some((0., 0.)),
+            fingers: event.fingers(),
+        };
+
         pointer.gesture_pinch_begin(
             self,
             &GesturePinchBeginEvent {
@@ -1037,6 +1020,10 @@ impl State {
 
         use smithay::backend::input::GesturePinchUpdateEvent as _;
 
+        let delta = event.delta();
+
+        self.pinnacle.input_state.gesture_state.delta = Some((delta.x, delta.y));
+
         pointer.gesture_pinch_update(
             self,
             &GesturePinchUpdateEvent {
@@ -1052,6 +1039,29 @@ impl State {
         let Some(pointer) = self.pinnacle.seat.get_pointer() else {
             return;
         };
+        let Some(keyboard) = self.pinnacle.seat.get_keyboard() else {
+            return;
+        };
+
+        let mods = keyboard.modifier_state();
+
+        let current_layer = self.pinnacle.input_state.bind_state.current_layer();
+
+        if self.pinnacle.input_state.gesture_state.delta.is_some() {
+            let fingers = self.pinnacle.input_state.gesture_state.fingers;
+
+            let _bind_action = self.pinnacle.input_state.bind_state.gesturebinds.gesture(
+                GestureDirection::Up, // Direction doesn't matter for pinches
+                fingers,
+                GestureType::Pinch,
+                mods,
+                Edge::Release,
+                current_layer,
+                !self.pinnacle.lock_state.is_unlocked(),
+            );
+        }
+
+        self.pinnacle.input_state.gesture_state.delta = None;
 
         pointer.gesture_pinch_end(
             self,
@@ -1389,6 +1399,33 @@ fn constrain_point_inside_rects(
             (x, y).into()
         })
         .unwrap_or(pos)
+}
+
+fn delta_to_direction(delta: (f64, f64)) -> GestureDirection {
+    use std::f64::consts::PI;
+
+    let (x, y) = delta;
+
+    let angle = y.atan2(x);
+    let angle_deg = (angle * 180.0 / PI + 360.0) % 360.0;
+
+    if !(22.5..337.5).contains(&angle_deg) {
+        GestureDirection::Right
+    } else if (22.5..67.5).contains(&angle_deg) {
+        GestureDirection::DownAndRight
+    } else if (67.5..112.5).contains(&angle_deg) {
+        GestureDirection::Down
+    } else if (112.5..157.5).contains(&angle_deg) {
+        GestureDirection::DownAndLeft
+    } else if (157.5..202.5).contains(&angle_deg) {
+        GestureDirection::Left
+    } else if (202.5..247.5).contains(&angle_deg) {
+        GestureDirection::UpAndLeft
+    } else if (247.5..292.5).contains(&angle_deg) {
+        GestureDirection::Up
+    } else {
+        GestureDirection::UpAndRight
+    }
 }
 
 #[cfg(test)]

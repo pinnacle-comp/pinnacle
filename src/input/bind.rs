@@ -6,6 +6,7 @@ use std::{
 };
 
 use indexmap::{IndexMap, map::Entry};
+use pinnacle_api::input::GestureType;
 use pinnacle_api_defs::pinnacle::input::v1::GestureDirection;
 use smithay::input::keyboard::ModifiersState;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
@@ -535,6 +536,7 @@ pub struct Gesturebind {
     pub bind_data: BindData,
     pub direction: GestureDirection,
     pub fingers: u32,
+    pub gesture_type: GestureType,
     sender: UnboundedSender<Edge>,
     pub recv: Option<UnboundedReceiver<Edge>>,
     pub has_on_begin: bool,
@@ -557,6 +559,7 @@ impl Gesturebinds {
         &mut self,
         direction: GestureDirection,
         fingers: u32,
+        gesture_type: GestureType,
         mods: ModifiersState,
         edge: Edge,
         current_layer: Option<String>,
@@ -575,6 +578,10 @@ impl Gesturebinds {
                 };
 
                 if !gesturebind.borrow().bind_data.mods.matches(mods) {
+                    continue;
+                }
+
+                if gesturebind.borrow().gesture_type != gesture_type {
                     continue;
                 }
 
@@ -607,6 +614,7 @@ impl Gesturebinds {
         &mut self,
         direction: GestureDirection,
         fingers: u32,
+        gesture_type: GestureType,
         mods: ModMask,
         layer: Option<String>,
         group: String,
@@ -632,6 +640,7 @@ impl Gesturebinds {
             },
             direction,
             fingers,
+            gesture_type,
             sender,
             recv: Some(recv),
             has_on_begin: false,
