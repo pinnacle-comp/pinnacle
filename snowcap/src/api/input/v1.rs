@@ -10,6 +10,7 @@ use tonic::{Request, Response, Status};
 use crate::{
     api::{ResponseStream, run_server_streaming, run_server_streaming_mapped},
     layer::LayerId,
+    popup::PopupId,
 };
 
 #[tonic::async_trait]
@@ -23,13 +24,22 @@ impl input_service_server::InputService for super::InputService {
     ) -> Result<Response<Self::KeyboardKeyStream>, Status> {
         let request = request.into_inner();
 
-        let id = LayerId(request.id);
+        let Some(target) = request.target.map(Target::from) else {
+            return Err(Status::invalid_argument("no target"));
+        };
 
         run_server_streaming_mapped(
             &self.sender,
-            move |state, sender| {
-                if let Some(layer) = state.layer_for_id(id) {
-                    layer.keyboard_key_sender = Some(sender);
+            move |state, sender| match target {
+                Target::Layer(id) => {
+                    if let Some(layer) = state.layer_for_id(id) {
+                        layer.keyboard_key_sender = Some(sender);
+                    }
+                }
+                Target::Popup(id) => {
+                    if let Some(popup) = state.popup_for_id(id) {
+                        popup.keyboard_key_sender = Some(sender);
+                    }
                 }
             },
             |item| {
@@ -59,5 +69,21 @@ impl input_service_server::InputService for super::InputService {
         let _id = request.id;
 
         run_server_streaming(&self.sender, move |_state, _sender| todo!())
+    }
+}
+
+enum Target {
+    Layer(LayerId),
+    Popup(PopupId),
+}
+
+impl From<input::v1::keyboard_key_request::Target> for Target {
+    fn from(value: input::v1::keyboard_key_request::Target) -> Self {
+        use input::v1::keyboard_key_request::{self as api};
+
+        match value {
+            api::Target::LayerId(id) => Target::Layer(LayerId(id)),
+            api::Target::PopupId(id) => Target::Popup(PopupId(id)),
+        }
     }
 }

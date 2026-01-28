@@ -17,6 +17,12 @@ local layer_handle = {}
 ---@field private _update fun(msg:any)
 local LayerHandle = {}
 
+---Convert a LayerHandle into a Popup's ParentHandle
+---@return snowcap.popup.ParentHandle
+function LayerHandle:as_parent()
+    return require("snowcap.popup").parent.Layer(self)
+end
+
 ---@param id integer
 ---@param update fun(msg: any)
 ---@return snowcap.layer.LayerHandle
@@ -164,7 +170,7 @@ end
 ---@param on_event fun(handle: snowcap.layer.LayerHandle, event: snowcap.input.KeyEvent)
 function LayerHandle:on_key_event(on_event)
     local err = client:snowcap_input_v1_InputService_KeyboardKey(
-        { id = self.id },
+        { layer_id = self.id },
         function(response)
             ---@cast response snowcap.input.v1.KeyboardKeyResponse
 

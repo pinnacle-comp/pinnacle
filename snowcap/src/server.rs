@@ -2,14 +2,14 @@ use std::path::{Path, PathBuf};
 
 use anyhow::Context;
 use smithay_client_toolkit::reexports::calloop;
-use snowcap_api_defs::snowcap::{decoration, input, layer, widget};
+use snowcap_api_defs::snowcap::{decoration, input, layer, popup, widget};
 use tokio::task::JoinHandle;
 use tracing::{error, info};
 
 use crate::{
     api::{
         decoration::DecorationService, input::InputService, layer::LayerService,
-        widget::WidgetService,
+        popup::PopupService, widget::WidgetService,
     },
     state::State,
 };
@@ -64,6 +64,7 @@ impl State {
         let input_service = InputService::new(grpc_sender.clone());
         let widget_service = WidgetService::new(grpc_sender.clone());
         let decoration_service = DecorationService::new(grpc_sender.clone());
+        let popup_service = PopupService::new(grpc_sender.clone());
 
         let refl_service = tonic_reflection::server::Builder::configure()
             .register_encoded_file_descriptor_set(snowcap_api_defs::FILE_DESCRIPTOR_SET)
@@ -97,7 +98,10 @@ impl State {
                 decoration::v1::decoration_service_server::DecorationServiceServer::new(
                     decoration_service,
                 ),
-            );
+            )
+            .add_service(popup::v1::popup_service_server::PopupServiceServer::new(
+                popup_service,
+            ));
 
         let join_handle = tokio::spawn(async move {
             if let Err(err) = grpc_server.serve_with_incoming(uds_stream).await {

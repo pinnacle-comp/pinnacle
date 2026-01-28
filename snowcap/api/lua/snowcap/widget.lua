@@ -107,6 +107,7 @@
 ---@field scroller_border snowcap.widget.Border?
 
 ---@class snowcap.widget.Container
+---@field id string?
 ---@field padding snowcap.widget.Padding?
 ---@field width snowcap.widget.Length?
 ---@field height snowcap.widget.Length?
@@ -686,6 +687,7 @@ end
 local function container_into_api(def)
     ---@type snowcap.widget.v1.Container
     return {
+        id = def.id,
         padding = def.padding --[[@as snowcap.widget.v1.Padding]],
         width = def.width --[[@as snowcap.widget.v1.Length]],
         height = def.height --[[@as snowcap.widget.v1.Length]],
