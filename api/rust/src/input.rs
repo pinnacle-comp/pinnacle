@@ -1008,7 +1008,7 @@ pub fn bind_infos() -> impl Iterator<Item = BindInfo> {
             input::v1::bind::Bind::Gesture(gesturebind) => BindInfoKind::Gesture {
                 direction: GestureDirection::try_from(gesturebind.direction)
                     .expect("invalid gesture direction value"),
-                fingers: gesturebind.fingers
+                fingers: gesturebind.fingers,
             },
         };
 
