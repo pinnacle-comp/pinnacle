@@ -511,40 +511,6 @@ impl WindowElement {
         }
     }
 
-    /*
-    /// Schedule configuration of the states to set a window surface as
-    /// minimised. This needs to be used in combination with the other `set_*_states`
-    /// functions.
-    pub(super) fn set_minimized_states(&self) {
-        match self.underlying_surface() {
-            WindowSurface::Wayland(toplevel) => toplevel.with_pending_state(|state| {
-                state.states.set(xdg_toplevel::State::Suspended);
-            }),
-            WindowSurface::X11(surface) => {
-                if !surface.is_override_redirect() {
-                    let _ = surface.set_hidden(true);
-                }
-            }
-        }
-    }
-
-    /// Schedule configuration of the states to set a window surface as
-    /// non-minimised. This needs to be used in combination with the other `set_*_states`
-    /// functions.
-    pub(super) fn unset_minimized_states(&self) {
-        match self.underlying_surface() {
-            WindowSurface::Wayland(toplevel) => toplevel.with_pending_state(|state| {
-                state.states.unset(xdg_toplevel::State::Suspended);
-            }),
-            WindowSurface::X11(surface) => {
-                if !surface.is_override_redirect() {
-                    let _ = surface.set_hidden(false);
-                }
-            }
-        }
-    }
-    */
-
     /// Apply current mode layout mode to the window underlying surface
     ///
     /// Toplevel need a call to `send_configure` or `send_pending_configure` for these changes to

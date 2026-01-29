@@ -21,7 +21,7 @@ impl ForeignToplevelHandler for State {
             return;
         };
 
-        // TODO make a nice `self.pinnacle` function somewhere for this?? IDK though >.< 
+        // TODO make a nice `self.pinnacle` function somewhere for this?? IDK though >.<
         let was_minimized = window.with_state(|state| state.minimized);
         window.with_state_mut(|state| state.minimized = false);
         self.pinnacle.keyboard_focus_stack.set_focus(window.clone());

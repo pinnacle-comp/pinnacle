@@ -65,7 +65,6 @@ pub fn set_geometry(
     );
 }
 
-// TODO: minimized
 /// Sets or toggles if a window is minimized.
 ///
 /// Minimized windows are always unfocused.
