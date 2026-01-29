@@ -601,7 +601,9 @@ impl Pinnacle {
             .iter()
             .filter_map(|z| z.window())
             .filter(|win| !win.is_x11_override_redirect())
-            .partition::<Vec<_>, _>(|win| win.is_on_active_tag());
+            .partition::<Vec<_>, _>(|win| {
+                win.is_on_active_tag() && win.with_state(|state| !state.minimized)
+            });
 
         let active_windows = active_windows.into_iter().flat_map(|win| win.x11_surface());
         let non_active_windows = non_active_windows

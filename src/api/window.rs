@@ -66,6 +66,43 @@ pub fn set_geometry(
 }
 
 // TODO: minimized
+/// Sets or toggles if a window is minimized.
+///
+/// Minimized windows are always unfocused.
+pub fn set_minimized(state: &mut State, window: &WindowElement, set: impl Into<Option<bool>>) {
+    if window.is_x11_override_redirect() {
+        return;
+    }
+
+    let set = set.into();
+
+    let is_minimized = window.with_state(|state| state.minimized);
+    let set = match set {
+        Some(absolute_set) => absolute_set,
+        None => !is_minimized,
+    };
+
+    // Note: tag moving will automatically adjust the output on the window directly even if
+    // minimised, so we can rely on this.
+    let Some(output) = window.output(&state.pinnacle) else {
+        // No associated output, do nothing...
+        return;
+    };
+
+    // This means we can rely on the output associated with the [`WindowElementState`] even while
+    // minimized, and we can use it to schedule layouts.
+    if set != is_minimized {
+        window.with_state_mut(|state| state.minimized = set);
+
+        state.pinnacle.request_layout(&output);
+        state.schedule_render(&output);
+        state.pinnacle.update_xwayland_stacking_order();
+
+        if !set {
+            state.pinnacle.keyboard_focus_stack.unset_focus();
+        }
+    }
+}
 
 /// Sets a window to focused or not.
 ///

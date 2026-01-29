@@ -151,6 +151,16 @@ async fn config() {
         .group("Window")
         .description("Toggle maximized on the focused window");
 
+    // `mod_key + n` toggles minimized
+    input::keybind(mod_key, 'n')
+        .on_press(|| {
+            if let Some(window) = window::get_focused() {
+                window.toggle_minimized();
+            }
+        })
+        .group("Window")
+        .description("Toggle minimized on the focused window");
+
     // Media keybinds ------------------------------------------------------
 
     input::keybind(Mod::empty(), Keysym::XF86_AudioRaiseVolume)
