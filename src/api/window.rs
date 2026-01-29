@@ -80,26 +80,26 @@ pub fn set_minimized(state: &mut State, window: &WindowElement, set: impl Into<O
         Some(absolute_set) => absolute_set,
         None => !is_minimized,
     };
+    window.with_state_mut(|state| state.minimized = set);
+
+    if !set && state.pinnacle.keyboard_focus_stack.current_focus() == Some(window)  {
+        state.pinnacle.keyboard_focus_stack.unset_focus();
+    }
+    
 
     // Note: tag moving will automatically adjust the output on the window directly even if
     // minimised, so we can rely on this.
     let Some(output) = window.output(&state.pinnacle) else {
-        warn!("window has no output, cannot toggle/set minimization");
+        warn!("adjusted minimization of window without an output.");
         return;
     };
 
     // This means we can rely on the output associated with the [`WindowElementState`] even while
     // minimized, and we can use it to schedule layouts.
     if set != is_minimized {
-        window.with_state_mut(|state| state.minimized = set);
-
         state.pinnacle.request_layout(&output);
         state.schedule_render(&output);
         state.pinnacle.update_xwayland_stacking_order();
-
-        if !set {
-            state.pinnacle.keyboard_focus_stack.unset_focus();
-        }
     }
 }
 
