@@ -82,10 +82,9 @@ pub fn set_minimized(state: &mut State, window: &WindowElement, set: impl Into<O
     };
     window.with_state_mut(|state| state.minimized = set);
 
-    if !set && state.pinnacle.keyboard_focus_stack.current_focus() == Some(window)  {
+    if !set && state.pinnacle.keyboard_focus_stack.current_focus() == Some(window) {
         state.pinnacle.keyboard_focus_stack.unset_focus();
     }
-    
 
     // Note: tag moving will automatically adjust the output on the window directly even if
     // minimised, so we can rely on this.
