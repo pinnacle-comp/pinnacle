@@ -609,6 +609,25 @@ impl From<LineHeight> for widget::v1::LineHeight {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Wrapping {
+    None,
+    Word,
+    Glyph,
+    WordOrGlyph,
+}
+
+impl From<Wrapping> for widget::v1::Wrapping {
+    fn from(value: Wrapping) -> Self {
+        match value {
+            Wrapping::None => widget::v1::Wrapping::None,
+            Wrapping::Word => widget::v1::Wrapping::Word,
+            Wrapping::Glyph => widget::v1::Wrapping::Glyph,
+            Wrapping::WordOrGlyph => widget::v1::Wrapping::WordOrGlyph,
+        }
+    }
+}
+
 // INFO: experimentation
 
 pub trait Program {

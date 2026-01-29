@@ -1,6 +1,6 @@
 use snowcap_api_defs::snowcap::widget;
 
-use super::{Alignment, Color, Length, font::Font};
+use super::{Alignment, Color, Length, Wrapping, font::Font};
 
 /// A text widget definition.
 #[derive(Debug, Clone, PartialEq, Default)]
@@ -10,6 +10,7 @@ pub struct Text {
     pub height: Option<Length>,
     pub horizontal_alignment: Option<Alignment>,
     pub vertical_alignment: Option<Alignment>,
+    pub wrapping: Option<Wrapping>,
     pub style: Option<Style>,
 }
 
@@ -45,6 +46,13 @@ impl Text {
     pub fn vertical_alignment(self, alignment: Alignment) -> Self {
         Self {
             vertical_alignment: Some(alignment),
+            ..self
+        }
+    }
+
+    pub fn wrapping(self, wrapping: Wrapping) -> Self {
+        Self {
+            wrapping: Some(wrapping),
             ..self
         }
     }
@@ -99,13 +107,18 @@ impl From<Text> for widget::v1::Text {
             height: value.height.map(From::from),
             horizontal_alignment: None,
             vertical_alignment: None,
+            wrapping: None,
             style: value.style.map(From::from),
         };
+
         if let Some(horizontal_alignment) = value.horizontal_alignment {
             text.set_horizontal_alignment(horizontal_alignment.into());
         }
         if let Some(vertical_alignment) = value.vertical_alignment {
             text.set_vertical_alignment(vertical_alignment.into());
+        }
+        if let Some(wrapping) = value.wrapping {
+            text.set_wrapping(wrapping.into());
         }
         text
     }

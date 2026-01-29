@@ -51,6 +51,7 @@
 ---@field halign snowcap.widget.Alignment?
 ---@field valign snowcap.widget.Alignment?
 ---@field style snowcap.widget.text.Style?
+---@field wrapping snowcap.widget.Wrapping?
 
 ---@class snowcap.widget.text.Style
 ---@field color snowcap.widget.Color?
@@ -541,6 +542,14 @@ local line_height = {
     end,
 }
 
+---@enum snowcap.widget.Wrapping
+local wrapping = {
+    NONE = 1,
+    WORD = 2,
+    GLYPH = 3,
+    WORD_OR_GLYPH = 4,
+}
+
 ---@class snowcap.widget.Color
 ---@field red number?
 ---@field green number?
@@ -651,6 +660,7 @@ local widget = {
         content_fit = content_fit,
     },
     line_height = line_height,
+    wrapping = wrapping,
     mouse = mouse,
 }
 
@@ -666,6 +676,7 @@ local function text_into_api(def)
         height = def.height --[[@as snowcap.widget.v1.Length]],
         vertical_alignment = def.valign,
         horizontal_alignment = def.halign,
+        wrapping = def.wrapping --[[@as snowcap.widget.v1.Wrapping]],
         style = def.style --[[@as snowcap.widget.v1.Text.Style]],
     }
 end
