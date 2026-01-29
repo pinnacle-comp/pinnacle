@@ -84,7 +84,7 @@ pub fn set_minimized(state: &mut State, window: &WindowElement, set: impl Into<O
     // Note: tag moving will automatically adjust the output on the window directly even if
     // minimised, so we can rely on this.
     let Some(output) = window.output(&state.pinnacle) else {
-        // No associated output, do nothing...
+        warn!("window has no output, cannot toggle/set minimization");
         return;
     };
 
