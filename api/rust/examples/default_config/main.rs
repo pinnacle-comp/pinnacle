@@ -161,6 +161,23 @@ async fn config() {
         .group("Window")
         .description("Minimize the focused window");
 
+    // `mon_key + shift + n` unminimises the "most recently focused"
+    // minimised window that is on the active tags in this current output.
+    input::keybind(mod_key | Mod::SHIFT, 'n')
+        .on_press(|| {
+            let Some(output) = output::get_focused() else { return };
+            let Some(most_recently_minimised_active_window) = output
+                .keyboard_focus_stack_visible()
+                .filter(|w| w.minimized())
+                .last()
+            else {
+                return;
+            };
+            most_recently_minimised_active_window.set_minimized(false);
+        })
+        .group("Window")
+        .description("Unminimize the most recently focused window on the active tags");
+
     // Media keybinds ------------------------------------------------------
 
     input::keybind(Mod::empty(), Keysym::XF86_AudioRaiseVolume)
