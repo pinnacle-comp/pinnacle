@@ -89,7 +89,7 @@ pub fn set_minimized(state: &mut State, window: &WindowElement, set: impl Into<O
     // Note: tag moving will automatically adjust the output on the window directly even if
     // minimised, so we can rely on this.
     let Some(output) = window.output(&state.pinnacle) else {
-        warn!("adjusted minimization of window without an output.");
+        warn!("adjusted minimization-state of window without an output.");
         return;
     };
 
@@ -107,6 +107,9 @@ pub fn set_minimized(state: &mut State, window: &WindowElement, set: impl Into<O
 /// If the window is on another output and an attempt is made to
 /// focus it, the focused output will change to that output UNLESS
 /// the window overlaps the currently focused output.
+///
+/// If the window is being set to be focused, then if it's minimized,
+/// this will automatically unminimize it.
 pub fn set_focused(state: &mut State, window: &WindowElement, set: impl Into<Option<bool>>) {
     if window.is_x11_override_redirect() {
         return;
@@ -174,6 +177,11 @@ pub fn set_focused(state: &mut State, window: &WindowElement, set: impl Into<Opt
                     state.pinnacle.focus_output(&output);
                 }
             }
+        }
+
+        if window.with_state(|window_state| window_state.minimized) {
+            // Will automatically do correct scheduling of re-layouting and such ^.^
+            set_minimized(state, window, false);
         }
     } else {
         state.pinnacle.keyboard_focus_stack.unset_focus();
