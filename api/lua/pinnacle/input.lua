@@ -424,6 +424,142 @@ function input.mousebind(mods, button, on_press, bind_info)
     mousebind_inner(mb)
 end
 
+---A gesturebind.
+---@class pinnacle.input.gesturebind : pinnacle.input.Bind
+---The gesture button that will trigger this bind.
+---@field button pinnacle.input.gestureButton
+---An action that will be run when the gesturebind is started.
+---@field on_begin fun()?
+---An action that will be run when the gesturebind is finished.
+---@field on_finish fun()?
+
+---@param mb pinnacle.input.gesturebind
+local function gesturebind_inner(mb)
+    local modifs = {}
+    local ignore_modifs = {}
+    for _, mod in ipairs(mb.mods) do
+        if string.match(mod, "ignore") then
+            table.insert(ignore_modifs, mods_with_ignore_values[mod])
+        else
+            table.insert(modifs, mods_with_ignore_values[mod])
+        end
+    end
+
+    local response, err = client:pinnacle_input_v1_InputService_Bind({
+        bind = {
+            mods = modifs,
+            ignore_mods = ignore_modifs,
+            layer_name = mb.bind_layer,
+            properties = {
+                group = mb.group,
+                description = mb.description,
+                quit = mb.quit,
+                reload_config = mb.reload_config,
+                allow_when_locked = mb.allow_when_locked,
+            },
+            gesture = {
+                button = gesture_button_values[mb.button],
+            },
+        },
+    })
+
+    if err then
+        log.error(err)
+        return
+    end
+
+    assert(response)
+
+    local bind_id = response.bind_id or 0
+
+    local err = client:pinnacle_input_v1_InputService_gesturebindStream({
+        bind_id = bind_id,
+    }, function(response)
+        if response.edge == edge_values.press then
+            if mb.on_press then
+                local success, error = pcall(mb.on_press)
+                if not success then
+                    log.error("While handling `gesturebind:on_press`: " .. tostring(error))
+                end
+            end
+        elseif response.edge == edge_values.release then
+            if mb.on_release then
+                local success, error = pcall(mb.on_release)
+                if not success then
+                    log.error("While handling `gesturebind:on_release`: " .. tostring(error))
+                end
+            end
+        end
+    end)
+
+    if mb.on_press then
+        local _, err = client:pinnacle_input_v1_InputService_gesturebindOnPress({
+            bind_id = bind_id,
+        })
+    end
+
+    if err then
+        log.error(err)
+        return
+    end
+end
+
+---Sets a gesturebind.
+---
+---This function can be called in two ways:
+---1. As `Input.gesturebind(mods, button, on_press, bind_info?)`
+---2. As `Input.gesturebind(<gesturebind table>)`
+---
+---Calling this with a `gesturebind` table gives you more options, including the ability to assign a bind layer
+---to the keybind or set it to happen on release instead of press.
+---
+---When calling using the first way, you must provide three arguments:
+---
+--- - `mods`: An array of `Modifier`s. If you don't want any, provide an empty table.
+--- - `button`: The gesture button.
+--- - `on_press`: The function that will be run when the button is pressed.
+---
+---#### Ignoring Modifiers
+---Normally, modifiers that are not specified will require the bind to not have them held down.
+---You can ignore this by adding the corresponding `"ignore_*"` modifier.
+---
+---#### Descriptions
+---You can specify a group and description for the bind.
+---This will be used to categorize the bind in the bind overlay and provide a description.
+---
+---#### Example
+---```lua
+--- -- Set `super + left gesture button` to move a window on press
+---Input.gesturebind({ "super" }, "btn_left", "press", function()
+---    Window.begin_move("btn_left")
+---end)
+---```
+---
+---@param mods pinnacle.input.Mod[] The modifiers that need to be held down for the bind to trigger
+---@param button pinnacle.input.gestureButton The gesture button used to trigger the bind
+---@param on_press fun() The function to run when the bind is triggered
+---@param bind_info { group: string?, description: string? }? An optional group and description that will be displayed in the bind overlay.
+---
+---@overload fun(gesturebind: pinnacle.input.gesturebind)
+function input.gesturebind(mods, button, on_press, bind_info)
+    ---@type pinnacle.input.gesturebind
+    local mb
+
+    if mods.button then
+        mb = mods
+    else
+        mb = {
+            mods = mods,
+            button = button,
+            on_press = on_press,
+            group = bind_info and bind_info.group,
+            description = bind_info and bind_info.description,
+        }
+    end
+
+    gesturebind_inner(mb)
+end
+
 ---Enters the bind layer `layer`, or the default layer if `layer` is nil.
 ---
 ---@param layer string? The bind layer.

@@ -1430,29 +1430,27 @@ fn constrain_point_inside_rects(
 }
 
 fn delta_to_direction(delta: (f64, f64)) -> GestureDirection {
-    use std::f64::consts::PI;
-
     let (x, y) = delta;
 
     let angle = y.atan2(x);
-    let angle_deg = (angle * 180.0 / PI + 360.0) % 360.0;
+    let angle_deg = (angle.to_degrees() + 360.0) % 360.0;
 
     if !(22.5..337.5).contains(&angle_deg) {
         GestureDirection::Right
     } else if (22.5..67.5).contains(&angle_deg) {
-        GestureDirection::DownAndRight
+        GestureDirection::DownRight
     } else if (67.5..112.5).contains(&angle_deg) {
         GestureDirection::Down
     } else if (112.5..157.5).contains(&angle_deg) {
-        GestureDirection::DownAndLeft
+        GestureDirection::DownLeft
     } else if (157.5..202.5).contains(&angle_deg) {
         GestureDirection::Left
     } else if (202.5..247.5).contains(&angle_deg) {
-        GestureDirection::UpAndLeft
+        GestureDirection::UpLeft
     } else if (247.5..292.5).contains(&angle_deg) {
         GestureDirection::Up
     } else {
-        GestureDirection::UpAndRight
+        GestureDirection::UpRight
     }
 }
 

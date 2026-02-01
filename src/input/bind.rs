@@ -28,6 +28,8 @@ impl BindState {
         self.keybinds.keysym_map.clear();
         self.mousebinds.id_map.clear();
         self.mousebinds.button_map.clear();
+        self.gesturebinds.id_map.clear();
+        self.gesturebinds.gesture_map.clear();
     }
 
     pub fn enter_layer(&mut self, layer: Option<String>) {
