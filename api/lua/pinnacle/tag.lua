@@ -222,10 +222,10 @@ function tag.move_to_output(output, tags)
 
     if err then
         log.error(err)
-        return false, response
+        return false, nil
     end
 
-    return true, nil
+    return true, response
 end
 
 local signal_name_to_SignalName = {
@@ -375,10 +375,10 @@ function TagHandle:move_to_output(output)
 
     if err then
         log.error(err)
-        return false, response
+        return false, nil
     end
 
-    return true, nil
+    return true, response
 end
 
 ---Gets whether or not this tag is active.

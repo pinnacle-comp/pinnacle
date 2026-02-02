@@ -186,11 +186,11 @@ pub fn remove(tags: impl IntoIterator<Item = TagHandle>) {
 #[derive(Debug, PartialEq, Clone)]
 pub enum TagMoveToOutputError {
     /// The requested output to move the tag to, does not exist
-    OutputDoesNotExist(OutputHandle),
+    OutputDoesNotExist,
 
     /// Moving the Tag to another output would result in having the same window in multiple tags.
-    /// It contains a list of tags that share the same Windows.
-    SameWindowOnTwoOutputs(Vec<TagHandle>),
+    /// It contains a list of windows that would be on multiple outputs.
+    SameWindowOnTwoOutputs(Vec<WindowHandle>),
 }
 
 /// Move existing tags to the specified output.
@@ -226,12 +226,14 @@ where
 
     match kind {
         None => Ok(()),
-        Some(Kind::OutputDoesNotExist(output_name)) => Err(
-            TagMoveToOutputError::OutputDoesNotExist(OutputHandle::from_name(output_name)),
-        ),
-        Some(Kind::SameWindowOnTwoOutputs(tags)) => {
+        Some(Kind::OutputDoesNotExist(_)) => Err(TagMoveToOutputError::OutputDoesNotExist),
+        Some(Kind::SameWindowOnTwoOutputs(windows)) => {
             Err(TagMoveToOutputError::SameWindowOnTwoOutputs(
-                tags.tag_ids.into_iter().map(TagHandle::from_id).collect(),
+                windows
+                    .window_ids
+                    .into_iter()
+                    .map(WindowHandle::from_id)
+                    .collect(),
             ))
         }
     }
