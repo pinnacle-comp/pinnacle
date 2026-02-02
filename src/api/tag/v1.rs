@@ -162,13 +162,13 @@ impl v1::tag_service_server::TagService for super::TagService {
 
             let kind = match crate::api::tag::move_to_output(state, tags_to_move, output_name) {
                 Ok(()) => None,
-                Err(TagMoveToOutputError::OutputDoesNotExist(output_name)) => Some(
-                    move_to_output_response::Kind::OutputDoesNotExist(output_name.0),
-                ),
-                Err(TagMoveToOutputError::SameWindowOnTwoOutputs(tags)) => {
+                Err(TagMoveToOutputError::OutputDoesNotExist) => {
+                    Some(move_to_output_response::Kind::OutputDoesNotExist(()))
+                }
+                Err(TagMoveToOutputError::SameWindowOnTwoOutputs(window_ids)) => {
                     Some(move_to_output_response::Kind::SameWindowOnTwoOutputs(
                         MoveToOutputSameWindowOnTwoOutputs {
-                            tag_ids: tags.into_iter().map(|tag| tag.id().to_inner()).collect(),
+                            window_ids: window_ids.into_iter().map(|id| id.0).collect(),
                         },
                     ))
                 }

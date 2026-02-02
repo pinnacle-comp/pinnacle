@@ -9,7 +9,7 @@ use crate::{
     output::OutputName,
     state::{State, WithState},
     tag::Tag,
-    window::UnmappedState,
+    window::{UnmappedState, window_state::WindowId},
 };
 
 use super::{StateFnSender, signal::Signal};
@@ -152,25 +152,10 @@ pub fn remove(state: &mut State, tags_to_remove: Vec<Tag>) {
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum TagMoveToOutputError {
-    OutputDoesNotExist(OutputName),
-    SameWindowOnTwoOutputs(Vec<Tag>),
-}
-
-impl core::fmt::Display for TagMoveToOutputError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            TagMoveToOutputError::OutputDoesNotExist(output) => write!(
-                f,
-                "Tried to move tags to output {} but it doesn't exist",
-                output.0
-            ),
-            TagMoveToOutputError::SameWindowOnTwoOutputs(tags) => write!(
-                f,
-                "executing this operation would put the same windows in tags {:?} on two separate outputs at once. This is forbidden.",
-                tags.iter().map(|tag| tag.name())
-            ),
-        }
-    }
+    /// Its impossible to move tags to an output that does not exist. Create it first
+    OutputDoesNotExist,
+    /// Moving the task would result in a situation where each of the following windows are on multiple outputs. This would be an invalid state for pinnacle.
+    SameWindowOnTwoOutputs(Vec<WindowId>),
 }
 
 pub fn move_to_output<T>(
@@ -182,47 +167,37 @@ where
     T: IntoIterator<Item = Tag>,
 {
     let Some(new_output) = output_name.output(&state.pinnacle) else {
-        return Err(TagMoveToOutputError::OutputDoesNotExist(output_name));
+        return Err(TagMoveToOutputError::OutputDoesNotExist);
     };
 
     let tags_to_move: IndexSet<Tag> = tags_to_move.into_iter().collect();
-    let mut to_evaluate_tags = IndexSet::new();
+    let tags_on_other_outputs = state
+        .pinnacle
+        .outputs
+        .iter()
+        .filter(|output| **output != new_output)
+        .flat_map(|output| output.with_state(|state| state.tags.clone()))
+        .filter(|tag| !tags_to_move.contains(tag))
+        .collect::<IndexSet<_>>();
+
+    let mut problematic_windows = IndexSet::new();
 
     for window in state.pinnacle.windows.iter() {
-        window.with_state(|state| {
-            // is window affected by move
-            let mut affected = false;
-            let mut contains_other_tags = false;
+        let (window_id, is_affected_by_move, has_other_output_tag) = window.with_state(|state| {
+            let is_affected_by_move = !state.tags.is_disjoint(&tags_to_move);
+            let has_other_output_tag = !state.tags.is_disjoint(&tags_on_other_outputs);
 
-            for tag in state.tags.iter() {
-                let contains = tags_to_move.contains(tag);
-                affected = contains || affected;
-                contains_other_tags = !contains || contains_other_tags;
+            (state.id, is_affected_by_move, has_other_output_tag)
+        });
 
-                if affected && contains_other_tags {
-                    to_evaluate_tags.insert(tag.clone());
-                }
-            }
-        })
-    }
-
-    let mut tags_on_other_output = Vec::new();
-
-    for output in state.pinnacle.outputs.iter() {
-        if output.name() != output_name.0 {
-            output.with_state(|state| {
-                for tag in to_evaluate_tags
-                    .extract_if(.., |to_evalaute_tag| state.tags.contains(to_evalaute_tag))
-                {
-                    tags_on_other_output.push(tag);
-                }
-            })
+        if is_affected_by_move && has_other_output_tag {
+            problematic_windows.insert(window_id);
         }
     }
 
-    if !tags_on_other_output.is_empty() {
+    if !problematic_windows.is_empty() {
         return Err(TagMoveToOutputError::SameWindowOnTwoOutputs(
-            tags_on_other_output,
+            problematic_windows.into_iter().collect(),
         ));
     }
 

@@ -1343,11 +1343,11 @@ local pinnacle_v1_Backend = {
 ---@field tag_ids integer[]?
 
 ---@class pinnacle.tag.v1.MoveToOutputResponse
----@field output_does_not_exist string?
+---@field output_does_not_exist google.protobuf.Empty?
 ---@field same_window_on_two_outputs pinnacle.tag.v1.MoveToOutputSameWindowOnTwoOutputs?
 
 ---@class pinnacle.tag.v1.MoveToOutputSameWindowOnTwoOutputs
----@field tag_ids integer[]?
+---@field window_ids integer[]?
 
 ---@class pinnacle.tag.v1.GetActiveRequest
 ---@field tag_id integer?

@@ -29,12 +29,12 @@ message MoveToOutputRequest {
 
 message MoveToOutputResponse {
     oneof kind {
-      string output_does_not_exist = 2;
+      google.protobuf.Empty output_does_not_exist = 2;
       MoveToOutputSameWindowOnTwoOutputs same_window_on_two_outputs = 3;
     }
 }
 message MoveToOutputSameWindowOnTwoOutputs {
-    repeated uint32 tag_ids = 1;
+    repeated uint32 window_ids = 1;
 }
 
 // Tag properties
