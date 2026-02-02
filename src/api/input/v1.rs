@@ -3,17 +3,17 @@ use pinnacle_api_defs::pinnacle::input::{
     self,
     v1::{
         AccelProfile, BindInfo, BindRequest, BindResponse, ClickMethod, EnterBindLayerRequest,
-        GestureDirection, GesturebindOnBeginRequest, GesturebindOnFinishRequest,
-        GesturebindRequest, GesturebindStreamRequest, GesturebindStreamResponse,
-        GetBindInfosRequest, GetBindInfosResponse, GetBindLayerStackRequest,
-        GetBindLayerStackResponse, GetDeviceCapabilitiesRequest, GetDeviceCapabilitiesResponse,
-        GetDeviceInfoRequest, GetDeviceInfoResponse, GetDeviceTypeRequest, GetDeviceTypeResponse,
-        GetDevicesRequest, GetDevicesResponse, KeybindOnPressRequest, KeybindStreamRequest,
-        KeybindStreamResponse, MousebindOnPressRequest, MousebindStreamRequest,
-        MousebindStreamResponse, ScrollMethod, SendEventsMode, SetBindPropertiesRequest,
-        SetDeviceLibinputSettingRequest, SetDeviceMapTargetRequest, SetRepeatRateRequest,
-        SetXcursorRequest, SetXkbConfigRequest, SetXkbKeymapRequest, SwitchXkbLayoutRequest,
-        TapButtonMap, set_device_map_target_request::Target, switch_xkb_layout_request::Action,
+        GesturebindOnBeginRequest, GesturebindOnFinishRequest, GesturebindRequest,
+        GesturebindStreamRequest, GesturebindStreamResponse, GetBindInfosRequest,
+        GetBindInfosResponse, GetBindLayerStackRequest, GetBindLayerStackResponse,
+        GetDeviceCapabilitiesRequest, GetDeviceCapabilitiesResponse, GetDeviceInfoRequest,
+        GetDeviceInfoResponse, GetDeviceTypeRequest, GetDeviceTypeResponse, GetDevicesRequest,
+        GetDevicesResponse, KeybindOnPressRequest, KeybindStreamRequest, KeybindStreamResponse,
+        MousebindOnPressRequest, MousebindStreamRequest, MousebindStreamResponse, ScrollMethod,
+        SendEventsMode, SetBindPropertiesRequest, SetDeviceLibinputSettingRequest,
+        SetDeviceMapTargetRequest, SetRepeatRateRequest, SetXcursorRequest, SetXkbConfigRequest,
+        SetXkbKeymapRequest, SwipeDirection, SwitchXkbLayoutRequest, TapButtonMap,
+        set_device_map_target_request::Target, switch_xkb_layout_request::Action,
     },
 };
 use smithay::reexports::input as libinput;
@@ -165,20 +165,27 @@ impl input::v1::input_service_server::InputService for InputService {
                     bind_id
                 }
                 input::v1::bind::Bind::Gesture(gesturebind) => {
-                    let direction = GestureDirection::try_from(gesturebind.direction)
-                        .expect("invalid gesture direction value");
                     let fingers = gesturebind.fingers;
-                    let gesture_type = GestureType::try_from(gesturebind.gesture_type)
-                        .expect("invalid gesture type");
+
+                    let gesture_type = match gesturebind.gesture_type() {
+                        pinnacle_api_defs::pinnacle::input::v1::GestureType::Hold => {
+                            GestureType::Hold
+                        }
+                        pinnacle_api_defs::pinnacle::input::v1::GestureType::Pinch => {
+                            GestureType::Pinch
+                        }
+                        pinnacle_api_defs::pinnacle::input::v1::GestureType::Swipe => {
+                            GestureType::Swipe(gesturebind.direction.into())
+                        }
+                    };
                     let bind_id = state
                         .pinnacle
                         .input_state
                         .bind_state
                         .gesturebinds
                         .add_gesturebind(
-                            direction,
-                            fingers,
                             gesture_type,
+                            fingers,
                             mods,
                             layer,
                             group,
@@ -420,8 +427,96 @@ impl input::v1::input_service_server::InputService for InputService {
                     }
                 });
 
+            let gesturebind_infos = state
+                .pinnacle
+                .input_state
+                .bind_state
+                .gesturebinds
+                .id_map
+                .values()
+                .map(|mousebind| {
+                    let gesturebind = mousebind.borrow();
+
+                    let mut mods = Vec::new();
+                    let mut ignore_mods = Vec::new();
+
+                    push_mods(
+                        &mut mods,
+                        &mut ignore_mods,
+                        gesturebind.bind_data.mods.shift,
+                        input::v1::Modifier::Shift,
+                    );
+                    push_mods(
+                        &mut mods,
+                        &mut ignore_mods,
+                        gesturebind.bind_data.mods.ctrl,
+                        input::v1::Modifier::Ctrl,
+                    );
+                    push_mods(
+                        &mut mods,
+                        &mut ignore_mods,
+                        gesturebind.bind_data.mods.alt,
+                        input::v1::Modifier::Alt,
+                    );
+                    push_mods(
+                        &mut mods,
+                        &mut ignore_mods,
+                        gesturebind.bind_data.mods.super_,
+                        input::v1::Modifier::Super,
+                    );
+                    push_mods(
+                        &mut mods,
+                        &mut ignore_mods,
+                        gesturebind.bind_data.mods.iso_level3_shift,
+                        input::v1::Modifier::IsoLevel3Shift,
+                    );
+                    push_mods(
+                        &mut mods,
+                        &mut ignore_mods,
+                        gesturebind.bind_data.mods.iso_level5_shift,
+                        input::v1::Modifier::IsoLevel5Shift,
+                    );
+
+                    let direction = match gesturebind.gesture_type {
+                        GestureType::Hold => SwipeDirection::None,
+                        GestureType::Pinch => SwipeDirection::None,
+                        GestureType::Swipe(_) => SwipeDirection::None,
+                    };
+
+                    let gesture_type: pinnacle_api_defs::pinnacle::input::v1::GestureType =
+                        gesturebind.gesture_type.into();
+
+                    BindInfo {
+                        bind_id: gesturebind.bind_data.id,
+                        bind: Some(input::v1::Bind {
+                            mods: mods.into_iter().map(|m| m.into()).collect(),
+                            ignore_mods: ignore_mods.into_iter().map(|m| m.into()).collect(),
+                            layer_name: gesturebind.bind_data.layer.clone(),
+                            properties: Some(input::v1::BindProperties {
+                                group: Some(gesturebind.bind_data.group.clone()),
+                                description: Some(gesturebind.bind_data.desc.clone()),
+                                quit: Some(gesturebind.bind_data.is_quit_bind),
+                                reload_config: Some(gesturebind.bind_data.is_reload_config_bind),
+                                allow_when_locked: Some(gesturebind.bind_data.allow_when_locked),
+                            }),
+                            #[allow(
+                                clippy::useless_conversion,
+                                clippy::unnecessary_fallible_conversions
+                            )]
+                            bind: Some(input::v1::bind::Bind::Gesture(input::v1::Gesturebind {
+                                fingers: gesturebind.fingers,
+                                direction: direction.into(),
+                                gesture_type: gesture_type.into(),
+                            })),
+                        }),
+                    }
+                });
+
             Ok(GetBindInfosResponse {
-                bind_infos: keybind_infos.chain(mousebind_infos).collect(),
+                bind_infos: keybind_infos
+                    .chain(mousebind_infos)
+                    .chain(gesturebind_infos)
+                    .collect(),
             })
         })
         .await

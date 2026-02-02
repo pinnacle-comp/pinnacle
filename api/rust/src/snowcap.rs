@@ -7,7 +7,6 @@
 use std::sync::{Arc, OnceLock};
 
 use indexmap::IndexMap;
-use pinnacle_api_defs::pinnacle::input::v1::GestureDirection;
 use snowcap_api::{
     decoration::{DecorationHandle, NewDecorationError},
     layer::{ExclusiveZone, KeyboardInteractivity, ZLayer},
@@ -293,14 +292,15 @@ impl Program for BindOverlay {
                     let repr = GesturebindRepr {
                         mods,
                         direction: match direction {
-                            GestureDirection::Down => "Down",
-                            GestureDirection::Left => "Left",
-                            GestureDirection::Right => "Right",
-                            GestureDirection::Up => "Up",
-                            GestureDirection::DownLeft => "Down-Left",
-                            GestureDirection::DownRight => "Down-Right",
-                            GestureDirection::UpLeft => "Up-Left",
-                            GestureDirection::UpRight => "Up-Right",
+                            crate::input::SwipeDirection::Down => "Swipe Down",
+                            crate::input::SwipeDirection::Left => "Swipe Left",
+                            crate::input::SwipeDirection::Right => "Swipe Right",
+                            crate::input::SwipeDirection::Up => "Swipe Up",
+                            crate::input::SwipeDirection::DownLeft => "Swipe Down-Left",
+                            crate::input::SwipeDirection::DownRight => "Swipe Down-Right",
+                            crate::input::SwipeDirection::UpLeft => "Swipe Up-Left",
+                            crate::input::SwipeDirection::UpRight => "Swipe Up-Right",
+                            crate::input::SwipeDirection::Unknown(_) => "Swipe Unknown",
                         }
                         .to_string(),
                         fingers: format!("{fingers:?} fingers"),

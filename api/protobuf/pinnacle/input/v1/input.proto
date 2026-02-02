@@ -96,15 +96,16 @@ message MousebindOnPressRequest {
 
 // Gesturebinds
 
-enum GestureDirection {
-  GESTURE_DIRECTION_DOWN = 0;
-  GESTURE_DIRECTION_LEFT = 1;
-  GESTURE_DIRECTION_RIGHT = 2;
-  GESTURE_DIRECTION_UP = 3;
-  GESTURE_DIRECTION_DOWN_LEFT = 4;
-  GESTURE_DIRECTION_DOWN_RIGHT = 5;
-  GESTURE_DIRECTION_UP_LEFT = 6;
-  GESTURE_DIRECTION_UP_RIGHT = 7;
+enum SwipeDirection {
+  SWIPE_DIRECTION_DOWN = 0;
+  SWIPE_DIRECTION_LEFT = 1;
+  SWIPE_DIRECTION_RIGHT = 2;
+  SWIPE_DIRECTION_UP = 3;
+  SWIPE_DIRECTION_DOWN_LEFT = 4;
+  SWIPE_DIRECTION_DOWN_RIGHT = 5;
+  SWIPE_DIRECTION_UP_LEFT = 6;
+  SWIPE_DIRECTION_UP_RIGHT = 7;
+  SWIPE_DIRECTION_NONE = 8;
 }
 
 enum GestureType {
@@ -114,7 +115,7 @@ enum GestureType {
 }
 
 message Gesturebind {
-  GestureDirection direction = 1;
+  SwipeDirection direction = 1;
   uint32 fingers = 2;
   GestureType gesture_type = 3;
 }

@@ -7,7 +7,6 @@ use std::{
 
 use indexmap::{IndexMap, map::Entry};
 use pinnacle_api::input::GestureType;
-use pinnacle_api_defs::pinnacle::input::v1::GestureDirection;
 use smithay::input::keyboard::ModifiersState;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use xkbcommon::xkb::Keysym;
@@ -536,7 +535,6 @@ impl Mousebinds {
 #[derive(Debug)]
 pub struct Gesturebind {
     pub bind_data: BindData,
-    pub direction: GestureDirection,
     pub fingers: u32,
     pub gesture_type: GestureType,
     sender: UnboundedSender<Edge>,
@@ -547,9 +545,9 @@ pub struct Gesturebind {
 #[derive(Debug, Default)]
 pub struct Gesturebinds {
     pub id_map: IndexMap<u32, Rc<RefCell<Gesturebind>>>,
-    gesture_map: IndexMap<(GestureDirection, u32), Vec<Weak<RefCell<Gesturebind>>>>,
+    gesture_map: IndexMap<(GestureType, u32), Vec<Weak<RefCell<Gesturebind>>>>,
 
-    pub last_pressed_triggered_binds: HashMap<(GestureDirection, u32), Vec<u32>>,
+    pub last_pressed_triggered_binds: HashMap<(GestureType, u32), Vec<u32>>,
 }
 
 // TODO: may be able to dedup with Keybinds above
@@ -559,15 +557,14 @@ impl Gesturebinds {
     /// Returns whether the gesture should be suppressed (not sent to the client).
     pub fn gesture(
         &mut self,
-        direction: GestureDirection,
-        fingers: u32,
         gesture_type: GestureType,
+        fingers: u32,
         mods: ModifiersState,
         edge: Edge,
         current_layer: Option<String>,
         is_locked: bool,
     ) -> BindAction {
-        let Some(gesturebinds) = self.gesture_map.get_mut(&(direction, fingers)) else {
+        let Some(gesturebinds) = self.gesture_map.get_mut(&(gesture_type, fingers)) else {
             return BindAction::Forward;
         };
 
@@ -614,9 +611,8 @@ impl Gesturebinds {
 
     pub fn add_gesturebind(
         &mut self,
-        direction: GestureDirection,
-        fingers: u32,
         gesture_type: GestureType,
+        fingers: u32,
         mods: ModMask,
         layer: Option<String>,
         group: String,
@@ -640,9 +636,8 @@ impl Gesturebinds {
                 is_reload_config_bind,
                 allow_when_locked,
             },
-            direction,
-            fingers,
             gesture_type,
+            fingers,
             sender,
             recv: Some(recv),
             has_on_begin: false,
@@ -654,7 +649,7 @@ impl Gesturebinds {
         );
 
         self.gesture_map
-            .entry((direction, fingers))
+            .entry((gesture_type, fingers))
             .or_default()
             .push(Rc::downgrade(&gesturebind));
 

@@ -31,8 +31,6 @@ pub mod libinput;
 
 pub use xkbcommon::xkb::Keysym;
 
-pub use pinnacle_api_defs::pinnacle::input::v1::{GestureDirection, GestureType};
-
 /// A mouse button.
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, FromPrimitive, IntoPrimitive)]
 #[repr(u32)]
@@ -180,14 +178,8 @@ impl BindLayer {
     }
 
     /// Creates a gesturebind on this layer.
-    pub fn gesturebind(
-        &self,
-        mods: Mod,
-        direction: GestureDirection,
-        fingers: u32,
-        gesture_type: GestureType,
-    ) -> Gesturebind {
-        new_gesturebind(mods, direction, fingers, gesture_type, self).block_on_tokio()
+    pub fn gesturebind(&self, mods: Mod, gesture_type: GestureType, fingers: u32) -> Gesturebind {
+        new_gesturebind(mods, gesture_type, fingers, self).block_on_tokio()
     }
 
     /// Enters this layer, causing only its binds to be in effect.
@@ -540,6 +532,78 @@ async fn new_mousebind_stream(
 
 // Gesturebinds
 
+/// The direction of a swipe gesture
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, FromPrimitive, IntoPrimitive)]
+#[repr(i32)]
+pub enum SwipeDirection {
+    /// Moving Down
+    Down = 0,
+    /// Moving Left
+    Left = 1,
+    /// Moving Right
+    Right = 2,
+    /// Moving Up
+    Up = 3,
+    /// Moving diagonally down to the left
+    DownLeft = 4,
+    /// Moving diagonally down to the right
+    DownRight = 5,
+    /// Moving diagonally up to the left
+    UpLeft = 6,
+    /// Moving diagonally up to the right
+    UpRight = 7,
+    /// unknown direction
+    #[num_enum(catch_all)]
+    Unknown(i32),
+}
+
+impl From<SwipeDirection> for pinnacle_api_defs::pinnacle::input::v1::SwipeDirection {
+    fn from(other: SwipeDirection) -> pinnacle_api_defs::pinnacle::input::v1::SwipeDirection {
+        match other {
+            SwipeDirection::Down => pinnacle_api_defs::pinnacle::input::v1::SwipeDirection::Down,
+            SwipeDirection::Left => pinnacle_api_defs::pinnacle::input::v1::SwipeDirection::Left,
+            SwipeDirection::Right => pinnacle_api_defs::pinnacle::input::v1::SwipeDirection::Right,
+            SwipeDirection::Up => pinnacle_api_defs::pinnacle::input::v1::SwipeDirection::Up,
+            SwipeDirection::DownLeft => {
+                pinnacle_api_defs::pinnacle::input::v1::SwipeDirection::DownLeft
+            }
+            SwipeDirection::DownRight => {
+                pinnacle_api_defs::pinnacle::input::v1::SwipeDirection::DownRight
+            }
+            SwipeDirection::UpLeft => {
+                pinnacle_api_defs::pinnacle::input::v1::SwipeDirection::UpLeft
+            }
+            SwipeDirection::UpRight => {
+                pinnacle_api_defs::pinnacle::input::v1::SwipeDirection::UpRight
+            }
+            SwipeDirection::Unknown(_) => {
+                pinnacle_api_defs::pinnacle::input::v1::SwipeDirection::None
+            }
+        }
+    }
+}
+
+/// The type of gesture
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
+pub enum GestureType {
+    /// Hold gesture
+    Hold,
+    /// Pinch gesture
+    Pinch,
+    /// Swipe gesture with direction
+    Swipe(SwipeDirection),
+}
+
+impl From<GestureType> for pinnacle_api_defs::pinnacle::input::v1::GestureType {
+    fn from(value: GestureType) -> Self {
+        match value {
+            GestureType::Hold => Self::Hold,
+            GestureType::Pinch => Self::Pinch,
+            GestureType::Swipe(_) => Self::Swipe,
+        }
+    }
+}
+
 type GesturebindCallback = (Box<dyn FnMut() + Send + 'static>, Edge);
 
 /// A Gesturebind.
@@ -551,13 +615,8 @@ pub struct Gesturebind {
 bind_impl!(Gesturebind);
 
 /// Creates a gesturebind on the [`DEFAULT`][BindLayer::DEFAULT] bind layer.
-pub fn gesturebind(
-    mods: Mod,
-    direction: GestureDirection,
-    fingers: u32,
-    gesture_type: GestureType,
-) -> Gesturebind {
-    BindLayer::DEFAULT.gesturebind(mods, direction, fingers, gesture_type)
+pub fn gesturebind(mods: Mod, gesture_type: GestureType, fingers: u32) -> Gesturebind {
+    BindLayer::DEFAULT.gesturebind(mods, gesture_type, fingers)
 }
 
 impl Gesturebind {
@@ -598,9 +657,8 @@ impl Gesturebind {
 
 async fn new_gesturebind(
     mods: Mod,
-    direction: GestureDirection,
-    fingers: u32,
     gesture_type: GestureType,
+    fingers: u32,
     layer: &BindLayer,
 ) -> Gesturebind {
     let ignore_mods = mods.api_ignore_mods();
@@ -614,9 +672,24 @@ async fn new_gesturebind(
                 layer_name: layer.name.clone(),
                 properties: Some(BindProperties::default()),
                 bind: Some(input::v1::bind::Bind::Gesture(input::v1::Gesturebind {
-                    direction: direction.into(),
+                    direction: match gesture_type {
+                        GestureType::Hold | GestureType::Pinch => {
+                            pinnacle_api_defs::pinnacle::input::v1::SwipeDirection::None.into()
+                        }
+                        GestureType::Swipe(direction) => direction.into(),
+                    },
                     fingers,
-                    gesture_type: gesture_type.into(),
+                    gesture_type: match gesture_type {
+                        GestureType::Hold => {
+                            pinnacle_api_defs::pinnacle::input::v1::GestureType::Hold.into()
+                        }
+                        GestureType::Pinch => {
+                            pinnacle_api_defs::pinnacle::input::v1::GestureType::Pinch.into()
+                        }
+                        GestureType::Swipe(_) => {
+                            pinnacle_api_defs::pinnacle::input::v1::GestureType::Swipe.into()
+                        }
+                    },
                 })),
             }),
         })
@@ -855,7 +928,7 @@ pub enum BindInfoKind {
     /// This is a gesturebind.
     Gesture {
         /// Direction of the gesture.
-        direction: GestureDirection,
+        direction: SwipeDirection,
         /// Fingers used in the gesture.
         fingers: u32,
     },
@@ -1006,8 +1079,7 @@ pub fn bind_infos() -> impl Iterator<Item = BindInfo> {
                 button: MouseButton::from(mousebind.button),
             },
             input::v1::bind::Bind::Gesture(gesturebind) => BindInfoKind::Gesture {
-                direction: GestureDirection::try_from(gesturebind.direction)
-                    .expect("invalid gesture direction value"),
+                direction: SwipeDirection::from(gesturebind.direction),
                 fingers: gesturebind.fingers,
             },
         };

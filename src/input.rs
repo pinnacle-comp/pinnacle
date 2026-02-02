@@ -14,7 +14,7 @@ use crate::{
 };
 use bind::BindState;
 use libinput::LibinputState;
-use pinnacle_api::input::{GestureDirection, GestureType};
+use pinnacle_api::input::{GestureType, SwipeDirection};
 use smithay::{
     backend::{
         input::{
@@ -971,9 +971,8 @@ impl State {
             let fingers = self.pinnacle.input_state.gesture_state.fingers;
 
             let _bind_action = self.pinnacle.input_state.bind_state.gesturebinds.gesture(
-                direction,
+                GestureType::Swipe(direction),
                 fingers,
-                GestureType::Swipe,
                 mods,
                 Edge::Release,
                 current_layer,
@@ -1051,9 +1050,8 @@ impl State {
             let fingers = self.pinnacle.input_state.gesture_state.fingers;
 
             let _bind_action = self.pinnacle.input_state.bind_state.gesturebinds.gesture(
-                GestureDirection::Up, // Direction doesn't matter for pinches
-                fingers,
                 GestureType::Pinch,
+                fingers,
                 mods,
                 Edge::Release,
                 current_layer,
@@ -1109,9 +1107,8 @@ impl State {
             let fingers = self.pinnacle.input_state.gesture_state.fingers;
 
             let _bind_action = self.pinnacle.input_state.bind_state.gesturebinds.gesture(
-                GestureDirection::Up, // Direction doesn't matter for pinches
-                fingers,
                 GestureType::Hold,
+                fingers,
                 mods,
                 Edge::Release,
                 current_layer,
@@ -1429,28 +1426,28 @@ fn constrain_point_inside_rects(
         .unwrap_or(pos)
 }
 
-fn delta_to_direction(delta: (f64, f64)) -> GestureDirection {
+fn delta_to_direction(delta: (f64, f64)) -> SwipeDirection {
     let (x, y) = delta;
 
     let angle = y.atan2(x);
     let angle_deg = (angle.to_degrees() + 360.0) % 360.0;
 
     if !(22.5..337.5).contains(&angle_deg) {
-        GestureDirection::Right
+        SwipeDirection::Right
     } else if (22.5..67.5).contains(&angle_deg) {
-        GestureDirection::DownRight
+        SwipeDirection::DownRight
     } else if (67.5..112.5).contains(&angle_deg) {
-        GestureDirection::Down
+        SwipeDirection::Down
     } else if (112.5..157.5).contains(&angle_deg) {
-        GestureDirection::DownLeft
+        SwipeDirection::DownLeft
     } else if (157.5..202.5).contains(&angle_deg) {
-        GestureDirection::Left
+        SwipeDirection::Left
     } else if (202.5..247.5).contains(&angle_deg) {
-        GestureDirection::UpLeft
+        SwipeDirection::UpLeft
     } else if (247.5..292.5).contains(&angle_deg) {
-        GestureDirection::Up
+        SwipeDirection::Up
     } else {
-        GestureDirection::UpRight
+        SwipeDirection::UpRight
     }
 }
 
