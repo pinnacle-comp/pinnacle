@@ -54,7 +54,11 @@ impl State {
             self.popup_destroy(popup_id);
         }
 
-        self.layers.retain(|p| p.layer_id != id);
+        let Some(layer) = self.layers.extract_if(.., |l| l.layer_id == id).next() else {
+            return;
+        };
+
+        self.flush_touch_for_surface(layer.layer.wl_surface());
     }
 }
 

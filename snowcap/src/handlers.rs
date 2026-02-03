@@ -3,6 +3,7 @@ pub mod foreign_toplevel_list;
 pub mod foreign_toplevel_management;
 pub mod keyboard;
 pub mod pointer;
+pub mod touch;
 
 use smithay_client_toolkit::{
     compositor::CompositorHandler,
@@ -97,13 +98,18 @@ impl SeatHandler for State {
             self.pointer = Some(pointer);
             self.cursor_shape_device = Some(cursor_shape_device);
         }
+
+        if capability == Capability::Touch {
+            let touch = self.seat_state.get_touch(qh, &seat).unwrap();
+            self.touch_handles.push((seat.clone(), touch));
+        }
     }
 
     fn remove_capability(
         &mut self,
         _conn: &Connection,
         _qh: &QueueHandle<Self>,
-        _seat: WlSeat,
+        seat: WlSeat,
         capability: Capability,
     ) {
         if capability == Capability::Keyboard
@@ -120,10 +126,32 @@ impl SeatHandler for State {
                 device.destroy();
             }
         }
+
+        if capability == Capability::Touch {
+            let Some((_, touch)) = self
+                .touch_handles
+                .extract_if(.., |(s, _)| s == &seat)
+                .next()
+            else {
+                return;
+            };
+
+            self.cancel_all_touch(&touch);
+            touch.release();
+        }
     }
 
-    fn remove_seat(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _seat: WlSeat) {
-        // TODO:
+    fn remove_seat(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, seat: WlSeat) {
+        let Some((_, touch)) = self
+            .touch_handles
+            .extract_if(.., |(s, _)| s == &seat)
+            .next()
+        else {
+            return;
+        };
+
+        self.cancel_all_touch(&touch);
+        touch.release();
     }
 }
 delegate_seat!(State);
