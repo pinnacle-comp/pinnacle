@@ -773,6 +773,7 @@ local snowcap_layer_v1_Layer = {
 ---@field input_region snowcap.widget.v1.InputRegion?
 ---@field mouse_area snowcap.widget.v1.MouseArea?
 ---@field text_input snowcap.widget.v1.TextInput?
+---@field wlr_task_list snowcap.widget.v1.WlrTaskList?
 
 ---@class snowcap.widget.v1.Text
 ---@field text string?
@@ -992,6 +993,31 @@ local snowcap_layer_v1_Layer = {
 ---@field submit google.protobuf.Empty?
 ---@field paste string?
 
+---@class snowcap.widget.v1.WlrTaskList
+---@field widget_id integer?
+---@field on_enter boolean?
+---@field on_update boolean?
+---@field on_leave boolean?
+---@field child snowcap.widget.v1.WidgetDef?
+
+---@class snowcap.widget.v1.WlrTaskList.Event
+---@field enter snowcap.widget.v1.WlrTaskList.WlrTaskData?
+---@field update snowcap.widget.v1.WlrTaskList.WlrTaskData?
+---@field leave integer?
+
+---@class snowcap.widget.v1.WlrTaskList.WlrTaskData
+---@field id integer?
+---@field title string?
+---@field app_id string?
+---@field state snowcap.widget.v1.WlrTaskList.WlrTaskState?
+---@field outputs string[]?
+
+---@class snowcap.widget.v1.WlrTaskList.WlrTaskState
+---@field maximized boolean?
+---@field minimized boolean?
+---@field activated boolean?
+---@field fullscreen boolean?
+
 ---@class snowcap.widget.v1.GetWidgetEventsRequest
 ---@field layer_id integer?
 ---@field decoration_id integer?
@@ -1001,6 +1027,7 @@ local snowcap_layer_v1_Layer = {
 ---@field button snowcap.widget.v1.Button.Event?
 ---@field mouse_area snowcap.widget.v1.MouseArea.Event?
 ---@field text_input snowcap.widget.v1.TextInput.Event?
+---@field wlr_task_list snowcap.widget.v1.WlrTaskList.Event?
 
 ---@class snowcap.widget.v1.GetWidgetEventsResponse
 ---@field widget_events snowcap.widget.v1.WidgetEvent[]?
@@ -1039,9 +1066,35 @@ local snowcap_layer_v1_Layer = {
 ---@class snowcap.operation.v1.TextInput.SelectAll
 ---@field id string?
 
+---@class snowcap.operation.v1.WlrTaskList
+---@field maximize snowcap.operation.v1.WlrTaskList.MaximizeToplevel?
+---@field minimize snowcap.operation.v1.WlrTaskList.MinimizeToplevel?
+---@field fullscreen snowcap.operation.v1.WlrTaskList.FullscreenToplevel?
+---@field activate snowcap.operation.v1.WlrTaskList.ActivateToplevel?
+---@field close snowcap.operation.v1.WlrTaskList.CloseToplevel?
+
+---@class snowcap.operation.v1.WlrTaskList.MaximizeToplevel
+---@field id integer?
+---@field maximize boolean?
+
+---@class snowcap.operation.v1.WlrTaskList.MinimizeToplevel
+---@field id integer?
+---@field minimize boolean?
+
+---@class snowcap.operation.v1.WlrTaskList.FullscreenToplevel
+---@field id integer?
+---@field fullscreen boolean?
+
+---@class snowcap.operation.v1.WlrTaskList.ActivateToplevel
+---@field id integer?
+
+---@class snowcap.operation.v1.WlrTaskList.CloseToplevel
+---@field id integer?
+
 ---@class snowcap.operation.v1.Operation
 ---@field focusable snowcap.operation.v1.Focusable?
 ---@field text_input snowcap.operation.v1.TextInput?
+---@field wlr_task_list snowcap.operation.v1.WlrTaskList?
 
 ---@class snowcap.decoration.v1.Bounds
 ---@field left integer?
@@ -1331,6 +1384,10 @@ snowcap.widget.v1.TextInput.Icon = {}
 snowcap.widget.v1.TextInput.Style = {}
 snowcap.widget.v1.TextInput.Style.Inner = {}
 snowcap.widget.v1.TextInput.Event = {}
+snowcap.widget.v1.WlrTaskList = {}
+snowcap.widget.v1.WlrTaskList.Event = {}
+snowcap.widget.v1.WlrTaskList.WlrTaskData = {}
+snowcap.widget.v1.WlrTaskList.WlrTaskState = {}
 snowcap.widget.v1.GetWidgetEventsRequest = {}
 snowcap.widget.v1.WidgetEvent = {}
 snowcap.widget.v1.GetWidgetEventsResponse = {}
@@ -1346,6 +1403,12 @@ snowcap.operation.v1.TextInput.MoveCursor = {}
 snowcap.operation.v1.TextInput.MoveCursorFront = {}
 snowcap.operation.v1.TextInput.MoveCursorEnd = {}
 snowcap.operation.v1.TextInput.SelectAll = {}
+snowcap.operation.v1.WlrTaskList = {}
+snowcap.operation.v1.WlrTaskList.MaximizeToplevel = {}
+snowcap.operation.v1.WlrTaskList.MinimizeToplevel = {}
+snowcap.operation.v1.WlrTaskList.FullscreenToplevel = {}
+snowcap.operation.v1.WlrTaskList.ActivateToplevel = {}
+snowcap.operation.v1.WlrTaskList.CloseToplevel = {}
 snowcap.operation.v1.Operation = {}
 snowcap.decoration = {}
 snowcap.decoration.v1 = {}

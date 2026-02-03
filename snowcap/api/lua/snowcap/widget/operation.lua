@@ -36,10 +36,37 @@
 ---@class snowcap.widget.operation.text_input.SelectAll
 ---@field id string?
 
+---Operation acting on WlrTaskList.
+---@class snowcap.widget.operation.WlrTaskList
+---@field maximize snowcap.widget.operation.wlr_task_list.MaximizeToplevel?
+---@field minimize snowcap.widget.operation.wlr_task_list.MinimizeToplevel?
+---@field fullscreen snowcap.widget.operation.wlr_task_list.FullscreenToplevel?
+---@field activate snowcap.widget.operation.wlr_task_list.ActivateToplevel?
+---@field close snowcap.widget.operation.wlr_task_list.CloseToplevel?
+
+---@class snowcap.widget.operation.wlr_task_list.MaximizeToplevel
+---@field id integer
+---@field maximize boolean
+
+---@class snowcap.widget.operation.wlr_task_list.MinimizeToplevel
+---@field id integer
+---@field minimize boolean
+
+---@class snowcap.widget.operation.wlr_task_list.FullscreenToplevel
+---@field id integer
+---@field fullscreen boolean
+
+---@class snowcap.widget.operation.wlr_task_list.ActivateToplevel
+---@field id integer
+
+---@class snowcap.widget.operation.wlr_task_list.CloseToplevel
+---@field id integer
+
 ---Update widgets' internal state.
 ---@class snowcap.widget.operation.Operation
 ---@field focusable snowcap.widget.operation.Focusable?
 ---@field text_input snowcap.widget.operation.TextInput?
+---@field wlr_task_list snowcap.widget.operation.WlrTaskList?
 
 ---Operation acting on widgets that can be focused.
 ---@class snowcap.widget.operation.focusable
@@ -128,6 +155,91 @@ function text_input.SelectAll(widget_id)
     }
 end
 
+---Operates on WlrTaskList
+---@class snowcap.widget.operation.wlr_task_list
+local wlr_task_list = {}
+
+---Operation that request a toplevel to be maximized or unmaximized.
+---@param toplevel_id integer Topleve Id.
+---@param maximize boolean
+---
+---@return snowcap.widget.operation.Operation
+function wlr_task_list.MaximizeToplevel(toplevel_id, maximize)
+    ---@type snowcap.widget.operation.Operation
+    return {
+        wlr_task_list = {
+            maximize = {
+                id = toplevel_id,
+                maximize = maximize
+            }
+        }
+    }
+end
+
+---Operation that request a toplevel to be minimized or unminimized.
+---@param toplevel_id integer Topleve Id.
+---@param minimize boolean
+---
+---@return snowcap.widget.operation.Operation
+function wlr_task_list.MinimizeToplevel(toplevel_id, minimize)
+    ---@type snowcap.widget.operation.Operation
+    return {
+        wlr_task_list = {
+            minimize = {
+                id = toplevel_id,
+                minimize = minimize
+            }
+        }
+    }
+end
+
+---Operation that request a toplevel to be fullscreened or unfullscreened.
+---@param toplevel_id integer Topleve Id.
+---@param fullscreen boolean
+---
+---@return snowcap.widget.operation.Operation
+function wlr_task_list.FullscreenToplevel(toplevel_id, fullscreen)
+    ---@type snowcap.widget.operation.Operation
+    return {
+        wlr_task_list = {
+            fullscreen = {
+                id = toplevel_id,
+                fullscreen = fullscreen
+            }
+        }
+    }
+end
+
+---Operation that request a toplevel to be activated.
+---@param toplevel_id integer Toplevel Id.
+---
+---@return snowcap.widget.operation.Operation
+function wlr_task_list.ActivateToplevel(toplevel_id)
+    ---@type snowcap.widget.operation.Operation
+    return {
+        wlr_task_list = {
+            activate = {
+                id = toplevel_id,
+            }
+        }
+    }
+end
+
+---Operation that request a toplevel to be closed.
+---@param toplevel_id integer Toplevel Id
+---
+---@return snowcap.widget.operation.Operation
+function wlr_task_list.CloseToplevel(toplevel_id)
+    ---@type snowcap.widget.operation.Operation
+    return {
+        wlr_task_list = {
+            close = {
+                id = toplevel_id,
+            }
+        }
+    }
+end
+
 ---Update internal state for some widgets.
 ---
 ---`Operation` can be passed to `LayerHandle:operate` and `DecorationHandle::operate` to
@@ -161,6 +273,7 @@ end
 local operation = {
     focusable = focusable,
     text_input = text_input,
+    wlr_task_list = wlr_task_list,
 }
 
 ---@private
