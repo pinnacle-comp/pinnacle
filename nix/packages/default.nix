@@ -37,7 +37,7 @@ let
     license = lib.licenses.gpl3;
     maintainers = [ "pinnacle-comp" ];
   };
-  version = "0.2.2";
+  version = "0.2.3";
 
   # we need a newer version of luaposix than what's in nixpkgs
   luaposix = lua54Packages.luaposix.overrideAttrs (old: rec {
