@@ -21,7 +21,7 @@ jobs:
     name: Build docs
     runs-on: ubuntu-24.04
 
-    if: startsWith(github.ref, 'refs/tags/') || github.ref_name == "main"
+    if: startsWith(github.ref, 'refs/tags/') || github.ref_name == 'main'
 
     steps:
       - name: Checkout
