@@ -28,7 +28,7 @@ use pinnacle_api_defs::pinnacle::{
     tag::v1::{
         AddRequest, GetActiveRequest, GetNameRequest, GetOutputNameRequest, GetRequest,
         MoveToOutputRequest, RemoveRequest, SetActiveRequest, SwitchToRequest,
-        move_to_output_response::Kind,
+        move_to_output_response::error::Kind,
     },
     util::v1::SetOrToggle,
 };
@@ -182,9 +182,9 @@ pub fn remove(tags: impl IntoIterator<Item = TagHandle>) {
         .unwrap();
 }
 
-/// Error that happends during moving a tag to a different output.
+/// Error that happens when moving tags to a different output.
 #[derive(Debug, PartialEq, Clone)]
-pub enum TagMoveToOutputError {
+pub enum MoveToOutputError {
     /// The requested output to move the tag to, does not exist
     OutputDoesNotExist,
 
@@ -193,7 +193,7 @@ pub enum TagMoveToOutputError {
     SameWindowOnTwoOutputs(Vec<WindowHandle>),
 }
 
-/// Move existing tags to the specified output.
+/// Moves existing tags to the specified output.
 ///
 /// # Examples
 ///
@@ -207,14 +207,14 @@ pub enum TagMoveToOutputError {
 /// # Some(())
 /// # };
 /// ```
-pub fn move_to_output<I>(output: &OutputHandle, tag_handles: I) -> Result<(), TagMoveToOutputError>
+pub fn move_to_output<I>(output: &OutputHandle, tag_handles: I) -> Result<(), MoveToOutputError>
 where
     I: IntoIterator<Item = TagHandle>,
 {
     let output_name = output.name();
     let tag_ids = tag_handles.into_iter().map(|h| h.id).collect();
 
-    let kind = Client::tag()
+    let error = Client::tag()
         .move_to_output(MoveToOutputRequest {
             output_name,
             tag_ids,
@@ -222,13 +222,14 @@ where
         .block_on_tokio()
         .unwrap()
         .into_inner()
-        .kind;
+        .error
+        .and_then(|error| error.kind);
 
-    match kind {
+    match error {
         None => Ok(()),
-        Some(Kind::OutputDoesNotExist(_)) => Err(TagMoveToOutputError::OutputDoesNotExist),
+        Some(Kind::OutputDoesNotExist(_)) => Err(MoveToOutputError::OutputDoesNotExist),
         Some(Kind::SameWindowOnTwoOutputs(windows)) => {
-            Err(TagMoveToOutputError::SameWindowOnTwoOutputs(
+            Err(MoveToOutputError::SameWindowOnTwoOutputs(
                 windows
                     .window_ids
                     .into_iter()
@@ -374,10 +375,10 @@ impl TagHandle {
             .unwrap();
     }
 
-    /// Move existing tags to the specified output.
+    /// Moves this tag to the specified output.
     ///
-    /// See [super::tag::move_to_output] for further information
-    pub fn move_to_output(&self, output: &OutputHandle) -> Result<(), TagMoveToOutputError> {
+    /// See [tag::move_to_output][crate::tag::move_to_output] for more information.
+    pub fn move_to_output(&self, output: &OutputHandle) -> Result<(), MoveToOutputError> {
         move_to_output(output, [self.clone()])
     }
 

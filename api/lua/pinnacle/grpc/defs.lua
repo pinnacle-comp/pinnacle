@@ -1343,10 +1343,13 @@ local pinnacle_v1_Backend = {
 ---@field tag_ids integer[]?
 
 ---@class pinnacle.tag.v1.MoveToOutputResponse
----@field output_does_not_exist google.protobuf.Empty?
----@field same_window_on_two_outputs pinnacle.tag.v1.MoveToOutputSameWindowOnTwoOutputs?
+---@field error pinnacle.tag.v1.MoveToOutputResponse.Error?
 
----@class pinnacle.tag.v1.MoveToOutputSameWindowOnTwoOutputs
+---@class pinnacle.tag.v1.MoveToOutputResponse.Error
+---@field output_does_not_exist google.protobuf.Empty?
+---@field same_window_on_two_outputs pinnacle.tag.v1.MoveToOutputResponse.Error.SameWindowOnTwoOutputs?
+
+---@class pinnacle.tag.v1.MoveToOutputResponse.Error.SameWindowOnTwoOutputs
 ---@field window_ids integer[]?
 
 ---@class pinnacle.tag.v1.GetActiveRequest
@@ -1613,7 +1616,8 @@ pinnacle.tag.v1.AddResponse = {}
 pinnacle.tag.v1.RemoveRequest = {}
 pinnacle.tag.v1.MoveToOutputRequest = {}
 pinnacle.tag.v1.MoveToOutputResponse = {}
-pinnacle.tag.v1.MoveToOutputSameWindowOnTwoOutputs = {}
+pinnacle.tag.v1.MoveToOutputResponse.Error = {}
+pinnacle.tag.v1.MoveToOutputResponse.Error.SameWindowOnTwoOutputs = {}
 pinnacle.tag.v1.GetActiveRequest = {}
 pinnacle.tag.v1.GetActiveResponse = {}
 pinnacle.tag.v1.GetNameRequest = {}
