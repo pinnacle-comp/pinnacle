@@ -10,7 +10,7 @@ use smithay_client_toolkit::{
         client::{
             Connection, QueueHandle,
             globals::registry_queue_init,
-            protocol::{wl_keyboard::WlKeyboard, wl_pointer::WlPointer},
+            protocol::{wl_keyboard::WlKeyboard, wl_pointer::WlPointer, wl_surface::WlSurface},
         },
         protocols::{
             ext::foreign_toplevel_list::v1::client::{
@@ -25,7 +25,7 @@ use smithay_client_toolkit::{
     },
     registry::RegistryState,
     seat::{SeatState, keyboard::Modifiers},
-    shell::wlr_layer::LayerShell,
+    shell::{WaylandSurface, wlr_layer::LayerShell},
 };
 use snowcap_protocols::snowcap_decoration_v1::client::snowcap_decoration_manager_v1::SnowcapDecorationManagerV1;
 use xkbcommon::xkb::Keysym;
@@ -36,7 +36,7 @@ use crate::{
     layer::{LayerIdCounter, SnowcapLayer},
     runtime::{CalloopSenderSink, CurrentTokioExecutor},
     server::GrpcServerState,
-    surface::CalloopNotifier,
+    surface::{self, CalloopNotifier},
     widget::SnowcapMessage,
 };
 
@@ -264,5 +264,42 @@ impl State {
         };
 
         Ok(state)
+    }
+
+    pub(crate) fn find_surface_mut(
+        &mut self,
+        wl_surface: &WlSurface,
+    ) -> Option<&mut surface::SnowcapSurface> {
+        if let Some(surface) = self
+            .layers
+            .iter_mut()
+            .filter_map(|l| {
+                if l.layer.wl_surface() == wl_surface {
+                    Some(&mut l.surface)
+                } else {
+                    None
+                }
+            })
+            .next()
+        {
+            return Some(surface);
+        }
+
+        if let Some(surface) = self
+            .decorations
+            .iter_mut()
+            .filter_map(|d| {
+                if &d.surface.wl_surface == wl_surface {
+                    Some(&mut d.surface)
+                } else {
+                    None
+                }
+            })
+            .next()
+        {
+            return Some(surface);
+        }
+
+        None
     }
 }
