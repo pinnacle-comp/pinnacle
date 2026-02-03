@@ -6,7 +6,6 @@ use smithay_client_toolkit::{
         protocol::wl_pointer::{AxisSource, WlPointer},
     },
     seat::pointer::{PointerEvent, PointerEventKind, PointerHandler},
-    shell::WaylandSurface,
 };
 
 use crate::state::State;
@@ -20,38 +19,21 @@ impl PointerHandler for State {
         events: &[PointerEvent],
     ) {
         for event in events {
-            let mut layer = self
-                .layers
-                .iter_mut()
-                .find(|sn_layer| sn_layer.layer.wl_surface() == &event.surface);
-            let mut deco = self
-                .decorations
-                .iter_mut()
-                .find(|deco| deco.surface.wl_surface == event.surface);
+            let Some(surface) = self.find_surface_mut(&event.surface) else {
+                return;
+            };
 
             let iced_event = match event.kind {
                 PointerEventKind::Enter { serial: _ } => {
-                    if let Some(layer) = layer.as_mut() {
-                        layer.surface.pointer_location = Some(event.position);
-                    } else if let Some(deco) = deco.as_mut() {
-                        deco.surface.pointer_location = Some(event.position);
-                    }
+                    surface.pointer_location = Some(event.position);
                     iced::Event::Mouse(iced::mouse::Event::CursorEntered)
                 }
                 PointerEventKind::Leave { serial: _ } => {
-                    if let Some(layer) = layer.as_mut() {
-                        layer.surface.pointer_location = None;
-                    } else if let Some(deco) = deco.as_mut() {
-                        deco.surface.pointer_location = None;
-                    }
+                    surface.pointer_location = None;
                     iced::Event::Mouse(iced::mouse::Event::CursorLeft)
                 }
                 PointerEventKind::Motion { time: _ } => {
-                    if let Some(layer) = layer.as_mut() {
-                        layer.surface.pointer_location = Some(event.position);
-                    } else if let Some(deco) = deco.as_mut() {
-                        deco.surface.pointer_location = Some(event.position);
-                    }
+                    surface.pointer_location = Some(event.position);
                     iced::Event::Mouse(iced::mouse::Event::CursorMoved {
                         position: iced::Point {
                             x: event.position.0 as f32,
@@ -97,11 +79,7 @@ impl PointerHandler for State {
                 }
             };
 
-            if let Some(layer) = layer.as_mut() {
-                layer.surface.widgets.queue_event(iced_event);
-            } else if let Some(deco) = deco.as_mut() {
-                deco.surface.widgets.queue_event(iced_event);
-            }
+            surface.widgets.queue_event(iced_event);
         }
     }
 }
