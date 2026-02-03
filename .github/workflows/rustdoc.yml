@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - v[0-9]+.[0-9]+
     paths:
       - api/rust/**
     tags:
@@ -14,24 +15,34 @@ jobs:
   build-docs:
     name: Build docs
     runs-on: ubuntu-latest
+
+    if: startsWith(github.ref, 'refs/tags/') || github.ref_name == "main"
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          submodules: recursive
+
       - name: Get protoc
         run: sudo apt install protobuf-compiler
-      - name: Extract possible tag version
-        if: startsWith(github.ref, 'refs/tags/')
-        run: echo "RELEASE_VERSION=${GITHUB_REF#refs/*/v}/" >> $GITHUB_ENV
+
+      - name: Set version
+        run: |
+          if [ ${{ startsWith(github.ref, 'refs/tags/') }} == "true" ]; then
+            echo "VERSION=${GITHUB_REF#refs/*/v}" >> $GITHUB_ENV
+          else
+            echo "VERSION=main" >> $GITHUB_ENV
+          fi
+
       - name: Build docs
         run: cd ./api/rust && cargo doc --no-deps -p pinnacle-api -p tokio
+
       - name: Create index.html
         run: echo "<meta http-equiv=\"refresh\" content=\"0; url=pinnacle_api\">" > ./target/doc/index.html
+
       - name: Deploy
         uses: peaceiris/actions-gh-pages@v3
         with:
           deploy_key: ${{ secrets.DOCS_DEPLOY_KEY_RUST }}
           external_repository: pinnacle-comp/rust-reference
           publish_dir: ./target/doc
-          destination_dir: ${{ env.RELEASE_VERSION || 'main' }}
+          destination_dir: ${{ env.VERSION }}
