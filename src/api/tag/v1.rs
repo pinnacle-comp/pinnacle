@@ -156,24 +156,23 @@ impl v1::tag_service_server::TagService for super::TagService {
                 .collect::<Vec<_>>();
 
             use crate::api::tag::TagMoveToOutputError;
-            use pinnacle_api_defs::pinnacle::tag::v1::{
-                MoveToOutputSameWindowOnTwoOutputs, move_to_output_response,
+            use pinnacle_api_defs::pinnacle::tag::v1::move_to_output_response::{
+                Error,
+                error::{Kind, SameWindowOnTwoOutputs},
             };
 
-            let kind = match crate::api::tag::move_to_output(state, tags_to_move, output_name) {
+            let error = match crate::api::tag::move_to_output(state, tags_to_move, output_name) {
                 Ok(()) => None,
-                Err(TagMoveToOutputError::OutputDoesNotExist) => {
-                    Some(move_to_output_response::Kind::OutputDoesNotExist(()))
-                }
-                Err(TagMoveToOutputError::SameWindowOnTwoOutputs(window_ids)) => {
-                    Some(move_to_output_response::Kind::SameWindowOnTwoOutputs(
-                        MoveToOutputSameWindowOnTwoOutputs {
-                            window_ids: window_ids.into_iter().map(|id| id.0).collect(),
-                        },
-                    ))
-                }
+                Err(TagMoveToOutputError::OutputDoesNotExist) => Some(Error {
+                    kind: Some(Kind::OutputDoesNotExist(())),
+                }),
+                Err(TagMoveToOutputError::SameWindowOnTwoOutputs(window_ids)) => Some(Error {
+                    kind: Some(Kind::SameWindowOnTwoOutputs(SameWindowOnTwoOutputs {
+                        window_ids: window_ids.into_iter().map(|id| id.0).collect(),
+                    })),
+                }),
             };
-            Ok(MoveToOutputResponse { kind })
+            Ok(MoveToOutputResponse { error })
         })
         .await
     }

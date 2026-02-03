@@ -28,13 +28,18 @@ message MoveToOutputRequest {
 }
 
 message MoveToOutputResponse {
-    oneof kind {
-      google.protobuf.Empty output_does_not_exist = 2;
-      MoveToOutputSameWindowOnTwoOutputs same_window_on_two_outputs = 3;
+    message Error {
+        message SameWindowOnTwoOutputs {
+            repeated uint32 window_ids = 1;
+        }
+
+        oneof kind {
+            google.protobuf.Empty output_does_not_exist = 1;
+            SameWindowOnTwoOutputs same_window_on_two_outputs = 2;
+        }
     }
-}
-message MoveToOutputSameWindowOnTwoOutputs {
-    repeated uint32 window_ids = 1;
+
+    optional Error error = 1;
 }
 
 // Tag properties
