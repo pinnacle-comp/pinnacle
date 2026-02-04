@@ -1,15 +1,18 @@
 use std::sync::atomic::Ordering;
 
 use smithay::{
-    reexports::wayland_protocols::ext::foreign_toplevel_list::v1::server::ext_foreign_toplevel_handle_v1::ExtForeignToplevelHandleV1,
-    wayland::{compositor, foreign_toplevel_list::ForeignToplevelHandle},
+    desktop::PopupKind, reexports::wayland_protocols::ext::foreign_toplevel_list::v1::server::ext_foreign_toplevel_handle_v1::ExtForeignToplevelHandleV1, wayland::{compositor, foreign_toplevel_list::ForeignToplevelHandle, shell::xdg}
 };
+use tracing::warn;
 
 use crate::{
     decoration::DecorationSurface,
     delegate_snowcap_decoration,
     hook::add_decoration_pre_commit_hook,
-    protocol::snowcap_decoration::{SnowcapDecorationHandler, SnowcapDecorationState},
+    protocol::{
+        self,
+        snowcap_decoration::{SnowcapDecorationHandler, SnowcapDecorationState},
+    },
     state::{State, WithState},
 };
 
@@ -20,7 +23,7 @@ impl SnowcapDecorationHandler for State {
 
     fn new_decoration_surface(
         &mut self,
-        surface: crate::protocol::snowcap_decoration::DecorationSurface,
+        surface: protocol::snowcap_decoration::DecorationSurface,
         handle: ExtForeignToplevelHandleV1,
     ) {
         let Some(window) = self
@@ -73,10 +76,7 @@ impl SnowcapDecorationHandler for State {
         });
     }
 
-    fn decoration_destroyed(
-        &mut self,
-        surface: crate::protocol::snowcap_decoration::DecorationSurface,
-    ) {
+    fn decoration_destroyed(&mut self, surface: protocol::snowcap_decoration::DecorationSurface) {
         for win in self.pinnacle.windows.iter().chain(
             self.pinnacle
                 .unmapped_windows
@@ -91,7 +91,7 @@ impl SnowcapDecorationHandler for State {
         }
     }
 
-    fn bounds_changed(&mut self, surface: crate::protocol::snowcap_decoration::DecorationSurface) {
+    fn bounds_changed(&mut self, surface: protocol::snowcap_decoration::DecorationSurface) {
         for win in self.pinnacle.windows.iter() {
             win.with_state_mut(|state| {
                 if let Some(deco) = state
@@ -104,6 +104,24 @@ impl SnowcapDecorationHandler for State {
                     });
                 }
             });
+        }
+    }
+
+    fn new_popup(
+        &mut self,
+        _parent: protocol::snowcap_decoration::DecorationSurface,
+        popup: xdg::PopupSurface,
+    ) {
+        if let Err(err) = self.pinnacle.position_popup(&popup) {
+            warn!("Failed to position popup: {err}");
+        }
+
+        if let Err(err) = self
+            .pinnacle
+            .popup_manager
+            .track_popup(PopupKind::from(popup))
+        {
+            warn!("Failed to track popup: {err}");
         }
     }
 }

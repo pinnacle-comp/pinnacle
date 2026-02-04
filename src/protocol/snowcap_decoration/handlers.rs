@@ -10,7 +10,10 @@ use smithay::{
         protocol::wl_surface::WlSurface,
     },
     utils::{Point, Serial},
-    wayland::compositor::{self, BufferAssignment, SurfaceAttributes},
+    wayland::{
+        compositor::{self, BufferAssignment, SurfaceAttributes},
+        shell::xdg::{XdgPopupSurfaceData, XdgShellHandler, XdgShellSurfaceUserData},
+    },
 };
 use snowcap_protocols::snowcap_decoration_v1::server::{
     snowcap_decoration_manager_v1::{self, SnowcapDecorationManagerV1},
@@ -185,12 +188,13 @@ impl<D> Dispatch<SnowcapDecorationSurfaceV1, SnowcapDecorationSurfaceUserData, D
     for SnowcapDecorationState
 where
     D: Dispatch<SnowcapDecorationSurfaceV1, SnowcapDecorationSurfaceUserData>
-        + SnowcapDecorationHandler,
+        + SnowcapDecorationHandler
+        + XdgShellHandler,
 {
     fn request(
         state: &mut D,
         _client: &Client,
-        resource: &SnowcapDecorationSurfaceV1,
+        deco_surface: &SnowcapDecorationSurfaceV1,
         request: <SnowcapDecorationSurfaceV1 as Resource>::Request,
         data: &SnowcapDecorationSurfaceUserData,
         _dhandle: &smithay::reexports::wayland_server::DisplayHandle,
@@ -198,7 +202,7 @@ where
     ) {
         match request {
             snowcap_decoration_surface_v1::Request::SetLocation { x, y } => {
-                let _ = with_surface_pending_state(resource, |data| {
+                let _ = with_surface_pending_state(deco_surface, |data| {
                     data.location = Point::new(x, y);
                 });
             }
@@ -208,7 +212,7 @@ where
                 top,
                 bottom,
             } => {
-                let _ = with_surface_pending_state(resource, |data| {
+                let _ = with_surface_pending_state(deco_surface, |data| {
                     data.bounds.left = left;
                     data.bounds.right = right;
                     data.bounds.top = top;
@@ -222,16 +226,49 @@ where
                         .lock()
                         .unwrap()
                         .iter()
-                        .find(|deco| deco.decoration_surface() == resource)
+                        .find(|deco| deco.decoration_surface() == deco_surface)
                         .cloned()
                 } {
                     state.bounds_changed(deco);
                 }
             }
             snowcap_decoration_surface_v1::Request::SetZIndex { z_index } => {
-                let _ = with_surface_pending_state(resource, |data| {
+                let _ = with_surface_pending_state(deco_surface, |data| {
                     data.z_index = z_index;
                 });
+            }
+            snowcap_decoration_surface_v1::Request::GetPopup { popup } => {
+                let Ok(parent_surface) = data.wl_surface.upgrade() else {
+                    return;
+                };
+
+                let Some(popup) = state.xdg_shell_state().get_popup(&popup) else {
+                    warn!("client called decoration_surface::get_popup with a dead popup");
+                    return;
+                };
+
+                compositor::with_states(popup.wl_surface(), move |states| {
+                    states
+                        .data_map
+                        .get::<XdgPopupSurfaceData>()
+                        .unwrap()
+                        .lock()
+                        .unwrap()
+                        .parent = Some(parent_surface);
+                });
+
+                let deco_surface = state
+                    .decoration_state()
+                    .known_decorations
+                    .lock()
+                    .unwrap()
+                    .iter()
+                    .find(|deco| deco.decoration_surface() == deco_surface)
+                    .cloned();
+
+                if let Some(deco_surface) = deco_surface {
+                    SnowcapDecorationHandler::new_popup(state, deco_surface, popup);
+                }
             }
             snowcap_decoration_surface_v1::Request::AckConfigure { serial } => {
                 let Ok(surface) = data.wl_surface.upgrade() else {
