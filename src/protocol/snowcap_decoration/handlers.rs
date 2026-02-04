@@ -12,7 +12,7 @@ use smithay::{
     utils::{Point, Serial},
     wayland::{
         compositor::{self, BufferAssignment, SurfaceAttributes},
-        shell::xdg::{XdgPopupSurfaceData, XdgShellHandler, XdgShellSurfaceUserData},
+        shell::xdg::{XdgPopupSurfaceData, XdgShellHandler},
     },
 };
 use snowcap_protocols::snowcap_decoration_v1::server::{
