@@ -181,6 +181,7 @@ where
         .collect::<IndexSet<_>>();
 
     let mut problematic_windows = IndexSet::new();
+    let mut windows_to_update = Vec::new();
 
     for window in state.pinnacle.windows.iter() {
         let (window_id, is_affected_by_move, has_other_output_tag) = window.with_state(|state| {
@@ -190,8 +191,11 @@ where
             (state.id, is_affected_by_move, has_other_output_tag)
         });
 
-        if is_affected_by_move && has_other_output_tag {
-            problematic_windows.insert(window_id);
+        if is_affected_by_move {
+            if has_other_output_tag {
+                problematic_windows.insert(window_id);
+            }
+            windows_to_update.push(window.clone());
         }
     }
 
@@ -221,6 +225,19 @@ where
         if changed {
             state.pinnacle.request_layout(&output);
             state.schedule_render(&output);
+        }
+    }
+
+    if state.pinnacle.space.output_geometry(&new_output).is_some() {
+        let loc = state.pinnacle.floating_loc_for_output(&new_output);
+        for window in windows_to_update {
+            window.with_state_mut(|state| state.set_floating_loc(Some(loc)));
+
+            let layout_mode = window.with_state(|state| state.layout_mode);
+            state.pinnacle.update_window_geometry(
+                &window,
+                layout_mode.is_tiled() || layout_mode.is_spilled(),
+            );
         }
     }
 
