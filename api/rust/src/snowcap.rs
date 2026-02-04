@@ -404,10 +404,49 @@ impl Program for BindOverlay {
                 }
             });
 
+            let gesturebinds = data.gesturebinds.into_iter().map(|(gesture, descs)| {
+                if descs.is_empty() {
+                    WidgetDef::from(
+                        Text::new(gesture.to_string())
+                            .style(text::Style::new().font(self.font.clone())),
+                    )
+                } else if descs.len() == 1 {
+                    Row::new_with_children([
+                        Text::new(gesture.to_string())
+                            .width(Length::FillPortion(1))
+                            .style(text::Style::new().font(self.font.clone()))
+                            .into(),
+                        Text::new(descs[0].clone())
+                            .width(Length::FillPortion(2))
+                            .style(text::Style::new().font(self.font.clone()))
+                            .into(),
+                    ])
+                    .into()
+                } else {
+                    let mut children = Vec::<WidgetDef<()>>::new();
+                    children.push(
+                        Text::new(gesture.to_string() + ":")
+                            .style(text::Style::new().font(self.font.clone()))
+                            .into(),
+                    );
+
+                    for desc in descs {
+                        children.push(
+                            Text::new(format!("\t{desc}"))
+                                .style(text::Style::new().font(self.font.clone()))
+                                .into(),
+                        );
+                    }
+
+                    Column::new_with_children(children).into()
+                }
+            });
+
             let mut children = Vec::<WidgetDef<()>>::new();
             children.push(group_title.into());
             children.extend(keybinds);
             children.extend(mousebinds);
+            children.extend(gesturebinds);
             children.push(Text::new("").style(text::Style::new().pixels(8.0)).into()); // Spacing because I haven't impl'd that yet
 
             children

@@ -363,7 +363,6 @@ service InputService {
 
   rpc KeybindOnPress(KeybindOnPressRequest) returns (google.protobuf.Empty);
   rpc MousebindOnPress(MousebindOnPressRequest) returns (google.protobuf.Empty);
-  rpc Gesturebind(GesturebindRequest) returns (google.protobuf.Empty);
   rpc GesturebindOnBegin(GesturebindOnBeginRequest) returns (google.protobuf.Empty);
   rpc GesturebindOnFinish(GesturebindOnFinishRequest) returns (google.protobuf.Empty);
 

@@ -3,12 +3,12 @@ use pinnacle_api_defs::pinnacle::input::{
     self,
     v1::{
         AccelProfile, BindInfo, BindRequest, BindResponse, ClickMethod, EnterBindLayerRequest,
-        GesturebindOnBeginRequest, GesturebindOnFinishRequest, GesturebindRequest,
-        GesturebindStreamRequest, GesturebindStreamResponse, GetBindInfosRequest,
-        GetBindInfosResponse, GetBindLayerStackRequest, GetBindLayerStackResponse,
-        GetDeviceCapabilitiesRequest, GetDeviceCapabilitiesResponse, GetDeviceInfoRequest,
-        GetDeviceInfoResponse, GetDeviceTypeRequest, GetDeviceTypeResponse, GetDevicesRequest,
-        GetDevicesResponse, KeybindOnPressRequest, KeybindStreamRequest, KeybindStreamResponse,
+        GesturebindOnBeginRequest, GesturebindOnFinishRequest, GesturebindStreamRequest,
+        GesturebindStreamResponse, GetBindInfosRequest, GetBindInfosResponse,
+        GetBindLayerStackRequest, GetBindLayerStackResponse, GetDeviceCapabilitiesRequest,
+        GetDeviceCapabilitiesResponse, GetDeviceInfoRequest, GetDeviceInfoResponse,
+        GetDeviceTypeRequest, GetDeviceTypeResponse, GetDevicesRequest, GetDevicesResponse,
+        KeybindOnPressRequest, KeybindStreamRequest, KeybindStreamResponse,
         MousebindOnPressRequest, MousebindStreamRequest, MousebindStreamResponse, ScrollMethod,
         SendEventsMode, SetBindPropertiesRequest, SetDeviceLibinputSettingRequest,
         SetDeviceMapTargetRequest, SetRepeatRateRequest, SetXcursorRequest, SetXkbConfigRequest,
@@ -751,20 +751,6 @@ impl input::v1::input_service_server::InputService for InputService {
                 .bind_state
                 .gesturebinds
                 .set_gesturebind_has_on_finish(bind_id);
-        })
-        .await
-    }
-
-    async fn gesturebind(&self, request: Request<GesturebindRequest>) -> TonicResult<()> {
-        let bind_id = request.into_inner().bind_id;
-
-        run_unary_no_response(&self.sender, move |state| {
-            state
-                .pinnacle
-                .input_state
-                .bind_state
-                .gesturebinds
-                .set_gesturebind_has_on_begin(bind_id);
         })
         .await
     }
