@@ -1,0 +1,8 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc b3e11b1900725d5f9d08dffd8fb1e8ab4b838b0a8989ec87fced2f596eda1119 # shrinks to args = TagMoveToOutputArgs { tag_actives: [[true, false], [false, false], [false, false], [false, false], [true, false]], output_to_focus: 0, tags_to_move: [[false, false], [false, false, false], [false, true, false, false, false, false, false, true, false, false], [false, false, false, false, false, false, false, false], [false, false, false, false, false, false, false, true]], output_to_move_to: 0 }
+cc ced2da3b866f49e5a8584cfa234feecad13d7bec14790f59d90d5bfbbc3b1436 # shrinks to args = TagMoveToOutputArgs { tag_actives: [[false, false], [false, false, false, false, false, false, false], [false, false, false], [false, false, false], [false, false, false, false, false, false, false, false, false], [false, false, false], [false, false, false], [false, false, false, false], [false, false, false, false, false]], output_to_focus: 0, tags_to_move: [[true, false], [false, false, false, false, false, false, false], [false, false, false], [false, false, false], [false, false, false, false, false, false, false, false, false], [false, false, false], [false, false, false], [false, false, false, false], [false, false, false, false, false]], output_to_move_to: 1 }
