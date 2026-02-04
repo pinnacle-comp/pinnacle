@@ -226,6 +226,25 @@ impl Pinnacle {
         }
     }
 
+    /// Compute a floating window location for an output.
+    ///
+    /// This is used when a window's tags are moved across outputs to prevent the
+    /// window from "jumping back" to an old floating position.
+    pub(crate) fn floating_loc_for_output(&self, target: &Output) -> Point<i32, Logical> {
+        let output_loc = target.current_location();
+
+        let Rectangle { mut loc, size } = layer_map_for_output(target).non_exclusive_zone();
+
+        // Slightly offset the location so the window is not jammed in a corner
+        let offset = {
+            let (w, h) = size.downscale(100).into();
+            i32::min(w, h)
+        };
+
+        loc += output_loc + Point::new(offset, offset);
+        loc
+    }
+
     /// Move a window to a new output.
     ///
     /// The move itself is done by updating the window tags.
@@ -252,19 +271,7 @@ impl Pinnacle {
 
         window.set_tags_to_output(&target);
 
-        // Reset the floating loc since we're changing output.
-        let output_loc = target.current_location();
-
-        let Rectangle { mut loc, size } = layer_map_for_output(&target).non_exclusive_zone();
-
-        // Slightly offset the location so the window is not jammed in a corner
-        let offset = {
-            let (w, h) = size.downscale(100).into();
-            i32::min(w, h)
-        };
-
-        loc += output_loc + Point::new(offset, offset);
-
+        let loc = self.floating_loc_for_output(&target);
         window.with_state_mut(|state| state.set_floating_loc(Some(loc)));
 
         let layout_mode = window.with_state(|state| state.layout_mode);
