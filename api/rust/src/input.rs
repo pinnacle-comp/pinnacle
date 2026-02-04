@@ -552,6 +552,8 @@ pub enum SwipeDirection {
     UpLeft = 6,
     /// Moving diagonally up to the right
     UpRight = 7,
+    /// No direction
+    None = 8,
     /// unknown direction
     #[num_enum(catch_all)]
     Unknown(i32),
@@ -576,7 +578,7 @@ impl From<SwipeDirection> for pinnacle_api_defs::pinnacle::input::v1::SwipeDirec
             SwipeDirection::UpRight => {
                 pinnacle_api_defs::pinnacle::input::v1::SwipeDirection::UpRight
             }
-            SwipeDirection::Unknown(_) => {
+            SwipeDirection::None | SwipeDirection::Unknown(_) => {
                 pinnacle_api_defs::pinnacle::input::v1::SwipeDirection::None
             }
         }

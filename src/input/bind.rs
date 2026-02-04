@@ -54,6 +54,8 @@ impl BindState {
             bind.borrow_mut().bind_data.group = group;
         } else if let Some(bind) = self.mousebinds.id_map.get(&bind_id) {
             bind.borrow_mut().bind_data.group = group;
+        } else if let Some(bind) = self.gesturebinds.id_map.get(&bind_id) {
+            bind.borrow_mut().bind_data.group = group;
         }
     }
 
@@ -61,6 +63,8 @@ impl BindState {
         if let Some(bind) = self.keybinds.id_map.get(&bind_id) {
             bind.borrow_mut().bind_data.desc = desc;
         } else if let Some(bind) = self.mousebinds.id_map.get(&bind_id) {
+            bind.borrow_mut().bind_data.desc = desc;
+        } else if let Some(bind) = self.gesturebinds.id_map.get(&bind_id) {
             bind.borrow_mut().bind_data.desc = desc;
         }
     }
@@ -70,6 +74,8 @@ impl BindState {
             bind.borrow_mut().bind_data.is_quit_bind = quit;
         } else if let Some(bind) = self.mousebinds.id_map.get(&bind_id) {
             bind.borrow_mut().bind_data.is_quit_bind = quit;
+        } else if let Some(bind) = self.gesturebinds.id_map.get(&bind_id) {
+            bind.borrow_mut().bind_data.is_quit_bind = quit;
         }
     }
 
@@ -78,6 +84,8 @@ impl BindState {
             bind.borrow_mut().bind_data.is_reload_config_bind = reload_config;
         } else if let Some(bind) = self.mousebinds.id_map.get(&bind_id) {
             bind.borrow_mut().bind_data.is_reload_config_bind = reload_config;
+        } else if let Some(bind) = self.gesturebinds.id_map.get(&bind_id) {
+            bind.borrow_mut().bind_data.is_reload_config_bind = reload_config;
         }
     }
 
@@ -85,6 +93,8 @@ impl BindState {
         if let Some(bind) = self.keybinds.id_map.get(&bind_id) {
             bind.borrow_mut().bind_data.allow_when_locked = allow_when_locked;
         } else if let Some(bind) = self.mousebinds.id_map.get(&bind_id) {
+            bind.borrow_mut().bind_data.allow_when_locked = allow_when_locked;
+        } else if let Some(bind) = self.gesturebinds.id_map.get(&bind_id) {
             bind.borrow_mut().bind_data.allow_when_locked = allow_when_locked;
         }
     }

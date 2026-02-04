@@ -434,10 +434,10 @@ end
 ---@field on_finish fun()?
 
 ---@param mb pinnacle.input.gesturebind
-local function gesturebind_inner(mb)
+local function gesturebind_inner(gb)
     local modifs = {}
     local ignore_modifs = {}
-    for _, mod in ipairs(mb.mods) do
+    for _, mod in ipairs(gb.mods) do
         if string.match(mod, "ignore") then
             table.insert(ignore_modifs, mods_with_ignore_values[mod])
         else
@@ -449,16 +449,16 @@ local function gesturebind_inner(mb)
         bind = {
             mods = modifs,
             ignore_mods = ignore_modifs,
-            layer_name = mb.bind_layer,
+            layer_name = gb.bind_layer,
             properties = {
-                group = mb.group,
-                description = mb.description,
-                quit = mb.quit,
-                reload_config = mb.reload_config,
-                allow_when_locked = mb.allow_when_locked,
+                group = gb.group,
+                description = gb.description,
+                quit = gb.quit,
+                reload_config = gb.reload_config,
+                allow_when_locked = gb.allow_when_locked,
             },
             gesture = {
-                button = gesture_button_values[mb.button],
+                button = gesture_button_values[gb.button],
             },
         },
     })
@@ -476,15 +476,15 @@ local function gesturebind_inner(mb)
         bind_id = bind_id,
     }, function(response)
         if response.edge == edge_values.press then
-            if mb.on_press then
-                local success, error = pcall(mb.on_press)
+            if gb.on_press then
+                local success, error = pcall(gb.on_press)
                 if not success then
                     log.error("While handling `gesturebind:on_press`: " .. tostring(error))
                 end
             end
         elseif response.edge == edge_values.release then
-            if mb.on_release then
-                local success, error = pcall(mb.on_release)
+            if gb.on_release then
+                local success, error = pcall(gb.on_release)
                 if not success then
                     log.error("While handling `gesturebind:on_release`: " .. tostring(error))
                 end
@@ -492,7 +492,7 @@ local function gesturebind_inner(mb)
         end
     end)
 
-    if mb.on_press then
+    if gb.on_press then
         local _, err = client:pinnacle_input_v1_InputService_gesturebindOnPress({
             bind_id = bind_id,
         })

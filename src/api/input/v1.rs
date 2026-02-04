@@ -434,8 +434,8 @@ impl input::v1::input_service_server::InputService for InputService {
                 .gesturebinds
                 .id_map
                 .values()
-                .map(|mousebind| {
-                    let gesturebind = mousebind.borrow();
+                .map(|gesturebind| {
+                    let gesturebind = gesturebind.borrow();
 
                     let mut mods = Vec::new();
                     let mut ignore_mods = Vec::new();
@@ -480,7 +480,7 @@ impl input::v1::input_service_server::InputService for InputService {
                     let direction = match gesturebind.gesture_type {
                         GestureType::Hold => SwipeDirection::None,
                         GestureType::Pinch => SwipeDirection::None,
-                        GestureType::Swipe(_) => SwipeDirection::None,
+                        GestureType::Swipe(swipe_direction) => swipe_direction.into(),
                     };
 
                     let gesture_type: pinnacle_api_defs::pinnacle::input::v1::GestureType =

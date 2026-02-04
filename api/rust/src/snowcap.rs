@@ -300,6 +300,7 @@ impl Program for BindOverlay {
                             crate::input::SwipeDirection::DownRight => "Swipe Down-Right",
                             crate::input::SwipeDirection::UpLeft => "Swipe Up-Left",
                             crate::input::SwipeDirection::UpRight => "Swipe Up-Right",
+                            crate::input::SwipeDirection::None => "Swipe None",
                             crate::input::SwipeDirection::Unknown(_) => "Swipe Unknown",
                         }
                         .to_string(),
