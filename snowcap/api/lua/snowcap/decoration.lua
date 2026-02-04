@@ -121,6 +121,12 @@ function decoration.new_widget(args)
     end)
 end
 
+---Convert a DecorationHandle into a Popup's ParentHandle
+---@return snowcap.popup.ParentHandle
+function DecorationHandle:as_parent()
+    return require("snowcap.popup").parent.Decoration(self)
+end
+
 function DecorationHandle:close()
     local _, err = client:snowcap_decoration_v1_DecorationService_Close({ decoration_id = self.id })
 

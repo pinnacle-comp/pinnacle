@@ -25,6 +25,7 @@ use crate::{
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) enum ParentInner {
     Layer(WidgetId),
+    Decoration(WidgetId),
     Popup(WidgetId),
 }
 
@@ -414,8 +415,8 @@ impl std::fmt::Debug for Parent {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self.0 {
             ParentInner::Layer(id) => f.debug_tuple("Parent::Layer").field(&id).finish(),
+            ParentInner::Decoration(id) => f.debug_tuple("Parent::Decoration").field(&id).finish(),
             ParentInner::Popup(id) => f.debug_tuple("Parent::Popup").field(&id).finish(),
-            // ParentInner::Decoration(id) => f.debug_tuple("Parent::Decoration").field(&id).finish(),
         }
     }
 }
@@ -443,8 +444,8 @@ impl From<Parent> for popup::v1::new_popup_request::ParentId {
         use popup::v1::new_popup_request::ParentId;
         match value.0 {
             ParentInner::Layer(id) => ParentId::LayerId(id.to_inner()),
+            ParentInner::Decoration(id) => ParentId::DecoId(id.to_inner()),
             ParentInner::Popup(id) => ParentId::PopupId(id.to_inner()),
-            // ParentInner::Decoration(id) => ParentId::DecoId(id.to_inner()),
         }
     }
 }

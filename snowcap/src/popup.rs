@@ -361,7 +361,38 @@ impl SnowcapPopup {
 
                 (popup, parent_id, l.surface.focus_serial)
             }
-            _ => unreachable!(),
+            ParentId::Decoration(id) => {
+                let deco = state
+                    .decorations
+                    .iter_mut()
+                    .find(|deco| deco.decoration_id == id)
+                    .ok_or(Error::ParentNotFound)?;
+
+                let iced::Rectangle {
+                    x,
+                    y,
+                    width,
+                    height,
+                } = position
+                    .anchor_rect_for(&mut deco.surface)
+                    .ok_or(Error::InvalidPosition)?;
+
+                positioner.set_anchor_rect(x, y, width, height);
+
+                let Ok(popup) = Popup::from_surface(
+                    None,
+                    &positioner,
+                    &state.queue_handle,
+                    surface.wl_surface.clone(),
+                    &state.xdg_shell,
+                ) else {
+                    return Err(Error::CreateFailed);
+                };
+
+                deco.decoration.get_popup(popup.xdg_popup());
+
+                (popup, parent_id, deco.surface.focus_serial)
+            }
         };
 
         if grab_keyboard {
@@ -389,6 +420,17 @@ impl SnowcapPopup {
 
                 // Popup don't receive frames unless the toplevel does.
                 layer.surface.request_frame();
+            }
+            ParentId::Decoration(id) => {
+                let deco = state
+                    .decorations
+                    .iter()
+                    .find(|deco| deco.decoration_id == id)
+                    .ok_or(Error::ToplevelNotFound)?;
+
+                surface.toplevel_wl_surface = Some(deco.surface.wl_surface.clone());
+
+                deco.surface.request_frame();
             }
             _ => unreachable!(),
         };

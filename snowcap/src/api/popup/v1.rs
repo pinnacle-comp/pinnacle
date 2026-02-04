@@ -3,8 +3,7 @@ use smithay_client_toolkit::reexports::protocols::xdg::shell::client::xdg_positi
 use snowcap_api_defs::snowcap::popup::v1::{
     self, CloseRequest, NewPopupRequest, NewPopupResponse, OperatePopupRequest,
     OperatePopupResponse, UpdatePopupRequest, UpdatePopupResponse, ViewRequest, ViewResponse,
-    new_popup_request::{self, ParentId},
-    popup_service_server,
+    new_popup_request, popup_service_server,
 };
 use tonic::{Request, Response, Status};
 
@@ -27,10 +26,6 @@ impl popup_service_server::PopupService for super::PopupService {
         let Some(parent_id) = request.parent_id else {
             return Err(Status::invalid_argument("no parent id"));
         };
-
-        if matches!(parent_id, ParentId::DecoId(_)) {
-            return Err(Status::unimplemented("Decoration's popup are unavailable."));
-        }
 
         let parent_id: popup::ParentId = parent_id.into();
 
@@ -234,8 +229,17 @@ impl popup_service_server::PopupService for super::PopupService {
                             .anchor_rect_for(&mut l.surface)
                             .ok_or(Status::invalid_argument("invalid position."))?
                     }
-                    // Decoration as parent is not implemented at the moment.
-                    popup::ParentId::Decoration(_) => unreachable!(),
+                    popup::ParentId::Decoration(id) => {
+                        let deco = state
+                            .decorations
+                            .iter_mut()
+                            .find(|deco| deco.decoration_id == id)
+                            .ok_or(Status::internal("parent not found."))?;
+
+                        position
+                            .anchor_rect_for(&mut deco.surface)
+                            .ok_or(Status::invalid_argument("invalid position."))?
+                    }
                 };
 
                 new_anchor_rect = Some(anchor_rect);

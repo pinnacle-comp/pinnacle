@@ -19,6 +19,7 @@ use tracing::error;
 use crate::{
     BlockOnTokio,
     client::Client,
+    popup::{self, AsParent},
     widget::{self, Program, WidgetDef, WidgetId, WidgetMessage},
 };
 
@@ -252,5 +253,11 @@ impl<Msg> DecorationHandle<Msg> {
             })
             .block_on_tokio()
             .unwrap();
+    }
+}
+
+impl<Msg> AsParent for DecorationHandle<Msg> {
+    fn as_parent(&self) -> crate::popup::Parent {
+        popup::Parent(popup::ParentInner::Decoration(self.id))
     }
 }

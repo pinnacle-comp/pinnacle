@@ -15,17 +15,20 @@ local popup_handle = {}
 
 ---A handle to a popup's parent surface.
 ---@class snowcap.popup.ParentHandle
----@field layer? integer Popup's parent surface is a Layer.
----@field popup? integer Popup's parent surface is another Popup.
+---@field layer? integer Popup's parent surface is a layer.
+---@field decoration? integer Popup's parent surface is a decoration.
+---@field popup? integer Popup's parent surface is another popup.
 local ParentHandle = {}
 
 function ParentHandle:__tostring()
     if self.layer ~= nil then
         return ("ParentHandle{Layer#%d}"):format(self.layer)
+    elseif self.decoration ~= nil then
+        return ("ParentHandle{Decoration#%d}"):format(self.decoration)
     elseif self.popup ~= nil then
-        return("ParentHandle{Popup#%d}"):format(self.popup)
+        return ("ParentHandle{Popup#%d}"):format(self.popup)
     else
-        return "ParenHandle{empty}"
+        return "ParentHandle{empty}"
     end
 end
 
@@ -39,6 +42,15 @@ local parent = {
     Layer = function(handle)
         return setmetatable({ layer = handle.id }, ParentHandle)
     end,
+
+    ---Build a ParentHandle from a DecorationHandle.
+    ---
+    ---@param handle snowcap.decoration.DecorationHandle
+    ---@return snowcap.popup.ParentHandle
+    Decoration = function(handle)
+        return setmetatable({ decoration = handle.id }, ParentHandle)
+    end,
+
     ---Build a ParentHandle from a PopupHandle.
     ---
     ---@param handle snowcap.popup.PopupHandle
@@ -190,7 +202,7 @@ popup.gravity = gravity
 ---@field anchor? snowcap.popup.Anchor Popup's anchor point on the Position boundaries.
 ---@field gravity? snowcap.popup.Gravity Popup's gravity.
 ---@field offset? snowcap.popup.Offset Popup's offset from the ancho point.
----@field contraints_adjust? snowcap.popup.ConstraintsAdjust Popup's contraints adjustment.
+---@field constraints_adjust? snowcap.popup.ConstraintsAdjust Popup's constraints adjustment.
 ---@field no_grab? boolean If true, the Popup will not request an explicit keyboard grab upon creation.
 ---@field no_replace? boolean If true, the Popup will fail if there is already another popup with the same parent.
 
@@ -211,7 +223,7 @@ function popup.new_widget(args)
         anchor = args.anchor,
         gravity = args.gravity,
         offset = args.offset --[[@as snowcap.popup.v1.Offset]],
-        constraints_adjust = args.contraints_adjust --[[@as snowcap.popup.v1.ConstraintsAdjust]],
+        constraints_adjust = args.constraints_adjust --[[@as snowcap.popup.v1.ConstraintsAdjust]],
         no_grab = args.no_grab,
         no_replace = args.no_replace,
     }
@@ -220,6 +232,8 @@ function popup.new_widget(args)
 
     if args.parent.layer then
         request.layer_id = args.parent.layer
+    elseif args.parent.decoration then
+        request.deco_id = args.parent.decoration
     elseif args.parent.popup then
         request.popup_id = args.parent.popup
     else
