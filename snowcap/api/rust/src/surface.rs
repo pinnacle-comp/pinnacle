@@ -22,6 +22,24 @@ pub enum SurfaceHandle<Msg> {
     Popup(PopupHandle<Msg>),
 }
 
+impl<Msg> From<LayerHandle<Msg>> for SurfaceHandle<Msg> {
+    fn from(value: LayerHandle<Msg>) -> Self {
+        Self::Layer(value)
+    }
+}
+
+impl<Msg> From<DecorationHandle<Msg>> for SurfaceHandle<Msg> {
+    fn from(value: DecorationHandle<Msg>) -> Self {
+        Self::Decoration(value)
+    }
+}
+
+impl<Msg> From<PopupHandle<Msg>> for SurfaceHandle<Msg> {
+    fn from(value: PopupHandle<Msg>) -> Self {
+        Self::Popup(value)
+    }
+}
+
 impl<Msg> SurfaceHandle<Msg> {
     /// Closes this surface.
     pub fn close(&self) {

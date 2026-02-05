@@ -277,6 +277,10 @@ function popup.new_widget(args)
     args.program:connect(widget_signal.redraw_needed, update_on_msg)
     args.program:connect(widget_signal.send_message, update_on_msg)
 
+    local handle = popup_handle.new(popup_id, update_on_msg)
+
+    args.program:created(widget.SurfaceHandle.from_popup_handle(handle))
+
     err = client:snowcap_widget_v1_WidgetService_GetWidgetEvents({
         popup_id = popup_id,
     }, function(response) ---@diagnostic disable-line:redefined-local
@@ -311,7 +315,7 @@ function popup.new_widget(args)
         end
     end)
 
-    return popup_handle.new(popup_id, update_on_msg)
+    return handle
 end
 
 ---Do something when a key event is received.
