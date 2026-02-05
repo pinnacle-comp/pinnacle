@@ -3,6 +3,7 @@
 -- file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 local signal = require("snowcap.signal")
+local widget_signal = require("snowcap.widget.signal")
 
 local widget_id = 0
 
@@ -22,6 +23,30 @@ end
 ---@field private widget_id integer
 local Base = {}
 Base.__index = Base
+
+---Called when a surface has been created with this program.
+---
+---A surface handle is provided to allow the program to manupulate
+---the surface. This handle should be passed to any child programs
+---to allow them to use it as well.
+---
+---@param handle snowcap.widget.SurfaceHandle
+---@diagnostic disable-next-line: unused-local
+function Base:created(handle) end
+
+---Registers a child program to this program, allowing it to
+---bubble up emitted redraw and message signals.
+---
+---@param child snowcap.widget.base.Base
+function Base:register_child(child)
+    child:connect(widget_signal.redraw_needed, function()
+        self:emit(widget_signal.redraw_needed)
+    end)
+
+    child:connect(widget_signal.send_message, function(...)
+        self:emit(widget_signal.send_message, ...)
+    end)
+end
 
 ---Connects a callback to a specific signal.
 ---
