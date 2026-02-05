@@ -78,7 +78,7 @@ impl decoration_service_server::DecorationService for super::DecorationService {
         let id = DecorationId(id);
 
         run_unary(&self.sender, move |state| {
-            state.decorations.retain(|deco| deco.decoration_id != id);
+            state.decoration_destroy(id);
             Ok(CloseResponse {})
         })
         .await
