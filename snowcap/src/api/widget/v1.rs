@@ -17,7 +17,9 @@ use crate::{
     layer::LayerId,
     popup::PopupId,
     util::convert::{FromApi, TryFromApi},
-    widget::{MouseAreaEvent, TextInputEvent, ViewFn, WidgetEvent, WidgetId},
+    widget::{
+        MouseAreaEvent, TextInputEvent, TouchAreaEvent, ViewFn, WidgetEvent, WidgetId, touch_area,
+    },
 };
 
 #[tonic::async_trait]
@@ -66,6 +68,9 @@ impl widget_service_server::WidgetService for super::WidgetService {
                                 }
                                 WidgetEvent::TextInput(evt) => {
                                     widget_event::Event::TextInput(evt.into())
+                                }
+                                WidgetEvent::TouchArea(evt) => {
+                                    widget_event::Event::TouchArea(evt.into())
                                 }
                             }),
                         })
@@ -996,6 +1001,89 @@ pub fn widget_def_to_fn(def: WidgetDef) -> Option<ViewFn> {
 
             Some(f)
         }
+        widget_def::Widget::TouchArea(touch_area) => {
+            let widget::v1::TouchArea {
+                child,
+                widget_id,
+                on_down,
+                on_up,
+                on_enter,
+                on_move,
+                on_exit,
+                on_cancel,
+            } = *touch_area;
+
+            let child_widget_fn = child.and_then(|def| widget_def_to_fn(*def));
+
+            let f: ViewFn = Box::new(move || {
+                let mut touch_area = touch_area::TouchArea::new(
+                    child_widget_fn
+                        .as_ref()
+                        .map(|child| child())
+                        .unwrap_or_else(|| iced::widget::Text::new("NULL").into()),
+                );
+
+                if let Some(widget_id) = widget_id {
+                    if on_down {
+                        touch_area = touch_area.on_down(move |id, pos| {
+                            crate::widget::SnowcapMessage::WidgetEvent(
+                                WidgetId(widget_id),
+                                WidgetEvent::TouchArea(TouchAreaEvent::Down(id, pos)),
+                            )
+                        });
+                    }
+
+                    if on_up {
+                        touch_area = touch_area.on_up(move |id| {
+                            crate::widget::SnowcapMessage::WidgetEvent(
+                                WidgetId(widget_id),
+                                WidgetEvent::TouchArea(TouchAreaEvent::Up(id)),
+                            )
+                        });
+                    }
+
+                    if on_enter {
+                        touch_area = touch_area.on_enter(move |id| {
+                            crate::widget::SnowcapMessage::WidgetEvent(
+                                WidgetId(widget_id),
+                                WidgetEvent::TouchArea(TouchAreaEvent::Enter(id)),
+                            )
+                        });
+                    }
+
+                    if on_move {
+                        touch_area = touch_area.on_move(move |id, pos| {
+                            crate::widget::SnowcapMessage::WidgetEvent(
+                                WidgetId(widget_id),
+                                WidgetEvent::TouchArea(TouchAreaEvent::Move(id, pos)),
+                            )
+                        });
+                    }
+
+                    if on_exit {
+                        touch_area = touch_area.on_exit(move |id| {
+                            crate::widget::SnowcapMessage::WidgetEvent(
+                                WidgetId(widget_id),
+                                WidgetEvent::TouchArea(TouchAreaEvent::Exit(id)),
+                            )
+                        });
+                    }
+
+                    if on_cancel {
+                        touch_area = touch_area.on_cancel(move |id| {
+                            crate::widget::SnowcapMessage::WidgetEvent(
+                                WidgetId(widget_id),
+                                WidgetEvent::TouchArea(TouchAreaEvent::Cancel(id)),
+                            )
+                        });
+                    }
+                }
+
+                touch_area.into()
+            });
+
+            Some(f)
+        }
     }
 }
 
@@ -1467,5 +1555,52 @@ impl FromApi<widget::v1::text_input::Style> for crate::widget::text_input::Style
             hover_focused: hover_focused.map(convert_inner),
             disabled: disabled.map(convert_inner),
         }
+    }
+}
+
+impl From<TouchAreaEvent> for snowcap_api_defs::snowcap::widget::v1::touch_area::Event {
+    fn from(value: TouchAreaEvent) -> Self {
+        use snowcap_api_defs::snowcap::widget::v1::touch_area::{self, event::Data};
+
+        let data = match value {
+            TouchAreaEvent::Down(finger, point) => {
+                let down_evt = touch_area::DownEvent {
+                    finger: Some(touch_area::Finger::from_api(finger)),
+                    point: Some(touch_area::Point::from_api(point)),
+                };
+
+                Data::Down(down_evt)
+            }
+            TouchAreaEvent::Up(finger) => Data::Up(touch_area::Finger::from_api(finger)),
+            TouchAreaEvent::Enter(finger) => Data::Enter(touch_area::Finger::from_api(finger)),
+            TouchAreaEvent::Move(finger, point) => {
+                let down_evt = touch_area::MoveEvent {
+                    finger: Some(touch_area::Finger::from_api(finger)),
+                    point: Some(touch_area::Point::from_api(point)),
+                };
+
+                Data::Move(down_evt)
+            }
+            TouchAreaEvent::Exit(finger) => Data::Exit(touch_area::Finger::from_api(finger)),
+            TouchAreaEvent::Cancel(finger) => Data::Cancel(touch_area::Finger::from_api(finger)),
+        };
+
+        Self { data: Some(data) }
+    }
+}
+
+impl FromApi<iced::touch::Finger> for snowcap_api_defs::snowcap::widget::v1::touch_area::Finger {
+    fn from_api(api_type: iced::touch::Finger) -> Self {
+        Self {
+            id: api_type.0 as u32,
+        }
+    }
+}
+
+impl FromApi<iced::Point> for snowcap_api_defs::snowcap::widget::v1::touch_area::Point {
+    fn from_api(api_type: iced::Point) -> Self {
+        let iced::Point { x, y } = api_type;
+
+        Self { x, y }
     }
 }
