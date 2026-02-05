@@ -20,7 +20,7 @@ use crate::{
     BlockOnTokio,
     client::Client,
     input::{KeyEvent, Modifiers},
-    widget::{self, Program, WidgetDef, WidgetId, WidgetMessage, signal},
+    widget::{self, Program, WidgetDef, WidgetId, WidgetMessage, operation::Operation, signal},
 };
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
@@ -308,12 +308,7 @@ impl<Msg> PopupHandle<Msg> {
             tracing::error!("Failed to close {self:?}: {status}");
         }
     }
-}
 
-impl<Msg> PopupHandle<Msg>
-where
-    Msg: Clone + Send + 'static,
-{
     /// Update this popup's attributes.
     pub fn update(
         &self,
@@ -375,7 +370,7 @@ where
     /// Sends an [`Operation`] to this Popup.
     ///
     /// [`Operation`]: widget::operation::Operation
-    pub fn operate(&self, operation: widget::operation::Operation) {
+    pub fn operate(&self, operation: Operation) {
         if let Err(status) = Client::popup()
             .operate_popup(OperatePopupRequest {
                 popup_id: self.id.to_inner(),
@@ -396,7 +391,12 @@ where
     pub fn force_redraw(&self) {
         let _ = self.msg_sender.send(None);
     }
+}
 
+impl<Msg> PopupHandle<Msg>
+where
+    Msg: Clone + Send + 'static,
+{
     /// Do something when a key event is received.
     pub fn on_key_event(
         &self,

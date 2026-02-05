@@ -272,10 +272,7 @@ impl<Msg> std::fmt::Debug for LayerHandle<Msg> {
     }
 }
 
-impl<Msg> LayerHandle<Msg>
-where
-    Msg: Clone + Send + 'static,
-{
+impl<Msg> LayerHandle<Msg> {
     /// Update this layer's attributes.
     pub fn update(
         &self,
@@ -377,7 +374,12 @@ where
             error!("Failed to send operation to {self:?}: {status}");
         }
     }
+}
 
+impl<Msg> LayerHandle<Msg>
+where
+    Msg: Clone + Send + 'static,
+{
     /// Do something when a key event is received
     pub fn on_key_event(
         &self,
