@@ -37,6 +37,7 @@ use text_input::TextInput;
 
 use crate::{
     signal::{HandlerPolicy, Signaler},
+    surface::SurfaceHandle,
     widget::{input_region::InputRegion, utils::Radians},
 };
 
@@ -643,10 +644,25 @@ pub trait Program {
     type Message;
 
     /// Updates this widget program with the received message.
+    ///
+    /// If this program has [`Source`]s or child programs, [`Self::Message`]
+    /// should impl `Clone` and the message should be
+    /// cloned and passed to all `Source`s and child programs.
+    ///
+    /// [`Self::Message`]: Program::Message
     fn update(&mut self, msg: Self::Message);
 
     /// Creates a widget definition for display by Snowcap.
     fn view(&self) -> WidgetDef<Self::Message>;
+
+    /// Called when a surface has been created with this program.
+    ///
+    /// A [`SurfaceHandle`] is provided to allow the program to manipulate
+    /// the surface. This handle should be cloned and passed to any child programs
+    /// to allow them to use it as well.
+    fn created(&mut self, handle: SurfaceHandle<Self::Message>) {
+        let _ = handle;
+    }
 
     /// Returns a possibly held [`Signaler`].
     ///
@@ -702,6 +718,17 @@ impl<Msg> Program for Box<dyn Program<Message = Msg>> {
     fn signaler(&self) -> Option<Signaler> {
         (**self).signaler()
     }
+
+    fn created(&mut self, handle: SurfaceHandle<Self::Message>) {
+        (**self).created(handle);
+    }
+
+    fn register_child(&self, child: &dyn Program<Message = Self::Message>)
+    where
+        Self::Message: Clone + 'static,
+    {
+        (**self).register_child(child);
+    }
 }
 
 impl<Msg> Program for Box<dyn Program<Message = Msg> + Send> {
@@ -718,6 +745,17 @@ impl<Msg> Program for Box<dyn Program<Message = Msg> + Send> {
     fn signaler(&self) -> Option<Signaler> {
         (**self).signaler()
     }
+
+    fn created(&mut self, handle: SurfaceHandle<Self::Message>) {
+        (**self).created(handle);
+    }
+
+    fn register_child(&self, child: &dyn Program<Message = Self::Message>)
+    where
+        Self::Message: Clone + 'static,
+    {
+        (**self).register_child(child);
+    }
 }
 
 impl<Msg> Program for Box<dyn Program<Message = Msg> + Send + Sync> {
@@ -733,5 +771,16 @@ impl<Msg> Program for Box<dyn Program<Message = Msg> + Send + Sync> {
 
     fn signaler(&self) -> Option<Signaler> {
         (**self).signaler()
+    }
+
+    fn created(&mut self, handle: SurfaceHandle<Self::Message>) {
+        (**self).created(handle);
+    }
+
+    fn register_child(&self, child: &dyn Program<Message = Self::Message>)
+    where
+        Self::Message: Clone + 'static,
+    {
+        (**self).register_child(child);
     }
 }
