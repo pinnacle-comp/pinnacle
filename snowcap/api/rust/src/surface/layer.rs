@@ -204,6 +204,13 @@ where
         });
     }
 
+    let handle = LayerHandle {
+        id: layer_id.into(),
+        msg_sender: msg_send,
+    };
+
+    program.created(handle.clone().into());
+
     tokio::spawn(async move {
         loop {
             tokio::select! {
@@ -253,10 +260,7 @@ where
         }
     });
 
-    Ok(LayerHandle {
-        id: layer_id.into(),
-        msg_sender: msg_send,
-    })
+    Ok(handle)
 }
 
 /// A handle to a layer surface.

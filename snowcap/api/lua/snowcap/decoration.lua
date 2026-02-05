@@ -99,6 +99,10 @@ function decoration.new_widget(args)
     args.program:connect(widget_signal.redraw_needed, update_on_msg)
     args.program:connect(widget_signal.send_message, update_on_msg)
 
+    local handle = decoration_handle.new(decoration_id, update_on_msg)
+
+    args.program:created(widget.SurfaceHandle.from_decoration_handle(handle))
+
     local err = client:snowcap_widget_v1_WidgetService_GetWidgetEvents({
         decoration_id = decoration_id,
     }, function(response)
@@ -127,7 +131,7 @@ function decoration.new_widget(args)
         })
     end)
 
-    return decoration_handle.new(decoration_id, update_on_msg)
+    return handle
 end
 
 ---Convert a DecorationHandle into a Popup's ParentHandle

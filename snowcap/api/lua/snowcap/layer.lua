@@ -144,6 +144,10 @@ function layer.new_widget(args)
     args.program:connect(widget_signal.redraw_needed, update_on_msg)
     args.program:connect(widget_signal.send_message, update_on_msg)
 
+    local handle = layer_handle.new(layer_id, update_on_msg)
+
+    args.program:created(widget.SurfaceHandle.from_layer_handle(handle))
+
     local err = client:snowcap_widget_v1_WidgetService_GetWidgetEvents({
         layer_id = layer_id,
     }, function(response)
@@ -172,7 +176,7 @@ function layer.new_widget(args)
         })
     end)
 
-    return layer_handle.new(layer_id, update_on_msg)
+    return handle
 end
 
 ---Do something when a key event is received.
