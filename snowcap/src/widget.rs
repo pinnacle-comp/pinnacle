@@ -1,4 +1,5 @@
 pub mod input_region;
+pub mod touch_area;
 
 use iced::{Color, Theme, event::Status};
 use iced_graphics::Viewport;
@@ -218,6 +219,7 @@ pub enum WidgetEvent {
     Button,
     MouseArea(MouseAreaEvent),
     TextInput(TextInputEvent),
+    TouchArea(TouchAreaEvent),
 }
 
 #[derive(Debug, Clone)]
@@ -240,6 +242,16 @@ pub enum TextInputEvent {
     Input(String),
     Submit,
     Paste(String),
+}
+
+#[derive(Debug, Clone)]
+pub enum TouchAreaEvent {
+    Down(iced::touch::Finger, iced::Point),
+    Up(iced::touch::Finger),
+    Enter(iced::touch::Finger),
+    Move(iced::touch::Finger, iced::Point),
+    Exit(iced::touch::Finger),
+    Cancel(iced::touch::Finger),
 }
 
 pub(crate) mod text_input {
