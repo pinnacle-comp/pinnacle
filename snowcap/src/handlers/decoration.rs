@@ -48,7 +48,15 @@ impl Dispatch<SnowcapDecorationSurfaceV1, ()> for State {
                 deco.schedule_redraw();
             }
             snowcap_decoration_surface_v1::Event::Closed => {
-                state.decorations.retain(|deco| &deco.decoration != surface);
+                if let Some(deco_id) = state.decorations.iter().find_map(|d| {
+                    if &d.decoration == surface {
+                        Some(d.decoration_id)
+                    } else {
+                        None
+                    }
+                }) {
+                    state.decoration_destroy(deco_id);
+                }
             }
             _ => todo!(),
         }
