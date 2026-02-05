@@ -5,6 +5,12 @@
 ---@class snowcap.widget.Program : snowcap.widget.base.Base
 ---@field update fun(self: self, message: any)
 ---@field view fun(self: self): snowcap.widget.WidgetDef
+---Called when a surface has been created with this program.
+---
+---A surface handle is provided to allow the program to manipulate
+---the surface. This handle should be passed to any child programs
+---to allow them to use it as well.
+---@field created fun(self: self, handle: snowcap.widget.SurfaceHandle)?
 
 ---@class snowcap.widget.Palette
 ---@field background snowcap.widget.Color
