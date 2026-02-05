@@ -6,6 +6,7 @@ local log = require("snowcap.log")
 local client = require("snowcap.grpc.client").client
 
 local widget = require("snowcap.widget")
+local widget_signal = require("snowcap.widget.signal")
 
 ---Support for popup surface widgets using `xdg-shell::xdg_popup`
 ---@class snowcap.popup
@@ -257,6 +258,25 @@ function popup.new_widget(args)
 
     local popup_id = response.popup_id --[[@as integer]]
 
+    ---@type fun(msg: any?)
+    local update_on_msg = function(msg)
+        if msg ~= nil then
+            args.program:update(msg)
+        end
+
+        ---@diagnostic disable-next-line: redefined-local
+        local _, err = client:snowcap_popup_v1_PopupService_RequestView({
+            popup_id = popup_id,
+        })
+
+        if err then
+            log.error(err)
+        end
+    end
+
+    args.program:connect(widget_signal.redraw_needed, update_on_msg)
+    args.program:connect(widget_signal.send_message, update_on_msg)
+
     err = client:snowcap_widget_v1_WidgetService_GetWidgetEvents({
         popup_id = popup_id,
     }, function(response) ---@diagnostic disable-line:redefined-local
@@ -291,18 +311,7 @@ function popup.new_widget(args)
         end
     end)
 
-    return popup_handle.new(popup_id, function(msg)
-        args.program:update(msg)
-
-        ---@diagnostic disable-next-line: redefined-local
-        local _, err = client:snowcap_popup_v1_PopupService_RequestView({
-            popup_id = popup_id,
-        })
-
-        if err then
-            log.error(err)
-        end
-    end)
+    return popup_handle.new(popup_id, update_on_msg)
 end
 
 ---Do something when a key event is received.
