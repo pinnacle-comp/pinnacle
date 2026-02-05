@@ -6,6 +6,10 @@
 ---
 ---@enum snowcap.widget.signal
 return {
+    ---Notifies that a redraw is needed.
     redraw_needed = "widget::redraw_needed",
+    ---Emits a message that will update widgets.
     send_message = "widget::send_message",
+    ---Notifies that a widget closed.
+    closed = "widget::closed",
 }

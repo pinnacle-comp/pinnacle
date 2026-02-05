@@ -29,3 +29,9 @@ impl<Msg> From<Msg> for Message<Msg> {
 }
 
 impl<Msg: Clone + 'static> Signal for Message<Msg> {}
+
+/// Notifies that a widget closed.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct Closed;
+
+impl Signal for Closed {}
