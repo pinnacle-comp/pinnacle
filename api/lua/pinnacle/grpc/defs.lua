@@ -526,6 +526,25 @@ local pinnacle_input_v1_Edge = {
     EDGE_RELEASE = 2,
 }
 
+---@enum pinnacle.input.v1.GestureDirection
+local pinnacle_input_v1_GestureDirection = {
+    DOWN = 0,
+    LEFT = 1,
+    RIGHT = 2,
+    UP = 3,
+    DOWN_AND_LEFT = 4,
+    DOWN_AND_RIGHT = 5,
+    UP_AND_LEFT = 6,
+    UP_AND_RIGHT = 7,
+}
+
+---@enum pinnacle.input.v1.GestureType
+local pinnacle_input_v1_GestureType = {
+    HOLD = 0,
+    PINCH = 1,
+    SWIPE = 2,
+}
+
 ---@enum pinnacle.input.v1.ClickMethod
 local pinnacle_input_v1_ClickMethod = {
     CLICK_METHOD_UNSPECIFIED = 0,
@@ -675,6 +694,7 @@ local pinnacle_v1_Backend = {
 ---@field properties pinnacle.input.v1.BindProperties?
 ---@field key pinnacle.input.v1.Keybind?
 ---@field mouse pinnacle.input.v1.Mousebind?
+---@field gesture pinnacle.input.v1.Gesturebind?
 
 ---@class pinnacle.input.v1.BindRequest
 ---@field bind pinnacle.input.v1.Bind?
@@ -716,6 +736,26 @@ local pinnacle_v1_Backend = {
 ---@field edge pinnacle.input.v1.Edge?
 
 ---@class pinnacle.input.v1.MousebindOnPressRequest
+---@field bind_id integer?
+
+---@class pinnacle.input.v1.Gesturebind
+---@field direction pinnacle.input.v1.GestureDirection?
+---@field fingers integer?
+---@field gesture_type pinnacle.input.v1.GestureType?
+
+---@class pinnacle.input.v1.GesturebindStreamRequest
+---@field bind_id integer?
+
+---@class pinnacle.input.v1.GesturebindStreamResponse
+---@field edge pinnacle.input.v1.Edge?
+
+---@class pinnacle.input.v1.GesturebindRequest
+---@field bind_id integer?
+
+---@class pinnacle.input.v1.GesturebindOnBeginRequest
+---@field bind_id integer?
+
+---@class pinnacle.input.v1.GesturebindOnFinishRequest
 ---@field bind_id integer?
 
 ---@class pinnacle.input.v1.GetBindInfosRequest
@@ -1417,6 +1457,12 @@ pinnacle.input.v1.Mousebind = {}
 pinnacle.input.v1.MousebindStreamRequest = {}
 pinnacle.input.v1.MousebindStreamResponse = {}
 pinnacle.input.v1.MousebindOnPressRequest = {}
+pinnacle.input.v1.Gesturebind = {}
+pinnacle.input.v1.GesturebindStreamRequest = {}
+pinnacle.input.v1.GesturebindStreamResponse = {}
+pinnacle.input.v1.GesturebindRequest = {}
+pinnacle.input.v1.GesturebindOnBeginRequest = {}
+pinnacle.input.v1.GesturebindOnFinishRequest = {}
 pinnacle.input.v1.GetBindInfosRequest = {}
 pinnacle.input.v1.GetBindInfosResponse = {}
 pinnacle.input.v1.BindInfo = {}
@@ -1624,6 +1670,8 @@ pinnacle.util.v1.AbsOrRel = pinnacle_util_v1_AbsOrRel
 pinnacle.util.v1.Dir = pinnacle_util_v1_Dir
 pinnacle.input.v1.Modifier = pinnacle_input_v1_Modifier
 pinnacle.input.v1.Edge = pinnacle_input_v1_Edge
+pinnacle.input.v1.GestureDirection = pinnacle_input_v1_GestureDirection
+pinnacle.input.v1.GestureType = pinnacle_input_v1_GestureType
 pinnacle.input.v1.ClickMethod = pinnacle_input_v1_ClickMethod
 pinnacle.input.v1.AccelProfile = pinnacle_input_v1_AccelProfile
 pinnacle.input.v1.ScrollMethod = pinnacle_input_v1_ScrollMethod
@@ -1832,6 +1880,25 @@ pinnacle.input.v1.InputService.MousebindStream.response = ".pinnacle.input.v1.Mo
 function Client:pinnacle_input_v1_InputService_MousebindStream(data, callback)
     return self:server_streaming_request(pinnacle.input.v1.InputService.MousebindStream, data, callback)
 end
+pinnacle.input.v1.InputService.GesturebindStream = {}
+pinnacle.input.v1.InputService.GesturebindStream.service = "pinnacle.input.v1.InputService"
+pinnacle.input.v1.InputService.GesturebindStream.method = "GesturebindStream"
+pinnacle.input.v1.InputService.GesturebindStream.request = ".pinnacle.input.v1.GesturebindStreamRequest"
+pinnacle.input.v1.InputService.GesturebindStream.response = ".pinnacle.input.v1.GesturebindStreamResponse"
+
+---Performs a server-streaming request.
+---
+---`callback` will be called with every streamed response.
+---
+---@nodiscard
+---
+---@param data pinnacle.input.v1.GesturebindStreamRequest
+---@param callback fun(response: pinnacle.input.v1.GesturebindStreamResponse)
+---
+---@return string | nil An error string, if any
+function Client:pinnacle_input_v1_InputService_GesturebindStream(data, callback)
+    return self:server_streaming_request(pinnacle.input.v1.InputService.GesturebindStream, data, callback)
+end
 pinnacle.input.v1.InputService.KeybindOnPress = {}
 pinnacle.input.v1.InputService.KeybindOnPress.service = "pinnacle.input.v1.InputService"
 pinnacle.input.v1.InputService.KeybindOnPress.method = "KeybindOnPress"
@@ -1865,6 +1932,57 @@ pinnacle.input.v1.InputService.MousebindOnPress.response = ".google.protobuf.Emp
 ---@return string | nil error An error string, if any
 function Client:pinnacle_input_v1_InputService_MousebindOnPress(data)
     return self:unary_request(pinnacle.input.v1.InputService.MousebindOnPress, data)
+end
+pinnacle.input.v1.InputService.Gesturebind = {}
+pinnacle.input.v1.InputService.Gesturebind.service = "pinnacle.input.v1.InputService"
+pinnacle.input.v1.InputService.Gesturebind.method = "Gesturebind"
+pinnacle.input.v1.InputService.Gesturebind.request = ".pinnacle.input.v1.GesturebindRequest"
+pinnacle.input.v1.InputService.Gesturebind.response = ".google.protobuf.Empty"
+
+---Performs a unary request.
+---
+---@nodiscard
+---
+---@param data pinnacle.input.v1.GesturebindRequest
+---
+---@return google.protobuf.Empty | nil response
+---@return string | nil error An error string, if any
+function Client:pinnacle_input_v1_InputService_Gesturebind(data)
+    return self:unary_request(pinnacle.input.v1.InputService.Gesturebind, data)
+end
+pinnacle.input.v1.InputService.GesturebindOnBegin = {}
+pinnacle.input.v1.InputService.GesturebindOnBegin.service = "pinnacle.input.v1.InputService"
+pinnacle.input.v1.InputService.GesturebindOnBegin.method = "GesturebindOnBegin"
+pinnacle.input.v1.InputService.GesturebindOnBegin.request = ".pinnacle.input.v1.GesturebindOnBeginRequest"
+pinnacle.input.v1.InputService.GesturebindOnBegin.response = ".google.protobuf.Empty"
+
+---Performs a unary request.
+---
+---@nodiscard
+---
+---@param data pinnacle.input.v1.GesturebindOnBeginRequest
+---
+---@return google.protobuf.Empty | nil response
+---@return string | nil error An error string, if any
+function Client:pinnacle_input_v1_InputService_GesturebindOnBegin(data)
+    return self:unary_request(pinnacle.input.v1.InputService.GesturebindOnBegin, data)
+end
+pinnacle.input.v1.InputService.GesturebindOnFinish = {}
+pinnacle.input.v1.InputService.GesturebindOnFinish.service = "pinnacle.input.v1.InputService"
+pinnacle.input.v1.InputService.GesturebindOnFinish.method = "GesturebindOnFinish"
+pinnacle.input.v1.InputService.GesturebindOnFinish.request = ".pinnacle.input.v1.GesturebindOnFinishRequest"
+pinnacle.input.v1.InputService.GesturebindOnFinish.response = ".google.protobuf.Empty"
+
+---Performs a unary request.
+---
+---@nodiscard
+---
+---@param data pinnacle.input.v1.GesturebindOnFinishRequest
+---
+---@return google.protobuf.Empty | nil response
+---@return string | nil error An error string, if any
+function Client:pinnacle_input_v1_InputService_GesturebindOnFinish(data)
+    return self:unary_request(pinnacle.input.v1.InputService.GesturebindOnFinish, data)
 end
 pinnacle.input.v1.InputService.SetXkbConfig = {}
 pinnacle.input.v1.InputService.SetXkbConfig.service = "pinnacle.input.v1.InputService"
