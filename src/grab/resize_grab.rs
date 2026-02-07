@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use smithay::{
+    backend::input::TouchSlot,
     desktop::WindowSurface,
     input::{
         Seat, SeatHandler,
@@ -10,18 +11,21 @@ use smithay::{
             GesturePinchUpdateEvent, GestureSwipeBeginEvent, GestureSwipeEndEvent,
             GestureSwipeUpdateEvent, GrabStartData, PointerGrab, PointerInnerHandle,
         },
+        touch::{self, TouchGrab, TouchInnerHandle, UpEvent},
     },
+    output::Output,
     reexports::{
         wayland_protocols::xdg::shell::server::xdg_toplevel,
         wayland_server::protocol::wl_surface::WlSurface,
     },
-    utils::{IsAlive, Logical, Point, Rectangle, Size},
+    utils::{IsAlive, Logical, Point, Rectangle, Serial, Size},
     wayland::{compositor, shell::xdg::SurfaceCachedState},
     xwayland,
 };
 use tracing::warn;
 
 use crate::{
+    grab::InputGrabStartData,
     layout::tree::ResizeDir,
     state::{State, WithState},
     util::transaction::{Location, TransactionBuilder},
@@ -70,21 +74,19 @@ impl ResizeEdge {
 }
 
 pub struct ResizeSurfaceGrab {
-    start_data: GrabStartData<State>,
+    start_data: InputGrabStartData<State>,
     window: WindowElement,
     edges: ResizeEdge,
     initial_window_geo: Rectangle<i32, Logical>,
     last_window_size: Size<i32, Logical>,
-    button_used: u32,
 }
 
 impl ResizeSurfaceGrab {
     pub fn start(
-        start_data: GrabStartData<State>,
+        start_data: InputGrabStartData<State>,
         window: WindowElement,
         edges: ResizeEdge,
         initial_window_geo: Rectangle<i32, Logical>,
-        button_used: u32,
     ) -> Option<Self> {
         Some(Self {
             start_data,
@@ -92,7 +94,6 @@ impl ResizeSurfaceGrab {
             edges,
             initial_window_geo,
             last_window_size: initial_window_geo.size,
-            button_used,
         })
     }
 
@@ -109,44 +110,11 @@ impl ResizeSurfaceGrab {
             toplevel.send_pending_configure();
         }
     }
-}
 
-impl PointerGrab<State> for ResizeSurfaceGrab {
-    fn frame(&mut self, data: &mut State, handle: &mut PointerInnerHandle<'_, State>) {
-        handle.frame(data);
-    }
-
-    fn motion(
-        &mut self,
-        state: &mut State,
-        handle: &mut PointerInnerHandle<'_, State>,
-        _focus: Option<(<State as SeatHandler>::PointerFocus, Point<f64, Logical>)>,
-        event: &smithay::input::pointer::MotionEvent,
-    ) {
-        handle.motion(state, None, event);
-
-        if state.pinnacle.layout_state.pending_resize {
-            return;
-        }
-
-        let output = self.window.output(&state.pinnacle);
-
-        if !self.window.alive() || output.is_none() {
-            state
-                .pinnacle
-                .cursor_state
-                .set_cursor_image(CursorImageStatus::default_named());
-            handle.unset_grab(self, state, event.serial, event.time, true);
-            return;
-        }
-
-        let Some(output) = output else {
-            unreachable!();
-        };
-
+    fn on_motion(&mut self, state: &mut State, location: Point<f64, Logical>, output: Output) {
         state.pinnacle.layout_state.pending_resize = true;
 
-        let delta = (event.location - self.start_data.location).to_i32_round::<i32>();
+        let delta = (location - self.start_data.location()).to_i32_round::<i32>();
 
         let mut new_window_width = self.initial_window_geo.size.w;
         let mut new_window_height = self.initial_window_geo.size.h;
@@ -256,6 +224,43 @@ impl PointerGrab<State> for ResizeSurfaceGrab {
                 transaction_builder.into_pending(Vec::new(), false, true),
             );
     }
+}
+
+impl PointerGrab<State> for ResizeSurfaceGrab {
+    fn frame(&mut self, data: &mut State, handle: &mut PointerInnerHandle<'_, State>) {
+        handle.frame(data);
+    }
+
+    fn motion(
+        &mut self,
+        state: &mut State,
+        handle: &mut PointerInnerHandle<'_, State>,
+        _focus: Option<(<State as SeatHandler>::PointerFocus, Point<f64, Logical>)>,
+        event: &smithay::input::pointer::MotionEvent,
+    ) {
+        handle.motion(state, None, event);
+
+        if state.pinnacle.layout_state.pending_resize {
+            return;
+        }
+
+        let output = self.window.output(&state.pinnacle);
+
+        if !self.window.alive() || output.is_none() {
+            state
+                .pinnacle
+                .cursor_state
+                .set_cursor_image(CursorImageStatus::default_named());
+            handle.unset_grab(self, state, event.serial, event.time, true);
+            return;
+        }
+
+        let Some(output) = output else {
+            unreachable!();
+        };
+
+        self.on_motion(state, event.location, output);
+    }
 
     fn relative_motion(
         &mut self,
@@ -275,7 +280,10 @@ impl PointerGrab<State> for ResizeSurfaceGrab {
     ) {
         handle.button(data, event);
 
-        if !handle.current_pressed().contains(&self.button_used) {
+        if !handle
+            .current_pressed()
+            .contains(&PointerGrab::start_data(self).button)
+        {
             data.pinnacle
                 .cursor_state
                 .set_cursor_image(CursorImageStatus::default_named());
@@ -293,7 +301,9 @@ impl PointerGrab<State> for ResizeSurfaceGrab {
     }
 
     fn start_data(&self) -> &GrabStartData<State> {
-        &self.start_data
+        self.start_data
+            .as_pointer()
+            .expect("start_data isn't Pointer")
     }
 
     fn unset(&mut self, _data: &mut State) {
@@ -373,6 +383,112 @@ impl PointerGrab<State> for ResizeSurfaceGrab {
     }
 }
 
+impl TouchGrab<State> for ResizeSurfaceGrab {
+    fn start_data(&self) -> &smithay::input::touch::GrabStartData<State> {
+        self.start_data
+            .as_touch()
+            .expect("start_data is not Touch.")
+    }
+
+    fn down(
+        &mut self,
+        data: &mut State,
+        handle: &mut smithay::input::touch::TouchInnerHandle<'_, State>,
+        _focus: Option<(<State as SeatHandler>::TouchFocus, Point<f64, Logical>)>,
+        event: &smithay::input::touch::DownEvent,
+        seq: smithay::utils::Serial,
+    ) {
+        handle.down(data, None, event, seq);
+    }
+
+    fn up(
+        &mut self,
+        data: &mut State,
+        handle: &mut TouchInnerHandle<'_, State>,
+        event: &UpEvent,
+        seq: Serial,
+    ) {
+        handle.up(data, event, seq);
+
+        let Some(start_data) = self.start_data.as_touch() else {
+            return;
+        };
+
+        if event.slot == start_data.slot {
+            handle.unset_grab(self, data);
+        }
+    }
+
+    fn motion(
+        &mut self,
+        state: &mut State,
+        handle: &mut TouchInnerHandle<'_, State>,
+        focus: Option<(<State as SeatHandler>::TouchFocus, Point<f64, Logical>)>,
+        event: &smithay::input::touch::MotionEvent,
+        seq: Serial,
+    ) {
+        handle.motion(state, focus, event, seq);
+
+        let Some(start_data) = self.start_data.as_touch() else {
+            return;
+        };
+
+        if event.slot != start_data.slot {
+            return;
+        }
+
+        if state.pinnacle.layout_state.pending_resize {
+            return;
+        }
+
+        let output = self.window.output(&state.pinnacle);
+
+        if !self.window.alive() || output.is_none() {
+            handle.unset_grab(self, state);
+            return;
+        }
+
+        let Some(output) = output else {
+            unreachable!();
+        };
+
+        self.on_motion(state, event.location, output);
+    }
+
+    fn shape(
+        &mut self,
+        data: &mut State,
+        handle: &mut TouchInnerHandle<'_, State>,
+        event: &smithay::input::touch::ShapeEvent,
+        seq: Serial,
+    ) {
+        handle.shape(data, event, seq);
+    }
+
+    fn orientation(
+        &mut self,
+        data: &mut State,
+        handle: &mut TouchInnerHandle<'_, State>,
+        event: &smithay::input::touch::OrientationEvent,
+        seq: Serial,
+    ) {
+        handle.orientation(data, event, seq);
+    }
+
+    fn frame(&mut self, data: &mut State, handle: &mut TouchInnerHandle<'_, State>, seq: Serial) {
+        handle.frame(data, seq);
+    }
+
+    fn cancel(&mut self, data: &mut State, handle: &mut TouchInnerHandle<'_, State>, seq: Serial) {
+        handle.cancel(data, seq);
+        handle.unset_grab(self, data);
+    }
+
+    fn unset(&mut self, _data: &mut State) {
+        self.ungrab();
+    }
+}
+
 impl State {
     /// The application requests a resize e.g. when you drag the edges of a window.
     pub fn resize_request_client(
@@ -381,7 +497,7 @@ impl State {
         seat: &Seat<State>,
         serial: smithay::utils::Serial,
         edges: self::ResizeEdge,
-        button_used: u32,
+        _button_used: u32,
     ) {
         let pointer = seat.get_pointer().expect("seat had no pointer");
 
@@ -411,18 +527,48 @@ impl State {
                 toplevel.send_pending_configure();
             }
 
-            let grab = ResizeSurfaceGrab::start(
-                start_data,
-                window,
-                edges,
-                initial_window_geo,
-                button_used,
-            );
+            let grab =
+                ResizeSurfaceGrab::start(start_data.into(), window, edges, initial_window_geo);
 
             if let Some(grab) = grab {
                 pointer.set_grab(self, grab, serial, Focus::Clear);
             }
         }
+    }
+
+    fn common_resize_request_server(
+        &mut self,
+        surface: &WlSurface,
+        edges: self::ResizeEdge,
+        start_data: InputGrabStartData<State>,
+    ) -> Option<ResizeSurfaceGrab> {
+        let Some(window) = self.pinnacle.window_for_surface(surface).cloned() else {
+            tracing::error!("Surface had no window, cancelling resize request");
+            return None;
+        };
+
+        if window.with_state(|state| {
+            state.layout_mode.is_maximized() || state.layout_mode.is_fullscreen()
+        }) {
+            return None;
+        }
+
+        let Some(initial_window_geo) = self.pinnacle.space.element_geometry(&window) else {
+            warn!("Resize request on unmapped surface");
+            return None;
+        };
+
+        if let Some(window) = self.pinnacle.window_for_surface(surface)
+            && let Some(toplevel) = window.toplevel()
+        {
+            toplevel.with_pending_state(|state| {
+                state.states.set(xdg_toplevel::State::Resizing);
+            });
+
+            toplevel.send_pending_configure();
+        }
+
+        ResizeSurfaceGrab::start(start_data, window, edges, initial_window_geo)
     }
 
     /// The compositor requested a resize e.g. you hold the mod key and right-click drag.
@@ -436,40 +582,13 @@ impl State {
     ) {
         let pointer = seat.get_pointer().expect("seat had no pointer");
 
-        let Some(window) = self.pinnacle.window_for_surface(surface).cloned() else {
-            tracing::error!("Surface had no window, cancelling resize request");
-            return;
-        };
-
-        if window.with_state(|state| {
-            state.layout_mode.is_maximized() || state.layout_mode.is_fullscreen()
-        }) {
-            return;
-        }
-
-        let Some(initial_window_geo) = self.pinnacle.space.element_geometry(&window) else {
-            warn!("Resize request on unmapped surface");
-            return;
-        };
-
-        if let Some(window) = self.pinnacle.window_for_surface(surface)
-            && let Some(toplevel) = window.toplevel()
-        {
-            toplevel.with_pending_state(|state| {
-                state.states.set(xdg_toplevel::State::Resizing);
-            });
-
-            toplevel.send_pending_configure();
-        }
-
         let start_data = smithay::input::pointer::GrabStartData {
             focus: None,
             button: button_used,
             location: pointer.current_location(),
         };
 
-        let grab =
-            ResizeSurfaceGrab::start(start_data, window, edges, initial_window_geo, button_used);
+        let grab = self.common_resize_request_server(surface, edges, start_data.into());
 
         if let Some(grab) = grab {
             pointer.set_grab(self, grab, serial, Focus::Clear);
@@ -477,6 +596,33 @@ impl State {
             self.pinnacle
                 .cursor_state
                 .set_cursor_image(CursorImageStatus::Named(edges.cursor_icon()));
+        }
+    }
+
+    pub fn touch_resize_request_server(
+        &mut self,
+        surface: &WlSurface,
+        seat: &Seat<State>,
+        serial: Serial,
+        edges: self::ResizeEdge,
+        slot: TouchSlot,
+        location: Point<f64, Logical>,
+    ) {
+        let Some(touch) = seat.get_touch() else {
+            tracing::warn!("seat had no touch");
+            return;
+        };
+
+        let start_data = touch::GrabStartData {
+            focus: None,
+            slot,
+            location,
+        };
+
+        let grab = self.common_resize_request_server(surface, edges, start_data.into());
+
+        if let Some(grab) = grab {
+            touch.set_grab(self, grab, serial);
         }
     }
 }
