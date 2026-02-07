@@ -645,7 +645,7 @@ pub trait Program {
 
     /// Updates this widget program with the received message.
     ///
-    /// If this program has [`Source`]s or child programs, [`Self::Message`]
+    /// If this program has `Source`s or child programs, [`Self::Message`]
     /// should impl `Clone` and the message should be
     /// cloned and passed to all `Source`s and child programs.
     ///
