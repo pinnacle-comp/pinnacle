@@ -118,7 +118,7 @@ impl From<ZLayer> for layer::v1::Layer {
     }
 }
 
-/// The error type for [`Layer::new_widget`].
+/// The error type for [`new_widget`].
 #[derive(thiserror::Error, Debug)]
 pub enum NewLayerError {
     /// Snowcap returned a gRPC error status.
