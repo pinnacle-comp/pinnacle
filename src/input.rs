@@ -8,11 +8,12 @@ use std::{any::Any, time::Duration};
 use crate::{
     api::signal::Signal as _,
     focus::pointer::{PointerContents, PointerFocusTarget},
-    input::bind::Edge,
+    input::bind::{BindAction, Edge},
     state::{Pinnacle, WithState},
     window::WindowElement,
 };
 use bind::BindState;
+use input::event::gesture::GestureEventCoordinates as _;
 use libinput::LibinputState;
 use pinnacle_api::input::{GestureType, SwipeDirection};
 use smithay::{
@@ -56,6 +57,7 @@ use crate::state::State;
 pub struct GestureState {
     pub delta: Option<(f64, f64)>,
     pub fingers: u32,
+    pub handled: bool,
 }
 
 #[derive(Default, Debug)]
@@ -286,7 +288,7 @@ impl Pinnacle {
 }
 
 impl State {
-    pub fn process_input_event<B: InputBackend>(&mut self, event: InputEvent<B>)
+    pub fn process_input_event<B: InputBackend + 'static>(&mut self, event: InputEvent<B>)
     where
         B::Device: 'static,
     {
@@ -921,6 +923,7 @@ impl State {
         self.pinnacle.input_state.gesture_state = GestureState {
             delta: Some((0., 0.)),
             fingers: event.fingers(),
+            handled: false,
         };
 
         pointer.gesture_swipe_begin(
@@ -933,16 +936,71 @@ impl State {
         );
     }
 
-    fn on_gesture_swipe_update<I: InputBackend>(&mut self, event: I::GestureSwipeUpdateEvent) {
+    fn on_gesture_swipe_update<I: InputBackend + 'static>(
+        &mut self,
+        event: I::GestureSwipeUpdateEvent,
+    ) {
         let Some(pointer) = self.pinnacle.seat.get_pointer() else {
             return;
         };
 
+        let mods = self
+            .pinnacle
+            .seat
+            .get_keyboard()
+            .map(|keyboard| keyboard.modifier_state())
+            .unwrap_or_default();
+
+        let mut delta_x = event.delta_x();
+        let mut delta_y = event.delta_y();
+
+        if let Some(libinput_event) =
+            (&event as &dyn Any).downcast_ref::<input::event::gesture::GestureSwipeUpdateEvent>()
+        {
+            delta_x = libinput_event.dx_unaccelerated();
+            delta_y = libinput_event.dy_unaccelerated();
+        }
+
+        let device = event.device();
+        if let Some(device) = (&device as &dyn Any).downcast_ref::<input::Device>()
+            && device.config_scroll_natural_scroll_enabled()
+        {
+            delta_x = -delta_x;
+            delta_y = -delta_y;
+        }
+
+        if let Some((cx, cy)) = &mut self.pinnacle.input_state.gesture_state.delta {
+            *cx += delta_x;
+            *cy += delta_y;
+
+            // Check if the gesture moved far enough to decide. Threshold copied from GNOME Shell.
+            let (cx, cy) = (*cx, *cy);
+            if cx * cx + cy * cy >= 16. * 16. {
+                self.pinnacle.input_state.gesture_state.delta = None;
+
+                let direction = delta_to_direction((cx, cy));
+
+                let current_layer = self.pinnacle.input_state.bind_state.current_layer();
+
+                let fingers = self.pinnacle.input_state.gesture_state.fingers;
+
+                let bind_action = self.pinnacle.input_state.bind_state.gesturebinds.gesture(
+                    GestureType::Swipe(direction),
+                    fingers,
+                    mods,
+                    Edge::Release,
+                    current_layer,
+                    !self.pinnacle.lock_state.is_unlocked(),
+                );
+
+                if bind_action != BindAction::Forward {
+                    self.pinnacle.input_state.gesture_state.handled = true;
+                    return;
+                }
+            }
+        }
+
         use smithay::backend::input::GestureSwipeUpdateEvent as _;
-
-        let delta = event.delta();
-
-        self.pinnacle.input_state.gesture_state.delta = Some((delta.x, delta.y));
 
         pointer.gesture_swipe_update(
             self,
@@ -957,30 +1015,13 @@ impl State {
         let Some(pointer) = self.pinnacle.seat.get_pointer() else {
             return;
         };
-        let Some(keyboard) = self.pinnacle.seat.get_keyboard() else {
+
+        if self.pinnacle.input_state.gesture_state.handled {
+            self.pinnacle.input_state.gesture_state.delta = None;
+            self.pinnacle.input_state.gesture_state.fingers = 0;
+            self.pinnacle.input_state.gesture_state.handled = false;
             return;
-        };
-
-        let mods = keyboard.modifier_state();
-
-        let current_layer = self.pinnacle.input_state.bind_state.current_layer();
-
-        if let Some(delta) = self.pinnacle.input_state.gesture_state.delta {
-            let direction = delta_to_direction(delta);
-
-            let fingers = self.pinnacle.input_state.gesture_state.fingers;
-
-            let _bind_action = self.pinnacle.input_state.bind_state.gesturebinds.gesture(
-                GestureType::Swipe(direction),
-                fingers,
-                mods,
-                Edge::Release,
-                current_layer,
-                !self.pinnacle.lock_state.is_unlocked(),
-            );
         }
-
-        self.pinnacle.input_state.gesture_state.delta = None;
 
         pointer.gesture_swipe_end(
             self,
@@ -1000,6 +1041,7 @@ impl State {
         self.pinnacle.input_state.gesture_state = GestureState {
             delta: Some((0., 0.)),
             fingers: event.fingers(),
+            handled: false,
         };
 
         pointer.gesture_pinch_begin(
@@ -1012,16 +1054,69 @@ impl State {
         );
     }
 
-    fn on_gesture_pinch_update<I: InputBackend>(&mut self, event: I::GesturePinchUpdateEvent) {
+    fn on_gesture_pinch_update<I: InputBackend + 'static>(
+        &mut self,
+        event: I::GesturePinchUpdateEvent,
+    ) {
         let Some(pointer) = self.pinnacle.seat.get_pointer() else {
             return;
         };
 
+        let mods = self
+            .pinnacle
+            .seat
+            .get_keyboard()
+            .map(|keyboard| keyboard.modifier_state())
+            .unwrap_or_default();
+
+        let mut delta_x = event.delta_x();
+        let mut delta_y = event.delta_y();
+
+        if let Some(libinput_event) =
+            (&event as &dyn Any).downcast_ref::<input::event::gesture::GesturePinchUpdateEvent>()
+        {
+            delta_x = libinput_event.dx_unaccelerated();
+            delta_y = libinput_event.dy_unaccelerated();
+        }
+
+        let device = event.device();
+        if let Some(device) = (&device as &dyn Any).downcast_ref::<input::Device>()
+            && device.config_scroll_natural_scroll_enabled()
+        {
+            delta_x = -delta_x;
+            delta_y = -delta_y;
+        }
+
+        if let Some((cx, cy)) = &mut self.pinnacle.input_state.gesture_state.delta {
+            *cx += delta_x;
+            *cy += delta_y;
+
+            // Check if the gesture moved far enough to decide. Threshold copied from GNOME Shell.
+            let (cx, cy) = (*cx, *cy);
+            if cx * cx + cy * cy >= 16. * 16. {
+                self.pinnacle.input_state.gesture_state.delta = None;
+
+                let current_layer = self.pinnacle.input_state.bind_state.current_layer();
+
+                let fingers = self.pinnacle.input_state.gesture_state.fingers;
+
+                let bind_action = self.pinnacle.input_state.bind_state.gesturebinds.gesture(
+                    GestureType::Pinch,
+                    fingers,
+                    mods,
+                    Edge::Release,
+                    current_layer,
+                    !self.pinnacle.lock_state.is_unlocked(),
+                );
+
+                if bind_action != BindAction::Forward {
+                    self.pinnacle.input_state.gesture_state.handled = true;
+                    return;
+                }
+            }
+        }
+
         use smithay::backend::input::GesturePinchUpdateEvent as _;
-
-        let delta = event.delta();
-
-        self.pinnacle.input_state.gesture_state.delta = Some((delta.x, delta.y));
 
         pointer.gesture_pinch_update(
             self,
@@ -1038,28 +1133,13 @@ impl State {
         let Some(pointer) = self.pinnacle.seat.get_pointer() else {
             return;
         };
-        let Some(keyboard) = self.pinnacle.seat.get_keyboard() else {
+
+        if self.pinnacle.input_state.gesture_state.handled {
+            self.pinnacle.input_state.gesture_state.delta = None;
+            self.pinnacle.input_state.gesture_state.fingers = 0;
+            self.pinnacle.input_state.gesture_state.handled = false;
             return;
-        };
-
-        let mods = keyboard.modifier_state();
-
-        let current_layer = self.pinnacle.input_state.bind_state.current_layer();
-
-        if self.pinnacle.input_state.gesture_state.delta.is_some() {
-            let fingers = self.pinnacle.input_state.gesture_state.fingers;
-
-            let _bind_action = self.pinnacle.input_state.bind_state.gesturebinds.gesture(
-                GestureType::Pinch,
-                fingers,
-                mods,
-                Edge::Release,
-                current_layer,
-                !self.pinnacle.lock_state.is_unlocked(),
-            );
         }
-
-        self.pinnacle.input_state.gesture_state.delta = None;
 
         pointer.gesture_pinch_end(
             self,
@@ -1079,6 +1159,7 @@ impl State {
         self.pinnacle.input_state.gesture_state = GestureState {
             delta: Some((0., 0.)),
             fingers: event.fingers(),
+            handled: false,
         };
 
         pointer.gesture_hold_begin(
@@ -1091,32 +1172,49 @@ impl State {
         );
     }
 
-    fn on_gesture_hold_end<I: InputBackend>(&mut self, event: I::GestureHoldEndEvent) {
+    fn on_gesture_hold_end<I: InputBackend + 'static>(&mut self, event: I::GestureHoldEndEvent) {
         let Some(pointer) = self.pinnacle.seat.get_pointer() else {
             return;
         };
-        let Some(keyboard) = self.pinnacle.seat.get_keyboard() else {
-            return;
-        };
 
-        let mods = keyboard.modifier_state();
+        let mods = self
+            .pinnacle
+            .seat
+            .get_keyboard()
+            .map(|keyboard| keyboard.modifier_state())
+            .unwrap_or_default();
 
         let current_layer = self.pinnacle.input_state.bind_state.current_layer();
 
-        if self.pinnacle.input_state.gesture_state.delta.is_some() {
+        let mut handled = false;
+
+        if let Some(libinput_event) =
+            (&event as &dyn Any).downcast_ref::<input::event::gesture::GestureHoldEndEvent>()
+            && self.pinnacle.input_state.gesture_state.delta.is_some()
+        {
             let fingers = self.pinnacle.input_state.gesture_state.fingers;
 
-            let _bind_action = self.pinnacle.input_state.bind_state.gesturebinds.gesture(
-                GestureType::Hold,
-                fingers,
-                mods,
-                Edge::Release,
-                current_layer,
-                !self.pinnacle.lock_state.is_unlocked(),
-            );
+            if fingers == libinput_event.fingers() {
+                let bind_action = self.pinnacle.input_state.bind_state.gesturebinds.gesture(
+                    GestureType::Hold,
+                    fingers,
+                    mods,
+                    Edge::Release,
+                    current_layer,
+                    !self.pinnacle.lock_state.is_unlocked(),
+                );
+
+                handled = bind_action != BindAction::Forward;
+            }
         }
 
         self.pinnacle.input_state.gesture_state.delta = None;
+        self.pinnacle.input_state.gesture_state.fingers = 0;
+        self.pinnacle.input_state.gesture_state.handled = false;
+
+        if handled {
+            return;
+        }
 
         pointer.gesture_hold_end(
             self,

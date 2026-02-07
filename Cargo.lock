@@ -2286,6 +2286,7 @@ dependencies = [
  "bitflags 2.10.0",
  "input-sys",
  "libc",
+ "log",
  "udev",
 ]
 
@@ -3464,6 +3465,7 @@ dependencies = [
  "drm-sys",
  "gag",
  "indexmap",
+ "input",
  "itertools",
  "libdisplay-info",
  "mlua",
