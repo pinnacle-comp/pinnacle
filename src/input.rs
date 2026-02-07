@@ -20,7 +20,7 @@ use smithay::{
             GestureBeginEvent, GestureEndEvent, InputBackend, InputEvent, KeyState,
             KeyboardKeyEvent, PointerAxisEvent, PointerButtonEvent, PointerMotionEvent,
             ProximityState, TabletToolButtonEvent, TabletToolEvent, TabletToolProximityEvent,
-            TabletToolTipEvent, TabletToolTipState, TouchEvent,
+            TabletToolTipEvent, TabletToolTipState, TouchEvent, TouchSlot,
         },
         renderer::utils::with_renderer_surface_state,
         winit::WinitVirtualDevice,
@@ -1035,6 +1035,19 @@ impl State {
         );
     }
 
+    fn update_touch_locs(&mut self, slot: TouchSlot, loc: Point<f64, Logical>) {
+        if let Some(entry) = self
+            .pinnacle
+            .touch_positions
+            .iter_mut()
+            .find(|(s, _)| s == &slot)
+        {
+            entry.1 = loc;
+        } else {
+            self.pinnacle.touch_positions.push((slot, loc));
+        }
+    }
+
     fn on_touch_down<I: InputBackend>(&mut self, event: I::TouchDownEvent)
     where
         I::Device: 'static,
@@ -1046,6 +1059,8 @@ impl State {
         let Some(touch_loc) = self.transform_device_coords(&event) else {
             return;
         };
+
+        self.update_touch_locs(event.slot(), touch_loc);
 
         let output_under = self.pinnacle.space.output_under(touch_loc).next().cloned();
 
@@ -1080,6 +1095,7 @@ impl State {
             return;
         };
 
+        self.update_touch_locs(event.slot(), touch_loc);
         let focus = self.pinnacle.pointer_contents_under(touch_loc);
 
         touch.motion(
@@ -1097,6 +1113,10 @@ impl State {
         let Some(touch) = self.pinnacle.seat.get_touch() else {
             return;
         };
+
+        self.pinnacle
+            .touch_positions
+            .retain(|(s, _)| s != &event.slot());
 
         touch.up(
             self,
@@ -1116,10 +1136,15 @@ impl State {
         touch.frame(self);
     }
 
-    fn on_touch_cancel<I: InputBackend>(&mut self, _event: I::TouchCancelEvent) {
+    fn on_touch_cancel<I: InputBackend>(&mut self, event: I::TouchCancelEvent) {
         let Some(touch) = self.pinnacle.seat.get_touch() else {
             return;
         };
+
+        // I assume libinput sends a cancel for every touch slot.
+        self.pinnacle
+            .touch_positions
+            .retain(|(s, _)| s != &event.slot());
 
         touch.cancel(self);
     }
