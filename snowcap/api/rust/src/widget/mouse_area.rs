@@ -6,6 +6,8 @@ use snowcap_api_defs::snowcap::widget;
 
 use super::{Widget, WidgetDef, WidgetId};
 
+pub use super::Point;
+
 /// Emits messages on mouse events.
 #[derive(Debug, Clone, PartialEq)]
 pub struct MouseArea<Msg> {
@@ -384,12 +386,6 @@ impl From<widget::v1::mouse_area::ScrollEvent> for ScrollDelta {
             Data::Pixels(Pixels { x, y }) => Self::Pixels { x, y },
         }
     }
-}
-
-#[derive(Debug, Copy, Clone, PartialEq)]
-pub struct Point {
-    x: f32,
-    y: f32,
 }
 
 impl From<widget::v1::mouse_area::MoveEvent> for Point {
