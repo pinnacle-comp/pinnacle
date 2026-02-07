@@ -4,6 +4,7 @@ mod inner {
     async fn config() {
         pinnacle_api::output::for_each_output(|output| {
             pinnacle_api::tag::add(output, ["1"])
+                .unwrap()
                 .next()
                 .unwrap()
                 .set_active(true);
