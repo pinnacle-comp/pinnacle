@@ -115,6 +115,7 @@ fn tag_add() {
                     &pinnacle_api::output::get_focused().unwrap(),
                     ["nubby's", "number", "factory"],
                 );
+                let tags = tags.unwrap();
                 assert_eq!(tags.count(), 3);
             }),
             Lang::Lua => spawn_lua_blocking! {
