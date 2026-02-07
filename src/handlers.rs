@@ -6,7 +6,7 @@ pub mod ext_workspace;
 mod foreign_toplevel;
 pub mod foreign_toplevel_list;
 pub mod idle;
-mod image_capture_source;
+pub mod image_capture_source;
 pub mod image_copy_capture;
 pub mod session_lock;
 pub mod snowcap_decoration;
