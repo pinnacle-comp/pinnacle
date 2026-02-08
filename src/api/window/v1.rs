@@ -12,15 +12,15 @@ use pinnacle_api_defs::pinnacle::{
             self, CloseRequest, GetAppIdRequest, GetAppIdResponse, GetFocusedRequest,
             GetFocusedResponse, GetForeignToplevelListIdentifierRequest,
             GetForeignToplevelListIdentifierResponse, GetLayoutModeRequest, GetLayoutModeResponse,
-            GetLocRequest, GetLocResponse, GetRequest, GetResponse, GetSizeRequest,
-            GetSizeResponse, GetTagIdsRequest, GetTagIdsResponse, GetTitleRequest,
-            GetTitleResponse, GetWindowsInDirRequest, GetWindowsInDirResponse, LowerRequest,
-            LowerResponse, MoveGrabRequest, MoveToOutputRequest, MoveToOutputResponse,
-            MoveToTagRequest, RaiseRequest, ResizeGrabRequest, ResizeTileRequest,
-            SetDecorationModeRequest, SetFloatingRequest, SetFocusedRequest, SetFullscreenRequest,
-            SetGeometryRequest, SetMaximizedRequest, SetTagRequest, SetTagsRequest,
-            SetTagsResponse, SetVrrDemandRequest, SetVrrDemandResponse, SwapRequest, SwapResponse,
-            WindowRuleRequest, WindowRuleResponse,
+            GetLocRequest, GetLocResponse, GetMinimizedRequest, GetMinimizedResponse, GetRequest,
+            GetResponse, GetSizeRequest, GetSizeResponse, GetTagIdsRequest, GetTagIdsResponse,
+            GetTitleRequest, GetTitleResponse, GetWindowsInDirRequest, GetWindowsInDirResponse,
+            LowerRequest, LowerResponse, MoveGrabRequest, MoveToOutputRequest,
+            MoveToOutputResponse, MoveToTagRequest, RaiseRequest, ResizeGrabRequest,
+            ResizeTileRequest, SetDecorationModeRequest, SetFloatingRequest, SetFocusedRequest,
+            SetFullscreenRequest, SetGeometryRequest, SetMaximizedRequest, SetMinimizedRequest,
+            SetTagRequest, SetTagsRequest, SetTagsResponse, SetVrrDemandRequest,
+            SetVrrDemandResponse, SwapRequest, SwapResponse, WindowRuleRequest, WindowRuleResponse,
         },
     },
 };
@@ -190,6 +190,27 @@ impl v1::window_service_server::WindowService for super::WindowService {
                 }
                 .into(),
             })
+        })
+        .await
+    }
+
+    async fn get_minimized(
+        &self,
+        request: Request<GetMinimizedRequest>,
+    ) -> TonicResult<GetMinimizedResponse> {
+        let window_id = WindowId(request.into_inner().window_id);
+
+        run_unary(&self.sender, move |state| {
+            let minimized = window_id
+                .window(&state.pinnacle)
+                .or_else(|| {
+                    window_id
+                        .unmapped_window(&state.pinnacle)
+                        .map(|unmapped| unmapped.window.clone())
+                })
+                .map(|win| win.with_state(|state| state.minimized))
+                .unwrap_or(false);
+            Ok(GetMinimizedResponse { minimized })
         })
         .await
     }
@@ -474,6 +495,31 @@ impl v1::window_service_server::WindowService for super::WindowService {
                             .toggle_maximized();
                     }
                 }
+            }
+        })
+        .await
+    }
+
+    async fn set_minimized(&self, request: Request<SetMinimizedRequest>) -> TonicResult<()> {
+        let request = request.into_inner();
+        let window_id = WindowId(request.window_id);
+        let absolute_minimized = match request.set_or_toggle() {
+            SetOrToggle::Unspecified => {
+                return Err(Status::invalid_argument("unspecified set or toggle"));
+            }
+            SetOrToggle::Set => Some(true),
+            SetOrToggle::Unset => Some(false),
+            SetOrToggle::Toggle => None,
+        };
+
+        run_unary_no_response(&self.sender, move |state| {
+            if let Some(window) = window_id.window(&state.pinnacle) {
+                crate::api::window::set_minimized(state, &window, absolute_minimized);
+            } else if let Some(unmapped) = window_id.unmapped_window_mut(&mut state.pinnacle)
+                && let UnmappedState::WaitingForRules { rules: _, .. } = &mut unmapped.state
+            {
+                // TODO: find a way to immediately minimize a window upon mapping.
+                warn!("minimizing unmapped windows not yet supported");
             }
         })
         .await

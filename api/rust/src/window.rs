@@ -19,12 +19,12 @@ use pinnacle_api_defs::pinnacle::{
         self,
         v1::{
             GetAppIdRequest, GetFocusedRequest, GetForeignToplevelListIdentifierRequest,
-            GetLayoutModeRequest, GetLocRequest, GetSizeRequest, GetTagIdsRequest, GetTitleRequest,
-            GetWindowsInDirRequest, LowerRequest, MoveGrabRequest, MoveToOutputRequest,
-            MoveToTagRequest, RaiseRequest, ResizeGrabRequest, ResizeTileRequest,
-            SetDecorationModeRequest, SetFloatingRequest, SetFocusedRequest, SetFullscreenRequest,
-            SetGeometryRequest, SetMaximizedRequest, SetTagRequest, SetTagsRequest,
-            SetVrrDemandRequest, SwapRequest,
+            GetLayoutModeRequest, GetLocRequest, GetMinimizedRequest, GetSizeRequest,
+            GetTagIdsRequest, GetTitleRequest, GetWindowsInDirRequest, LowerRequest,
+            MoveGrabRequest, MoveToOutputRequest, MoveToTagRequest, RaiseRequest,
+            ResizeGrabRequest, ResizeTileRequest, SetDecorationModeRequest, SetFloatingRequest,
+            SetFocusedRequest, SetFullscreenRequest, SetGeometryRequest, SetMaximizedRequest,
+            SetMinimizedRequest, SetTagRequest, SetTagsRequest, SetVrrDemandRequest, SwapRequest,
         },
     },
 };
@@ -358,6 +358,34 @@ impl WindowHandle {
         let window_id = self.id;
         Client::window()
             .set_maximized(SetMaximizedRequest {
+                window_id,
+                set_or_toggle: SetOrToggle::Toggle.into(),
+            })
+            .block_on_tokio()
+            .unwrap();
+    }
+
+    /// Sets this window to minimized or not.
+    pub fn set_minimized(&self, set: bool) {
+        let window_id = self.id;
+        Client::window()
+            .set_minimized(SetMinimizedRequest {
+                window_id,
+                set_or_toggle: match set {
+                    true => SetOrToggle::Set,
+                    false => SetOrToggle::Unset,
+                }
+                .into(),
+            })
+            .block_on_tokio()
+            .unwrap();
+    }
+
+    /// Toggles this window between minimized and not.
+    pub fn toggle_minimized(&self) {
+        let window_id = self.id;
+        Client::window()
+            .set_minimized(SetMinimizedRequest {
                 window_id,
                 set_or_toggle: SetOrToggle::Toggle.into(),
             })
@@ -805,6 +833,22 @@ impl WindowHandle {
     /// Async impl for [`Self::maximized`].
     pub async fn maximized_async(&self) -> bool {
         self.layout_mode_async().await == LayoutMode::Maximized
+    }
+
+    /// Gets whether or not this window is minimized
+    pub fn minimized(&self) -> bool {
+        self.minimized_async().block_on_tokio()
+    }
+
+    /// Async impl for [`Self::minimized`]
+    pub async fn minimized_async(&self) -> bool {
+        let window_id = self.id;
+        Client::window()
+            .get_minimized(GetMinimizedRequest { window_id })
+            .await
+            .unwrap()
+            .into_inner()
+            .minimized
     }
 
     /// Gets handles to all tags on this window.

@@ -65,13 +65,51 @@ pub fn set_geometry(
     );
 }
 
-// TODO: minimized
+/// Sets or toggles if a window is minimized.
+///
+/// Minimized windows are always unfocused.
+pub fn set_minimized(state: &mut State, window: &WindowElement, set: impl Into<Option<bool>>) {
+    if window.is_x11_override_redirect() {
+        return;
+    }
+
+    let set = set.into();
+
+    let is_minimized = window.with_state(|state| state.minimized);
+    let set = match set {
+        Some(absolute_set) => absolute_set,
+        None => !is_minimized,
+    };
+    window.with_state_mut(|state| state.minimized = set);
+
+    if !set && state.pinnacle.keyboard_focus_stack.current_focus() == Some(window) {
+        state.pinnacle.keyboard_focus_stack.unset_focus();
+    }
+
+    // Note: tag moving will automatically adjust the output on the window directly even if
+    // minimised, so we can rely on this.
+    let Some(output) = window.output(&state.pinnacle) else {
+        warn!("adjusted minimization-state of window without an output.");
+        return;
+    };
+
+    // This means we can rely on the output associated with the [`WindowElementState`] even while
+    // minimized, and we can use it to schedule layouts.
+    if set != is_minimized {
+        state.pinnacle.request_layout(&output);
+        state.schedule_render(&output);
+        state.pinnacle.update_xwayland_stacking_order();
+    }
+}
 
 /// Sets a window to focused or not.
 ///
 /// If the window is on another output and an attempt is made to
 /// focus it, the focused output will change to that output UNLESS
 /// the window overlaps the currently focused output.
+///
+/// If the window is being set to be focused, then if it's minimized,
+/// this will automatically unminimize it.
 pub fn set_focused(state: &mut State, window: &WindowElement, set: impl Into<Option<bool>>) {
     if window.is_x11_override_redirect() {
         return;
@@ -139,6 +177,11 @@ pub fn set_focused(state: &mut State, window: &WindowElement, set: impl Into<Opt
                     state.pinnacle.focus_output(&output);
                 }
             }
+        }
+
+        if window.with_state(|window_state| window_state.minimized) {
+            // Will automatically do correct scheduling of re-layouting and such ^.^
+            set_minimized(state, window, false);
         }
     } else {
         state.pinnacle.keyboard_focus_stack.unset_focus();
