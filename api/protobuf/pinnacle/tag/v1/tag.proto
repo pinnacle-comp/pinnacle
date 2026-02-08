@@ -22,6 +22,26 @@ message RemoveRequest {
     repeated uint32 tag_ids = 1;
 }
 
+message MoveToOutputRequest {
+    string output_name = 1;
+    repeated uint32 tag_ids = 2;
+}
+
+message MoveToOutputResponse {
+    message Error {
+        message SameWindowOnTwoOutputs {
+            repeated uint32 window_ids = 1;
+        }
+
+        oneof kind {
+            google.protobuf.Empty output_does_not_exist = 1;
+            SameWindowOnTwoOutputs same_window_on_two_outputs = 2;
+        }
+    }
+
+    optional Error error = 1;
+}
+
 // Tag properties
 
 message GetActiveRequest {
@@ -68,4 +88,5 @@ service TagService {
 
     rpc SetActive(SetActiveRequest) returns (google.protobuf.Empty);
     rpc SwitchTo(SwitchToRequest) returns (google.protobuf.Empty);
+    rpc MoveToOutput(MoveToOutputRequest) returns (MoveToOutputResponse);
 }

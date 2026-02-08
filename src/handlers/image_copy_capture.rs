@@ -1,7 +1,8 @@
-use std::mem;
+use std::{cell::RefCell, collections::HashMap};
 
 use smithay::{
     backend::{
+        allocator::{Fourcc as DrmFourcc, Modifier as DrmModifier},
         egl::EGLDevice,
         renderer::{
             Bind, Color32F, ExportMem, Offscreen, buffer_dimensions,
@@ -10,6 +11,7 @@ use smithay::{
             gles::{GlesRenderbuffer, GlesRenderer},
         },
     },
+    delegate_image_copy_capture,
     output::Output,
     reexports::wayland_server::protocol::wl_shm,
     utils::{Buffer, Physical, Point, Rectangle, Size, Transform},
@@ -17,6 +19,12 @@ use smithay::{
         compositor,
         dmabuf::get_dmabuf,
         fractional_scale::with_fractional_scale,
+        image_capture_source::ImageCaptureSource,
+        image_copy_capture::{
+            BufferConstraints, CaptureFailureReason, CursorSession, CursorSessionRef,
+            DmabufConstraints, Frame, FrameRef, ImageCopyCaptureHandler, ImageCopyCaptureState,
+            Session, SessionRef,
+        },
         seat::WaylandFocus,
         shm::{shm_format_to_fourcc, with_buffer_contents},
     },
@@ -24,196 +32,251 @@ use smithay::{
 use tracing::error;
 
 use crate::{
-    protocol::{
-        image_capture_source::Source,
-        image_copy_capture::{
-            ImageCopyCaptureHandler, ImageCopyCaptureState, delegate_image_copy_capture,
-            frame::Frame,
-            session::{Cursor, CursorSession, Session},
-        },
-    },
+    handlers::image_capture_source::ImageCaptureSourceKind,
     render::{
         output_render_elements,
         pointer::pointer_render_elements,
         util::{DynElement, damage::BufferDamageElement},
     },
     state::{Pinnacle, State, WithState},
+    window::WindowElement,
 };
+
+const SUPPORTED_SHM_FORMATS: &[wl_shm::Format] = &[wl_shm::Format::Argb8888];
 
 impl ImageCopyCaptureHandler for State {
     fn image_copy_capture_state(&mut self) -> &mut ImageCopyCaptureState {
         &mut self.pinnacle.image_copy_capture_state
     }
 
+    fn capture_constraints(&mut self, source: &ImageCaptureSource) -> Option<BufferConstraints> {
+        let (size, _scale) = self.pinnacle.buffer_size_and_scale_for_source(source)?;
+
+        Some(self.buffer_constraints(size))
+    }
+
     fn new_session(&mut self, session: Session) {
-        let Some((buffer_size, scale)) = self.pinnacle.buffer_size_and_scale_for_session(&session)
+        let Some((size, scale)) = self
+            .pinnacle
+            .buffer_size_and_scale_for_source(&session.source())
         else {
-            session.stopped();
             return;
         };
 
-        session.resized(buffer_size);
-        let trackers = SessionDamageTrackers::new(buffer_size, scale);
+        session
+            .user_data()
+            .insert_if_missing(|| RefCell::new(SessionDamageTrackers::new(size, scale)));
 
-        match session.source() {
-            Source::Output(wl_output) => {
-                let Some(output) = Output::from_resource(&wl_output) else {
-                    session.stopped();
-                    return;
-                };
+        self.pinnacle.capture_sessions.push(session);
+    }
 
-                output.with_state_mut(|state| state.capture_sessions.insert(session, trackers));
-            }
-            Source::ForeignToplevel(ext_foreign_toplevel_handle_v1) => {
-                let Some(window) = self
-                    .pinnacle
-                    .window_for_foreign_toplevel_handle(&ext_foreign_toplevel_handle_v1)
-                else {
-                    session.stopped();
-                    return;
-                };
+    fn frame(&mut self, session: &SessionRef, frame: Frame) {
+        let f = session.user_data().get_or_insert(|| RefCell::new(None));
+        *f.borrow_mut() = Some(frame);
+    }
 
-                window.with_state_mut(|state| state.capture_sessions.insert(session, trackers));
-            }
+    fn cursor_capture_constraints(
+        &mut self,
+        source: &ImageCaptureSource,
+    ) -> Option<BufferConstraints> {
+        let (size, _scale) = self
+            .pinnacle
+            .buffer_size_and_scale_for_cursor_source(source)?;
+
+        Some(self.buffer_constraints(size))
+    }
+
+    fn new_cursor_session(&mut self, session: CursorSession) {
+        let Some((size, scale)) = self
+            .pinnacle
+            .buffer_size_and_scale_for_cursor_source(&session.source())
+        else {
+            return;
+        };
+
+        session
+            .user_data()
+            .insert_if_missing(|| RefCell::new(SessionDamageTrackers::new(size, scale)));
+
+        self.pinnacle.cursor_capture_sessions.push(session);
+    }
+
+    fn cursor_frame(&mut self, session: &CursorSessionRef, frame: Frame) {
+        let f = session.user_data().get_or_insert(|| RefCell::new(None));
+        *f.borrow_mut() = Some(frame);
+    }
+
+    fn frame_aborted(&mut self, frame: FrameRef) {
+        let _span = tracy_client::span!();
+
+        for session in self.pinnacle.capture_sessions.iter() {
+            session
+                .user_data()
+                .get_or_insert(|| RefCell::new(None::<Frame>))
+                .borrow_mut()
+                .take_if(|f| **f == frame);
+        }
+
+        for session in self.pinnacle.cursor_capture_sessions.iter() {
+            session
+                .user_data()
+                .get_or_insert(|| RefCell::new(None::<Frame>))
+                .borrow_mut()
+                .take_if(|f| **f == frame);
         }
     }
 
-    fn new_cursor_session(&mut self, cursor_session: CursorSession) {
-        match cursor_session.source() {
-            Source::Output(wl_output) => {
-                let Some(output) = Output::from_resource(wl_output) else {
-                    return;
-                };
-
-                output.with_state_mut(|state| state.cursor_sessions.push(cursor_session));
-            }
-            Source::ForeignToplevel(ext_foreign_toplevel_handle_v1) => {
-                let Some(window) = self
-                    .pinnacle
-                    .window_for_foreign_toplevel_handle(ext_foreign_toplevel_handle_v1)
-                else {
-                    return;
-                };
-
-                window.with_state_mut(|state| state.cursor_sessions.push(cursor_session));
-            }
-        }
+    fn session_destroyed(&mut self, session: SessionRef) {
+        self.pinnacle
+            .capture_sessions
+            .retain(|sess| *sess != session);
     }
 
-    fn session_destroyed(&mut self, session: Session) {
-        for output in self.pinnacle.outputs.iter() {
-            output.with_state_mut(|state| state.capture_sessions.remove(&session));
-        }
-
-        for win in self.pinnacle.windows.iter() {
-            win.with_state_mut(|state| state.capture_sessions.remove(&session));
-        }
-    }
-
-    fn cursor_session_destroyed(&mut self, cursor_session: CursorSession) {
-        for output in self.pinnacle.outputs.iter() {
-            output.with_state_mut(|state| {
-                state
-                    .cursor_sessions
-                    .retain(|session| *session != cursor_session)
-            });
-        }
-
-        for win in self.pinnacle.windows.iter() {
-            win.with_state_mut(|state| {
-                state
-                    .cursor_sessions
-                    .retain(|session| *session != cursor_session)
-            });
-        }
+    fn cursor_session_destroyed(&mut self, session: CursorSessionRef) {
+        self.pinnacle
+            .cursor_capture_sessions
+            .retain(|sess| *sess != session);
     }
 }
 delegate_image_copy_capture!(State);
 
 impl State {
-    /// Sets buffer constraints for all [`Session`]s globally.
-    pub fn set_copy_capture_buffer_constraints(&mut self) {
-        let shm_formats = [wl_shm::Format::Argb8888];
-
-        let dmabuf_device = self
-            .backend
-            .with_renderer(|renderer| {
-                EGLDevice::device_for_display(renderer.egl_context().display())
-                    .ok()
-                    .and_then(|device| device.try_get_render_node().ok().flatten())
-            })
-            .flatten();
-
-        let dmabuf_formats = self
-            .backend
-            .with_renderer(|renderer| renderer.egl_context().dmabuf_render_formats().clone())
-            .unwrap_or_default();
-
-        self.pinnacle
-            .image_copy_capture_state
-            .set_buffer_constraints(shm_formats, dmabuf_device, dmabuf_formats);
-    }
-
-    /// Processes all active [`Session`]s by updating cursor positions and
-    /// rendering pending frames.
     pub fn process_capture_sessions(&mut self) {
         let _span = tracy_client::span!();
 
         self.update_cursor_capture_positions();
 
-        for win in self.pinnacle.windows.clone() {
-            let mut sessions = win.with_state_mut(|state| mem::take(&mut state.capture_sessions));
-            for (session, trackers) in sessions.iter_mut() {
-                let Some((size, scale)) = self.pinnacle.buffer_size_and_scale_for_session(session)
-                else {
-                    session.stopped();
-                    continue;
+        for session in self
+            .pinnacle
+            .capture_sessions
+            .iter()
+            .map(|session| session.as_ref())
+            .collect::<Vec<_>>()
+        {
+            self.process_capture_session(session);
+        }
+
+        for session in self
+            .pinnacle
+            .cursor_capture_sessions
+            .iter()
+            .map(|session| session.as_ref())
+            .collect::<Vec<_>>()
+        {
+            self.process_cursor_capture_session(session);
+        }
+    }
+
+    fn process_capture_session(&mut self, session: SessionRef) {
+        let _span = tracy_client::span!();
+
+        let maybe_frame = session
+            .user_data()
+            .get_or_insert(|| RefCell::new(None::<Frame>));
+
+        let Some(frame) = maybe_frame.borrow_mut().take() else {
+            return;
+        };
+
+        let Some((size, scale)) = self
+            .pinnacle
+            .buffer_size_and_scale_for_source(&session.source())
+        else {
+            return;
+        };
+
+        let trackers = session
+            .user_data()
+            .get_or_insert(|| RefCell::new(SessionDamageTrackers::new(size, scale)));
+
+        let mut trackers = trackers.borrow_mut();
+
+        if (size, scale) != (trackers.size(), trackers.scale()) {
+            session.update_constraints(self.buffer_constraints(size));
+            frame.fail(CaptureFailureReason::BufferConstraints);
+            *trackers = SessionDamageTrackers::new(size, scale);
+            return;
+        }
+
+        let elements = match session
+            .source()
+            .user_data()
+            .get::<ImageCaptureSourceKind>()
+            .unwrap()
+        {
+            ImageCaptureSourceKind::Output(output) => {
+                let Some(output) = output.upgrade() else {
+                    frame.fail(CaptureFailureReason::Stopped);
+                    return;
                 };
 
-                if (size, scale) != (trackers.size(), trackers.scale()) {
-                    if size != trackers.size() {
-                        session.resized(size);
-                    }
-                    *trackers = SessionDamageTrackers::new(size, scale);
-                }
+                let elements = if session.draw_cursor() {
+                    let Some(output_geo) = self.pinnacle.space.output_geometry(&output) else {
+                        frame.fail(CaptureFailureReason::Stopped);
+                        return;
+                    };
 
-                let Some(frame) = session.get_pending_frame(size) else {
-                    continue;
-                };
+                    let pointer_loc = self.pinnacle.seat.get_pointer().unwrap().current_location()
+                        - output_geo.loc.to_f64();
+                    let scale = output.current_scale().fractional_scale();
 
-                if let Some(cursor_session) = session.cursor_session() {
-                    let cursor_offset = self
-                        .pinnacle
-                        .cursor_state
-                        .cursor_geometry(self.pinnacle.clock.now(), scale)
-                        .unwrap_or_default()
-                        .loc;
-
-                    cursor_session.set_hotspot(Point::default() - cursor_offset);
-                }
-
-                let elements = match session.cursor() {
-                    Cursor::Hidden => self
-                        .backend
+                    self.backend
                         .with_renderer(|renderer| {
-                            let elements = win.render_elements(
+                            let (pointer_elements, _) = pointer_render_elements(
+                                pointer_loc,
+                                scale,
                                 renderer,
-                                (0, 0).into(),
-                                scale.into(),
-                                1.0,
-                                false,
+                                &mut self.pinnacle.cursor_state,
+                                &self.pinnacle.clock,
                             );
-
-                            elements
-                                .popup_elements
+                            let elements = output_render_elements(
+                                &output,
+                                renderer,
+                                &self.pinnacle.space,
+                                &self.pinnacle.z_index_stack,
+                            );
+                            pointer_elements
                                 .into_iter()
-                                .chain(elements.surface_elements)
                                 .map(DynElement::owned)
+                                .chain(elements.into_iter().map(DynElement::owned))
                                 .collect::<Vec<_>>()
                         })
-                        .unwrap(),
-                    Cursor::Composited => self
-                        .backend
+                        .unwrap()
+                } else {
+                    self.backend
+                        .with_renderer(|renderer| {
+                            output_render_elements(
+                                &output,
+                                renderer,
+                                &self.pinnacle.space,
+                                &self.pinnacle.z_index_stack,
+                            )
+                            .into_iter()
+                            .map(DynElement::owned)
+                            .collect::<Vec<_>>()
+                        })
+                        .unwrap()
+                };
+
+                elements
+            }
+            ImageCaptureSourceKind::Toplevel(foreign_toplevel) => {
+                let Some(foreign_toplevel) = foreign_toplevel.upgrade() else {
+                    frame.fail(CaptureFailureReason::Stopped);
+                    return;
+                };
+
+                let Some(win) = self
+                    .pinnacle
+                    .window_for_foreign_toplevel_handle(&foreign_toplevel)
+                    .cloned()
+                else {
+                    frame.fail(CaptureFailureReason::Stopped);
+                    return;
+                };
+
+                let elements = if session.draw_cursor() {
+                    self.backend
                         .with_renderer(|renderer| {
                             let win_loc = self.pinnacle.space.element_location(&win);
                             let pointer_elements = if let Some(win_loc) = win_loc {
@@ -253,141 +316,98 @@ impl State {
                                 .collect::<Vec<_>>();
                             elements
                         })
-                        .unwrap(),
-                    Cursor::Standalone { pointer: _ } => self
-                        .backend
+                        .unwrap()
+                } else {
+                    self.backend
                         .with_renderer(|renderer| {
-                            let (pointer_elements, _) = pointer_render_elements(
-                                (0.0, 0.0).into(),
-                                scale,
+                            let elements = win.render_elements(
                                 renderer,
-                                &mut self.pinnacle.cursor_state,
-                                &self.pinnacle.clock,
+                                (0, 0).into(),
+                                scale.into(),
+                                1.0,
+                                false,
                             );
-                            let pointer_elements =
-                                crate::render::util::to_local_coord_space(pointer_elements, scale);
-                            pointer_elements
+
+                            elements
+                                .popup_elements
                                 .into_iter()
+                                .chain(elements.surface_elements)
                                 .map(DynElement::owned)
-                                .collect()
+                                .collect::<Vec<_>>()
                         })
-                        .unwrap(),
+                        .unwrap()
                 };
 
-                self.handle_frame(frame, &elements, trackers);
+                elements
             }
-            win.with_state_mut(|state| state.capture_sessions = sessions);
+        };
+
+        if let Err(frame) = self.handle_frame(frame, &elements, &mut trackers) {
+            *maybe_frame.borrow_mut() = Some(frame);
+        }
+    }
+
+    fn process_cursor_capture_session(&mut self, session: CursorSessionRef) {
+        let _span = tracy_client::span!();
+
+        let maybe_frame = session
+            .user_data()
+            .get_or_insert(|| RefCell::new(None::<Frame>));
+
+        let Some(frame) = maybe_frame.borrow_mut().take() else {
+            return;
+        };
+
+        let Some((size, scale)) = self
+            .pinnacle
+            .buffer_size_and_scale_for_cursor_source(&session.source())
+        else {
+            return;
+        };
+
+        let trackers = session
+            .user_data()
+            .get_or_insert(|| RefCell::new(SessionDamageTrackers::new(size, scale)));
+
+        let mut trackers = trackers.borrow_mut();
+
+        if (size, scale) != (trackers.size(), trackers.scale()) {
+            session.update_constraints(self.buffer_constraints(size));
+            frame.fail(CaptureFailureReason::BufferConstraints);
+            *trackers = SessionDamageTrackers::new(size, scale);
+            return;
         }
 
-        for output in self.pinnacle.outputs.clone() {
-            let mut sessions =
-                output.with_state_mut(|state| mem::take(&mut state.capture_sessions));
-            for (session, trackers) in sessions.iter_mut() {
-                let Some((size, scale)) = self.pinnacle.buffer_size_and_scale_for_session(session)
-                else {
-                    session.stopped();
-                    continue;
-                };
+        let cursor_offset = self
+            .pinnacle
+            .cursor_state
+            .cursor_geometry(self.pinnacle.clock.now(), scale)
+            .unwrap_or_default()
+            .loc;
 
-                if (size, scale) != (trackers.size(), trackers.scale()) {
-                    if size != trackers.size() {
-                        session.resized(size);
-                    }
-                    *trackers = SessionDamageTrackers::new(size, scale);
-                }
+        session.set_cursor_hotspot(Point::default() - cursor_offset);
 
-                let Some(frame) = session.get_pending_frame(size) else {
-                    continue;
-                };
+        let elements = self
+            .backend
+            .with_renderer(|renderer| {
+                let (pointer_elements, _) = pointer_render_elements(
+                    (0.0, 0.0).into(),
+                    scale,
+                    renderer,
+                    &mut self.pinnacle.cursor_state,
+                    &self.pinnacle.clock,
+                );
+                let pointer_elements =
+                    crate::render::util::to_local_coord_space(pointer_elements, scale);
+                pointer_elements
+                    .into_iter()
+                    .map(DynElement::owned)
+                    .collect::<Vec<_>>()
+            })
+            .unwrap();
 
-                if let Some(cursor_session) = session.cursor_session() {
-                    let cursor_offset = self
-                        .pinnacle
-                        .cursor_state
-                        .cursor_geometry(self.pinnacle.clock.now(), scale)
-                        .unwrap_or_default()
-                        .loc;
-
-                    cursor_session.set_hotspot(Point::default() - cursor_offset);
-                }
-
-                let elements = match session.cursor() {
-                    Cursor::Hidden => self
-                        .backend
-                        .with_renderer(|renderer| {
-                            output_render_elements(
-                                &output,
-                                renderer,
-                                &self.pinnacle.space,
-                                &self.pinnacle.z_index_stack,
-                            )
-                            .into_iter()
-                            .map(DynElement::owned)
-                            .collect::<Vec<_>>()
-                        })
-                        .unwrap(),
-                    Cursor::Composited => {
-                        let Some(output_geo) = self.pinnacle.space.output_geometry(&output) else {
-                            continue;
-                        };
-
-                        let pointer_loc =
-                            self.pinnacle.seat.get_pointer().unwrap().current_location()
-                                - output_geo.loc.to_f64();
-                        let scale = output.current_scale().fractional_scale();
-
-                        self.backend
-                            .with_renderer(|renderer| {
-                                let (pointer_elements, _) = pointer_render_elements(
-                                    pointer_loc,
-                                    scale,
-                                    renderer,
-                                    &mut self.pinnacle.cursor_state,
-                                    &self.pinnacle.clock,
-                                );
-                                let elements = output_render_elements(
-                                    &output,
-                                    renderer,
-                                    &self.pinnacle.space,
-                                    &self.pinnacle.z_index_stack,
-                                );
-                                pointer_elements
-                                    .into_iter()
-                                    .map(DynElement::owned)
-                                    .chain(elements.into_iter().map(DynElement::owned))
-                                    .collect::<Vec<_>>()
-                            })
-                            .unwrap()
-                    }
-                    Cursor::Standalone { pointer: _ } => {
-                        let scale = output.current_scale().fractional_scale();
-
-                        self.backend
-                            .with_renderer(|renderer| {
-                                let (pointer_elements, _) = pointer_render_elements(
-                                    (0.0, 0.0).into(),
-                                    scale,
-                                    renderer,
-                                    &mut self.pinnacle.cursor_state,
-                                    &self.pinnacle.clock,
-                                );
-                                let pointer_elements = crate::render::util::to_local_coord_space(
-                                    pointer_elements,
-                                    scale,
-                                );
-                                pointer_elements
-                                    .into_iter()
-                                    .map(DynElement::owned)
-                                    .collect()
-                            })
-                            .unwrap()
-                    }
-                };
-
-                self.handle_frame(frame, &elements, trackers);
-            }
-
-            output.with_state_mut(|state| state.capture_sessions = sessions);
+        if let Err(frame) = self.handle_frame(frame, &elements, &mut trackers) {
+            *maybe_frame.borrow_mut() = Some(frame);
         }
     }
 
@@ -397,121 +417,177 @@ impl State {
 
         let cursor_loc = self.pinnacle.seat.get_pointer().unwrap().current_location();
 
-        for output in self.pinnacle.outputs.iter() {
-            let sessions = output.with_state(|state| state.cursor_sessions.clone());
+        for session in self.pinnacle.cursor_capture_sessions.iter() {
+            // PERF: We recompute the location every time regardless if we've already done it for a
+            // window or output. We should be able to cache this if needed.
 
-            if sessions.is_empty() {
-                continue;
-            }
+            match session
+                .source()
+                .user_data()
+                .get::<ImageCaptureSourceKind>()
+                .unwrap()
+            {
+                ImageCaptureSourceKind::Output(output) => {
+                    let Some(output) = output.upgrade() else {
+                        return;
+                    };
 
-            let cursor_loc: Point<i32, Physical> = (cursor_loc
-                - output.current_location().to_f64())
-            .to_physical_precise_round(output.current_scale().fractional_scale());
-            let cursor_loc: Point<i32, Buffer> = (cursor_loc.x, cursor_loc.y).into();
+                    let cursor_loc: Point<i32, Physical> = (cursor_loc
+                        - output.current_location().to_f64())
+                    .to_physical_precise_round(output.current_scale().fractional_scale());
+                    let cursor_loc: Point<i32, Buffer> = (cursor_loc.x, cursor_loc.y).into();
 
-            let mut cursor_geo = self
-                .pinnacle
-                .cursor_state
-                .cursor_geometry(
-                    self.pinnacle.clock.now(),
-                    output.current_scale().fractional_scale(),
-                )
-                .unwrap_or_default();
+                    let mut cursor_geo = self
+                        .pinnacle
+                        .cursor_state
+                        .cursor_geometry(
+                            self.pinnacle.clock.now(),
+                            output.current_scale().fractional_scale(),
+                        )
+                        .unwrap_or_default();
 
-            cursor_geo.loc += cursor_loc;
+                    cursor_geo.loc += cursor_loc;
 
-            let mode_size = output
-                .current_mode()
-                .map(|mode| mode.size)
-                .unwrap_or_default();
-            let mode_rect: Rectangle<i32, Buffer> =
-                Rectangle::from_size((mode_size.w, mode_size.h).into());
+                    let mode_size = output
+                        .current_mode()
+                        .map(|mode| mode.size)
+                        .unwrap_or_default();
+                    let mode_rect: Rectangle<i32, Buffer> =
+                        Rectangle::from_size((mode_size.w, mode_size.h).into());
 
-            let position = if cursor_geo.overlaps(mode_rect) {
-                Some(cursor_loc)
-            } else {
-                None
-            };
+                    let position = if cursor_geo.overlaps(mode_rect) {
+                        Some(cursor_loc)
+                    } else {
+                        None
+                    };
 
-            for session in sessions {
-                session.set_position(position);
-            }
-        }
+                    session.set_cursor_pos(position);
+                }
+                ImageCaptureSourceKind::Toplevel(foreign_toplevel) => {
+                    let Some(foreign_toplevel) = foreign_toplevel.upgrade() else {
+                        return;
+                    };
 
-        for window in self.pinnacle.windows.iter() {
-            let sessions = window.with_state(|state| state.cursor_sessions.clone());
+                    let Some(window) = self
+                        .pinnacle
+                        .window_for_foreign_toplevel_handle(&foreign_toplevel)
+                        .cloned()
+                    else {
+                        return;
+                    };
 
-            if sessions.is_empty() {
-                continue;
-            }
+                    let Some(window_loc) = self.pinnacle.space.element_location(&window) else {
+                        return;
+                    };
 
-            let Some(window_loc) = self.pinnacle.space.element_location(window) else {
-                continue;
-            };
+                    let Some(surface) = window.wl_surface() else {
+                        return;
+                    };
 
-            let Some(surface) = window.wl_surface() else {
-                continue;
-            };
+                    let fractional_scale = compositor::with_states(&surface, |data| {
+                        with_fractional_scale(data, |scale| scale.preferred_scale())
+                    })
+                    .unwrap_or(1.0);
 
-            let fractional_scale = compositor::with_states(&surface, |data| {
-                with_fractional_scale(data, |scale| scale.preferred_scale())
-            })
-            .unwrap_or(1.0);
+                    let cursor_loc = cursor_loc
+                        - window_loc.to_f64()
+                        - window.total_decoration_offset().to_f64();
 
-            let cursor_loc =
-                cursor_loc - window_loc.to_f64() - window.total_decoration_offset().to_f64();
+                    let cursor_loc: Point<i32, Physical> =
+                        cursor_loc.to_physical_precise_round(fractional_scale);
+                    let cursor_loc: Point<i32, Buffer> = (cursor_loc.x, cursor_loc.y).into();
 
-            let cursor_loc: Point<i32, Physical> =
-                cursor_loc.to_physical_precise_round(fractional_scale);
-            let cursor_loc: Point<i32, Buffer> = (cursor_loc.x, cursor_loc.y).into();
+                    let mut cursor_geo = self
+                        .pinnacle
+                        .cursor_state
+                        .cursor_geometry(self.pinnacle.clock.now(), fractional_scale)
+                        .unwrap_or_default();
 
-            let mut cursor_geo = self
-                .pinnacle
-                .cursor_state
-                .cursor_geometry(self.pinnacle.clock.now(), fractional_scale)
-                .unwrap_or_default();
+                    cursor_geo.loc += cursor_loc;
 
-            cursor_geo.loc += cursor_loc;
+                    let buffer_size: Size<i32, Physical> = window
+                        .geometry_without_decorations()
+                        .size
+                        .to_f64()
+                        .to_physical_precise_round(fractional_scale);
+                    let buffer_geo: Rectangle<i32, Buffer> =
+                        Rectangle::from_size((buffer_size.w, buffer_size.h).into());
 
-            let buffer_size: Size<i32, Physical> = window
-                .geometry_without_decorations()
-                .size
-                .to_f64()
-                .to_physical_precise_round(fractional_scale);
-            let buffer_geo: Rectangle<i32, Buffer> =
-                Rectangle::from_size((buffer_size.w, buffer_size.h).into());
+                    let position = if cursor_geo.overlaps(buffer_geo) {
+                        Some(cursor_loc)
+                    } else {
+                        None
+                    };
 
-            let position = if cursor_geo.overlaps(buffer_geo) {
-                Some(cursor_loc)
-            } else {
-                None
-            };
-
-            for session in sessions {
-                session.set_position(position);
+                    session.set_cursor_pos(position);
+                }
             }
         }
     }
 
+    fn buffer_constraints(&mut self, size: Size<i32, Buffer>) -> BufferConstraints {
+        let shm_formats = SUPPORTED_SHM_FORMATS.to_vec();
+
+        // TODO: maybe cache these
+        let dmabuf_device = self
+            .backend
+            .with_renderer(|renderer| {
+                EGLDevice::device_for_display(renderer.egl_context().display())
+                    .ok()
+                    .and_then(|device| device.try_get_render_node().ok().flatten())
+            })
+            .flatten();
+
+        let dmabuf_constraints = dmabuf_device.map(|device| {
+            let dmabuf_formats = self
+                .backend
+                .with_renderer(|renderer| renderer.egl_context().dmabuf_render_formats().clone())
+                .unwrap_or_default();
+
+            let mut formats: HashMap<DrmFourcc, Vec<DrmModifier>> = HashMap::new();
+
+            for format in dmabuf_formats.into_iter() {
+                formats
+                    .entry(format.code)
+                    .or_default()
+                    .push(format.modifier);
+            }
+
+            DmabufConstraints {
+                node: device,
+                formats: formats.into_iter().collect(),
+            }
+        });
+
+        BufferConstraints {
+            size,
+            shm: shm_formats,
+            dma: dmabuf_constraints,
+        }
+    }
+
     /// Renders elements to a [`Frame`] if they caused damage, then notifies the client.
+    ///
+    /// If there was no damage, an `Err` containing the frame is returned.
     fn handle_frame(
         &mut self,
         frame: Frame,
         elements: &[impl RenderElement<GlesRenderer>],
         trackers: &mut SessionDamageTrackers,
-    ) {
+    ) -> Result<(), Frame> {
+        let _span = tracy_client::span!();
+
         let (damage, _) = trackers.damage.damage_output(1, elements).unwrap();
         let damage = damage.map(|damage| damage.as_slice()).unwrap_or_default();
         if damage.is_empty() {
-            frame.submit(Transform::Normal, []);
-            return;
+            return Err(frame);
         }
 
         let buffer = frame.buffer();
         let buffer_size = buffer_dimensions(&buffer).expect("this buffer is handled");
 
         let client_damage = frame
-            .buffer_damage()
+            .damage()
             .into_iter()
             .map(BufferDamageElement::new)
             .collect::<Vec<_>>();
@@ -578,46 +654,114 @@ impl State {
                 }
             }
 
-            frame.submit(
-                Transform::Normal,
-                damage.iter().map(|rect| {
+            let damage = damage
+                .iter()
+                .map(|rect| {
                     Rectangle::new(
                         (rect.loc.x, rect.loc.y).into(),
                         (rect.size.w, rect.size.h).into(),
                     )
-                }),
-            );
+                })
+                .collect::<Vec<_>>();
+
+            frame.success(Transform::Normal, damage, self.pinnacle.clock.now());
         });
+
+        Ok(())
     }
 }
 
 impl Pinnacle {
-    /// Returns the target buffer size and scale for a [`Session`].
+    pub fn stop_capture_sessions_for_output(&mut self, output: &Output) {
+        self.capture_sessions.retain(|session| {
+            let session_is_for_this_output = matches!(
+                session
+                    .source()
+                    .user_data()
+                    .get::<ImageCaptureSourceKind>()
+                    .unwrap(),
+                ImageCaptureSourceKind::Output(weak) if weak == output
+            );
+            !session_is_for_this_output
+        });
+
+        self.cursor_capture_sessions.retain(|session| {
+            let session_is_for_this_output = matches!(
+                session
+                    .source()
+                    .user_data()
+                    .get::<ImageCaptureSourceKind>()
+                    .unwrap(),
+                ImageCaptureSourceKind::Output(weak) if weak == output
+            );
+            !session_is_for_this_output
+        });
+    }
+
+    pub fn stop_capture_sessions_for_window(&mut self, window: &WindowElement) {
+        self.capture_sessions.retain(|session| {
+            let session_is_for_this_window = matches!(
+                session
+                    .source()
+                    .user_data()
+                    .get::<ImageCaptureSourceKind>()
+                    .unwrap(),
+                ImageCaptureSourceKind::Toplevel(weak)
+                    if window.with_state(|state| {
+                        // TODO: figure out if this upgrade is correct
+                        weak.upgrade().map(|handle| handle.identifier())
+                            == state
+                                .foreign_toplevel_list_handle
+                                .as_ref()
+                                .map(|handle| handle.identifier())
+                    })
+            );
+            !session_is_for_this_window
+        });
+
+        self.cursor_capture_sessions.retain(|session| {
+            let session_is_for_this_window = matches!(
+                session
+                    .source()
+                    .user_data()
+                    .get::<ImageCaptureSourceKind>()
+                    .unwrap(),
+                ImageCaptureSourceKind::Toplevel(weak)
+                    if window.with_state(|state| {
+                        weak.upgrade().map(|handle| handle.identifier())
+                            == state
+                                .foreign_toplevel_list_handle
+                                .as_ref()
+                                .map(|handle| handle.identifier())
+                    })
+            );
+            !session_is_for_this_window
+        });
+    }
+
+    /// Returns the target buffer size and scale for an [`ImageCaptureSource`].
     ///
     /// Returns `None` if the source doesn't exist.
-    fn buffer_size_and_scale_for_session(
+    fn buffer_size_and_scale_for_source(
         &mut self,
-        session: &Session,
+        source: &ImageCaptureSource,
     ) -> Option<(Size<i32, Buffer>, f64)> {
-        match session.source() {
-            Source::Output(wl_output) => {
-                let output = Output::from_resource(&wl_output)?;
+        let kind = source
+            .user_data()
+            .get::<ImageCaptureSourceKind>()
+            .expect("source should have source here");
+
+        match kind {
+            ImageCaptureSourceKind::Output(output) => {
+                let output = output.upgrade()?;
                 let scale = output.current_scale().fractional_scale();
 
-                if matches!(session.cursor(), Cursor::Standalone { .. }) {
-                    let geo = self
-                        .cursor_state
-                        .cursor_geometry(self.clock.now(), scale)
-                        .unwrap_or(Rectangle::from_size((1, 1).into()));
-                    Some((geo.size, scale))
-                } else {
-                    let size = output.current_mode()?.size;
-                    Some(((size.w, size.h).into(), scale))
-                }
+                let size = output.current_mode()?.size;
+                Some(((size.w, size.h).into(), scale))
             }
-            Source::ForeignToplevel(ext_foreign_toplevel_handle_v1) => {
-                let window =
-                    self.window_for_foreign_toplevel_handle(&ext_foreign_toplevel_handle_v1)?;
+            ImageCaptureSourceKind::Toplevel(foreign_toplevel) => {
+                let foreign_toplevel = foreign_toplevel.upgrade()?;
+                let window = self.window_for_foreign_toplevel_handle(&foreign_toplevel)?;
 
                 let surface = window.wl_surface()?;
 
@@ -625,24 +769,51 @@ impl Pinnacle {
                     with_fractional_scale(data, |scale| scale.preferred_scale())
                 })?;
 
-                if matches!(session.cursor(), Cursor::Standalone { .. }) {
-                    let geo = self
-                        .cursor_state
-                        .cursor_geometry(self.clock.now(), fractional_scale)
-                        .unwrap_or(Rectangle::from_size((1, 1).into()));
-                    Some((geo.size, fractional_scale))
-                } else {
-                    let size = window
-                        .geometry_without_decorations()
-                        .size
-                        .to_f64()
-                        .to_buffer(fractional_scale, Transform::Normal)
-                        .to_i32_round();
+                let size = window
+                    .geometry_without_decorations()
+                    .size
+                    .to_f64()
+                    .to_buffer(fractional_scale, Transform::Normal)
+                    .to_i32_round();
 
-                    Some((size, fractional_scale))
-                }
+                Some((size, fractional_scale))
             }
         }
+    }
+
+    fn buffer_size_and_scale_for_cursor_source(
+        &mut self,
+        source: &ImageCaptureSource,
+    ) -> Option<(Size<i32, Buffer>, f64)> {
+        let kind = source
+            .user_data()
+            .get::<ImageCaptureSourceKind>()
+            .expect("source should have source here");
+
+        let scale = match kind {
+            ImageCaptureSourceKind::Output(output) => {
+                let output = output.upgrade()?;
+                output.current_scale().fractional_scale()
+            }
+            ImageCaptureSourceKind::Toplevel(foreign_toplevel) => {
+                let foreign_toplevel = foreign_toplevel.upgrade()?;
+                let window = self.window_for_foreign_toplevel_handle(&foreign_toplevel)?;
+
+                let surface = window.wl_surface()?;
+
+                let fractional_scale = compositor::with_states(&surface, |data| {
+                    with_fractional_scale(data, |scale| scale.preferred_scale())
+                })?;
+
+                fractional_scale
+            }
+        };
+
+        let geo = self
+            .cursor_state
+            .cursor_geometry(self.clock.now(), scale)
+            .unwrap_or(Rectangle::from_size((1, 1).into()));
+        Some((geo.size, scale))
     }
 }
 

@@ -3,7 +3,7 @@
 use std::{collections::HashMap, num::NonZeroU32};
 
 use snowcap_api_defs::snowcap::{
-    input::v1::KeyboardKeyRequest,
+    input::v1::{KeyboardKeyRequest, keyboard_key_request::Target},
     layer::{
         self,
         v1::{CloseRequest, NewLayerRequest, OperateLayerRequest, UpdateLayerRequest, ViewRequest},
@@ -19,7 +19,8 @@ use crate::{
     BlockOnTokio,
     client::Client,
     input::{KeyEvent, Modifiers},
-    widget::{self, Program, WidgetDef, WidgetId, WidgetMessage},
+    popup::{self, AsParent},
+    widget::{self, Program, WidgetDef, WidgetId, WidgetMessage, signal},
 };
 
 // TODO: change to bitflag
@@ -117,7 +118,7 @@ impl From<ZLayer> for layer::v1::Layer {
     }
 }
 
-/// The error type for [`Layer::new_widget`].
+/// The error type for [`new_widget`].
 #[derive(thiserror::Error, Debug)]
 pub enum NewLayerError {
     /// Snowcap returned a gRPC error status.
@@ -173,7 +174,42 @@ where
         .block_on_tokio()?
         .into_inner();
 
-    let (msg_send, mut msg_recv) = tokio::sync::mpsc::unbounded_channel::<Msg>();
+    let (msg_send, mut msg_recv) = tokio::sync::mpsc::unbounded_channel::<Option<Msg>>();
+
+    if let Some(signaler) = program.signaler() {
+        signaler.connect({
+            let msg_send = msg_send.clone();
+
+            move |msg: signal::Message<Msg>| {
+                if let Err(err) = msg_send.send(Some(msg.into_inner())) {
+                    error!("Failed to send emitted msg: {err}");
+                    crate::signal::HandlerPolicy::Discard
+                } else {
+                    crate::signal::HandlerPolicy::Keep
+                }
+            }
+        });
+
+        signaler.connect({
+            let msg_send = msg_send.clone();
+
+            move |_: signal::RedrawNeeded| {
+                if let Err(err) = msg_send.send(None) {
+                    error!("Failed to send redraw signal: {err}");
+                    crate::signal::HandlerPolicy::Discard
+                } else {
+                    crate::signal::HandlerPolicy::Keep
+                }
+            }
+        });
+    }
+
+    let handle = LayerHandle {
+        id: layer_id.into(),
+        msg_sender: msg_send,
+    };
+
+    program.created(handle.clone().into());
 
     tokio::spawn(async move {
         loop {
@@ -188,7 +224,9 @@ where
                     }
                 }
                 Some(msg) = msg_recv.recv() => {
-                    program.update(msg);
+                    if let Some(msg) = msg {
+                        program.update(msg);
+                    }
 
                     if let Err(status) = Client::layer()
                         .request_view(ViewRequest { layer_id })
@@ -222,17 +260,14 @@ where
         }
     });
 
-    Ok(LayerHandle {
-        id: layer_id.into(),
-        msg_sender: msg_send,
-    })
+    Ok(handle)
 }
 
 /// A handle to a layer surface.
 #[derive(Clone)]
 pub struct LayerHandle<Msg> {
     id: WidgetId,
-    msg_sender: UnboundedSender<Msg>,
+    msg_sender: UnboundedSender<Option<Msg>>,
 }
 
 impl<Msg> std::fmt::Debug for LayerHandle<Msg> {
@@ -241,10 +276,7 @@ impl<Msg> std::fmt::Debug for LayerHandle<Msg> {
     }
 }
 
-impl<Msg> LayerHandle<Msg>
-where
-    Msg: Clone + Send + 'static,
-{
+impl<Msg> LayerHandle<Msg> {
     /// Update this layer's attributes.
     pub fn update(
         &self,
@@ -324,7 +356,12 @@ where
 
     /// Sends a message to this Layer [`Program`].
     pub fn send_message(&self, message: Msg) {
-        let _ = self.msg_sender.send(message);
+        let _ = self.msg_sender.send(Some(message));
+    }
+
+    /// Forces this layer to redraw.
+    pub fn force_redraw(&self) {
+        let _ = self.msg_sender.send(None);
     }
 
     /// Sends an [`Operation`] to this Layer.
@@ -341,7 +378,12 @@ where
             error!("Failed to send operation to {self:?}: {status}");
         }
     }
+}
 
+impl<Msg> LayerHandle<Msg>
+where
+    Msg: Clone + Send + 'static,
+{
     /// Do something when a key event is received
     pub fn on_key_event(
         &self,
@@ -349,7 +391,7 @@ where
     ) {
         let mut stream = match Client::input()
             .keyboard_key(KeyboardKeyRequest {
-                id: self.id.to_inner(),
+                target: Some(Target::LayerId(self.id.to_inner())),
             })
             .block_on_tokio()
         {
@@ -383,5 +425,11 @@ where
 
             on_press(handle, event.key, event.mods)
         });
+    }
+}
+
+impl<Msg> AsParent for LayerHandle<Msg> {
+    fn as_parent(&self) -> crate::popup::Parent {
+        popup::Parent(popup::ParentInner::Layer(self.id))
     }
 }

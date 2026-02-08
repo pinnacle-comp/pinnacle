@@ -1,9 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use std::{
-    collections::HashMap,
-    sync::atomic::{AtomicU32, Ordering},
-};
+use std::sync::atomic::{AtomicU32, Ordering};
 
 use indexmap::IndexSet;
 use smithay::{
@@ -18,11 +15,7 @@ use tracing::warn;
 
 use crate::{
     decoration::DecorationSurface,
-    handlers::image_copy_capture::SessionDamageTrackers,
-    protocol::{
-        image_copy_capture::session::{CursorSession, Session},
-        snowcap_decoration::Bounds,
-    },
+    protocol::snowcap_decoration::Bounds,
     render::util::snapshot::WindowSnapshot,
     state::{Pinnacle, WithState},
     tag::Tag,
@@ -409,17 +402,6 @@ pub struct WindowElementState {
     pub decoration_surfaces: Vec<DecorationSurface>,
 
     pub vrr_demand: Option<VrrDemand>,
-
-    pub capture_sessions: HashMap<Session, SessionDamageTrackers>,
-    pub cursor_sessions: Vec<CursorSession>,
-}
-
-impl Drop for WindowElementState {
-    fn drop(&mut self) {
-        for session in self.capture_sessions.keys() {
-            session.stopped();
-        }
-    }
 }
 
 impl WindowElement {
@@ -690,8 +672,6 @@ impl WindowElementState {
             foreign_toplevel_list_handle: None,
             decoration_surfaces: Vec::new(),
             vrr_demand: None,
-            capture_sessions: Default::default(),
-            cursor_sessions: Default::default(),
         }
     }
 

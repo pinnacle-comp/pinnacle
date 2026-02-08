@@ -174,9 +174,6 @@ impl XdgShellHandler for State {
             debug!("Failed to reposition popup: {err}");
         }
         surface.send_repositioned(token);
-        if let Err(err) = surface.send_configure() {
-            warn!("Failed to configure popup: {err}");
-        }
     }
 
     fn grab(&mut self, surface: PopupSurface, seat: WlSeat, serial: Serial) {

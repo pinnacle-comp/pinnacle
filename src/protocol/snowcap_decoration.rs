@@ -9,7 +9,10 @@ use smithay::{
         },
     },
     utils::{IsAlive, Logical, Point, SERIAL_COUNTER, Serial, Size},
-    wayland::compositor::{self, Cacheable},
+    wayland::{
+        compositor::{self, Cacheable},
+        shell::xdg,
+    },
 };
 use snowcap_protocols::snowcap_decoration_v1::server::{
     snowcap_decoration_manager_v1::SnowcapDecorationManagerV1,
@@ -175,6 +178,11 @@ pub trait SnowcapDecorationHandler {
 
     fn bounds_changed(&mut self, surface: DecorationSurface) {
         let _ = surface;
+    }
+
+    fn new_popup(&mut self, parent: DecorationSurface, popup: xdg::PopupSurface) {
+        let _ = parent;
+        let _ = popup;
     }
 }
 

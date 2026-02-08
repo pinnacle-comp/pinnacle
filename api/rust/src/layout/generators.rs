@@ -534,9 +534,9 @@ impl LayoutGenerator for Fair {
 /// A [`LayoutGenerator`] that floats windows.
 ///
 /// This works by simply returning an empty layout tree.<br>
-/// Note: the windows are not truly floating, see [`WindowHandle::spilled`] for details.
-///
-/// [`WindowHandle::spilled`]: crate::window::WindowHandle::spilled
+// /// Note: the windows are not truly floating, see [`WindowHandle::spilled`] for details.
+// ///
+// /// [`WindowHandle::spilled`]: crate::window::WindowHandle::spilled
 #[derive(Copy, Clone, Debug, Default, PartialEq)]
 pub struct Floating {}
 

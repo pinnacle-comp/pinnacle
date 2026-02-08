@@ -47,6 +47,7 @@ local snowcap = {
 ---The height of the prompt.
 ---@field height integer
 local QuitPrompt = {}
+setmetatable(QuitPrompt, { __index = require("snowcap.widget.base").Base })
 
 ---An overlay that shows various input binds.
 ---@class pinnacle.snowcap.integration.BindOverlay : snowcap.widget.Program
@@ -65,6 +66,7 @@ local QuitPrompt = {}
 ---The height of the overlay.
 ---@field height integer
 local BindOverlay = {}
+setmetatable(BindOverlay, { __index = require("snowcap.widget.base").Base })
 
 ---A border that shows window focus, with an optional titlebar.
 ---@class pinnacle.snowcap.integration.FocusBorder : snowcap.widget.Program
@@ -85,6 +87,7 @@ local BindOverlay = {}
 ---The height of the titlebar
 ---@field titlebar_height integer
 local FocusBorder = {}
+setmetatable(FocusBorder, { __index = require("snowcap.widget.base").Base })
 
 function QuitPrompt:view()
     local Widget = require("snowcap.widget")
@@ -644,7 +647,9 @@ function FocusBorder:view()
     if self.include_titlebar then
         local titlebar = Widget.container({
             style = {
-                background = Widget.background.Color(self.focused and self.focused_color or self.unfocused_color),
+                background = Widget.background.Color(
+                    self.focused and self.focused_color or self.unfocused_color
+                ),
             },
             padding = {
                 top = self.thickness,
@@ -927,6 +932,9 @@ end
 function integration.quit_prompt()
     local Widget = require("snowcap.widget")
 
+    local base = require("snowcap.widget.base").Base.new()
+    setmetatable(base, { __index = QuitPrompt })
+
     ---@type pinnacle.snowcap.integration.QuitPrompt
     local prompt = {
         border_radius = 12.0,
@@ -940,9 +948,13 @@ function integration.quit_prompt()
         height = 120,
     }
 
-    setmetatable(prompt, { __index = QuitPrompt })
+    for k, v in pairs(prompt) do
+        base[k] = v
+    end
 
-    return prompt
+    ---@cast base pinnacle.snowcap.integration.QuitPrompt
+
+    return base
 end
 
 ---Creates the default bind overlay.
@@ -953,8 +965,11 @@ end
 function integration.bind_overlay()
     local Widget = require("snowcap.widget")
 
+    local base = require("snowcap.widget.base").Base.new()
+    setmetatable(base, { __index = BindOverlay })
+
     ---@type pinnacle.snowcap.integration.BindOverlay
-    local prompt = {
+    local overlay = {
         border_radius = 12.0,
         border_thickness = 6.0,
         background_color = Widget.color.from_rgba(0.15, 0.15, 0.225, 0.8),
@@ -966,9 +981,13 @@ function integration.bind_overlay()
         height = 500,
     }
 
-    setmetatable(prompt, { __index = BindOverlay })
+    for k, v in pairs(overlay) do
+        base[k] = v
+    end
 
-    return prompt
+    ---@cast base pinnacle.snowcap.integration.BindOverlay
+
+    return base
 end
 
 ---Creates the default focus border without a titlebar.
@@ -978,6 +997,9 @@ end
 ---@return pinnacle.snowcap.integration.FocusBorder
 function integration.focus_border(window)
     local Widget = require("snowcap.widget")
+
+    local base = require("snowcap.widget.base").Base.new()
+    setmetatable(base, { __index = FocusBorder })
 
     ---@type pinnacle.snowcap.integration.FocusBorder
     local border = {
@@ -991,9 +1013,13 @@ function integration.focus_border(window)
         titlebar_height = 0,
     }
 
-    setmetatable(border, { __index = FocusBorder })
+    for k, v in pairs(border) do
+        base[k] = v
+    end
 
-    return border
+    ---@cast base pinnacle.snowcap.integration.FocusBorder
+
+    return base
 end
 
 ---Creates the default focus border with a titlebar.
@@ -1003,6 +1029,9 @@ end
 ---@return pinnacle.snowcap.integration.FocusBorder
 function integration.focus_border_with_titlebar(window)
     local Widget = require("snowcap.widget")
+
+    local base = require("snowcap.widget.base").Base.new()
+    setmetatable(base, { __index = FocusBorder })
 
     ---@type pinnacle.snowcap.integration.FocusBorder
     local border = {
@@ -1016,9 +1045,13 @@ function integration.focus_border_with_titlebar(window)
         titlebar_height = 16,
     }
 
-    setmetatable(border, { __index = FocusBorder })
+    for k, v in pairs(border) do
+        base[k] = v
+    end
 
-    return border
+    ---@cast base pinnacle.snowcap.integration.FocusBorder
+
+    return base
 end
 
 return snowcap

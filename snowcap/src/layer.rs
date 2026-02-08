@@ -13,7 +13,8 @@ use tokio::sync::mpsc::UnboundedSender;
 use tonic::Status;
 
 use crate::{
-    handlers::keyboard::KeyboardKey, state::State, surface::SnowcapSurface, widget::ViewFn,
+    handlers::keyboard::KeyboardKey, popup::ParentId, state::State, surface::SnowcapSurface,
+    widget::ViewFn,
 };
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Default)]
@@ -34,6 +35,26 @@ impl LayerIdCounter {
 impl State {
     pub fn layer_for_id(&mut self, id: LayerId) -> Option<&mut SnowcapLayer> {
         self.layers.iter_mut().find(|layer| layer.layer_id == id)
+    }
+
+    pub fn layer_destroy(&mut self, id: LayerId) {
+        let to_destroy: Vec<_> = self
+            .popups
+            .iter()
+            .filter_map(|p| {
+                if p.parent_id == ParentId::Layer(id) {
+                    Some(p.popup_id)
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        for popup_id in to_destroy {
+            self.popup_destroy(popup_id);
+        }
+
+        self.layers.retain(|p| p.layer_id != id);
     }
 }
 

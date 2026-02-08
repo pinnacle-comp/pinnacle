@@ -194,6 +194,68 @@ function tag.remove(tags)
     end
 end
 
+---@param response pinnacle.tag.v1.MoveToOutputResponse?
+---@return pinnacle.tag.MoveToOutputError|nil
+local function move_to_output_error_from_response(response)
+    if not (response and response.error) then
+        return nil
+    end
+
+    ---@type pinnacle.tag.MoveToOutputError
+    local move_error = {}
+
+    if response.error.output_does_not_exist then
+        move_error.output_does_not_exist = true
+    end
+
+    if response.error.same_window_on_two_outputs then
+        local window_ids = response.error.same_window_on_two_outputs.window_ids or {}
+        move_error.same_window_on_two_outputs =
+            require("pinnacle.window").handle.new_from_table(window_ids)
+    end
+
+    return move_error
+end
+
+---Moves existing tags to the specified output.
+---
+---#### Example
+---```lua
+---local tag_to_move = Tag.get("1")
+---Tag.move_to_output(Output.get_by_name("HDMI-1"), { tag_to_move })
+---```
+---
+---@param output pinnacle.output.OutputHandle The output to move tags to.
+---@param tags pinnacle.tag.TagHandle[] The tags to move.
+---
+---@return boolean ok `true` on success.
+---@return pinnacle.tag.MoveToOutputError|nil err Error on failure.
+function tag.move_to_output(output, tags)
+    ---@type integer[]
+    local ids = {}
+
+    for _, tg in ipairs(tags) do
+        table.insert(ids, tg.id)
+    end
+
+    local response, err = client:pinnacle_tag_v1_TagService_MoveToOutput({
+        output_name = output.name,
+        tag_ids = ids,
+    })
+
+    if err then
+        log.error(err)
+        return false, nil
+    end
+
+    local move_error = move_to_output_error_from_response(response)
+    if move_error then
+        return false, move_error
+    end
+
+    return true, nil
+end
+
 local signal_name_to_SignalName = {
     active = "TagActive",
     created = "TagCreated",
@@ -204,6 +266,12 @@ local signal_name_to_SignalName = {
 ---@field active fun(tag: pinnacle.tag.TagHandle, active: boolean)? A tag was set to active or not active.
 ---@field created fun(tag: pinnacle.tag.TagHandle)? A tag was created.
 ---@field removed fun(tag: pinnacle.tag.TagHandle)? A tag was removed.
+
+---@class pinnacle.tag.MoveToOutputError
+---`true` if the output does not exist.
+---@field output_does_not_exist boolean?
+---This operation would cause the provided windows to be on multiple outputs.
+---@field same_window_on_two_outputs pinnacle.window.WindowHandle[]?
 
 ---Connects to a tag signal.
 ---
@@ -320,6 +388,17 @@ function TagHandle:toggle_active()
     if err then
         log.error(err)
     end
+end
+
+---Moves this tag to the specified output.
+---
+---@see pinnacle.tag.move_to_output - for further information
+---@param output pinnacle.output.OutputHandle The output to move this tag to.
+---
+---@return boolean ok `true` on success.
+---@return pinnacle.tag.MoveToOutputError|nil err Error on failure.
+function TagHandle:move_to_output(output)
+    return tag.move_to_output(output, { self })
 end
 
 ---Gets whether or not this tag is active.
