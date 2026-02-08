@@ -124,6 +124,10 @@ pub enum NewLayerError {
     /// Snowcap returned a gRPC error status.
     #[error("gRPC error: `{0}`")]
     GrpcStatus(#[from] tonic::Status),
+
+    /// [`Program::view()`] returned None.
+    #[error("Toplevel Program must return a WidgetDef")]
+    EmptyView,
 }
 
 /// The error type for [`LayerHandle::update`] and set_* functions.
@@ -148,7 +152,7 @@ where
 {
     let mut callbacks = HashMap::<WidgetId, WidgetMessage<Msg>>::new();
 
-    let widget_def = program.view();
+    let widget_def = program.view().ok_or(NewLayerError::EmptyView)?;
 
     widget_def.collect_messages(&mut callbacks, WidgetDef::message_collector);
 
@@ -240,7 +244,9 @@ where
                 else => break,
             };
 
-            let widget_def = program.view();
+            let widget_def = program
+                .view()
+                .expect("Toplevel program must return a WidgetDef");
 
             callbacks.clear();
 

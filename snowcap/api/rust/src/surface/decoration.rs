@@ -65,6 +65,10 @@ pub enum NewDecorationError {
     /// Snowcap returned a gRPC error status.
     #[error("gRPC error: `{0}`")]
     GrpcStatus(#[from] tonic::Status),
+
+    /// [`Program::view()`] returned None.
+    #[error("Toplevel Program must return a WidgetDef")]
+    EmptyView,
 }
 
 /// Create a new widget.
@@ -81,7 +85,7 @@ where
 {
     let mut callbacks = HashMap::<WidgetId, WidgetMessage<Msg>>::new();
 
-    let widget_def = program.view();
+    let widget_def = program.view().ok_or(NewDecorationError::EmptyView)?;
 
     widget_def.collect_messages(&mut callbacks, WidgetDef::message_collector);
 
@@ -170,7 +174,9 @@ where
                 else => break,
             };
 
-            let widget_def = program.view();
+            let widget_def = program
+                .view()
+                .expect("Toplevel program must return a WidgetDef");
 
             callbacks.clear();
 

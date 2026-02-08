@@ -73,14 +73,14 @@
 //!         }
 //!     }
 //!
-//!     fn view(&self) -> widget::WidgetDef<Self::Message> {
+//!     fn view(&self) -> Option<widget::WidgetDef<Self::Message>> {
 //!         let widget = TextInput::new("placeholder:", &self.input_value.clone())
 //!             .id(Self::INPUT_ID)
 //!             .on_input(Message::ContentChanged)
 //!             .on_submit(Message::Submit)
 //!             .width(Length::Fixed(220.0));
 //!
-//!         widget.into()
+//!         Some(widget.into())
 //!     }
 //! }
 //! ```
