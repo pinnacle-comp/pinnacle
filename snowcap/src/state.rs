@@ -12,7 +12,7 @@ use smithay_client_toolkit::{
             globals::registry_queue_init,
             protocol::{
                 wl_keyboard::WlKeyboard, wl_pointer::WlPointer, wl_seat::WlSeat,
-                wl_surface::WlSurface,
+                wl_surface::WlSurface, wl_touch::WlTouch,
             },
         },
         protocols::{
@@ -35,7 +35,10 @@ use xkbcommon::xkb::Keysym;
 
 use crate::{
     decoration::{DecorationIdCounter, SnowcapDecoration},
-    handlers::{foreign_toplevel_list::ForeignToplevelListHandleData, keyboard::KeyboardFocus},
+    handlers::{
+        foreign_toplevel_list::ForeignToplevelListHandleData, keyboard::KeyboardFocus,
+        touch::ActiveTouch,
+    },
     layer::{LayerIdCounter, SnowcapLayer},
     popup::{PopupIdCounter, SnowcapPopup},
     runtime::{CalloopSenderSink, CurrentTokioExecutor},
@@ -81,6 +84,10 @@ pub struct State {
     pub keyboard: Option<WlKeyboard>, // TODO: multiple
 
     pub pointer: Option<WlPointer>, // TODO: multiple
+
+    pub touch_handles: Vec<(WlSeat, WlTouch)>,
+    pub active_touches: Vec<ActiveTouch>,
+
     // TODO: Do we need a pointer seat as well ?
     pub layer_id_counter: LayerIdCounter,
     pub decoration_id_counter: DecorationIdCounter,
@@ -285,6 +292,10 @@ impl State {
             keyboard_modifiers: smithay_client_toolkit::seat::keyboard::Modifiers::default(),
             keyboard: None,
             pointer: None,
+
+            touch_handles: Vec::default(),
+            active_touches: Vec::default(),
+
             layer_id_counter: LayerIdCounter::default(),
             decoration_id_counter: DecorationIdCounter::default(),
             popup_id_counter: PopupIdCounter::default(),

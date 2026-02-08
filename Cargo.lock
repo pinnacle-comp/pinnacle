@@ -2163,6 +2163,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "iced_touch"
+version = "0.1.0"
+source = "git+https://git.sr.ht/~phantomas/iced_touch?rev=2eebdf33#2eebdf33c8478eac565d16d573faada04775ee60"
+dependencies = [
+ "iced_core",
+ "iced_renderer",
+]
+
+[[package]]
 name = "iced_wgpu"
 version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4473,6 +4482,7 @@ dependencies = [
  "iced_renderer",
  "iced_runtime",
  "iced_tiny_skia",
+ "iced_touch",
  "iced_wgpu",
  "prost",
  "raw-window-handle",

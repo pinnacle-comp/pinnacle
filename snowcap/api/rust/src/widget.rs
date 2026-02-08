@@ -17,6 +17,7 @@ pub mod scrollable;
 pub mod signal;
 pub mod text;
 pub mod text_input;
+pub mod touch_area;
 pub mod utils;
 
 use std::{
@@ -38,7 +39,7 @@ use text_input::TextInput;
 use crate::{
     signal::{HandlerPolicy, Signaler},
     surface::SurfaceHandle,
-    widget::{input_region::InputRegion, utils::Radians},
+    widget::{input_region::InputRegion, touch_area::TouchArea, utils::Radians},
 };
 
 /// A unique identifier for a widget.
@@ -122,6 +123,7 @@ pub enum WidgetMessage<Msg> {
     Button(Msg),
     MouseArea(mouse_area::Callbacks<Msg>),
     TextInput(text_input::Callbacks<Msg>),
+    TouchArea(touch_area::Callbacks<Msg>),
 }
 
 pub fn message_from_event<Msg>(
@@ -147,6 +149,10 @@ where
         }),
         Event::TextInput(event) => callbacks.get(&id).cloned().and_then(|f| match f {
             WidgetMessage::TextInput(callbacks) => callbacks.process_event(event.into()),
+            _ => unreachable!(),
+        }),
+        Event::TouchArea(event) => callbacks.get(&id).cloned().and_then(|f| match f {
+            WidgetMessage::TouchArea(callbacks) => callbacks.process_event(event.into()),
             _ => unreachable!(),
         }),
     }
@@ -188,6 +194,9 @@ impl<Msg> WidgetDef<Msg> {
                 mouse_area.child.collect_messages(callbacks, with_widget);
             }
             Widget::TextInput(_) => (),
+            Widget::TouchArea(touch_area) => {
+                touch_area.child.collect_messages(callbacks, with_widget);
+            }
         }
     }
 }
@@ -218,6 +227,14 @@ impl<Msg: Clone> WidgetDef<Msg> {
                     .map(|id| (id, WidgetMessage::TextInput(text_input.callbacks.clone()))),
             );
         }
+
+        if let Widget::TouchArea(touch_area) = &self.widget {
+            callbacks.extend(
+                touch_area
+                    .widget_id
+                    .map(|id| (id, WidgetMessage::TouchArea(touch_area.callbacks.clone()))),
+            )
+        }
     }
 }
 
@@ -244,6 +261,7 @@ pub enum Widget<Msg> {
     InputRegion(Box<InputRegion<Msg>>),
     MouseArea(Box<MouseArea<Msg>>),
     TextInput(Box<TextInput<Msg>>),
+    TouchArea(Box<TouchArea<Msg>>),
 }
 
 impl<Msg, T: Into<Widget<Msg>>> From<T> for WidgetDef<Msg> {
@@ -280,6 +298,9 @@ impl<Msg> From<Widget<Msg>> for widget::v1::widget_def::Widget {
             }
             Widget::TextInput(text_input) => {
                 widget::v1::widget_def::Widget::TextInput(Box::new((*text_input).into()))
+            }
+            Widget::TouchArea(touch_area) => {
+                widget::v1::widget_def::Widget::TouchArea(Box::new((*touch_area).into()))
             }
         }
     }
@@ -633,6 +654,12 @@ impl From<Wrapping> for widget::v1::Wrapping {
             Wrapping::WordOrGlyph => widget::v1::Wrapping::WordOrGlyph,
         }
     }
+}
+
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub struct Point {
+    pub x: f32,
+    pub y: f32,
 }
 
 /// A complete widget program.

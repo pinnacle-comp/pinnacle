@@ -24,7 +24,7 @@ use pinnacle_api_defs::pinnacle::{
             MoveToTagRequest, RaiseRequest, ResizeGrabRequest, ResizeTileRequest,
             SetDecorationModeRequest, SetFloatingRequest, SetFocusedRequest, SetFullscreenRequest,
             SetGeometryRequest, SetMaximizedRequest, SetTagRequest, SetTagsRequest,
-            SetVrrDemandRequest, SwapRequest,
+            SetVrrDemandRequest, SwapRequest, TouchMoveGrabRequest, TouchResizeGrabRequest,
         },
     },
 };
@@ -138,6 +138,30 @@ pub fn begin_resize(button: MouseButton) {
         .resize_grab(ResizeGrabRequest {
             button: button.into(),
         })
+        .block_on_tokio()
+        .unwrap();
+}
+
+/// Begins a touch-driven interactive window move.
+///
+/// This will start moving the window under the given finger until it's lifted.
+///
+/// `finger_id` should correspond to the finger that triggered this function to be called.
+pub fn begin_touch_move(finger_id: u32) {
+    Client::window()
+        .touch_move_grab(TouchMoveGrabRequest { finger_id })
+        .block_on_tokio()
+        .unwrap();
+}
+
+/// Begins a touch-driven interactive window resize.
+///
+/// This will start resizing the window under the given finger until it's lifted.
+///
+/// `finger_id` should correspond to the finger that triggered this function to be called.
+pub fn begin_touch_resize(finger_id: u32) {
+    Client::window()
+        .touch_resize_grab(TouchResizeGrabRequest { finger_id })
         .block_on_tokio()
         .unwrap();
 }

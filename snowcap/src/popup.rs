@@ -55,7 +55,15 @@ impl State {
         }
 
         for popup_id in to_destroy.iter().rev() {
-            self.popups.retain(|p| &p.popup_id != popup_id)
+            let Some(popup) = self
+                .popups
+                .extract_if(.., |p| &p.popup_id == popup_id)
+                .next()
+            else {
+                continue;
+            };
+
+            self.flush_touch_for_surface(&popup.surface.wl_surface);
         }
     }
 }

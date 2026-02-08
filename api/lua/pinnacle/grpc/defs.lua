@@ -1184,8 +1184,18 @@ local pinnacle_v1_Backend = {
 ---@class pinnacle.window.v1.MoveGrabRequest
 ---@field button integer?
 
+---@class pinnacle.window.v1.TouchMoveGrabRequest
+---@field finger_id integer?
+
+---@class pinnacle.window.v1.TouchMoveGrabResponse
+
 ---@class pinnacle.window.v1.ResizeGrabRequest
 ---@field button integer?
+
+---@class pinnacle.window.v1.TouchResizeGrabRequest
+---@field finger_id integer?
+
+---@class pinnacle.window.v1.TouchResizeGrabResponse
 
 ---@class pinnacle.window.v1.SwapRequest
 ---@field window_id integer?
@@ -1562,7 +1572,11 @@ pinnacle.window.v1.RaiseRequest = {}
 pinnacle.window.v1.LowerRequest = {}
 pinnacle.window.v1.LowerResponse = {}
 pinnacle.window.v1.MoveGrabRequest = {}
+pinnacle.window.v1.TouchMoveGrabRequest = {}
+pinnacle.window.v1.TouchMoveGrabResponse = {}
 pinnacle.window.v1.ResizeGrabRequest = {}
+pinnacle.window.v1.TouchResizeGrabRequest = {}
+pinnacle.window.v1.TouchResizeGrabResponse = {}
 pinnacle.window.v1.SwapRequest = {}
 pinnacle.window.v1.SwapResponse = {}
 pinnacle.window.v1.WindowRuleRequest = {}
@@ -3016,6 +3030,40 @@ pinnacle.window.v1.WindowService.ResizeGrab.response = ".google.protobuf.Empty"
 ---@return string | nil error An error string, if any
 function Client:pinnacle_window_v1_WindowService_ResizeGrab(data)
     return self:unary_request(pinnacle.window.v1.WindowService.ResizeGrab, data)
+end
+pinnacle.window.v1.WindowService.TouchMoveGrab = {}
+pinnacle.window.v1.WindowService.TouchMoveGrab.service = "pinnacle.window.v1.WindowService"
+pinnacle.window.v1.WindowService.TouchMoveGrab.method = "TouchMoveGrab"
+pinnacle.window.v1.WindowService.TouchMoveGrab.request = ".pinnacle.window.v1.TouchMoveGrabRequest"
+pinnacle.window.v1.WindowService.TouchMoveGrab.response = ".pinnacle.window.v1.TouchMoveGrabResponse"
+
+---Performs a unary request.
+---
+---@nodiscard
+---
+---@param data pinnacle.window.v1.TouchMoveGrabRequest
+---
+---@return pinnacle.window.v1.TouchMoveGrabResponse | nil response
+---@return string | nil error An error string, if any
+function Client:pinnacle_window_v1_WindowService_TouchMoveGrab(data)
+    return self:unary_request(pinnacle.window.v1.WindowService.TouchMoveGrab, data)
+end
+pinnacle.window.v1.WindowService.TouchResizeGrab = {}
+pinnacle.window.v1.WindowService.TouchResizeGrab.service = "pinnacle.window.v1.WindowService"
+pinnacle.window.v1.WindowService.TouchResizeGrab.method = "TouchResizeGrab"
+pinnacle.window.v1.WindowService.TouchResizeGrab.request = ".pinnacle.window.v1.TouchResizeGrabRequest"
+pinnacle.window.v1.WindowService.TouchResizeGrab.response = ".pinnacle.window.v1.TouchResizeGrabResponse"
+
+---Performs a unary request.
+---
+---@nodiscard
+---
+---@param data pinnacle.window.v1.TouchResizeGrabRequest
+---
+---@return pinnacle.window.v1.TouchResizeGrabResponse | nil response
+---@return string | nil error An error string, if any
+function Client:pinnacle_window_v1_WindowService_TouchResizeGrab(data)
+    return self:unary_request(pinnacle.window.v1.WindowService.TouchResizeGrab, data)
 end
 pinnacle.window.v1.WindowService.Swap = {}
 pinnacle.window.v1.WindowService.Swap.service = "pinnacle.window.v1.WindowService"

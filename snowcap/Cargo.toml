@@ -19,6 +19,9 @@ iced_renderer = "0.14.0"
 iced_runtime = "0.14.0"
 iced_tiny_skia = "0.14.0"
 iced_wgpu = "0.14.0"
+
+iced_touch = { git = "https://git.sr.ht/~phantomas/iced_touch", rev = "2eebdf33" }
+
 smithay-client-toolkit = "0.20.0"
 # iced = { path = "../../../git/iced", default-features = false, features = ["wgpu", "tokio", "tiny-skia", "image"] }
 # iced_wgpu = { path = "../../../git/iced/wgpu" }
