@@ -12,10 +12,12 @@
 //! implements the `wlr-layer-shell` protocol.
 
 mod client;
-pub mod decoration;
 pub mod input;
-pub mod layer;
+pub mod signal;
+pub mod surface;
 pub mod widget;
+
+pub use surface::{decoration, layer, popup};
 
 use client::Client;
 use hyper_util::rt::TokioIo;

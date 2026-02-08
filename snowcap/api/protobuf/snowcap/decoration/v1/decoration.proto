@@ -2,7 +2,6 @@ syntax = "proto3";
 
 package snowcap.decoration.v1;
 
-import "google/protobuf/empty.proto";
 import "snowcap/widget/v1/widget.proto";
 import "snowcap/operation/v1/operation.proto";
 

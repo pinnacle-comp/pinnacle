@@ -1378,6 +1378,20 @@ local pinnacle_v1_Backend = {
 ---@class pinnacle.tag.v1.RemoveRequest
 ---@field tag_ids integer[]?
 
+---@class pinnacle.tag.v1.MoveToOutputRequest
+---@field output_name string?
+---@field tag_ids integer[]?
+
+---@class pinnacle.tag.v1.MoveToOutputResponse
+---@field error pinnacle.tag.v1.MoveToOutputResponse.Error?
+
+---@class pinnacle.tag.v1.MoveToOutputResponse.Error
+---@field output_does_not_exist google.protobuf.Empty?
+---@field same_window_on_two_outputs pinnacle.tag.v1.MoveToOutputResponse.Error.SameWindowOnTwoOutputs?
+
+---@class pinnacle.tag.v1.MoveToOutputResponse.Error.SameWindowOnTwoOutputs
+---@field window_ids integer[]?
+
 ---@class pinnacle.tag.v1.GetActiveRequest
 ---@field tag_id integer?
 
@@ -1646,6 +1660,10 @@ pinnacle.tag.v1.GetResponse = {}
 pinnacle.tag.v1.AddRequest = {}
 pinnacle.tag.v1.AddResponse = {}
 pinnacle.tag.v1.RemoveRequest = {}
+pinnacle.tag.v1.MoveToOutputRequest = {}
+pinnacle.tag.v1.MoveToOutputResponse = {}
+pinnacle.tag.v1.MoveToOutputResponse.Error = {}
+pinnacle.tag.v1.MoveToOutputResponse.Error.SameWindowOnTwoOutputs = {}
 pinnacle.tag.v1.GetActiveRequest = {}
 pinnacle.tag.v1.GetActiveResponse = {}
 pinnacle.tag.v1.GetNameRequest = {}
@@ -3670,6 +3688,23 @@ pinnacle.tag.v1.TagService.SwitchTo.response = ".google.protobuf.Empty"
 ---@return string | nil error An error string, if any
 function Client:pinnacle_tag_v1_TagService_SwitchTo(data)
     return self:unary_request(pinnacle.tag.v1.TagService.SwitchTo, data)
+end
+pinnacle.tag.v1.TagService.MoveToOutput = {}
+pinnacle.tag.v1.TagService.MoveToOutput.service = "pinnacle.tag.v1.TagService"
+pinnacle.tag.v1.TagService.MoveToOutput.method = "MoveToOutput"
+pinnacle.tag.v1.TagService.MoveToOutput.request = ".pinnacle.tag.v1.MoveToOutputRequest"
+pinnacle.tag.v1.TagService.MoveToOutput.response = ".pinnacle.tag.v1.MoveToOutputResponse"
+
+---Performs a unary request.
+---
+---@nodiscard
+---
+---@param data pinnacle.tag.v1.MoveToOutputRequest
+---
+---@return pinnacle.tag.v1.MoveToOutputResponse | nil response
+---@return string | nil error An error string, if any
+function Client:pinnacle_tag_v1_TagService_MoveToOutput(data)
+    return self:unary_request(pinnacle.tag.v1.TagService.MoveToOutput, data)
 end
 pinnacle.v1.PinnacleService = {}
 pinnacle.v1.PinnacleService.Quit = {}

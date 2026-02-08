@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use std::{cell::RefCell, collections::HashMap};
+use std::cell::RefCell;
 
 use indexmap::IndexSet;
 use smithay::{
@@ -17,11 +17,7 @@ use crate::{
     api::signal::Signal,
     backend::BackendData,
     config::ConnectorSavedState,
-    handlers::image_copy_capture::SessionDamageTrackers,
-    protocol::{
-        image_copy_capture::session::{CursorSession, Session},
-        screencopy::Screencopy,
-    },
+    protocol::screencopy::Screencopy,
     state::{Pinnacle, State, WithState},
     tag::Tag,
     util::centered_loc,
@@ -80,9 +76,6 @@ pub struct OutputState {
     pub debug_damage_tracker: OutputDamageTracker,
     pub is_vrr_on: bool,
     pub is_vrr_on_demand: bool,
-
-    pub capture_sessions: HashMap<Session, SessionDamageTrackers>,
-    pub cursor_sessions: Vec<CursorSession>,
 }
 
 impl Default for OutputState {
@@ -102,8 +95,6 @@ impl Default for OutputState {
             ),
             is_vrr_on: false,
             is_vrr_on_demand: false,
-            capture_sessions: Default::default(),
-            cursor_sessions: Default::default(),
         }
     }
 }
@@ -376,11 +367,7 @@ impl Pinnacle {
             self.signal_state.output_focused.signal(new_focused_output);
         }
 
-        output.with_state(|state| {
-            for session in state.capture_sessions.keys() {
-                session.stopped();
-            }
-        });
+        self.stop_capture_sessions_for_output(output);
 
         self.gamma_control_manager_state.output_removed(output);
 

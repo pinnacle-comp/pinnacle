@@ -2,9 +2,15 @@
 -- License, v. 2.0. If a copy of the MPL was not distributed with this
 -- file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
----@class snowcap.widget.Program
+---@class snowcap.widget.Program : snowcap.widget.base.Base
 ---@field update fun(self: self, message: any)
 ---@field view fun(self: self): snowcap.widget.WidgetDef
+---Called when a surface has been created with this program.
+---
+---A surface handle is provided to allow the program to manipulate
+---the surface. This handle should be passed to any child programs
+---to allow them to use it as well.
+---@field created fun(self: self, handle: snowcap.widget.SurfaceHandle)?
 
 ---@class snowcap.widget.Palette
 ---@field background snowcap.widget.Color
@@ -107,6 +113,7 @@
 ---@field scroller_border snowcap.widget.Border?
 
 ---@class snowcap.widget.Container
+---@field id string?
 ---@field padding snowcap.widget.Padding?
 ---@field width snowcap.widget.Length?
 ---@field height snowcap.widget.Length?
@@ -686,6 +693,7 @@ end
 local function container_into_api(def)
     ---@type snowcap.widget.v1.Container
     return {
+        id = def.id,
         padding = def.padding --[[@as snowcap.widget.v1.Padding]],
         width = def.width --[[@as snowcap.widget.v1.Length]],
         height = def.height --[[@as snowcap.widget.v1.Length]],
@@ -1229,5 +1237,142 @@ function widget._message_from_event(callbacks, event)
 end
 
 widget.operation = require("snowcap.widget.operation")
+
+---A handle to a surface.
+---
+---@class snowcap.widget.SurfaceHandle
+---A handle to a layer surface.
+---@field layer snowcap.layer.LayerHandle?
+---A handle to a decoration surface.
+---@field decoration snowcap.decoration.DecorationHandle?
+---A handle to a popup surface.
+---@field popup snowcap.popup.PopupHandle?
+local SurfaceHandle = {}
+
+---@type metatable
+local SurfaceHandle_mt = {
+    __index = SurfaceHandle,
+    ---@param self snowcap.widget.SurfaceHandle
+    __tostring = function(self)
+        if self.layer then
+            return ("SurfaceHandle{Layer#%d}"):format(self.layer.id)
+        end
+
+        if self.decoration then
+            return ("SurfaceHandle{Decoration#%d}"):format(self.decoration.id)
+        end
+
+        if self.popup then
+            return ("SurfaceHandle{Popup#%d}"):format(self.popup.id)
+        end
+
+        return "SurfaceHandle{Unknown}"
+    end,
+}
+
+---Creates a SurfaceHandle from a LayerHandle.
+---
+---@param handle snowcap.layer.LayerHandle
+function SurfaceHandle.from_layer_handle(handle)
+    ---@type snowcap.widget.SurfaceHandle
+    local self = {
+        layer = handle,
+    }
+    return setmetatable(self, SurfaceHandle_mt)
+end
+
+---Creates a SurfaceHandle from a DecorationHandle.
+---
+---@param handle snowcap.decoration.DecorationHandle
+function SurfaceHandle.from_decoration_handle(handle)
+    ---@type snowcap.widget.SurfaceHandle
+    local self = {
+        decoration = handle,
+    }
+    return setmetatable(self, SurfaceHandle_mt)
+end
+
+---Creates a SurfaceHandle from a PopupHandle.
+---
+---@param handle snowcap.popup.PopupHandle
+function SurfaceHandle.from_popup_handle(handle)
+    ---@type snowcap.widget.SurfaceHandle
+    local self = {
+        popup = handle,
+    }
+    return setmetatable(self, SurfaceHandle_mt)
+end
+
+---Closes this surface.
+function SurfaceHandle:close()
+    if self.layer then
+        self.layer:close()
+    end
+
+    if self.decoration then
+        self.decoration:close()
+    end
+
+    if self.popup then
+        self.popup:close()
+    end
+end
+
+---Sends a message to this surface.
+---
+---@param message any
+function SurfaceHandle:send_message(message)
+    if self.layer then
+        self.layer:send_message(message)
+    end
+
+    if self.decoration then
+        self.decoration:send_message(message)
+    end
+
+    if self.popup then
+        self.popup:send_message(message)
+    end
+end
+
+---Sends a operation to this surface.
+---
+---@param operation snowcap.widget.operation.Operation
+function SurfaceHandle:operate(operation)
+    if self.layer then
+        self.layer:operate(operation)
+    end
+
+    if self.decoration then
+        self.decoration:operate(operation)
+    end
+
+    if self.popup then
+        self.popup:operate(operation)
+    end
+end
+
+---Converts this surface handle into a popup parent.
+---
+---@return snowcap.popup.ParentHandle
+---
+---@see snowcap.popup.ParentHandle
+function SurfaceHandle:as_parent()
+    if self.layer then
+        return self.layer:as_parent()
+    end
+
+    if self.decoration then
+        return self.decoration:as_parent()
+    end
+
+    if self.popup then
+        return self.popup:as_parent()
+    end
+
+    error("SurfaceHandle was empty")
+end
+
+widget.SurfaceHandle = SurfaceHandle
 
 return widget

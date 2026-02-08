@@ -45,7 +45,7 @@ pub struct EncompassingTexture {
 ///
 /// See [`render_to_texture`].
 ///
-/// From https://github.com/YaLTeR/niri/blob/efb39e466b5248eb894745e899de33661493511d/src/render_helpers/mod.rs#L158
+/// From <https://github.com/YaLTeR/niri/blob/efb39e466b5248eb894745e899de33661493511d/src/render_helpers/mod.rs#L158>
 pub fn render_to_encompassing_texture<E: RenderElement<GlesRenderer>>(
     renderer: &mut GlesRenderer,
     elements: impl IntoIterator<Item = E>,
@@ -91,11 +91,11 @@ pub fn render_to_encompassing_texture<E: RenderElement<GlesRenderer>>(
 /// `elements` should have their locations relative to (0, 0), as they will be rendered
 /// to a texture with a rectangle of loc (0, 0) and size `size`. This can be achieved
 /// by wrapping them in a
-/// [`RelocateRenderElement`][smithay::backend::renderer::element::utils::RelocateRenderElement].
+/// [`RelocateRenderElement`].
 ///
 /// Elements outside of the rectangle will be clipped.
 ///
-/// From https://github.com/YaLTeR/niri/blob/efb39e466b5248eb894745e899de33661493511d/src/render_helpers/mod.rs#L180
+/// From <https://github.com/YaLTeR/niri/blob/efb39e466b5248eb894745e899de33661493511d/src/render_helpers/mod.rs#L180>
 pub fn render_to_texture(
     renderer: &mut GlesRenderer,
     elements: impl IntoIterator<Item = impl RenderElement<GlesRenderer>>,
@@ -173,7 +173,7 @@ fn render_elements_to_framebuffer(
 
 /// Renders damage rectangles for the given elements.
 ///
-/// https://github.com/YaLTeR/niri/blob/b351f6ff220560d96a260d8dd3ad794000923481/src/render_helpers/debug.rs#L61
+/// <https://github.com/YaLTeR/niri/blob/b351f6ff220560d96a260d8dd3ad794000923481/src/render_helpers/debug.rs#L61>
 pub fn render_damage_from_elements<E: Element>(
     damage_tracker: &mut OutputDamageTracker,
     elements: &[E],
@@ -209,7 +209,7 @@ pub fn render_damage(
 
 /// Renders opaque region rectangles on top of each element.
 ///
-/// https://github.com/YaLTeR/niri/blob/b351f6ff220560d96a260d8dd3ad794000923481/src/render_helpers/debug.rs#L10
+/// <https://github.com/YaLTeR/niri/blob/b351f6ff220560d96a260d8dd3ad794000923481/src/render_helpers/debug.rs#L10>
 pub fn render_opaque_regions<R: PRenderer>(
     elements: &mut Vec<OutputRenderElement<R>>,
     scale: Scale<f64>,

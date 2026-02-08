@@ -252,7 +252,7 @@ impl PendingTransactions {
     }
 }
 
-/// Pending [`UnmappingWindow`][crate::window::UnmappingWindow]s from things like
+/// Pending [`UnmappingWindow`]s from things like
 /// windows closing.
 ///
 /// Pending unmapping windows are picked up by the next requested layout.

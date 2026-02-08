@@ -15,14 +15,11 @@ use smithay::{
     },
     output::{Output, WeakOutput},
     reexports::{
-        wayland_protocols::{
-            ext::foreign_toplevel_list::v1::server::ext_foreign_toplevel_handle_v1::ExtForeignToplevelHandleV1,
-            xdg::{
-                decoration::zv1::server::zxdg_toplevel_decoration_v1,
-                shell::server::{
-                    xdg_positioner::{Anchor, ConstraintAdjustment, Gravity},
-                    xdg_toplevel,
-                },
+        wayland_protocols::xdg::{
+            decoration::zv1::server::zxdg_toplevel_decoration_v1,
+            shell::server::{
+                xdg_positioner::{Anchor, ConstraintAdjustment, Gravity},
+                xdg_toplevel,
             },
         },
         wayland_server::protocol::wl_surface::WlSurface,
@@ -536,10 +533,8 @@ impl Pinnacle {
 
     pub fn window_for_foreign_toplevel_handle(
         &self,
-        handle: &ExtForeignToplevelHandleV1,
+        handle: &ForeignToplevelHandle,
     ) -> Option<&WindowElement> {
-        let handle = ForeignToplevelHandle::from_resource(handle)?;
-
         self.windows
             .iter()
             .chain(
@@ -577,6 +572,8 @@ impl Pinnacle {
                 self.add_default_dmabuf_pre_commit_hook(toplevel.wl_surface());
             }
         }
+
+        self.stop_capture_sessions_for_window(window);
 
         let maybe_output = window.output(self);
 

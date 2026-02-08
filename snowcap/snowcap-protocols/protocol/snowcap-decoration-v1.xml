@@ -145,6 +145,19 @@
             <arg name="z_index" type="int" summary="index to render the surface at" />
         </request>
 
+        <request name="get_popup">
+            <description summary="assign this decoration surface as an xdg_popup parent">
+                This assigns an xdg_popup's parent to this decoration surface.
+                This popup should have been created via xdg_surface::get_popup
+                with the parent set to NULL, and this request must be invoked before
+                committing the popup's initial state.
+
+                See the documentation of xdg_popup for more details about what
+                an xdg_popup is and how it is used.
+            </description>
+            <arg name="popup" type="object" interface="xdg_popup"/>
+        </request>
+
         <request name="ack_configure">
             <description summary="acknowledge a configure request">
                 When a configure event is received, if a client commits the

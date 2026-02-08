@@ -6,6 +6,7 @@ local log = require("snowcap.log")
 local client = require("snowcap.grpc.client").client
 
 local widget = require("snowcap.widget")
+local widget_signal = require("snowcap.widget.signal")
 
 ---@class snowcap.layer
 local layer = {}
@@ -17,8 +18,14 @@ local layer_handle = {}
 ---@field private _update fun(msg:any)
 local LayerHandle = {}
 
+---Convert a LayerHandle into a Popup's ParentHandle
+---@return snowcap.popup.ParentHandle
+function LayerHandle:as_parent()
+    return require("snowcap.popup").parent.Layer(self)
+end
+
 ---@param id integer
----@param update fun(msg: any)
+---@param update fun(msg: any?)
 ---@return snowcap.layer.LayerHandle
 function layer_handle.new(id, update)
     ---@type snowcap.layer.LayerHandle
@@ -116,7 +123,30 @@ function layer.new_widget(args)
         return nil
     end
 
-    local layer_id = response.layer_id
+    local layer_id = response.layer_id or 0
+
+    ---@type fun(msg: any?)
+    local update_on_msg = function(msg)
+        if msg ~= nil then
+            args.program:update(msg)
+        end
+
+        ---@diagnostic disable-next-line: redefined-local
+        local _, err = client:snowcap_layer_v1_LayerService_RequestView({
+            layer_id = layer_id,
+        })
+
+        if err then
+            log.error(err)
+        end
+    end
+
+    args.program:connect(widget_signal.redraw_needed, update_on_msg)
+    args.program:connect(widget_signal.send_message, update_on_msg)
+
+    local handle = layer_handle.new(layer_id, update_on_msg)
+
+    args.program:created(widget.SurfaceHandle.from_layer_handle(handle))
 
     local err = client:snowcap_widget_v1_WidgetService_GetWidgetEvents({
         layer_id = layer_id,
@@ -146,25 +176,14 @@ function layer.new_widget(args)
         })
     end)
 
-    return layer_handle.new(layer_id, function(msg)
-        args.program:update(msg)
-
-        ---@diagnostic disable-next-line: redefined-local
-        local _, err = client:snowcap_layer_v1_LayerService_RequestView({
-            layer_id = layer_id,
-        })
-
-        if err then
-            log.error(err)
-        end
-    end)
+    return handle
 end
 
 ---Do something when a key event is received.
 ---@param on_event fun(handle: snowcap.layer.LayerHandle, event: snowcap.input.KeyEvent)
 function LayerHandle:on_key_event(on_event)
     local err = client:snowcap_input_v1_InputService_KeyboardKey(
-        { id = self.id },
+        { layer_id = self.id },
         function(response)
             ---@cast response snowcap.input.v1.KeyboardKeyResponse
 

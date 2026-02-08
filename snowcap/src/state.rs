@@ -10,7 +10,10 @@ use smithay_client_toolkit::{
         client::{
             Connection, QueueHandle,
             globals::registry_queue_init,
-            protocol::{wl_keyboard::WlKeyboard, wl_pointer::WlPointer},
+            protocol::{
+                wl_keyboard::WlKeyboard, wl_pointer::WlPointer, wl_seat::WlSeat,
+                wl_surface::WlSurface,
+            },
         },
         protocols::{
             ext::foreign_toplevel_list::v1::client::{
@@ -25,7 +28,7 @@ use smithay_client_toolkit::{
     },
     registry::RegistryState,
     seat::{SeatState, keyboard::Modifiers},
-    shell::wlr_layer::LayerShell,
+    shell::{WaylandSurface, wlr_layer::LayerShell, xdg::XdgShell},
 };
 use snowcap_protocols::snowcap_decoration_v1::client::snowcap_decoration_manager_v1::SnowcapDecorationManagerV1;
 use xkbcommon::xkb::Keysym;
@@ -34,9 +37,10 @@ use crate::{
     decoration::{DecorationIdCounter, SnowcapDecoration},
     handlers::{foreign_toplevel_list::ForeignToplevelListHandleData, keyboard::KeyboardFocus},
     layer::{LayerIdCounter, SnowcapLayer},
+    popup::{PopupIdCounter, SnowcapPopup},
     runtime::{CalloopSenderSink, CurrentTokioExecutor},
     server::GrpcServerState,
-    surface::CalloopNotifier,
+    surface::{self, CalloopNotifier},
     widget::SnowcapMessage,
 };
 
@@ -57,6 +61,7 @@ pub struct State {
     pub viewporter: WpViewporter,
     pub snowcap_decoration_manager: SnowcapDecorationManagerV1,
     pub foreign_toplevel_list: ExtForeignToplevelListV1,
+    pub xdg_shell: XdgShell,
 
     pub grpc_server_state: Option<GrpcServerState>,
 
@@ -67,16 +72,19 @@ pub struct State {
 
     pub layers: Vec<SnowcapLayer>,
     pub decorations: Vec<SnowcapDecoration>,
+    pub popups: Vec<SnowcapPopup>,
 
+    pub seat: Option<WlSeat>,
     // TODO: per wl_keyboard
     pub keyboard_focus: Option<KeyboardFocus>,
     pub keyboard_modifiers: Modifiers,
     pub keyboard: Option<WlKeyboard>, // TODO: multiple
 
     pub pointer: Option<WlPointer>, // TODO: multiple
-
+    // TODO: Do we need a pointer seat as well ?
     pub layer_id_counter: LayerIdCounter,
     pub decoration_id_counter: DecorationIdCounter,
+    pub popup_id_counter: PopupIdCounter,
 
     pub foreign_toplevel_list_handles:
         Vec<(ExtForeignToplevelHandleV1, ForeignToplevelListHandleData)>,
@@ -107,6 +115,8 @@ impl State {
         let foreign_toplevel_list: ExtForeignToplevelListV1 =
             globals.bind(&queue_handle, 1..=1, ()).unwrap();
 
+        let xdg_shell = XdgShell::bind(&globals, &queue_handle).unwrap();
+
         let wayland_source = WaylandSource::new(conn.clone(), event_queue);
 
         let dispatcher = Dispatcher::new(wayland_source, |_, queue, data| {
@@ -127,6 +137,9 @@ impl State {
                 for deco in state.decorations.iter_mut() {
                     deco.schedule_redraw();
                 }
+                for popup in state.popups.iter_mut() {
+                    popup.schedule_redraw();
+                }
             })
             .unwrap();
 
@@ -137,6 +150,9 @@ impl State {
                 }
                 for deco in state.decorations.iter_mut() {
                     deco.surface.invalidate_layout();
+                }
+                for popup in state.popups.iter_mut() {
+                    popup.surface.invalidate_layout();
                 }
             })
             .unwrap();
@@ -155,19 +171,25 @@ impl State {
         loop_handle
             .insert_source(recv, move |event, _, state| match event {
                 calloop::channel::Event::Msg((id, msg)) => {
-                    let Some(layer) = state
+                    let layer = state
                         .layers
                         .iter()
-                        .find(|layer| layer.surface.window_id == id)
-                    else {
-                        return;
-                    };
+                        .find(|layer| layer.surface.window_id == id);
+
+                    let popup = state
+                        .popups
+                        .iter()
+                        .find(|popup| popup.surface.window_id == id);
 
                     match msg {
                         SnowcapMessage::Noop => (),
                         SnowcapMessage::Close => (),
                         SnowcapMessage::KeyboardKey(key) => {
-                            if let Some(sender) = layer.keyboard_key_sender.as_ref() {
+                            let sender = layer
+                                .map(|l| l.keyboard_key_sender.as_ref())
+                                .or(popup.map(|p| p.keyboard_key_sender.as_ref()));
+
+                            if let Some(Some(sender)) = sender {
                                 let _ = sender.send(key);
                             }
                         }
@@ -230,6 +252,8 @@ impl State {
             }),
         ));
 
+        let seat = seat_state.seats().next();
+
         let state = State {
             loop_handle,
             loop_signal,
@@ -247,6 +271,7 @@ impl State {
             viewporter,
             snowcap_decoration_manager,
             foreign_toplevel_list,
+            xdg_shell,
 
             grpc_server_state: None,
             queue_handle,
@@ -254,15 +279,70 @@ impl State {
             tiny_skia: None,
             layers: Vec::new(),
             decorations: Vec::new(),
+            popups: Vec::new(),
+            seat,
             keyboard_focus: None,
             keyboard_modifiers: smithay_client_toolkit::seat::keyboard::Modifiers::default(),
             keyboard: None,
             pointer: None,
             layer_id_counter: LayerIdCounter::default(),
             decoration_id_counter: DecorationIdCounter::default(),
+            popup_id_counter: PopupIdCounter::default(),
             foreign_toplevel_list_handles: Vec::new(),
         };
 
         Ok(state)
+    }
+
+    pub(crate) fn find_surface_mut(
+        &mut self,
+        wl_surface: &WlSurface,
+    ) -> Option<&mut surface::SnowcapSurface> {
+        if let Some(surface) = self
+            .layers
+            .iter_mut()
+            .filter_map(|l| {
+                if l.layer.wl_surface() == wl_surface {
+                    Some(&mut l.surface)
+                } else {
+                    None
+                }
+            })
+            .next()
+        {
+            return Some(surface);
+        }
+
+        if let Some(surface) = self
+            .decorations
+            .iter_mut()
+            .filter_map(|d| {
+                if &d.surface.wl_surface == wl_surface {
+                    Some(&mut d.surface)
+                } else {
+                    None
+                }
+            })
+            .next()
+        {
+            return Some(surface);
+        }
+
+        if let Some(surface) = self
+            .popups
+            .iter_mut()
+            .filter_map(|p| {
+                if &p.surface.wl_surface == wl_surface {
+                    Some(&mut p.surface)
+                } else {
+                    None
+                }
+            })
+            .next()
+        {
+            return Some(surface);
+        }
+
+        None
     }
 }

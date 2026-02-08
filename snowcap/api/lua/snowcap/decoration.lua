@@ -6,6 +6,7 @@ local log = require("snowcap.log")
 local client = require("snowcap.grpc.client").client
 
 local widget = require("snowcap.widget")
+local widget_signal = require("snowcap.widget.signal")
 
 ---@class snowcap.decoration
 local decoration = {}
@@ -18,7 +19,7 @@ local decoration_handle = {}
 local DecorationHandle = {}
 
 ---@param id integer
----@param update fun(msg: any)
+---@param update fun(msg: any?)
 ---@return snowcap.decoration.DecorationHandle
 function decoration_handle.new(id, update)
     ---@type snowcap.decoration.DecorationHandle
@@ -79,6 +80,29 @@ function decoration.new_widget(args)
 
     local decoration_id = response.decoration_id or 0
 
+    ---@type fun(msg: any?)
+    local update_on_msg = function(msg)
+        if msg ~= nil then
+            args.program:update(msg)
+        end
+
+        ---@diagnostic disable-next-line: redefined-local
+        local _, err = client:snowcap_decoration_v1_DecorationService_RequestView({
+            decoration_id = decoration_id,
+        })
+
+        if err then
+            log.error(err)
+        end
+    end
+
+    args.program:connect(widget_signal.redraw_needed, update_on_msg)
+    args.program:connect(widget_signal.send_message, update_on_msg)
+
+    local handle = decoration_handle.new(decoration_id, update_on_msg)
+
+    args.program:created(widget.SurfaceHandle.from_decoration_handle(handle))
+
     local err = client:snowcap_widget_v1_WidgetService_GetWidgetEvents({
         decoration_id = decoration_id,
     }, function(response)
@@ -107,18 +131,13 @@ function decoration.new_widget(args)
         })
     end)
 
-    return decoration_handle.new(decoration_id, function(msg)
-        args.program:update(msg)
+    return handle
+end
 
-        ---@diagnostic disable-next-line: redefined-local
-        local _, err = client:snowcap_decoration_v1_DecorationService_RequestView({
-            decoration_id = decoration_id,
-        })
-
-        if err then
-            log.error(err)
-        end
-    end)
+---Convert a DecorationHandle into a Popup's ParentHandle
+---@return snowcap.popup.ParentHandle
+function DecorationHandle:as_parent()
+    return require("snowcap.popup").parent.Decoration(self)
 end
 
 function DecorationHandle:close()

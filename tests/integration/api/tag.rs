@@ -3,9 +3,11 @@ use std::{
     sync::{Arc, Mutex, OnceLock},
 };
 
+use indexmap::IndexSet;
 use mlua::{UserData, UserDataMethods};
 use pinnacle::{state::WithState, tag::Tag};
-use pinnacle_api::{layout::LayoutNode, signal::TagSignal, tag::TagHandle};
+use pinnacle_api::{layout::LayoutNode, output::OutputHandle, signal::TagSignal, tag::TagHandle};
+use proptest::prelude::*;
 use smithay::{output::Output, utils::Rectangle};
 
 use crate::{
@@ -148,6 +150,201 @@ fn tag_remove() {
         let tag_count = output.with_state(|state| state.tags.len());
         assert_eq!(tag_count, 2);
     });
+}
+
+/// Arguments for testing `tag.move_to_output`.
+#[derive(Debug, Clone)]
+struct TagMoveToOutputArgs {
+    /// A 2d map of tags that should be active.
+    ///
+    /// Each nested vec maps to one output.
+    /// For each output, the length of the vec is the amount of tags
+    /// the output will have. `true` will set that tag active.
+    tag_actives: Vec<Vec<bool>>,
+    /// The index of the output to focus.
+    output_to_focus: usize,
+    /// A 2d map of tags that will be moved to the target output.
+    ///
+    /// Similar to `tag_actives`. `true` means "move this tag".
+    tags_to_move: Vec<Vec<bool>>,
+    /// The index of the output that tags will be moved to.
+    output_to_move_to: usize,
+}
+
+fn tag_move_to_output_args() -> impl Strategy<Value = TagMoveToOutputArgs> {
+    (2usize..=10)
+        .prop_flat_map(|output_count| {
+            (
+                0..output_count,
+                0..output_count,
+                vec![2usize..=10; output_count],
+            )
+        })
+        .prop_flat_map(|(output_to_focus, output_to_move_to, tag_counts)| {
+            (
+                Just(output_to_focus),
+                Just(output_to_move_to),
+                tag_counts
+                    .iter()
+                    .map(|&tag_count| vec![proptest::bool::ANY; tag_count])
+                    .collect::<Vec<_>>(),
+                tag_counts
+                    .iter()
+                    .map(|&tag_count| vec![proptest::bool::weighted(0.1); tag_count])
+                    .collect::<Vec<_>>(),
+            )
+        })
+        .prop_map(
+            |(output_to_focus, output_to_move_to, tag_actives, tags_to_move)| TagMoveToOutputArgs {
+                tag_actives,
+                output_to_focus,
+                tags_to_move,
+                output_to_move_to,
+            },
+        )
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig {
+        cases: 20,
+        ..ProptestConfig::default()
+    })]
+    #[test_log::test]
+    fn tag_move_to_output(
+        args in tag_move_to_output_args()
+    ) {
+        for_each_api(|lang| {
+            let mut fixture = Fixture::new();
+
+            fixture
+                .runtime_handle()
+                .block_on(pinnacle_api::connect())
+                .unwrap();
+
+            let TagMoveToOutputArgs {
+                tag_actives,
+                output_to_focus,
+                tags_to_move,
+                output_to_move_to
+            } = args.clone();
+
+            let mut outputs = Vec::new();
+            let mut tags = Vec::new();
+            let mut tags_to_mv = Vec::new();
+
+            for (i, (tag_mask, tag_move)) in tag_actives.clone().into_iter().zip(tags_to_move.clone()).enumerate() {
+                let output = fixture.add_output(Rectangle::new((1920 * i as i32, 0).into(), (1920, 1080).into()));
+                output.with_state_mut(|state| {
+                    let tgs = tag_mask
+                        .into_iter()
+                        .zip(tag_move)
+                        .map(|(active, r#move)| {
+                            let tag = Tag::new("mama mia".to_string());
+                            tag.set_active(active);
+
+                            if r#move {
+                                tags_to_mv.push(tag.clone());
+                            }
+
+                            tag
+                        })
+                        .collect::<Vec<_>>();
+                    state.add_tags(tgs.clone());
+                    tags.push(tgs);
+                });
+                outputs.push(output);
+            }
+
+            fixture.pinnacle().focus_output(&outputs[output_to_focus]);
+
+            if outputs[output_to_focus].with_state(|state| state.focused_tags().next().is_none()) {
+                // Just ignore this case
+                return;
+            }
+
+            let id = fixture.add_client();
+            fixture.spawn_floating_window_with(id, (500, 500), |_| ());
+
+            let window_has_moved_tags = !outputs[output_to_focus]
+                .with_state(|state| {
+                    state.focused_tags().cloned().collect::<IndexSet<_>>()
+                })
+                .is_disjoint(&tags_to_mv.iter().cloned().collect::<IndexSet<_>>());
+
+            let target_output_name = outputs[output_to_move_to].name();
+            let focused_output_name = outputs[output_to_focus].name();
+            let tag_ids_to_move = tags_to_mv
+                .into_iter()
+                .map(|tag| tag.id().to_inner())
+                .collect::<Vec<_>>();
+
+            match lang {
+                Lang::Rust => fixture.spawn_blocking(move || {
+                    let target_output = OutputHandle::from_name(target_output_name);
+                    let focused_output = OutputHandle::from_name(focused_output_name);
+                    let target_tags = tag_ids_to_move
+                        .into_iter()
+                        .map(TagHandle::from_id)
+                        .collect::<Vec<_>>();
+
+                    let ret = pinnacle_api::tag::move_to_output(&target_output, target_tags.clone());
+
+                    match ret {
+                        Ok(()) => {
+                            let win = pinnacle_api::window::get_all().next().unwrap();
+
+                            if window_has_moved_tags {
+                                assert_eq!(win.output().as_ref(), Some(&target_output), "win not on target output");
+                            } else {
+                                assert_eq!(win.output().as_ref(), Some(&focused_output), "win not on focused output, moved");
+                            }
+
+                            for tag in target_tags {
+                                assert_eq!(tag.output(), target_output, "tag not on target output");
+                            }
+                        }
+                        Err(err) => match err {
+                            pinnacle_api::tag::MoveToOutputError::OutputDoesNotExist => unreachable!(),
+                            pinnacle_api::tag::MoveToOutputError::SameWindowOnTwoOutputs(window_handles) => {
+                                assert_eq!(window_handles.len(), 1, "win not on two ops");
+                                let win = &window_handles[0];
+                                assert_eq!(win.output().as_ref(), Some(&focused_output), "win not on focused output, not moved");
+                            }
+                        }
+                    }
+                }),
+                Lang::Lua => spawn_lua_blocking! {
+                    fixture,
+
+                    local target_output = Output.handle.new($target_output_name)
+                    local focused_output = Output.handle.new($focused_output_name)
+                    local tags_to_move = Tag.handle.new_from_table($tag_ids_to_move)
+
+                    local ok, err = Tag.move_to_output(target_output, tags_to_move)
+
+                    if ok then
+                        assert(not err, "err was non-nil")
+                        local win = Window.get_all()[1]
+                        local win_output = win:output().name
+                        if $window_has_moved_tags then
+                            assert(win_output == target_output.name, "win not on target output")
+                        else
+                            assert(win_output == focused_output.name, "win not on focused output, moved")
+                        end
+
+                        for _, tag in ipairs(tags_to_move) do
+                            assert(tag:output().name == target_output.name, "tag not on target_output")
+                        end
+                    else
+                        assert(not err.output_does_not_exist, "output doesn't exist")
+                        assert(err.same_window_on_two_outputs, "window not on two ops")
+                        local win = err.same_window_on_two_outputs[1]
+                        assert(win:output().name == focused_output.name, "win not on focused output, not moved")
+                    end
+                }
+            }
+        });
+    }
 }
 
 #[test_log::test]

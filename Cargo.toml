@@ -55,7 +55,7 @@ xkbcommon = "0.9.0"
 
 [workspace.dependencies.smithay]
 git = "https://github.com/Smithay/smithay"
-rev = "2928e4f"
+rev = "2608eb1"
 # path = "../../git/smithay"
 default-features = false
 features = [
@@ -104,7 +104,7 @@ rust-version.workspace = true
 
 [dependencies]
 smithay = { workspace = true }
-smithay-drm-extras = { git = "https://github.com/Smithay/smithay", rev = "2928e4f" }
+smithay-drm-extras = { git = "https://github.com/Smithay/smithay", rev = "2608eb1" }
 
 anyhow = { workspace = true }
 assert_matches = "1.5.0"

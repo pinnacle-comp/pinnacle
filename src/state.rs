@@ -22,8 +22,6 @@ use crate::{
         ext_workspace::{self, ExtWorkspaceManagerState},
         foreign_toplevel::{self, ForeignToplevelManagerState},
         gamma_control::GammaControlManagerState,
-        image_capture_source::ImageCaptureSourceState,
-        image_copy_capture::ImageCopyCaptureState,
         output_management::OutputManagementManagerState,
         output_power_management::OutputPowerManagementState,
         screencopy::ScreencopyManagerState,
@@ -71,6 +69,10 @@ use smithay::{
         fractional_scale::{FractionalScaleManagerState, with_fractional_scale},
         idle_inhibit::IdleInhibitManagerState,
         idle_notify::IdleNotifierState,
+        image_capture_source::{
+            ImageCaptureSourceState, OutputCaptureSourceState, ToplevelCaptureSourceState,
+        },
+        image_copy_capture::{CursorSession, ImageCopyCaptureState, Session},
         keyboard_shortcuts_inhibit::KeyboardShortcutsInhibitState,
         output::OutputManagerState,
         pointer_constraints::PointerConstraintsState,
@@ -178,6 +180,8 @@ pub struct Pinnacle {
     pub snowcap_decoration_state: SnowcapDecorationState,
     pub wl_drm_state: WlDrmState,
     pub image_capture_source_state: ImageCaptureSourceState,
+    pub output_capture_source_state: OutputCaptureSourceState,
+    pub toplevel_capture_source_state: ToplevelCaptureSourceState,
     pub image_copy_capture_state: ImageCopyCaptureState,
     pub content_type_state: ContentTypeState,
 
@@ -240,6 +244,9 @@ pub struct Pinnacle {
     pub blocker_cleared_rx: std::sync::mpsc::Receiver<Client>,
 
     pub dmabuf_hooks: HashMap<WlSurface, HookId>,
+
+    pub capture_sessions: Vec<Session>,
+    pub cursor_capture_sessions: Vec<CursorSession>,
 }
 
 #[cfg(feature = "snowcap")]
@@ -269,6 +276,8 @@ impl State {
         foreign_toplevel::refresh(self);
         ext_workspace::refresh(self);
         self.pinnacle.refresh_idle_inhibit();
+
+        // TODO: Probably want to do this only after a redraw
         self.process_capture_sessions();
 
         self.backend.render_scheduled_outputs(&mut self.pinnacle);
@@ -394,10 +403,6 @@ impl Pinnacle {
 
         let (blocker_cleared_tx, blocker_cleared_rx) = std::sync::mpsc::channel();
 
-        loop_handle.insert_idle(|state| {
-            state.set_copy_capture_buffer_constraints();
-        });
-
         let pinnacle = Pinnacle {
             loop_signal,
             loop_handle: loop_handle.clone(),
@@ -482,14 +487,12 @@ impl Pinnacle {
             ),
             snowcap_decoration_state: SnowcapDecorationState::new::<State>(&display_handle),
             wl_drm_state: WlDrmState,
-            image_capture_source_state: ImageCaptureSourceState::new::<State, _>(
+            image_capture_source_state: ImageCaptureSourceState::new(),
+            output_capture_source_state: OutputCaptureSourceState::new::<State>(&display_handle),
+            toplevel_capture_source_state: ToplevelCaptureSourceState::new::<State>(
                 &display_handle,
-                filter_restricted_client,
             ),
-            image_copy_capture_state: ImageCopyCaptureState::new::<State, _>(
-                &display_handle,
-                filter_restricted_client,
-            ),
+            image_copy_capture_state: ImageCopyCaptureState::new::<State>(&display_handle),
             content_type_state: ContentTypeState::new::<State>(&display_handle),
 
             lock_state: LockState::default(),
@@ -548,6 +551,9 @@ impl Pinnacle {
             blocker_cleared_rx,
 
             dmabuf_hooks: Default::default(),
+
+            capture_sessions: Default::default(),
+            cursor_capture_sessions: Default::default(),
         };
 
         Ok(pinnacle)

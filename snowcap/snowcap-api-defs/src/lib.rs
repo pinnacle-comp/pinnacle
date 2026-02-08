@@ -35,6 +35,12 @@ pub mod snowcap {
         }
     }
 
+    pub mod popup {
+        pub mod v1 {
+            tonic::include_proto!("snowcap.popup.v1");
+        }
+    }
+
     pub mod operation {
         pub mod v1 {
             tonic::include_proto!("snowcap.operation.v1");

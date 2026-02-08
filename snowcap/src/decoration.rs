@@ -4,7 +4,7 @@ use smithay_client_toolkit::reexports::{
 };
 use snowcap_protocols::snowcap_decoration_v1::client::snowcap_decoration_surface_v1::SnowcapDecorationSurfaceV1;
 
-use crate::{state::State, surface::SnowcapSurface, widget::ViewFn};
+use crate::{popup::ParentId, state::State, surface::SnowcapSurface, widget::ViewFn};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Default)]
 pub struct DecorationId(pub u32);
@@ -26,6 +26,26 @@ impl State {
         self.decorations
             .iter_mut()
             .find(|deco| deco.decoration_id == id)
+    }
+
+    pub fn decoration_destroy(&mut self, id: DecorationId) {
+        let to_destroy: Vec<_> = self
+            .popups
+            .iter()
+            .filter_map(|p| {
+                if p.parent_id == ParentId::Decoration(id) {
+                    Some(p.popup_id)
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        for popup_id in to_destroy {
+            self.popup_destroy(popup_id);
+        }
+
+        self.decorations.retain(|d| d.decoration_id != id);
     }
 }
 
