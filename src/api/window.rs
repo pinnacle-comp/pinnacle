@@ -98,6 +98,10 @@ pub fn set_minimized(state: &mut State, window: &WindowElement, set: impl Into<O
     if set != is_minimized {
         state.pinnacle.request_layout(&output);
         state.schedule_render(&output);
+        if let Some(x11surface) = window.x11_surface() {
+            // Error can occur here on connection failure, but window is dead anyway at that point.
+            let _ = x11surface.set_hidden(!set);
+        }
         state.pinnacle.update_xwayland_stacking_order();
     }
 }
