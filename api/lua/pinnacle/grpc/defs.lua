@@ -1334,6 +1334,10 @@ local pinnacle_v1_Backend = {
 
 ---@class pinnacle.tag.v1.AddResponse
 ---@field tag_ids integer[]?
+---@field error pinnacle.tag.v1.AddResponse.Error?
+
+---@class pinnacle.tag.v1.AddResponse.Error
+---@field output_does_not_exist google.protobuf.Empty?
 
 ---@class pinnacle.tag.v1.RemoveRequest
 ---@field tag_ids integer[]?
@@ -1613,6 +1617,7 @@ pinnacle.tag.v1.GetRequest = {}
 pinnacle.tag.v1.GetResponse = {}
 pinnacle.tag.v1.AddRequest = {}
 pinnacle.tag.v1.AddResponse = {}
+pinnacle.tag.v1.AddResponse.Error = {}
 pinnacle.tag.v1.RemoveRequest = {}
 pinnacle.tag.v1.MoveToOutputRequest = {}
 pinnacle.tag.v1.MoveToOutputResponse = {}
