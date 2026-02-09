@@ -35,11 +35,20 @@ pub struct WindowRuleState {
 pub struct WindowRules {
     pub layout_mode: Option<LayoutMode>,
     pub focused: Option<bool>,
+    pub minimized: Option<bool>,
     pub floating_x: Option<i32>,
     pub floating_y: Option<i32>,
     pub floating_size: Option<Size<i32, Logical>>,
     pub decoration_mode: Option<zxdg_toplevel_decoration_v1::Mode>,
     pub tags: Option<IndexSet<Tag>>,
+}
+
+impl WindowRules {
+    /// Get the the "default" minimization state to apply to a window if the rules do not specify
+    /// any.
+    pub const fn default_minimization_state() -> bool {
+        false
+    }
 }
 
 #[derive(Debug, Clone, Default)]
@@ -165,6 +174,7 @@ impl Pinnacle {
             floating_size,
             decoration_mode,
             tags,
+            minimized,
         } = rules;
 
         let ClientRequests {
@@ -183,10 +193,13 @@ impl Pinnacle {
             })
             .unwrap_or(LayoutMode::new_tiled());
 
+        let minimized = minimized.unwrap_or(WindowRules::default_minimization_state());
+
         unmapped.window.with_state_mut(|state| {
             state.layout_mode = layout_mode;
             state.floating_x = *floating_x;
             state.floating_y = *floating_y;
+            state.minimized = minimized;
             state.floating_size = floating_size.unwrap_or(state.floating_size);
             state.decoration_mode = (*decoration_mode).or(*client_decoration_mode);
             if let Some(tags) = tags {
@@ -213,6 +226,7 @@ impl Pinnacle {
             }
             WindowSurface::X11(surface) => {
                 let _ = surface.set_mapped(true);
+                let _ = surface.set_hidden(minimized);
             }
         }
 

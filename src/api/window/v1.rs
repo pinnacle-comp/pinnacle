@@ -520,10 +520,16 @@ impl v1::window_service_server::WindowService for super::WindowService {
             if let Some(window) = window_id.window(&state.pinnacle) {
                 crate::api::window::set_minimized(state, &window, absolute_minimized);
             } else if let Some(unmapped) = window_id.unmapped_window_mut(&mut state.pinnacle)
-                && let UnmappedState::WaitingForRules { rules: _, .. } = &mut unmapped.state
+                && let UnmappedState::WaitingForRules { rules, .. } = &mut unmapped.state
             {
-                // TODO: find a way to immediately minimize a window upon mapping.
-                warn!("minimizing unmapped windows not yet supported");
+                let target_minimized = match absolute_minimized {
+                    Some(absolute) => absolute,
+                    // Toggling
+                    None => !rules
+                        .minimized
+                        .unwrap_or(crate::window::rules::WindowRules::default_minimization_state()),
+                };
+                rules.minimized = Some(target_minimized);
             };
 
             Ok(SetMinimizedResponse {})
