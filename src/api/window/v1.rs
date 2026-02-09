@@ -19,8 +19,9 @@ use pinnacle_api_defs::pinnacle::{
             MoveToOutputResponse, MoveToTagRequest, RaiseRequest, ResizeGrabRequest,
             ResizeTileRequest, SetDecorationModeRequest, SetFloatingRequest, SetFocusedRequest,
             SetFullscreenRequest, SetGeometryRequest, SetMaximizedRequest, SetMinimizedRequest,
-            SetTagRequest, SetTagsRequest, SetTagsResponse, SetVrrDemandRequest,
-            SetVrrDemandResponse, SwapRequest, SwapResponse, WindowRuleRequest, WindowRuleResponse,
+            SetMinimizedResponse, SetTagRequest, SetTagsRequest, SetTagsResponse,
+            SetVrrDemandRequest, SetVrrDemandResponse, SwapRequest, SwapResponse,
+            WindowRuleRequest, WindowRuleResponse,
         },
     },
 };
@@ -500,7 +501,10 @@ impl v1::window_service_server::WindowService for super::WindowService {
         .await
     }
 
-    async fn set_minimized(&self, request: Request<SetMinimizedRequest>) -> TonicResult<()> {
+    async fn set_minimized(
+        &self,
+        request: Request<SetMinimizedRequest>,
+    ) -> TonicResult<SetMinimizedResponse> {
         let request = request.into_inner();
         let window_id = WindowId(request.window_id);
         let absolute_minimized = match request.set_or_toggle() {
@@ -512,7 +516,7 @@ impl v1::window_service_server::WindowService for super::WindowService {
             SetOrToggle::Toggle => None,
         };
 
-        run_unary_no_response(&self.sender, move |state| {
+        run_unary(&self.sender, move |state| {
             if let Some(window) = window_id.window(&state.pinnacle) {
                 crate::api::window::set_minimized(state, &window, absolute_minimized);
             } else if let Some(unmapped) = window_id.unmapped_window_mut(&mut state.pinnacle)
@@ -520,7 +524,9 @@ impl v1::window_service_server::WindowService for super::WindowService {
             {
                 // TODO: find a way to immediately minimize a window upon mapping.
                 warn!("minimizing unmapped windows not yet supported");
-            }
+            };
+
+            Ok(SetMinimizedResponse {})
         })
         .await
     }
