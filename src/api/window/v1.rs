@@ -522,14 +522,14 @@ impl v1::window_service_server::WindowService for super::WindowService {
             } else if let Some(unmapped) = window_id.unmapped_window_mut(&mut state.pinnacle)
                 && let UnmappedState::WaitingForRules { rules, .. } = &mut unmapped.state
             {
-                let target_minimized = match absolute_minimized {
+                let absolute_minimized = match absolute_minimized {
                     Some(absolute) => absolute,
                     // Toggling
                     None => !rules
                         .minimized
                         .unwrap_or(crate::window::rules::WindowRules::default_minimization_state()),
                 };
-                rules.minimized = Some(target_minimized);
+                rules.minimized = Some(absolute_minimized);
             };
 
             Ok(SetMinimizedResponse {})

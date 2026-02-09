@@ -74,7 +74,6 @@ pub fn set_minimized(state: &mut State, window: &WindowElement, set: impl Into<O
     }
 
     let set = set.into();
-
     let is_minimized = window.with_state(|state| state.minimized);
     let set = match set {
         Some(absolute_set) => absolute_set,
@@ -100,7 +99,7 @@ pub fn set_minimized(state: &mut State, window: &WindowElement, set: impl Into<O
         state.schedule_render(&output);
         if let Some(x11surface) = window.x11_surface() {
             // Error can occur here on connection failure, but window is dead anyway at that point.
-            let _ = x11surface.set_hidden(!set);
+            let _ = x11surface.set_hidden(set);
         }
         state.pinnacle.update_xwayland_stacking_order();
     }
