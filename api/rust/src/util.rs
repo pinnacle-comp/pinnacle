@@ -269,3 +269,26 @@ impl From<Rect> for pinnacle_api_defs::pinnacle::util::v1::Rect {
         }
     }
 }
+
+/// Extension trait for [`Result`].
+pub(crate) trait ResultExt {
+    type T;
+    type E;
+
+    /// Swap the "error" and "ok" components of a result.
+    fn swap_ok_err(self) -> Result<Self::E, Self::T>;
+}
+
+impl<T, E> ResultExt for Result<T, E> {
+    type T = T;
+
+    type E = E;
+
+    #[inline(always)]
+    fn swap_ok_err(self) -> Result<Self::E, Self::T> {
+        match self {
+            Ok(t) => Err(t),
+            Err(e) => Ok(e),
+        }
+    }
+}

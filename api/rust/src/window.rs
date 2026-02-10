@@ -23,8 +23,8 @@ use pinnacle_api_defs::pinnacle::{
             GetTagIdsRequest, GetTitleRequest, GetWindowsInDirRequest, LowerRequest,
             MoveGrabRequest, MoveToOutputRequest, MoveToTagRequest, RaiseRequest,
             ResizeGrabRequest, ResizeTileRequest, SetDecorationModeRequest, SetFloatingRequest,
-            SetFocusedRequest, SetFullscreenRequest, SetGeometryRequest, SetMaximizedRequest,
-            SetMinimizedRequest, SetTagRequest, SetTagsRequest, SetVrrDemandRequest, SwapRequest,
+            SetFullscreenRequest, SetGeometryRequest, SetMaximizedRequest, SetMinimizedRequest,
+            SetTagRequest, SetTagsRequest, SetVrrDemandRequest, SwapRequest, TrySetFocusedRequest,
         },
     },
 };
@@ -38,7 +38,7 @@ use crate::{
     output::OutputHandle,
     signal::{SignalHandle, WindowSignal},
     tag::TagHandle,
-    util::{Batch, Direction, Point, Size},
+    util::{Batch, Direction, Point, ResultExt, Size},
 };
 
 /// Gets handles to all windows.
@@ -235,6 +235,29 @@ impl VrrDemand {
     }
 }
 
+/// Error when trying to focus/unfocus a window.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum TrySetFocusedError {
+    /// Window was minimized and could not be focused.
+    WindowMinimized,
+}
+
+impl TryFrom<pinnacle_api_defs::pinnacle::window::v1::TrySetFocusedResponse>
+    for TrySetFocusedError
+{
+    type Error = ();
+
+    fn try_from(
+        value: pinnacle_api_defs::pinnacle::window::v1::TrySetFocusedResponse,
+    ) -> Result<Self, Self::Error> {
+        use pinnacle_api_defs::pinnacle::window::v1::try_set_focused_response::TrySetFocusedStatus;
+        match value.status() {
+            TrySetFocusedStatus::Success => Err(()),
+            TrySetFocusedStatus::WindowMinimized => Ok(Self::WindowMinimized),
+        }
+    }
+}
+
 impl WindowHandle {
     /// Sends a close request to this window.
     ///
@@ -426,10 +449,20 @@ impl WindowHandle {
     }
 
     /// Focuses or unfocuses this window.
+    ///
+    /// Silently fails if trying to focus a minimized window.
+    #[deprecated = "use `WindowHandle::try_set_focused` instead"]
     pub fn set_focused(&self, set: bool) {
+        let _ = self.try_set_focused(set);
+    }
+
+    /// Tries to focus or unfocus this window.
+    ///
+    /// Fails if the window is minimized.
+    pub fn try_set_focused(&self, set: bool) -> Result<(), TrySetFocusedError> {
         let window_id = self.id;
         Client::window()
-            .set_focused(SetFocusedRequest {
+            .try_set_focused(TrySetFocusedRequest {
                 window_id,
                 set_or_toggle: match set {
                     true => SetOrToggle::Set,
@@ -438,19 +471,35 @@ impl WindowHandle {
                 .into(),
             })
             .block_on_tokio()
-            .unwrap();
+            .expect("successful rpc communication is expected")
+            .into_inner()
+            .try_into()
+            .swap_ok_err()
     }
 
     /// Toggles this window between focused and unfocused.
+    ///
+    /// Silently fails if trying to focus a minimized window.
+    #[deprecated = "use `WindowHandle::try_toggle_focused` instead"]
     pub fn toggle_focused(&self) {
+        let _ = self.try_toggle_focused();
+    }
+
+    /// Tries to toggle this window between focused and unfocused.
+    ///
+    /// Fails if the window is minimized.
+    pub fn try_toggle_focused(&self) -> Result<(), TrySetFocusedError> {
         let window_id = self.id;
         Client::window()
-            .set_focused(SetFocusedRequest {
+            .try_set_focused(TrySetFocusedRequest {
                 window_id,
                 set_or_toggle: SetOrToggle::Toggle.into(),
             })
             .block_on_tokio()
-            .unwrap();
+            .expect("successful rpc communication is expected")
+            .into_inner()
+            .try_into()
+            .swap_ok_err()
     }
 
     /// Sets this window's decoration mode.

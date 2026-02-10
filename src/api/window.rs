@@ -81,7 +81,7 @@ pub fn set_minimized(state: &mut State, window: &WindowElement, set: impl Into<O
     };
     window.with_state_mut(|state| state.minimized = set);
 
-    if !set && state.pinnacle.keyboard_focus_stack.current_focus() == Some(window) {
+    if set && state.pinnacle.keyboard_focus_stack.current_focus() == Some(window) {
         state.pinnacle.keyboard_focus_stack.unset_focus();
     }
 
@@ -111,33 +111,89 @@ pub fn set_minimized(state: &mut State, window: &WindowElement, set: impl Into<O
 /// focus it, the focused output will change to that output UNLESS
 /// the window overlaps the currently focused output.
 ///
-/// If the window is being set to be focused, then if it's minimized,
-/// this will automatically unminimize it.
+/// If the window is being set to be focused, and the window is currently minimized,
+/// then this will SILENTLY FAIL
+#[deprecated = "Use `crate::api::window::try_set_focused` instead, will correctly emit errors when windows are minimized"]
 pub fn set_focused(state: &mut State, window: &WindowElement, set: impl Into<Option<bool>>) {
+    let _ = try_set_focused(state, window, set);
+}
+
+/// Error when trying to focus/unfocus a window.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum TrySetFocusedError {
+    /// Window was minimized and could not be focused.
+    WindowMinimized,
+}
+
+impl core::fmt::Display for TrySetFocusedError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("failed to focus window: ")?;
+        match self {
+            TrySetFocusedError::WindowMinimized => f.write_str("window was currently minimized"),
+        }
+    }
+}
+
+/// Convert the result of [`try_set_focused`] into a protocol-friendly response.
+fn try_set_focused_protocol_result(
+    r: Result<(), TrySetFocusedError>,
+) -> pinnacle_api_defs::pinnacle::window::v1::TrySetFocusedResponse {
+    use pinnacle_api_defs::pinnacle::window::v1::{
+        TrySetFocusedResponse, try_set_focused_response::TrySetFocusedStatus,
+    };
+    TrySetFocusedResponse {
+        status: match r
+            .map(|_| TrySetFocusedStatus::Success)
+            .map_err(|e| match e {
+                TrySetFocusedError::WindowMinimized => TrySetFocusedStatus::WindowMinimized,
+            }) {
+            Ok(status) | Err(status) => status.into(),
+        },
+    }
+}
+
+/// Sets a window to focused or not.
+///
+/// If the window is on another output and an attempt is made to
+/// focus it, the focused output will change to that output UNLESS
+/// the window overlaps the currently focused output.
+///
+/// If the window is being set to be focused, and the window is currently minimized,
+/// then an error will be emitted
+pub fn try_set_focused(
+    state: &mut State,
+    window: &WindowElement,
+    set: impl Into<Option<bool>>,
+) -> Result<(), TrySetFocusedError> {
     if window.is_x11_override_redirect() {
-        return;
+        return Ok(());
     }
 
     let Some(output) = window.output(&state.pinnacle) else {
-        return;
+        return Ok(());
     };
 
-    let set = set.into();
+    let absolute_set = set.into();
 
     let Some(keyboard) = state.pinnacle.seat.get_keyboard() else {
-        return;
+        return Ok(());
     };
 
     let is_focused = keyboard
         .current_focus()
         .is_some_and(|focus| matches!(focus, KeyboardFocusTarget::Window(win) if win == window));
 
-    let set = match set {
+    let absolute_set = match absolute_set {
         Some(set) => set,
         None => !is_focused,
     };
 
-    if set {
+    if absolute_set {
+        if window.with_state(|s| s.minimized) {
+            warn!("Cannot focus a minimized window");
+            return Err(TrySetFocusedError::WindowMinimized);
+        }
+
         state
             .pinnacle
             .keyboard_focus_stack
@@ -163,7 +219,7 @@ pub fn set_focused(state: &mut State, window: &WindowElement, set: impl Into<Opt
 
         if window_outputs.is_empty() {
             warn!("Cannot focus an unmapped window");
-            return;
+            return Ok(());
         }
 
         if window_outputs.len() == 1 {
@@ -182,12 +238,10 @@ pub fn set_focused(state: &mut State, window: &WindowElement, set: impl Into<Opt
             }
         }
 
-        if window.with_state(|window_state| window_state.minimized) {
-            // Will automatically do correct scheduling of re-layouting and such ^.^
-            set_minimized(state, window, false);
-        }
+        Ok(())
     } else {
         state.pinnacle.keyboard_focus_stack.unset_focus();
+        Ok(())
     }
 }
 

@@ -489,7 +489,7 @@ async fn config() {
 
     // Enable sloppy focus
     window::connect_signal(WindowSignal::PointerEnter(Box::new(|win| {
-        win.set_focused(true);
+        let _ = win.try_set_focused(true);
     })));
 
     // Focus outputs when the pointer enters them
