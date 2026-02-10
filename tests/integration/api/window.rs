@@ -541,7 +541,8 @@ fn window_handle_set_focused() {
             Lang::Rust => fixture.spawn_blocking(|| {
                 pinnacle_api::window::get_focused()
                     .unwrap()
-                    .set_focused(false);
+                    .try_set_focused(false)
+                    .unwrap()
             }),
             Lang::Lua => spawn_lua_blocking! {
                 fixture,
@@ -559,7 +560,8 @@ fn window_handle_set_focused() {
                 pinnacle_api::window::get_all()
                     .next()
                     .unwrap()
-                    .set_focused(true);
+                    .try_set_focused(true)
+                    .unwrap()
             }),
             Lang::Lua => spawn_lua_blocking! {
                 fixture,
@@ -581,7 +583,8 @@ fn window_handle_set_focused() {
                 pinnacle_api::window::get_all()
                     .nth(1)
                     .unwrap()
-                    .set_focused(true);
+                    .try_set_focused(true)
+                    .unwrap()
             }),
             Lang::Lua => spawn_lua_blocking! {
                 fixture,
@@ -615,7 +618,8 @@ fn window_handle_toggle_focused() {
             Lang::Rust => fixture.spawn_blocking(|| {
                 pinnacle_api::window::get_focused()
                     .unwrap()
-                    .toggle_focused();
+                    .try_toggle_focused()
+                    .unwrap()
             }),
             Lang::Lua => spawn_lua_blocking! {
                 fixture,
@@ -633,7 +637,8 @@ fn window_handle_toggle_focused() {
                 pinnacle_api::window::get_all()
                     .next()
                     .unwrap()
-                    .toggle_focused();
+                    .try_toggle_focused()
+                    .unwrap()
             }),
             Lang::Lua => spawn_lua_blocking! {
                 fixture,
@@ -655,7 +660,8 @@ fn window_handle_toggle_focused() {
                 pinnacle_api::window::get_all()
                     .nth(1)
                     .unwrap()
-                    .toggle_focused();
+                    .try_toggle_focused()
+                    .unwrap()
             }),
             Lang::Lua => spawn_lua_blocking! {
                 fixture,

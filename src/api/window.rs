@@ -105,19 +105,6 @@ pub fn set_minimized(state: &mut State, window: &WindowElement, set: impl Into<O
     }
 }
 
-/// Sets a window to focused or not.
-///
-/// If the window is on another output and an attempt is made to
-/// focus it, the focused output will change to that output UNLESS
-/// the window overlaps the currently focused output.
-///
-/// If the window is being set to be focused, and the window is currently minimized,
-/// then this will SILENTLY FAIL
-#[deprecated = "Use `crate::api::window::try_set_focused` instead, will correctly emit errors when windows are minimized"]
-pub fn set_focused(state: &mut State, window: &WindowElement, set: impl Into<Option<bool>>) {
-    let _ = try_set_focused(state, window, set);
-}
-
 /// Error when trying to focus/unfocus a window.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum TrySetFocusedError {
