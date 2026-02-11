@@ -1,6 +1,6 @@
 use std::{mem, ptr::NonNull, time::Instant};
 
-use iced::window::RedrawRequest;
+use iced::{mouse::Interaction, window::RedrawRequest};
 use iced_graphics::{Compositor, shell::Notifier};
 use iced_runtime::{core::widget, user_interface};
 use raw_window_handle::{
@@ -56,6 +56,7 @@ pub struct SnowcapSurface {
 
     pub pointer_location: Option<(f64, f64)>,
     pub focus_serial: Option<u32>,
+    pub mouse_interaction: Interaction,
 
     pub window_id: iced::window::Id,
 
@@ -145,6 +146,7 @@ impl SnowcapSurface {
             clipboard,
             pointer_location: None,
             focus_serial: None,
+            mouse_interaction: Interaction::None,
             viewport,
             fractional_scale,
             window_id: iced::window::Id::unique(),
@@ -229,13 +231,11 @@ impl SnowcapSurface {
     }
 
     /// Updates this surface.
-    ///
-    /// Returns whether the widgets have resized as a result.
     pub fn update(
         &mut self,
         runtime: &mut crate::runtime::Runtime,
         compositor: &mut crate::compositor::Compositor,
-    ) -> bool {
+    ) -> UpdateStatus {
         let _span = tracy_client::span!("SnowcapSurface::update");
 
         let mut needs_rebuild = mem::take(&mut self.layout_invalidated);
@@ -259,7 +259,7 @@ impl SnowcapSurface {
             self.waiting_view = false;
         }
 
-        let mut resized = false;
+        let mut update_status = UpdateStatus::default();
 
         if needs_rebuild {
             let old_size = self.widgets.size();
@@ -269,7 +269,7 @@ impl SnowcapSurface {
                 .update(&self.queue_handle, &self.compositor_state, &self.wl_surface);
 
             if self.widgets.size() != old_size {
-                resized = true;
+                update_status.resized = true;
             }
 
             // INFO: If the size is 0 here we a) protocol error, and b) wgpu error.
@@ -300,7 +300,7 @@ impl SnowcapSurface {
         let mut messages = Vec::new();
 
         if self.waiting_view {
-            return resized;
+            return update_status;
         }
 
         let Some((state, statuses)) = self.widgets.update(
@@ -309,7 +309,7 @@ impl SnowcapSurface {
             &mut self.clipboard,
             &mut messages,
         ) else {
-            return resized;
+            return update_status;
         };
 
         let mut ui_stale = false;
@@ -320,26 +320,33 @@ impl SnowcapSurface {
                 ui_stale = true;
             }
             user_interface::State::Updated {
-                mouse_interaction: _, // TODO:
+                mouse_interaction,
                 redraw_request,
                 input_method: _,
                 has_layout_changed: _,
-            } => match redraw_request {
-                RedrawRequest::NextFrame => {
-                    request_frame = true;
+            } => {
+                if self.mouse_interaction != mouse_interaction {
+                    update_status.interaction_changed = true;
+                    self.mouse_interaction = mouse_interaction;
                 }
-                RedrawRequest::At(instant) => {
-                    let surface = self.wl_surface.clone();
-                    self.loop_handle
-                        .insert_source(Timer::from_deadline(instant), move |_, _, state| {
-                            surface.frame(&state.queue_handle, surface.clone());
-                            surface.commit();
-                            calloop::timer::TimeoutAction::Drop
-                        })
-                        .unwrap();
+
+                match redraw_request {
+                    RedrawRequest::NextFrame => {
+                        request_frame = true;
+                    }
+                    RedrawRequest::At(instant) => {
+                        let surface = self.wl_surface.clone();
+                        self.loop_handle
+                            .insert_source(Timer::from_deadline(instant), move |_, _, state| {
+                                surface.frame(&state.queue_handle, surface.clone());
+                                surface.commit();
+                                calloop::timer::TimeoutAction::Drop
+                            })
+                            .unwrap();
+                    }
+                    RedrawRequest::Wait => (),
                 }
-                RedrawRequest::Wait => (),
-            },
+            }
         }
 
         for (event, status) in self.widgets.drain_events().zip(statuses) {
@@ -382,7 +389,7 @@ impl SnowcapSurface {
             self.request_frame();
         }
 
-        resized
+        update_status
     }
 
     pub fn operate(&mut self, operation: &mut dyn widget::Operation) {
@@ -399,6 +406,12 @@ impl SnowcapSurface {
             wl_surface.commit();
         }
     }
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct UpdateStatus {
+    pub resized: bool,
+    pub interaction_changed: bool,
 }
 
 #[derive(Clone)]

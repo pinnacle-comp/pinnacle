@@ -1,9 +1,12 @@
-use iced::mouse::ScrollDelta;
+use iced::mouse::{Interaction, ScrollDelta};
 use smithay_client_toolkit::{
     delegate_pointer,
-    reexports::client::{
-        Connection, QueueHandle,
-        protocol::wl_pointer::{AxisSource, WlPointer},
+    reexports::{
+        client::{
+            Connection, QueueHandle,
+            protocol::wl_pointer::{AxisSource, WlPointer},
+        },
+        protocols::wp::cursor_shape::v1::client::wp_cursor_shape_device_v1::Shape,
     },
     seat::pointer::{PointerEvent, PointerEventKind, PointerHandler},
 };
@@ -19,8 +22,16 @@ impl PointerHandler for State {
         events: &[PointerEvent],
     ) {
         for event in events {
+            if let PointerEventKind::Enter { serial } = &event.kind {
+                self.pointer_focus = Some(event.surface.clone());
+                self.last_pointer_enter_serial = Some(*serial);
+            }
+            if let PointerEventKind::Leave { serial: _ } = &event.kind {
+                self.pointer_focus = None;
+            }
+
             let Some(surface) = self.find_surface_mut(&event.surface) else {
-                return;
+                continue;
             };
 
             let iced_event = match event.kind {
@@ -101,4 +112,37 @@ fn button_to_iced_button(button: u32) -> iced::mouse::Button {
         0x116 => iced::mouse::Button::Back,
         button => iced::mouse::Button::Other(button as u16),
     }
+}
+
+pub fn iced_interaction_to_shape(interaction: Interaction) -> Option<Shape> {
+    let shape = match interaction {
+        Interaction::Hidden => return None,
+        Interaction::None | Interaction::Idle => Shape::Default,
+        Interaction::ContextMenu => Shape::ContextMenu,
+        Interaction::Help => Shape::Help,
+        Interaction::Pointer => Shape::Pointer,
+        Interaction::Progress => Shape::Progress,
+        Interaction::Wait => Shape::Wait,
+        Interaction::Cell => Shape::Cell,
+        Interaction::Crosshair => Shape::Crosshair,
+        Interaction::Text => Shape::Text,
+        Interaction::Alias => Shape::Alias,
+        Interaction::Copy => Shape::Copy,
+        Interaction::Move => Shape::Move,
+        Interaction::NoDrop => Shape::NoDrop,
+        Interaction::NotAllowed => Shape::NotAllowed,
+        Interaction::Grab => Shape::Grab,
+        Interaction::Grabbing => Shape::Grabbing,
+        Interaction::ResizingHorizontally => Shape::EwResize,
+        Interaction::ResizingVertically => Shape::NsResize,
+        Interaction::ResizingDiagonallyUp => Shape::NeswResize,
+        Interaction::ResizingDiagonallyDown => Shape::NwseResize,
+        Interaction::ResizingColumn => Shape::ColResize,
+        Interaction::ResizingRow => Shape::RowResize,
+        Interaction::AllScroll => Shape::AllScroll,
+        Interaction::ZoomIn => Shape::ZoomIn,
+        Interaction::ZoomOut => Shape::ZoomOut,
+    };
+
+    Some(shape)
 }

@@ -21,13 +21,14 @@ use smithay_client_toolkit::{
                 ext_foreign_toplevel_list_v1::ExtForeignToplevelListV1,
             },
             wp::{
+                cursor_shape::v1::client::wp_cursor_shape_device_v1::WpCursorShapeDeviceV1,
                 fractional_scale::v1::client::wp_fractional_scale_manager_v1::WpFractionalScaleManagerV1,
                 viewporter::client::wp_viewporter::WpViewporter,
             },
         },
     },
     registry::RegistryState,
-    seat::{SeatState, keyboard::Modifiers},
+    seat::{SeatState, keyboard::Modifiers, pointer::cursor_shape::CursorShapeManager},
     shell::{WaylandSurface, wlr_layer::LayerShell, xdg::XdgShell},
 };
 use snowcap_protocols::snowcap_decoration_v1::client::snowcap_decoration_manager_v1::SnowcapDecorationManagerV1;
@@ -62,6 +63,8 @@ pub struct State {
     pub snowcap_decoration_manager: SnowcapDecorationManagerV1,
     pub foreign_toplevel_list: ExtForeignToplevelListV1,
     pub xdg_shell: XdgShell,
+    pub cursor_shape_manager: CursorShapeManager,
+    pub cursor_shape_device: Option<WpCursorShapeDeviceV1>,
 
     pub grpc_server_state: Option<GrpcServerState>,
 
@@ -81,6 +84,8 @@ pub struct State {
     pub keyboard: Option<WlKeyboard>, // TODO: multiple
 
     pub pointer: Option<WlPointer>, // TODO: multiple
+    pub pointer_focus: Option<WlSurface>,
+    pub last_pointer_enter_serial: Option<u32>,
     // TODO: Do we need a pointer seat as well ?
     pub layer_id_counter: LayerIdCounter,
     pub decoration_id_counter: DecorationIdCounter,
@@ -114,6 +119,7 @@ impl State {
             globals.bind(&queue_handle, 1..=1, ()).unwrap();
         let foreign_toplevel_list: ExtForeignToplevelListV1 =
             globals.bind(&queue_handle, 1..=1, ()).unwrap();
+        let cursor_shape_manager = CursorShapeManager::bind(&globals, &queue_handle).unwrap();
 
         let xdg_shell = XdgShell::bind(&globals, &queue_handle).unwrap();
 
@@ -272,6 +278,8 @@ impl State {
             snowcap_decoration_manager,
             foreign_toplevel_list,
             xdg_shell,
+            cursor_shape_manager,
+            cursor_shape_device: None,
 
             grpc_server_state: None,
             queue_handle,
@@ -285,6 +293,8 @@ impl State {
             keyboard_modifiers: smithay_client_toolkit::seat::keyboard::Modifiers::default(),
             keyboard: None,
             pointer: None,
+            pointer_focus: None,
+            last_pointer_enter_serial: None,
             layer_id_counter: LayerIdCounter::default(),
             decoration_id_counter: DecorationIdCounter::default(),
             popup_id_counter: PopupIdCounter::default(),

@@ -197,25 +197,29 @@ impl SnowcapLayer {
         self.surface.operate(operation)
     }
 
+    /// Returns whether the mouse interaction changed.
+    #[must_use]
     pub fn update(
         &mut self,
         runtime: &mut crate::runtime::Runtime,
         compositor: &mut crate::compositor::Compositor,
-    ) {
+    ) -> bool {
         if let Some(pending_size) = self.pending_output_size.take() {
             self.output_size = pending_size;
         }
 
         self.surface.bounds_changed(self.widget_bounds());
 
-        let resized = self.surface.update(runtime, compositor);
+        let update_status = self.surface.update(runtime, compositor);
 
-        if resized {
+        if update_status.resized {
             self.layer.set_size(
                 self.surface.widgets.size().width,
                 self.surface.widgets.size().height,
             );
         }
+
+        update_status.interaction_changed
     }
 
     pub fn widget_bounds(&self) -> iced::Size<u32> {

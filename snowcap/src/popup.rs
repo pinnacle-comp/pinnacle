@@ -546,11 +546,13 @@ impl SnowcapPopup {
         self.surface.operate(operation);
     }
 
+    /// Returns whether the mouse interaction changed.
+    #[must_use]
     pub fn update(
         &mut self,
         runtime: &mut crate::runtime::Runtime,
         compositor: &mut crate::compositor::Compositor,
-    ) {
+    ) -> bool {
         if let Some(pending_size) = self.pending_size.take() {
             self.current_size = pending_size;
         }
@@ -561,9 +563,9 @@ impl SnowcapPopup {
 
         self.surface.bounds_changed(self.widget_bounds());
 
-        let resized = self.surface.update(runtime, compositor);
+        let update_status = self.surface.update(runtime, compositor);
 
-        if resized {
+        if update_status.resized {
             let iced::Size { width, height } = self.surface.widgets.size();
             self.current_size = iced::Size::new(width, height);
 
@@ -576,6 +578,8 @@ impl SnowcapPopup {
         }
 
         self.recompute_size = false;
+
+        update_status.interaction_changed
     }
 
     pub fn widget_bounds(&self) -> iced::Size<u32> {
