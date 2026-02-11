@@ -708,6 +708,14 @@ pub trait Program {
                     HandlerPolicy::Keep
                 }
             });
+
+            child_signaler.connect({
+                let self_signaler = self_signaler.clone();
+                move |sig: signal::RequestClose| {
+                    self_signaler.emit(sig);
+                    HandlerPolicy::Keep
+                }
+            });
         }
     }
 }
