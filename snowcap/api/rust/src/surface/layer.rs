@@ -20,7 +20,7 @@ use crate::{
     client::Client,
     input::{KeyEvent, Modifiers},
     popup::{self, AsParent},
-    widget::{self, Program, WidgetDef, WidgetId, WidgetMessage, signal},
+    widget::{self, Program, WidgetDef, WidgetId, WidgetMessage, operation, signal},
 };
 
 // TODO: change to bitflag
@@ -176,6 +176,11 @@ where
 
     let (msg_send, mut msg_recv) = tokio::sync::mpsc::unbounded_channel::<Option<Msg>>();
 
+    let handle = LayerHandle {
+        id: layer_id.into(),
+        msg_sender: msg_send.clone(),
+    };
+
     if let Some(signaler) = program.signaler() {
         signaler.connect({
             let msg_send = msg_send.clone();
@@ -202,12 +207,16 @@ where
                 }
             }
         });
-    }
 
-    let handle = LayerHandle {
-        id: layer_id.into(),
-        msg_sender: msg_send,
-    };
+        signaler.connect({
+            let handle = handle.clone();
+
+            move |operation: operation::Operation| {
+                handle.operate(operation);
+                crate::signal::HandlerPolicy::Keep
+            }
+        });
+    }
 
     program.created(handle.clone().into());
 
