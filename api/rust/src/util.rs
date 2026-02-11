@@ -271,6 +271,8 @@ impl From<Rect> for pinnacle_api_defs::pinnacle::util::v1::Rect {
 }
 
 /// Extension trait for [`Result`].
+// This is needed - combined with an implementation of `TryFrom` - to avoid issues with the orphan
+// rule.
 pub(crate) trait ResultExt {
     type T;
     type E;

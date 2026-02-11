@@ -242,6 +242,8 @@ pub enum TrySetFocusedError {
     WindowMinimized,
 }
 
+// We perform this bizarre construction because of Orphan rules that prevent us from implementing
+// `From` on the normal [`core::result::Result`] value
 impl TryFrom<pinnacle_api_defs::pinnacle::window::v1::TrySetFocusedResponse>
     for TrySetFocusedError
 {
