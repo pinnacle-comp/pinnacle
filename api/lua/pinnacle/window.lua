@@ -401,6 +401,32 @@ function WindowHandle:toggle_maximized()
     end
 end
 
+--- Set this window to be minimized or not minimized.
+--- @param minimized boolean
+function WindowHandle:set_minimized(minimized)
+    local _, err = client:pinnacle_window_v1_WindowService_SetMinimized({
+        window_id = self.id,
+        set_or_toggle = set_or_toggle[minimized]
+    })
+
+    if err then
+        log.error(err)
+    end
+end
+
+
+--- Toggles this window between minimized and not.
+function WindowHandle:toggle_minimized()
+    local _, err = client:pinnacle_window_v1_WindowService_SetMinimized({
+        window_id = self.id,
+        set_or_toggle = set_or_toggle.TOGGLE
+    })
+
+    if err then
+        log.error(err)
+    end
+end
+
 ---Sets this window to floating or not.
 ---
 ---@param floating boolean
@@ -811,6 +837,16 @@ function WindowHandle:maximized()
         client:pinnacle_window_v1_WindowService_GetLayoutMode({ window_id = self.id })
 
     return response and response.layout_mode == layout_mode_def.LAYOUT_MODE_MAXIMIZED or false
+end
+
+--- Gets whether this window is minimized.
+---
+--- @return boolean
+function WindowHandle:minimized()
+    local response, err =
+        client:pinnacle_window_v1_WindowService_GetMinimized({ window_id = self.id })
+
+    return response and response.minimized or false
 end
 
 ---Gets all tags on this window.
