@@ -272,17 +272,20 @@ impl SnowcapSurface {
                 resized = true;
             }
 
-            self.viewport.set_destination(
-                self.widgets.size().width as i32,
-                self.widgets.size().height as i32,
-            );
+            // INFO: If the size is 0 here we a) protocol error, and b) wgpu error.
+            // We're setting a minimum size of 1x1 as a quick fix.
+
+            let width = self.widgets.size().width.max(1) as i32;
+            let height = self.widgets.size().height.max(1) as i32;
+
+            self.viewport.set_destination(width, height);
 
             let buffer_size = self.widgets.viewport(self.output_scale).physical_size();
 
             compositor.configure_surface(
                 self.surface.as_mut().unwrap(),
-                buffer_size.width,
-                buffer_size.height,
+                buffer_size.width.max(1),
+                buffer_size.height.max(1),
             );
         }
 
