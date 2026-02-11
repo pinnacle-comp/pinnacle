@@ -428,11 +428,23 @@ function WindowHandle:toggle_floating()
     end
 end
 
+
+--- @alias pinnacle.window.TrySetFocusedError
+---     | "WindowMinimized"
+local try_set_focused_error = {
+    WindowMinimized = window_v1.TrySetFocusedResponse.TrySetFocusedStatus.TRY_SET_FOCUSED_STATUS_WINDOW_MINIMIZED
+}
+
+require("pinnacle.util").make_bijective(try_set_focused_error)
+
 ---Focuses or unfocuses this window.
 ---
+---@deprecated silently fails if trying to focus a minimized window, use `WindowHandle:try_set_focused`
 ---@param focused boolean
+---@see pinnacle.window.WindowHandle.try_set_focused replacement function. 
 function WindowHandle:set_focused(focused)
-    local _, err = client:pinnacle_window_v1_WindowService_SetFocused({
+    log.warn("Using deprecated function WindowHandle:set_focused(), which silently fails if focusing a minimized window.")
+    local _, err = client:pinnacle_window_v1_WindowService_TrySetFocused({
         window_id = self.id,
         set_or_toggle = set_or_toggle[focused],
     })
@@ -442,10 +454,34 @@ function WindowHandle:set_focused(focused)
     end
 end
 
+
+--- @class pinnacle.window.TrySetFocusedResult
+--- @field err? pinnacle.window.TrySetFocusedError
+---
+--- Tries to focus or unfocus this window
+--- @param focused boolean
+--- @return pinnacle.window.TrySetFocusedResult
+function WindowHandle:try_set_focused(focused)
+    local response, err = client:pinnacle_window_v1_WindowService_TrySetFocused({
+        window_id = self.id,
+        set_or_toggle = set_or_toggle[focused]
+    })
+
+    if err then
+        log.error(err)
+    end
+    assert(response)
+
+    return { err = try_set_focused_error[response.status]  }
+end
+
 ---Toggles this window to and from focused.
 ---
+--- @deprecated silently fails if trying to focus a minimized window, use `WindowHandle:try_toggle_focused`.
+--- @see pinnacle.window.WindowHandle.try_toggle_focused replacement function.
 function WindowHandle:toggle_focused()
-    local _, err = client:pinnacle_window_v1_WindowService_SetFocused({
+    log.warn("Using deprecated function WindowHandle:toggle_focused(), which silently fails if focusing a minimized window.")
+    local _, err = client:pinnacle_window_v1_WindowService_TrySetFocused({
         window_id = self.id,
         set_or_toggle = set_or_toggle.TOGGLE,
     })
@@ -453,6 +489,25 @@ function WindowHandle:toggle_focused()
     if err then
         log.error(err)
     end
+end
+
+--- @class pinnacle.window.TryToggleFocusedResult
+--- @field err? pinnacle.window.TrySetFocusedError
+---
+--- Tries to toggle this window to and from focused, failing if the window is minimized and it is trying to be focused.
+--- @return pinnacle.window.TrySetFocusedResult
+function WindowHandle:try_toggle_focused()
+    local response, err = client:pinnacle_window_v1_WindowService_TrySetFocused({
+        window_id = self.id,
+        set_or_toggle = set_or_toggle.TOGGLE,
+    })
+
+    if err then
+        log.error(err)
+    end
+    assert(response)
+
+    return { err = try_set_focused_error[response.status] }
 end
 
 ---Sets this window's decoration mode.
