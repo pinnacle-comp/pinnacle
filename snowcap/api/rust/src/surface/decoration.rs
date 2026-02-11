@@ -146,6 +146,15 @@ where
                 crate::signal::HandlerPolicy::Keep
             }
         });
+
+        signaler.connect({
+            let handle = handle.clone();
+
+            move |_: signal::RequestClose| {
+                handle.close();
+                crate::signal::HandlerPolicy::Discard
+            }
+        });
     }
 
     program.created(handle.clone().into());
