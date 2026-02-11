@@ -60,15 +60,6 @@ impl<Msg> From<PopupHandle<Msg>> for SurfaceHandle<Msg> {
 }
 
 impl<Msg> SurfaceHandle<Msg> {
-    /// Closes this surface.
-    pub fn close(&self) {
-        match &self.0 {
-            Inner::Layer(layer_handle) => layer_handle.close(),
-            Inner::Decoration(decoration_handle) => decoration_handle.close(),
-            Inner::Popup(popup_handle) => popup_handle.close(),
-        }
-    }
-
     /// Sends a message to this surface.
     pub fn send_message(&self, message: Msg) {
         match &self.0 {
