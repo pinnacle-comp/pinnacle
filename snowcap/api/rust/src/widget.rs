@@ -700,6 +700,14 @@ pub trait Program {
                     HandlerPolicy::Keep
                 }
             });
+
+            child_signaler.connect({
+                let self_signaler = self_signaler.clone();
+                move |sig: operation::Operation| {
+                    self_signaler.emit(sig);
+                    HandlerPolicy::Keep
+                }
+            });
         }
     }
 }
