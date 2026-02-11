@@ -20,7 +20,11 @@ use crate::{
     BlockOnTokio,
     client::Client,
     input::{KeyEvent, Modifiers},
-    widget::{self, Program, WidgetDef, WidgetId, WidgetMessage, operation::Operation, signal},
+    widget::{
+        self, Program, WidgetDef, WidgetId, WidgetMessage,
+        operation::{self, Operation},
+        signal,
+    },
 };
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
@@ -209,6 +213,11 @@ where
 
     let (msg_send, mut msg_recv) = tokio::sync::mpsc::unbounded_channel::<Option<Msg>>();
 
+    let handle = PopupHandle {
+        id: popup_id.into(),
+        msg_sender: msg_send.clone(),
+    };
+
     if let Some(signaler) = program.signaler() {
         signaler.connect({
             let msg_send = msg_send.clone();
@@ -235,12 +244,16 @@ where
                 }
             }
         });
-    }
 
-    let handle = PopupHandle {
-        id: popup_id.into(),
-        msg_sender: msg_send,
-    };
+        signaler.connect({
+            let handle = handle.clone();
+
+            move |operation: operation::Operation| {
+                handle.operate(operation);
+                crate::signal::HandlerPolicy::Keep
+            }
+        });
+    }
 
     program.created(handle.clone().into());
 

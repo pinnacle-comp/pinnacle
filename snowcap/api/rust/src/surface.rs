@@ -4,7 +4,6 @@ use crate::{
     decoration::DecorationHandle,
     layer::LayerHandle,
     popup::{AsParent, Parent, PopupHandle},
-    widget::operation::Operation,
 };
 
 pub mod decoration;
@@ -67,15 +66,6 @@ impl<Msg> SurfaceHandle<Msg> {
             Inner::Layer(layer_handle) => layer_handle.close(),
             Inner::Decoration(decoration_handle) => decoration_handle.close(),
             Inner::Popup(popup_handle) => popup_handle.close(),
-        }
-    }
-
-    /// Sends an [`Operation`] to this surface.
-    pub fn operate(&self, operation: Operation) {
-        match &self.0 {
-            Inner::Layer(layer_handle) => layer_handle.operate(operation),
-            Inner::Decoration(decoration_handle) => decoration_handle.operate(operation),
-            Inner::Popup(popup_handle) => popup_handle.operate(operation),
         }
     }
 

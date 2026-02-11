@@ -20,7 +20,11 @@ use crate::{
     client::Client,
     input::{KeyEvent, Modifiers},
     popup::{self, AsParent},
-    widget::{self, Program, WidgetDef, WidgetId, WidgetMessage, signal},
+    widget::{
+        self, Program, WidgetDef, WidgetId, WidgetMessage,
+        operation::{self, focusable},
+        signal,
+    },
 };
 
 // TODO: change to bitflag
@@ -176,6 +180,11 @@ where
 
     let (msg_send, mut msg_recv) = tokio::sync::mpsc::unbounded_channel::<Option<Msg>>();
 
+    let handle = LayerHandle {
+        id: layer_id.into(),
+        msg_sender: msg_send.clone(),
+    };
+
     if let Some(signaler) = program.signaler() {
         signaler.connect({
             let msg_send = msg_send.clone();
@@ -202,12 +211,16 @@ where
                 }
             }
         });
-    }
 
-    let handle = LayerHandle {
-        id: layer_id.into(),
-        msg_sender: msg_send,
-    };
+        signaler.connect({
+            let handle = handle.clone();
+
+            move |operation: operation::Operation| {
+                handle.operate(operation);
+                crate::signal::HandlerPolicy::Keep
+            }
+        });
+    }
 
     program.created(handle.clone().into());
 
@@ -368,6 +381,10 @@ impl<Msg> LayerHandle<Msg> {
     ///
     /// [`Operation`]: widget::operation::Operation
     pub fn operate(&self, operation: widget::operation::Operation) {
+        if let operation::Operation::Focusable(f) = &operation {
+            self.handle_focus(f);
+        };
+
         if let Err(status) = Client::layer()
             .operate_layer(OperateLayerRequest {
                 layer_id: self.id.to_inner(),
@@ -377,6 +394,16 @@ impl<Msg> LayerHandle<Msg> {
         {
             error!("Failed to send operation to {self:?}: {status}");
         }
+    }
+
+    /// Manage keyboard interactivity on focus change.
+    fn handle_focus(&self, operation: &focusable::Focusable) {
+        let _ = match operation {
+            focusable::Focusable::Unfocus => {
+                self.set_keyboard_interactivity(KeyboardInteractivity::None)
+            }
+            _ => self.set_keyboard_interactivity(KeyboardInteractivity::Exclusive),
+        };
     }
 }
 
