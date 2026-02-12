@@ -20,6 +20,7 @@ use crate::{
     client::Client,
     input::{KeyEvent, Modifiers},
     popup::{self, AsParent},
+    surface::SurfaceEvent,
     widget::{self, Program, WidgetDef, WidgetId, WidgetMessage, operation, signal},
 };
 
@@ -229,7 +230,9 @@ where
         });
     }
 
-    program.created(handle.clone().into());
+    program.event(SurfaceEvent::Created {
+        surface: handle.clone().into(),
+    });
 
     tokio::spawn(async move {
         loop {
