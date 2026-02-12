@@ -22,11 +22,13 @@ pub mod input_grab {
 
         fn update(&mut self, _msg: Self::Message) {}
 
-        fn view(&self) -> snowcap_api::widget::WidgetDef<Self::Message> {
-            Row::new()
-                .width(snowcap_api::widget::Length::Fixed(1.0))
-                .height(snowcap_api::widget::Length::Fixed(1.0))
-                .into()
+        fn view(&self) -> Option<snowcap_api::widget::WidgetDef<Self::Message>> {
+            Some(
+                Row::new()
+                    .width(snowcap_api::widget::Length::Fixed(1.0))
+                    .height(snowcap_api::widget::Length::Fixed(1.0))
+                    .into(),
+            )
         }
     }
 

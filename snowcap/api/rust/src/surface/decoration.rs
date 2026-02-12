@@ -81,7 +81,9 @@ where
 {
     let mut callbacks = HashMap::<WidgetId, WidgetMessage<Msg>>::new();
 
-    let widget_def = program.view();
+    let widget_def = program
+        .view()
+        .unwrap_or_else(|| widget::row::Row::new().into());
 
     widget_def.collect_messages(&mut callbacks, WidgetDef::message_collector);
 
@@ -188,7 +190,9 @@ where
                 else => break,
             };
 
-            let widget_def = program.view();
+            let widget_def = program
+                .view()
+                .unwrap_or_else(|| widget::row::Row::new().into());
 
             callbacks.clear();
 
