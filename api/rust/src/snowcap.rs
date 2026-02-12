@@ -57,7 +57,7 @@ impl Program for QuitPrompt {
 
     fn update(&mut self, _msg: Self::Message) {}
 
-    fn view(&self) -> WidgetDef<Self::Message> {
+    fn view(&self) -> Option<WidgetDef<Self::Message>> {
         let widget = Container::new(Column::new_with_children([
             Text::new("Quit Pinnacle?")
                 .style(
@@ -85,7 +85,7 @@ impl Program for QuitPrompt {
             }),
         });
 
-        widget.into()
+        Some(widget.into())
     }
 }
 
@@ -147,7 +147,7 @@ impl Program for BindOverlay {
 
     fn update(&mut self, _msg: Self::Message) {}
 
-    fn view(&self) -> WidgetDef<Self::Message> {
+    fn view(&self) -> Option<WidgetDef<Self::Message>> {
         #[derive(PartialEq, Eq, Hash)]
         struct KeybindRepr {
             mods: Mod,
@@ -395,7 +395,7 @@ impl Program for BindOverlay {
             }),
         });
 
-        widget.into()
+        Some(widget.into())
     }
 }
 
@@ -485,7 +485,7 @@ impl Program for ConfigCrashedMessage {
 
     fn update(&mut self, _msg: Self::Message) {}
 
-    fn view(&self) -> WidgetDef<Self::Message> {
+    fn view(&self) -> Option<WidgetDef<Self::Message>> {
         let widget = Container::new(Column::new_with_children([
             Text::new("Config crashed!")
                 .style(
@@ -534,7 +534,7 @@ impl Program for ConfigCrashedMessage {
             }),
         });
 
-        widget.into()
+        Some(widget.into())
     }
 }
 
@@ -810,7 +810,7 @@ impl Program for FocusBorder {
         }
     }
 
-    fn view(&self) -> WidgetDef<Self::Message> {
+    fn view(&self) -> Option<WidgetDef<Self::Message>> {
         let mut row = Column::new();
 
         if self.include_titlebar {
@@ -993,6 +993,6 @@ impl Program for FocusBorder {
 
         row = row.push(focus_border);
 
-        row.into()
+        Some(row.into())
     }
 }
