@@ -23,6 +23,12 @@ pub enum SurfaceEvent<Msg> {
         /// The surface's handle.
         surface: SurfaceHandle<Msg>,
     },
+    /// Emitted when the surface is being closed.
+    ///
+    /// This event is emitted during the surface termination. If the program
+    /// stored the handle passed via [`Self::Created`], this handle should be
+    /// considered stale.
+    Closing,
 }
 
 /// Implementation detail for [`SurfaceHandle`]

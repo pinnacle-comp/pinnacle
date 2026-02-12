@@ -287,6 +287,8 @@ where
                 .await
                 .unwrap();
         }
+
+        program.event(SurfaceEvent::Closing);
     });
 
     Ok(handle)
