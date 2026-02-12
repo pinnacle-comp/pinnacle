@@ -10,6 +10,21 @@ pub mod decoration;
 pub mod layer;
 pub mod popup;
 
+/// Events emitted by the surface to notify [`Program`] of state changes.
+#[derive(Debug, Clone)]
+#[non_exhaustive]
+pub enum SurfaceEvent<Msg> {
+    /// Emitted when the surface is created.
+    ///
+    /// A [`SurfaceHandle`] is provided to allow the program to manipulate the
+    /// surface. The handle will remains valid for the lifetime of the program
+    /// and may be cloned for later use.
+    Created {
+        /// The surface's handle.
+        surface: SurfaceHandle<Msg>,
+    },
+}
+
 /// Implementation detail for [`SurfaceHandle`]
 #[derive(Clone)]
 enum Inner<Msg> {
