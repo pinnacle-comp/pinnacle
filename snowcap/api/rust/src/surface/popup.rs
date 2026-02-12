@@ -20,6 +20,7 @@ use crate::{
     BlockOnTokio,
     client::Client,
     input::{KeyEvent, Modifiers},
+    surface::SurfaceEvent,
     widget::{
         self, Program, WidgetDef, WidgetId, WidgetMessage,
         operation::{self, Operation},
@@ -266,7 +267,9 @@ where
         });
     }
 
-    program.created(handle.clone().into());
+    program.event(SurfaceEvent::Created {
+        surface: handle.clone().into(),
+    });
 
     tokio::spawn(async move {
         loop {
