@@ -13,7 +13,10 @@ use tokio::sync::mpsc::UnboundedSender;
 use tonic::Status;
 
 use crate::{
-    handlers::keyboard::KeyboardKey, popup::ParentId, state::State, surface::SnowcapSurface,
+    handlers::keyboard::{KeyboardFocusEvent, KeyboardKey},
+    popup::ParentId,
+    state::State,
+    surface::SnowcapSurface,
     widget::ViewFn,
 };
 
@@ -30,6 +33,11 @@ impl LayerIdCounter {
         self.0.0 += 1;
         ret
     }
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum LayerEvent {
+    Focus(KeyboardFocusEvent),
 }
 
 impl State {
@@ -70,12 +78,15 @@ pub struct SnowcapLayer {
     // COMPAT: 0.1
     max_size: Option<iced::Size<u32>>,
 
+    keyboard_interactivity: wlr_layer::KeyboardInteractivity,
+
     pub layer_id: LayerId,
 
     pub wl_output: Option<WlOutput>,
 
     pub keyboard_key_sender: Option<UnboundedSender<KeyboardKey>>,
     pub pointer_button_sender: Option<UnboundedSender<Result<PointerButtonResponse, Status>>>,
+    pub layer_event_sender: Option<UnboundedSender<Vec<LayerEvent>>>,
 
     pub initial_configure: InitialConfigureState,
 }
@@ -135,12 +146,14 @@ impl SnowcapLayer {
             surface,
             layer,
             max_size: max_size.map(|(w, h)| iced::Size::new(w, h)),
+            keyboard_interactivity,
             output_size: iced::Size::new(1, 1),
             pending_output_size: None,
             wl_output: None,
             layer_id: next_id,
             keyboard_key_sender: None,
             pointer_button_sender: None,
+            layer_event_sender: None,
             initial_configure: InitialConfigureState::PreConfigure(None),
         }
     }
@@ -182,6 +195,8 @@ impl SnowcapLayer {
         }
 
         if let Some(keyboard_interactivity) = keyboard_interactivity {
+            self.keyboard_interactivity = keyboard_interactivity;
+
             self.layer
                 .set_keyboard_interactivity(keyboard_interactivity);
         }
@@ -235,5 +250,23 @@ impl SnowcapLayer {
 
     pub fn output_size_changed(&mut self, new_size: iced::Size<u32>) {
         self.pending_output_size = Some(new_size);
+    }
+
+    pub fn keyboard_focus_changed(&mut self, has_focus: bool) {
+        if let Some(sender) = self.layer_event_sender.as_ref() {
+            let event = if has_focus {
+                KeyboardFocusEvent::FocusGained.into()
+            } else {
+                KeyboardFocusEvent::FocusLost.into()
+            };
+
+            let _ = sender.send(vec![event]);
+        }
+    }
+}
+
+impl From<KeyboardFocusEvent> for LayerEvent {
+    fn from(value: KeyboardFocusEvent) -> Self {
+        Self::Focus(value)
     }
 }
