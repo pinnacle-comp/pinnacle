@@ -6,7 +6,10 @@ use snowcap_api_defs::snowcap::{
     input::v1::{KeyboardKeyRequest, keyboard_key_request::Target},
     layer::{
         self,
-        v1::{CloseRequest, NewLayerRequest, OperateLayerRequest, UpdateLayerRequest, ViewRequest},
+        v1::{
+            CloseRequest, GetLayerEventsRequest, NewLayerRequest, OperateLayerRequest,
+            UpdateLayerRequest, ViewRequest,
+        },
     },
     widget::v1::{GetWidgetEventsRequest, get_widget_events_request},
 };
@@ -119,6 +122,31 @@ impl From<ZLayer> for layer::v1::Layer {
     }
 }
 
+/// The error type for layer event conversion.
+#[allow(missing_docs)]
+#[derive(Debug)]
+pub enum LayerEventError {
+    Unspecified,
+    Unknown,
+}
+
+impl<Msg> TryFrom<layer::v1::layer_event::Event> for SurfaceEvent<Msg> {
+    type Error = LayerEventError;
+
+    fn try_from(value: layer::v1::layer_event::Event) -> Result<Self, Self::Error> {
+        use layer::v1::layer_event::{Event, Focus};
+
+        let Event::Focus(f) = value;
+
+        match Focus::try_from(f) {
+            Ok(Focus::Gained) => Ok(Self::FocusGained),
+            Ok(Focus::Lost) => Ok(Self::FocusLost),
+            Ok(_) => Err(LayerEventError::Unspecified),
+            Err(_) => Err(LayerEventError::Unknown),
+        }
+    }
+}
+
 /// The error type for [`new_widget`].
 #[derive(thiserror::Error, Debug)]
 pub enum NewLayerError {
@@ -170,10 +198,15 @@ where
 
     let layer_id = response.into_inner().layer_id;
 
-    let mut event_stream = Client::widget()
+    let mut widget_event_stream = Client::widget()
         .get_widget_events(GetWidgetEventsRequest {
             id: Some(get_widget_events_request::Id::LayerId(layer_id)),
         })
+        .block_on_tokio()?
+        .into_inner();
+
+    let mut layer_event_stream = Client::layer()
+        .get_layer_events(GetLayerEventsRequest { layer_id })
         .block_on_tokio()?
         .into_inner();
 
@@ -237,7 +270,7 @@ where
     tokio::spawn(async move {
         loop {
             tokio::select! {
-                Some(Ok(response)) = event_stream.next() => {
+                Some(Ok(response)) = widget_event_stream.next() => {
                     for widget_event in response.widget_events {
                         let Some(msg) = widget::message_from_event(&callbacks, widget_event) else {
                             continue;
@@ -249,6 +282,26 @@ where
                 Some(msg) = msg_recv.recv() => {
                     if let Some(msg) = msg {
                         program.update(msg);
+                    }
+
+                    if let Err(status) = Client::layer()
+                        .request_view(ViewRequest { layer_id })
+                        .block_on_tokio()
+                    {
+                        error!("Failed to request view for {layer_id}: {status}");
+                    }
+
+                    continue;
+                }
+                Some(Ok(response)) = layer_event_stream.next() => {
+                    for layer_event in response.layer_events {
+                        let Some(event) = layer_event
+                            .event
+                            .and_then(|e| e.try_into().ok()) else {
+                                continue;
+                            };
+
+                        program.event(event);
                     }
 
                     if let Err(status) = Client::layer()
