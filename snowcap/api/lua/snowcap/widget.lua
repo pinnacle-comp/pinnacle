@@ -1242,11 +1242,11 @@ widget.operation = require("snowcap.widget.operation")
 ---
 ---@class snowcap.widget.SurfaceHandle
 ---A handle to a layer surface.
----@field layer snowcap.layer.LayerHandle?
+---@field package layer snowcap.layer.LayerHandle?
 ---A handle to a decoration surface.
----@field decoration snowcap.decoration.DecorationHandle?
+---@field package decoration snowcap.decoration.DecorationHandle?
 ---A handle to a popup surface.
----@field popup snowcap.popup.PopupHandle?
+---@field package popup snowcap.popup.PopupHandle?
 local SurfaceHandle = {}
 
 ---@type metatable
