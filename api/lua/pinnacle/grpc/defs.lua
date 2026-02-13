@@ -627,6 +627,12 @@ local pinnacle_window_v1_DecorationMode = {
     DECORATION_MODE_SERVER_SIDE = 2,
 }
 
+---@enum pinnacle.window.v1.TrySetFocusedResponse.TrySetFocusedStatus
+local pinnacle_window_v1_TrySetFocusedResponse_TrySetFocusedStatus = {
+    TRY_SET_FOCUSED_STATUS_SUCCESS = 0,
+    TRY_SET_FOCUSED_STATUS_WINDOW_MINIMIZED = 1,
+}
+
 ---@enum pinnacle.signal.v1.StreamControl
 local pinnacle_signal_v1_StreamControl = {
     STREAM_CONTROL_UNSPECIFIED = 0,
@@ -1087,6 +1093,12 @@ local pinnacle_v1_Backend = {
 ---@class pinnacle.window.v1.GetLayoutModeResponse
 ---@field layout_mode pinnacle.window.v1.LayoutMode?
 
+---@class pinnacle.window.v1.GetMinimizedRequest
+---@field window_id integer?
+
+---@class pinnacle.window.v1.GetMinimizedResponse
+---@field minimized boolean?
+
 ---@class pinnacle.window.v1.GetTagIdsRequest
 ---@field window_id integer?
 
@@ -1131,6 +1143,12 @@ local pinnacle_v1_Backend = {
 ---@field window_id integer?
 ---@field set_or_toggle pinnacle.util.v1.SetOrToggle?
 
+---@class pinnacle.window.v1.SetMinimizedRequest
+---@field window_id integer?
+---@field set_or_toggle pinnacle.util.v1.SetOrToggle?
+
+---@class pinnacle.window.v1.SetMinimizedResponse
+
 ---@class pinnacle.window.v1.SetFloatingRequest
 ---@field window_id integer?
 ---@field set_or_toggle pinnacle.util.v1.SetOrToggle?
@@ -1138,6 +1156,13 @@ local pinnacle_v1_Backend = {
 ---@class pinnacle.window.v1.SetFocusedRequest
 ---@field window_id integer?
 ---@field set_or_toggle pinnacle.util.v1.SetOrToggle?
+
+---@class pinnacle.window.v1.TrySetFocusedRequest
+---@field window_id integer?
+---@field set_or_toggle pinnacle.util.v1.SetOrToggle?
+
+---@class pinnacle.window.v1.TrySetFocusedResponse
+---@field status pinnacle.window.v1.TrySetFocusedResponse.TrySetFocusedStatus?
 
 ---@class pinnacle.window.v1.SetDecorationModeRequest
 ---@field window_id integer?
@@ -1535,6 +1560,8 @@ pinnacle.window.v1.GetFocusedRequest = {}
 pinnacle.window.v1.GetFocusedResponse = {}
 pinnacle.window.v1.GetLayoutModeRequest = {}
 pinnacle.window.v1.GetLayoutModeResponse = {}
+pinnacle.window.v1.GetMinimizedRequest = {}
+pinnacle.window.v1.GetMinimizedResponse = {}
 pinnacle.window.v1.GetTagIdsRequest = {}
 pinnacle.window.v1.GetTagIdsResponse = {}
 pinnacle.window.v1.GetWindowsInDirRequest = {}
@@ -1546,8 +1573,12 @@ pinnacle.window.v1.SetGeometryRequest = {}
 pinnacle.window.v1.ResizeTileRequest = {}
 pinnacle.window.v1.SetFullscreenRequest = {}
 pinnacle.window.v1.SetMaximizedRequest = {}
+pinnacle.window.v1.SetMinimizedRequest = {}
+pinnacle.window.v1.SetMinimizedResponse = {}
 pinnacle.window.v1.SetFloatingRequest = {}
 pinnacle.window.v1.SetFocusedRequest = {}
+pinnacle.window.v1.TrySetFocusedRequest = {}
+pinnacle.window.v1.TrySetFocusedResponse = {}
 pinnacle.window.v1.SetDecorationModeRequest = {}
 pinnacle.window.v1.MoveToTagRequest = {}
 pinnacle.window.v1.SetTagRequest = {}
@@ -1654,6 +1685,7 @@ pinnacle.output.v1.Vrr = pinnacle_output_v1_Vrr
 pinnacle.render.v1.Filter = pinnacle_render_v1_Filter
 pinnacle.window.v1.LayoutMode = pinnacle_window_v1_LayoutMode
 pinnacle.window.v1.DecorationMode = pinnacle_window_v1_DecorationMode
+pinnacle.window.v1.TrySetFocusedResponse.TrySetFocusedStatus = pinnacle_window_v1_TrySetFocusedResponse_TrySetFocusedStatus
 pinnacle.signal.v1.StreamControl = pinnacle_signal_v1_StreamControl
 pinnacle.v1.Backend = pinnacle_v1_Backend
 
@@ -2677,6 +2709,23 @@ pinnacle.window.v1.WindowService.GetLayoutMode.response = ".pinnacle.window.v1.G
 function Client:pinnacle_window_v1_WindowService_GetLayoutMode(data)
     return self:unary_request(pinnacle.window.v1.WindowService.GetLayoutMode, data)
 end
+pinnacle.window.v1.WindowService.GetMinimized = {}
+pinnacle.window.v1.WindowService.GetMinimized.service = "pinnacle.window.v1.WindowService"
+pinnacle.window.v1.WindowService.GetMinimized.method = "GetMinimized"
+pinnacle.window.v1.WindowService.GetMinimized.request = ".pinnacle.window.v1.GetMinimizedRequest"
+pinnacle.window.v1.WindowService.GetMinimized.response = ".pinnacle.window.v1.GetMinimizedResponse"
+
+---Performs a unary request.
+---
+---@nodiscard
+---
+---@param data pinnacle.window.v1.GetMinimizedRequest
+---
+---@return pinnacle.window.v1.GetMinimizedResponse | nil response
+---@return string | nil error An error string, if any
+function Client:pinnacle_window_v1_WindowService_GetMinimized(data)
+    return self:unary_request(pinnacle.window.v1.WindowService.GetMinimized, data)
+end
 pinnacle.window.v1.WindowService.GetTagIds = {}
 pinnacle.window.v1.WindowService.GetTagIds.service = "pinnacle.window.v1.WindowService"
 pinnacle.window.v1.WindowService.GetTagIds.method = "GetTagIds"
@@ -2813,6 +2862,23 @@ pinnacle.window.v1.WindowService.SetMaximized.response = ".google.protobuf.Empty
 function Client:pinnacle_window_v1_WindowService_SetMaximized(data)
     return self:unary_request(pinnacle.window.v1.WindowService.SetMaximized, data)
 end
+pinnacle.window.v1.WindowService.SetMinimized = {}
+pinnacle.window.v1.WindowService.SetMinimized.service = "pinnacle.window.v1.WindowService"
+pinnacle.window.v1.WindowService.SetMinimized.method = "SetMinimized"
+pinnacle.window.v1.WindowService.SetMinimized.request = ".pinnacle.window.v1.SetMinimizedRequest"
+pinnacle.window.v1.WindowService.SetMinimized.response = ".pinnacle.window.v1.SetMinimizedResponse"
+
+---Performs a unary request.
+---
+---@nodiscard
+---
+---@param data pinnacle.window.v1.SetMinimizedRequest
+---
+---@return pinnacle.window.v1.SetMinimizedResponse | nil response
+---@return string | nil error An error string, if any
+function Client:pinnacle_window_v1_WindowService_SetMinimized(data)
+    return self:unary_request(pinnacle.window.v1.WindowService.SetMinimized, data)
+end
 pinnacle.window.v1.WindowService.SetFloating = {}
 pinnacle.window.v1.WindowService.SetFloating.service = "pinnacle.window.v1.WindowService"
 pinnacle.window.v1.WindowService.SetFloating.method = "SetFloating"
@@ -2846,6 +2912,23 @@ pinnacle.window.v1.WindowService.SetFocused.response = ".google.protobuf.Empty"
 ---@return string | nil error An error string, if any
 function Client:pinnacle_window_v1_WindowService_SetFocused(data)
     return self:unary_request(pinnacle.window.v1.WindowService.SetFocused, data)
+end
+pinnacle.window.v1.WindowService.TrySetFocused = {}
+pinnacle.window.v1.WindowService.TrySetFocused.service = "pinnacle.window.v1.WindowService"
+pinnacle.window.v1.WindowService.TrySetFocused.method = "TrySetFocused"
+pinnacle.window.v1.WindowService.TrySetFocused.request = ".pinnacle.window.v1.TrySetFocusedRequest"
+pinnacle.window.v1.WindowService.TrySetFocused.response = ".pinnacle.window.v1.TrySetFocusedResponse"
+
+---Performs a unary request.
+---
+---@nodiscard
+---
+---@param data pinnacle.window.v1.TrySetFocusedRequest
+---
+---@return pinnacle.window.v1.TrySetFocusedResponse | nil response
+---@return string | nil error An error string, if any
+function Client:pinnacle_window_v1_WindowService_TrySetFocused(data)
+    return self:unary_request(pinnacle.window.v1.WindowService.TrySetFocused, data)
 end
 pinnacle.window.v1.WindowService.SetDecorationMode = {}
 pinnacle.window.v1.WindowService.SetDecorationMode.service = "pinnacle.window.v1.WindowService"

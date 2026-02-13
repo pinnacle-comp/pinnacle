@@ -76,7 +76,8 @@ fn keyboard_focus() {
         pinnacle_api::window::get_all()
             .next()
             .unwrap()
-            .set_focused(true)
+            .try_set_focused(true)
+            .unwrap()
     });
 
     let current_focus = fixture

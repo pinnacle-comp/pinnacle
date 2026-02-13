@@ -12,15 +12,16 @@ use pinnacle_api_defs::pinnacle::{
             self, CloseRequest, GetAppIdRequest, GetAppIdResponse, GetFocusedRequest,
             GetFocusedResponse, GetForeignToplevelListIdentifierRequest,
             GetForeignToplevelListIdentifierResponse, GetLayoutModeRequest, GetLayoutModeResponse,
-            GetLocRequest, GetLocResponse, GetRequest, GetResponse, GetSizeRequest,
-            GetSizeResponse, GetTagIdsRequest, GetTagIdsResponse, GetTitleRequest,
-            GetTitleResponse, GetWindowsInDirRequest, GetWindowsInDirResponse, LowerRequest,
-            LowerResponse, MoveGrabRequest, MoveToOutputRequest, MoveToOutputResponse,
-            MoveToTagRequest, RaiseRequest, ResizeGrabRequest, ResizeTileRequest,
-            SetDecorationModeRequest, SetFloatingRequest, SetFocusedRequest, SetFullscreenRequest,
-            SetGeometryRequest, SetMaximizedRequest, SetTagRequest, SetTagsRequest,
-            SetTagsResponse, SetVrrDemandRequest, SetVrrDemandResponse, SwapRequest, SwapResponse,
-            WindowRuleRequest, WindowRuleResponse,
+            GetLocRequest, GetLocResponse, GetMinimizedRequest, GetMinimizedResponse, GetRequest,
+            GetResponse, GetSizeRequest, GetSizeResponse, GetTagIdsRequest, GetTagIdsResponse,
+            GetTitleRequest, GetTitleResponse, GetWindowsInDirRequest, GetWindowsInDirResponse,
+            LowerRequest, LowerResponse, MoveGrabRequest, MoveToOutputRequest,
+            MoveToOutputResponse, MoveToTagRequest, RaiseRequest, ResizeGrabRequest,
+            ResizeTileRequest, SetDecorationModeRequest, SetFloatingRequest, SetFocusedRequest,
+            SetFullscreenRequest, SetGeometryRequest, SetMaximizedRequest, SetMinimizedRequest,
+            SetMinimizedResponse, SetTagRequest, SetTagsRequest, SetTagsResponse,
+            SetVrrDemandRequest, SetVrrDemandResponse, SwapRequest, SwapResponse,
+            TrySetFocusedRequest, TrySetFocusedResponse, WindowRuleRequest, WindowRuleResponse,
         },
     },
 };
@@ -44,6 +45,7 @@ use crate::{
     util::rect::Direction,
     window::{
         UnmappedState,
+        rules::WindowRules,
         window_state::{LayoutMode, LayoutModeKind, VrrDemand, WindowId},
     },
 };
@@ -190,6 +192,27 @@ impl v1::window_service_server::WindowService for super::WindowService {
                 }
                 .into(),
             })
+        })
+        .await
+    }
+
+    async fn get_minimized(
+        &self,
+        request: Request<GetMinimizedRequest>,
+    ) -> TonicResult<GetMinimizedResponse> {
+        let window_id = WindowId(request.into_inner().window_id);
+
+        run_unary(&self.sender, move |state| {
+            let minimized = window_id
+                .window(&state.pinnacle)
+                .or_else(|| {
+                    window_id
+                        .unmapped_window(&state.pinnacle)
+                        .map(|unmapped| unmapped.window.clone())
+                })
+                .map(|win| win.with_state(|state| state.minimized))
+                .unwrap_or(false);
+            Ok(GetMinimizedResponse { minimized })
         })
         .await
     }
@@ -479,6 +502,47 @@ impl v1::window_service_server::WindowService for super::WindowService {
         .await
     }
 
+    async fn set_minimized(
+        &self,
+        request: Request<SetMinimizedRequest>,
+    ) -> TonicResult<SetMinimizedResponse> {
+        let request = request.into_inner();
+        let window_id = WindowId(request.window_id);
+        let absolute_minimized = match request.set_or_toggle() {
+            SetOrToggle::Unspecified => {
+                return Err(Status::invalid_argument("unspecified set or toggle"));
+            }
+            SetOrToggle::Set => Some(true),
+            SetOrToggle::Unset => Some(false),
+            SetOrToggle::Toggle => None,
+        };
+
+        run_unary(&self.sender, move |state| {
+            if let Some(window) = window_id.window(&state.pinnacle) {
+                crate::api::window::set_minimized(state, &window, absolute_minimized);
+            } else if let Some(unmapped) = window_id.unmapped_window_mut(&mut state.pinnacle)
+                && let UnmappedState::WaitingForRules { rules, .. } = &mut unmapped.state
+            {
+                let absolute_minimized = match absolute_minimized {
+                    Some(absolute) => absolute,
+                    // Toggling
+                    None => !rules
+                        .minimized
+                        .unwrap_or(crate::window::rules::WindowRules::default_minimization_state()),
+                };
+                rules.minimized = Some(absolute_minimized);
+                // If the window is scheduled to focus, we will undo it explicitly to match the
+                // general minimization behaviour.
+                if absolute_minimized {
+                    rules.focused = Some(false);
+                }
+            };
+
+            Ok(SetMinimizedResponse {})
+        })
+        .await
+    }
+
     async fn set_floating(&self, request: Request<SetFloatingRequest>) -> TonicResult<()> {
         let request = request.into_inner();
 
@@ -534,37 +598,74 @@ impl v1::window_service_server::WindowService for super::WindowService {
     }
 
     async fn set_focused(&self, request: Request<SetFocusedRequest>) -> TonicResult<()> {
+        tracing::warn!(
+            "Call of deprecated focusing mechanism `set_focused`, will silently ignore focus failures due to window minimization - use try_set_focused instead."
+        );
+        self.try_set_focused({
+            let (metadata, extensions, message) = request.into_parts();
+            let message = TrySetFocusedRequest {
+                window_id: message.window_id,
+                set_or_toggle: message.set_or_toggle().into(),
+            };
+            Request::from_parts(metadata, extensions, message)
+        })
+        .await
+        .map(|response| {
+            let (metadata, _message, extensions) = response.into_parts();
+            // Discard the error information
+            tonic::Response::from_parts(metadata, (), extensions)
+        })
+    }
+
+    async fn try_set_focused(
+        &self,
+        request: Request<TrySetFocusedRequest>,
+    ) -> TonicResult<TrySetFocusedResponse> {
+        use super::{TrySetFocusedError, try_set_focused_protocol_result as make_response};
         let request = request.into_inner();
-
         let window_id = WindowId(request.window_id);
-
-        let set_or_toggle = request.set_or_toggle();
-
-        if set_or_toggle == SetOrToggle::Unspecified {
-            return Err(Status::invalid_argument("unspecified set or toggle"));
-        }
-
-        let set = match set_or_toggle {
-            SetOrToggle::Unspecified => unreachable!(),
+        let absolute_focus_state = match request.set_or_toggle() {
+            SetOrToggle::Unspecified => {
+                return Err(Status::invalid_argument("unspecified set or toggle"));
+            }
             SetOrToggle::Set => Some(true),
             SetOrToggle::Unset => Some(false),
             SetOrToggle::Toggle => None,
         };
 
-        run_unary_no_response(&self.sender, move |state| {
-            if let Some(window) = window_id.window(&state.pinnacle) {
-                crate::api::window::set_focused(state, &window, set);
-            } else if let Some(unmapped) = window_id.unmapped_window_mut(&mut state.pinnacle)
-                && let UnmappedState::WaitingForRules { rules, .. } = &mut unmapped.state
-            {
-                match set {
-                    Some(set) => rules.focused = Some(set),
-                    None => {
-                        let focused = rules.focused.get_or_insert(true);
-                        *focused = !*focused;
+        run_unary(&self.sender, move |state| {
+            Ok(make_response({
+                if let Some(window) = window_id.window(&state.pinnacle) {
+                    crate::api::window::try_set_focused(state, &window, absolute_focus_state)
+                } else if let Some(unmapped) = window_id.unmapped_window_mut(&mut state.pinnacle)
+                    && let UnmappedState::WaitingForRules { rules, .. } = &mut unmapped.state
+                {
+                    let minimized = rules
+                        .minimized
+                        .unwrap_or(WindowRules::default_minimization_state());
+                    match absolute_focus_state {
+                        Some(absolute_focus_state) => {
+                            if minimized && absolute_focus_state {
+                                Err(TrySetFocusedError::WindowMinimized)
+                            } else {
+                                rules.focused = Some(absolute_focus_state);
+                                Ok(())
+                            }
+                        }
+                        None => {
+                            let focused = rules.focused.get_or_insert(true);
+                            if minimized && !*focused {
+                                Err(TrySetFocusedError::WindowMinimized)
+                            } else {
+                                *focused = !*focused;
+                                Ok(())
+                            }
+                        }
                     }
+                } else {
+                    Ok(())
                 }
-            }
+            }))
         })
         .await
     }

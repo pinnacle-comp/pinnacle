@@ -269,3 +269,28 @@ impl From<Rect> for pinnacle_api_defs::pinnacle::util::v1::Rect {
         }
     }
 }
+
+/// Extension trait for [`Result`].
+// This is needed - combined with an implementation of `TryFrom` - to avoid issues with the orphan
+// rule.
+pub(crate) trait ResultExt {
+    type T;
+    type E;
+
+    /// Swap the "error" and "ok" components of a result.
+    fn swap_ok_err(self) -> Result<Self::E, Self::T>;
+}
+
+impl<T, E> ResultExt for Result<T, E> {
+    type T = T;
+
+    type E = E;
+
+    #[inline(always)]
+    fn swap_ok_err(self) -> Result<Self::E, Self::T> {
+        match self {
+            Ok(t) => Err(t),
+            Err(e) => Ok(e),
+        }
+    }
+}
