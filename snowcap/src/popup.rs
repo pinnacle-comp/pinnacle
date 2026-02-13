@@ -12,8 +12,12 @@ use smithay_client_toolkit::{
 use tokio::sync::mpsc::UnboundedSender;
 
 use crate::{
-    decoration::DecorationId, handlers::keyboard::KeyboardKey, layer::LayerId, state::State,
-    surface::SnowcapSurface, widget::ViewFn,
+    decoration::DecorationId,
+    handlers::keyboard::{KeyboardFocusEvent, KeyboardKey},
+    layer::LayerId,
+    state::State,
+    surface::SnowcapSurface,
+    widget::ViewFn,
 };
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Default)]
@@ -29,6 +33,10 @@ impl PopupIdCounter {
         self.0.0 += 1;
         ret
     }
+}
+
+pub enum PopupEvent {
+    Focus(KeyboardFocusEvent),
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
@@ -260,6 +268,7 @@ pub struct SnowcapPopup {
     pending_size: Option<iced::Size<u32>>,
 
     pub keyboard_key_sender: Option<UnboundedSender<KeyboardKey>>,
+    pub popup_event_sender: Option<UnboundedSender<Vec<PopupEvent>>>,
 }
 
 impl SnowcapPopup {
@@ -464,6 +473,7 @@ impl SnowcapPopup {
             pending_size: None,
 
             keyboard_key_sender: None,
+            popup_event_sender: None,
         })
     }
 
@@ -604,5 +614,23 @@ impl SnowcapPopup {
             self.pending_reposition = None;
             self.schedule_redraw();
         }
+    }
+
+    pub fn keyboard_focus_changed(&mut self, has_focus: bool) {
+        if let Some(sender) = self.popup_event_sender.as_ref() {
+            let event = if has_focus {
+                KeyboardFocusEvent::FocusGained.into()
+            } else {
+                KeyboardFocusEvent::FocusLost.into()
+            };
+
+            let _ = sender.send(vec![event]);
+        }
+    }
+}
+
+impl From<KeyboardFocusEvent> for PopupEvent {
+    fn from(value: KeyboardFocusEvent) -> Self {
+        Self::Focus(value)
     }
 }

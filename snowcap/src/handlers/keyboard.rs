@@ -109,6 +109,7 @@ impl KeyboardHandler for State {
             .find(|p| p.popup.wl_surface() == surface)
         {
             popup.surface.focus_serial = Some(serial);
+            popup.keyboard_focus_changed(true);
             self.keyboard_focus = Some(KeyboardFocus::Popup(popup.popup.clone()))
         }
     }
@@ -134,6 +135,13 @@ impl KeyboardHandler for State {
                 self.keyboard_focus = None;
             }
             Some(KeyboardFocus::Popup(popup)) if popup.wl_surface() == surface => {
+                if let Some(sn_popup) = self
+                    .popups
+                    .iter_mut()
+                    .find(|sn_popup| &sn_popup.popup == popup)
+                {
+                    sn_popup.keyboard_focus_changed(false);
+                }
                 self.keyboard_focus = None
             }
             _ => (),

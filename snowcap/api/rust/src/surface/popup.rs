@@ -7,7 +7,10 @@ use snowcap_api_defs::snowcap::{
     input::v1::{KeyboardKeyRequest, keyboard_key_request::Target},
     popup::{
         self,
-        v1::{CloseRequest, NewPopupRequest, OperatePopupRequest, UpdatePopupRequest, ViewRequest},
+        v1::{
+            CloseRequest, GetPopupEventsRequest, NewPopupRequest, OperatePopupRequest,
+            UpdatePopupRequest, ViewRequest,
+        },
     },
     widget::v1::{GetWidgetEventsRequest, get_widget_events_request},
 };
@@ -145,6 +148,31 @@ bitflags! {
     }
 }
 
+/// The error type for popup event conversion.
+#[allow(missing_docs)]
+#[derive(Debug)]
+pub enum PopupEventError {
+    Unspecified,
+    Unknown,
+}
+
+impl<Msg> TryFrom<popup::v1::popup_event::Event> for SurfaceEvent<Msg> {
+    type Error = PopupEventError;
+
+    fn try_from(value: popup::v1::popup_event::Event) -> Result<Self, Self::Error> {
+        use popup::v1::popup_event::{Event, Focus};
+
+        let Event::Focus(f) = value;
+
+        match Focus::try_from(f) {
+            Ok(Focus::Gained) => Ok(Self::FocusGained),
+            Ok(Focus::Lost) => Ok(Self::FocusLost),
+            Ok(_) => Err(PopupEventError::Unspecified),
+            Err(_) => Err(PopupEventError::Unknown),
+        }
+    }
+}
+
 /// The error type for [`Popup::new_widget`].
 ///
 /// [`Popup::new_widget`]: self::new_widget
@@ -207,10 +235,15 @@ where
 
     let popup_id = response.into_inner().popup_id;
 
-    let mut event_stream = Client::widget()
+    let mut widget_event_stream = Client::widget()
         .get_widget_events(GetWidgetEventsRequest {
             id: Some(get_widget_events_request::Id::PopupId(popup_id)),
         })
+        .block_on_tokio()?
+        .into_inner();
+
+    let mut popup_event_stream = Client::popup()
+        .get_popup_events(GetPopupEventsRequest { popup_id })
         .block_on_tokio()?
         .into_inner();
 
@@ -274,7 +307,7 @@ where
     tokio::spawn(async move {
         loop {
             tokio::select! {
-                Some(Ok(response)) = event_stream.next() => {
+                Some(Ok(response)) = widget_event_stream.next() => {
                     for widget_event in response.widget_events {
                         let Some(msg) = widget::message_from_event(&callbacks, widget_event) else {
                             continue;
@@ -293,6 +326,25 @@ where
                         .block_on_tokio()
                     {
                         tracing::error!("Failed to request view for {popup_id}: {status}");
+                    }
+
+                    continue;
+                }
+                Some(Ok(response)) = popup_event_stream.next() => {
+                    for popup_event in response.popup_events {
+                        let Some(event) = popup_event.event
+                            .and_then(|e| e.try_into().ok()) else {
+                                continue;
+                            };
+
+                        program.event(event);
+                    }
+
+                    if let Err(status) = Client::popup()
+                        .request_view(ViewRequest { popup_id })
+                        .block_on_tokio()
+                    {
+                        error!("Failed to request view for {popup_id}: {status}");
                     }
 
                     continue;
