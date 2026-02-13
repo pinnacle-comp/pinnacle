@@ -22,18 +22,18 @@ repository = "https://github.com/pinnacle-comp/pinnacle/"
 rust-version = "1.88"
 
 [workspace.dependencies]
-anyhow = { version = "1.0.100", features = ["backtrace"] }
+anyhow = { version = "1.0.101", features = ["backtrace"] }
 bitflags = "2.10.0"
-clap = { version = "4.5.54", features = ["derive", "string"] }
+clap = { version = "4.5.58", features = ["derive", "string"] }
 futures = "0.3.31"
-hyper-util = { version = "0.1.19", features = ["tokio"] }
+hyper-util = { version = "0.1.20", features = ["tokio"] }
 indexmap = "2.13.0"
 passfd = "0.1.6"
 pinnacle-api-defs = { path = "./pinnacle-api-defs" }
 prost = "0.13.5"
 snowcap-api-defs = { path = "./snowcap/snowcap-api-defs" }
 snowcap-protocols = { path = "./snowcap/snowcap-protocols" }
-tempfile = "3.24.0"
+tempfile = "3.25.0"
 thiserror = "2.0.18"
 tokio = { version = "1.49.0", features = ["macros", "rt-multi-thread"] }
 tokio-stream = { version = "0.1.18", features = ["net"] }
@@ -55,7 +55,7 @@ xkbcommon = "0.9.0"
 
 [workspace.dependencies.smithay]
 git = "https://github.com/Smithay/smithay"
-rev = "2608eb1"
+rev = "599857c"
 # path = "../../git/smithay"
 default-features = false
 features = [
@@ -104,17 +104,17 @@ rust-version.workspace = true
 
 [dependencies]
 smithay = { workspace = true }
-smithay-drm-extras = { git = "https://github.com/Smithay/smithay", rev = "2608eb1" }
+smithay-drm-extras = { git = "https://github.com/Smithay/smithay", rev = "599857c" }
 
 anyhow = { workspace = true }
 assert_matches = "1.5.0"
 async-channel = "2.5.0"
 bimap = "0.6.3"
 bitflags = { workspace = true }
-bytemuck = "1.24.0"
+bytemuck = "1.25.0"
 clap = { workspace = true }
-clap_complete = "4.5.65"
-cliclack = "0.3.7"
+clap_complete = "4.5.66"
+cliclack = "0.3.8"
 drm-sys = "0.8.0"
 gag = "1.0.0"
 indexmap = { workspace = true }
@@ -131,11 +131,11 @@ slab_tree = { git = "https://github.com/Ottatop/slab-tree", rev = "d6adbbb" } # 
 snowcap = { path = "./snowcap", optional = true }
 snowcap-api = { path = "./snowcap/api/rust", optional = true }
 snowcap-protocols = { workspace = true }
-sysinfo = "0.37.2"
+sysinfo = "0.38.1"
 taffy = "=0.8.2" # Patched below for rounding fixes
 tokio = { workspace = true, features = ["process", "io-util", "signal"] }
 tokio-stream = { workspace = true }
-toml = "0.9.11"
+toml = "1.0.1"
 tonic = { workspace = true }
 tonic-reflection = { workspace = true }
 tracing = { workspace = true }
@@ -159,10 +159,10 @@ test-log = { version = "0.2.19", default-features = false, features = [
 ] }
 pinnacle = { path = ".", default-features = false }
 pinnacle-api = { path = "./api/rust", default-features = false }
-mlua = { version = "0.11.5", features = ["lua54", "send", "macros"] }
-proptest = "1.9.0"
-proptest-derive = "0.7.0"
-rand = "0.9.2"
+mlua = { version = "0.11.6", features = ["lua54", "send", "macros"] }
+proptest = "1.10.0"
+proptest-derive = "0.8.0"
+rand = "0.10.0"
 wayland-client = "0.31.12"
 calloop-wayland-source = "0.4.1"
 
