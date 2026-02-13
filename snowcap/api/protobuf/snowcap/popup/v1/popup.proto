@@ -108,10 +108,31 @@ message ViewRequest {
 }
 message ViewResponse {}
 
+message GetPopupEventsRequest {
+  uint32 popup_id = 1;
+}
+
+message PopupEvent {
+  enum Focus {
+    FOCUS_UNSPECIFIED = 0;
+    FOCUS_GAINED = 1;
+    FOCUS_LOST = 2;
+  }
+
+  oneof event {
+    Focus focus = 1;
+  }
+}
+
+message GetPopupEventsResponse {
+  repeated PopupEvent popup_events = 1;
+}
+
 service PopupService {
   rpc NewPopup(NewPopupRequest) returns (NewPopupResponse);
   rpc Close(CloseRequest) returns (google.protobuf.Empty);
   rpc OperatePopup(OperatePopupRequest) returns (OperatePopupResponse);
   rpc UpdatePopup(UpdatePopupRequest) returns (UpdatePopupResponse);
   rpc RequestView(ViewRequest) returns (ViewResponse);
+  rpc GetPopupEvents(GetPopupEventsRequest) returns (stream GetPopupEventsResponse);
 }
