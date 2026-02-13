@@ -29,6 +29,11 @@ pub enum SurfaceEvent<Msg> {
     /// stored the handle passed via [`Self::Created`], this handle should be
     /// considered stale.
     Closing,
+
+    /// Emitted when the surface gains focus.
+    FocusGained,
+    /// Emitted when the surface loses focus.
+    FocusLost,
 }
 
 /// Implementation detail for [`SurfaceHandle`]
