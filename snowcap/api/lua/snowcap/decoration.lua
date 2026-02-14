@@ -115,7 +115,9 @@ function decoration.new_widget(args)
     args.program:connect(widget_signal.operation, forward_operation)
     args.program:connect(widget_signal.request_close, close_surface)
 
-    args.program:created(widget.SurfaceHandle.from_decoration_handle(handle))
+    args.program:event({
+        created = widget.SurfaceHandle.from_decoration_handle(handle),
+    })
 
     err = client:snowcap_widget_v1_WidgetService_GetWidgetEvents({
         decoration_id = decoration_id,

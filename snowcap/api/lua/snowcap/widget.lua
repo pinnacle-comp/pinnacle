@@ -5,12 +5,12 @@
 ---@class snowcap.widget.Program : snowcap.widget.base.Base
 ---@field update fun(self: self, message: any)
 ---@field view fun(self: self): snowcap.widget.WidgetDef?
----Called when a surface has been created with this program.
+---Called to notify programs about the surface's state changes.
 ---
----A surface handle is provided to allow the program to manipulate
----the surface. This handle should be passed to any child programs
----to allow them to use it as well.
----@field created fun(self: self, handle: snowcap.widget.SurfaceHandle)?
+---The SurfaceEvent contains informations that programs may want to react. As
+---such it should be passed to child programs to allow them to react
+---accordingly.
+---@field event fun(self: self, event: snowcap.widget.SurfaceEvent)?
 
 ---@class snowcap.widget.Palette
 ---@field background snowcap.widget.Color
@@ -1237,6 +1237,14 @@ function widget._message_from_event(callbacks, event)
 end
 
 widget.operation = require("snowcap.widget.operation")
+
+---Events emitted by the surface to notify `Program` of state changes.
+---@class snowcap.widget.SurfaceEvent
+---Emitted when the surface is created
+---
+---A SurfaceHandle is provided to allow the program to manipulate the surface.
+---The handle will remain valid for the lifetime of the program.
+---@field created? snowcap.widget.SurfaceHandle
 
 ---A handle to a surface.
 ---
