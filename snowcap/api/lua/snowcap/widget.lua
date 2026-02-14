@@ -1335,23 +1335,6 @@ function SurfaceHandle:send_message(message)
     end
 end
 
----Sends a operation to this surface.
----
----@param operation snowcap.widget.operation.Operation
-function SurfaceHandle:operate(operation)
-    if self.layer then
-        self.layer:operate(operation)
-    end
-
-    if self.decoration then
-        self.decoration:operate(operation)
-    end
-
-    if self.popup then
-        self.popup:operate(operation)
-    end
-end
-
 ---Converts this surface handle into a popup parent.
 ---
 ---@return snowcap.popup.ParentHandle

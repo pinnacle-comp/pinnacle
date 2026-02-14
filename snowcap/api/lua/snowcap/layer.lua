@@ -141,10 +141,16 @@ function layer.new_widget(args)
         end
     end
 
+    local handle = layer_handle.new(layer_id, update_on_msg)
+
+    ---@type fun(oper: snowcap.widget.operation.Operation)
+    local forward_operation = function(oper)
+        handle:operate(oper)
+    end
+
     args.program:connect(widget_signal.redraw_needed, update_on_msg)
     args.program:connect(widget_signal.send_message, update_on_msg)
-
-    local handle = layer_handle.new(layer_id, update_on_msg)
+    args.program:connect(widget_signal.operation, forward_operation)
 
     args.program:created(widget.SurfaceHandle.from_layer_handle(handle))
 
