@@ -1245,6 +1245,12 @@ widget.operation = require("snowcap.widget.operation")
 ---A SurfaceHandle is provided to allow the program to manipulate the surface.
 ---The handle will remain valid for the lifetime of the program.
 ---@field created? snowcap.widget.SurfaceHandle
+---Emitted when the surface is being closed.
+---
+---This event is emitted during the surface termination. If the program stored
+---the handle passed via SurfaceEvent.created, this handle should be considered
+---stale.
+---@field closing? {}
 
 ---A handle to a surface.
 ---
