@@ -50,6 +50,10 @@ function Base:register_child(child)
     child:connect(widget_signal.operation, function(...)
         self:emit(widget_signal.operation, ...)
     end)
+
+    child:connect(widget_signal.request_close, function()
+        self:emit(widget_signal.request_close)
+    end)
 end
 
 ---Connects a callback to a specific signal.

@@ -1303,21 +1303,6 @@ function SurfaceHandle.from_popup_handle(handle)
     return setmetatable(self, SurfaceHandle_mt)
 end
 
----Closes this surface.
-function SurfaceHandle:close()
-    if self.layer then
-        self.layer:close()
-    end
-
-    if self.decoration then
-        self.decoration:close()
-    end
-
-    if self.popup then
-        self.popup:close()
-    end
-end
-
 ---Sends a message to this surface.
 ---
 ---@param message any
