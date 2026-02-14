@@ -1251,6 +1251,10 @@ widget.operation = require("snowcap.widget.operation")
 ---the handle passed via SurfaceEvent.created, this handle should be considered
 ---stale.
 ---@field closing? {}
+---Emitted when the surface gains focus.
+---@field focus_gained? {}
+---Emitted when the surface loses focus.
+---@field focus_lost? {}
 
 ---A handle to a surface.
 ---
