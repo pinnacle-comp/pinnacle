@@ -141,10 +141,16 @@ function layer.new_widget(args)
         end
     end
 
+    local handle = layer_handle.new(layer_id, update_on_msg)
+
+    ---@type fun(oper: snowcap.widget.operation.Operation)
+    local forward_operation = function(oper)
+        handle:operate(oper)
+    end
+
     args.program:connect(widget_signal.redraw_needed, update_on_msg)
     args.program:connect(widget_signal.send_message, update_on_msg)
-
-    local handle = layer_handle.new(layer_id, update_on_msg)
+    args.program:connect(widget_signal.operation, forward_operation)
 
     args.program:created(widget.SurfaceHandle.from_layer_handle(handle))
 
@@ -272,6 +278,10 @@ end
 ---Sends an `Operation` to this layer.
 ---@param operation snowcap.widget.operation.Operation
 function LayerHandle:operate(operation)
+    if operation.focusable ~= nil then
+        self:handle_focus(operation.focusable)
+    end
+
     local _, err = client:snowcap_layer_v1_LayerService_OperateLayer({
         layer_id = self.id,
         operation = require("snowcap.widget.operation")._to_api(operation), ---@diagnostic disable-line: invisible
@@ -279,6 +289,21 @@ function LayerHandle:operate(operation)
 
     if err then
         log.error(err)
+    end
+end
+
+---@lcat nodoc
+---@private
+---@param focusable snowcap.widget.operation.Focusable
+function LayerHandle:handle_focus(focusable)
+    if focusable.unfocus ~= nil then
+        self:update({
+            keyboard_interactivity = keyboard_interactivity.NONE,
+        })
+    else
+        self:update({
+            keyboard_interactivity = keyboard_interactivity.EXCLUSIVE,
+        })
     end
 end
 
