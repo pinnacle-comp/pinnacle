@@ -64,6 +64,13 @@ local zlayer = {
     OVERLAY = 4,
 }
 
+---@package
+---@enum snowcap.layer.FocusEvent
+local focus_event = {
+    GAINED = 1,
+    LOST = 2,
+}
+
 ---@alias snowcap.layer.ExclusiveZone
 ---| integer
 ---| "respect"
@@ -163,6 +170,41 @@ function layer.new_widget(args)
     args.program:event({
         created = widget.SurfaceHandle.from_layer_handle(handle),
     })
+
+    err = client:snowcap_layer_v1_LayerService_GetLayerEvents({
+        layer_id = layer_id,
+    }, function(response) ---@diagnostic disable-line:redefined-local
+        response.layer_events = response.layer_events or {}
+
+        for _, layer_event in ipairs(response.layer_events) do
+            local focus = layer_event.focus --[[@as snowcap.layer.FocusEvent]]
+            ---@type snowcap.widget.SurfaceEvent?
+            local event = nil
+
+            if focus == focus_event.GAINED then
+                event = {
+                    focus_gained = {},
+                }
+            elseif focus == focus_event.LOST then
+                event = {
+                    focus_lost = {},
+                }
+            end
+
+            if event then
+                args.program:event(event)
+            end
+        end
+
+        ---@diagnostic disable-next-line: redefined-local
+        local _, err = client:snowcap_layer_v1_LayerService_RequestView({
+            layer_id = layer_id,
+        })
+
+        if err then
+            log.error(err)
+        end
+    end)
 
     err = client:snowcap_widget_v1_WidgetService_GetWidgetEvents({
         layer_id = layer_id,

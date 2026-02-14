@@ -691,6 +691,13 @@ local snowcap_layer_v1_Layer = {
     LAYER_OVERLAY = 4,
 }
 
+---@enum snowcap.layer.v1.LayerEvent.Focus
+local snowcap_layer_v1_LayerEvent_Focus = {
+    FOCUS_UNSPECIFIED = 0,
+    FOCUS_GAINED = 1,
+    FOCUS_LOST = 2,
+}
+
 ---@enum snowcap.popup.v1.Anchor
 local snowcap_popup_v1_Anchor = {
     ANCHOR_UNSPECIFIED = 0,
@@ -1318,6 +1325,15 @@ local snowcap_popup_v1_Gravity = {
 
 ---@class snowcap.layer.v1.ViewResponse
 
+---@class snowcap.layer.v1.GetLayerEventsRequest
+---@field layer_id integer?
+
+---@class snowcap.layer.v1.LayerEvent
+---@field focus snowcap.layer.v1.LayerEvent.Focus?
+
+---@class snowcap.layer.v1.GetLayerEventsResponse
+---@field layer_events snowcap.layer.v1.LayerEvent[]?
+
 ---@class snowcap.popup.v1.Offset
 ---@field x number?
 ---@field y number?
@@ -1508,6 +1524,9 @@ snowcap.layer.v1.UpdateLayerRequest = {}
 snowcap.layer.v1.UpdateLayerResponse = {}
 snowcap.layer.v1.ViewRequest = {}
 snowcap.layer.v1.ViewResponse = {}
+snowcap.layer.v1.GetLayerEventsRequest = {}
+snowcap.layer.v1.LayerEvent = {}
+snowcap.layer.v1.GetLayerEventsResponse = {}
 snowcap.popup = {}
 snowcap.popup.v1 = {}
 snowcap.popup.v1.Offset = {}
@@ -1545,6 +1564,7 @@ snowcap.layer.v0alpha1.Layer = snowcap_layer_v0alpha1_Layer
 snowcap.layer.v1.Anchor = snowcap_layer_v1_Anchor
 snowcap.layer.v1.KeyboardInteractivity = snowcap_layer_v1_KeyboardInteractivity
 snowcap.layer.v1.Layer = snowcap_layer_v1_Layer
+snowcap.layer.v1.LayerEvent.Focus = snowcap_layer_v1_LayerEvent_Focus
 snowcap.popup.v1.Anchor = snowcap_popup_v1_Anchor
 snowcap.popup.v1.Gravity = snowcap_popup_v1_Gravity
 
@@ -1857,6 +1877,26 @@ snowcap.layer.v1.LayerService.RequestView.response = ".snowcap.layer.v1.ViewResp
 ---@return string | nil error An error string, if any
 function Client:snowcap_layer_v1_LayerService_RequestView(data)
     return self:unary_request(snowcap.layer.v1.LayerService.RequestView, data)
+end
+snowcap.layer.v1.LayerService.GetLayerEvents = {}
+snowcap.layer.v1.LayerService.GetLayerEvents.service = "snowcap.layer.v1.LayerService"
+snowcap.layer.v1.LayerService.GetLayerEvents.method = "GetLayerEvents"
+snowcap.layer.v1.LayerService.GetLayerEvents.request = ".snowcap.layer.v1.GetLayerEventsRequest"
+snowcap.layer.v1.LayerService.GetLayerEvents.response = ".snowcap.layer.v1.GetLayerEventsResponse"
+
+---Performs a server-streaming request.
+---
+---`callback` will be called with every streamed response.
+---
+---@nodiscard
+---
+---@param data snowcap.layer.v1.GetLayerEventsRequest
+---@param callback fun(response: snowcap.layer.v1.GetLayerEventsResponse)
+---@param done? fun()
+---
+---@return string | nil An error string, if any
+function Client:snowcap_layer_v1_LayerService_GetLayerEvents(data, callback, done)
+    return self:server_streaming_request(snowcap.layer.v1.LayerService.GetLayerEvents, data, callback, done)
 end
 snowcap.popup.v1.PopupService = {}
 snowcap.popup.v1.PopupService.NewPopup = {}
