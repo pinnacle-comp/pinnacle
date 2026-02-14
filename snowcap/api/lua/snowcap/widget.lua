@@ -38,6 +38,7 @@
 ---@field input_region snowcap.widget.InputRegion?
 ---@field mouse_area snowcap.widget.MouseArea?
 ---@field text_input snowcap.widget.TextInput?
+---@field touch_area snowcap.widget.TouchArea?
 
 ---@class snowcap.widget.Border
 ---@field color snowcap.widget.Color?
@@ -442,6 +443,58 @@ local text_input_event_type = {
     INPUT = "input",
     SUBMIT = "submit",
     PASTE = "press",
+}
+
+---Emits messages on touch events.
+---@class snowcap.widget.TouchArea
+---@field child snowcap.widget.WidgetDef? TouchArea content
+---@field on_down (fun(evt: snowcap.widget.touch_area.DownEvent): any)? Message to emit when a finger is pressed.
+---@field on_up (fun(evt: snowcap.widget.touch_area.Finger): any)? Message to emit when a finger is lifted.
+---@field on_enter (fun(evt: snowcap.widget.touch_area.Finger): any)? Message to emit when a finger enter the surface.
+---@field on_move (fun(evt: snowcap.widget.touch_area.MoveEvent): any)? Message to emit when a finger move on the surface.
+---@field on_exit (fun(evt: snowcap.widget.touch_area.Finger): any)? Message to emit when a finger leave the surface.
+---@field on_cancel (fun(evt: snowcap.widget.touch_area.Finger): any)? Message to emit when a touch input is to be discarded.
+---@field package widget_id integer?
+
+---@class snowcap.widget.touch_area.Callbacks
+---@field on_down (fun(evt: snowcap.widget.touch_area.DownEvent): any)?
+---@field on_up (fun(evt: snowcap.widget.touch_area.Finger): any)?
+---@field on_enter (fun(evt: snowcap.widget.touch_area.Finger): any)?
+---@field on_move (fun(evt: snowcap.widget.touch_area.MoveEvent): any)?
+---@field on_exit (fun(evt: snowcap.widget.touch_area.Finger): any)?
+---@field on_cancel (fun(evt: snowcap.widget.touch_area.Finger): any)?
+
+---@class snowcap.widget.touch_area.Event
+---@field down snowcap.widget.touch_area.DownEvent?
+---@field up snowcap.widget.touch_area.Finger?
+---@field enter snowcap.widget.touch_area.Finger?
+---@field move snowcap.widget.touch_area.MoveEvent?
+---@field exit snowcap.widget.touch_area.Finger?
+---@field cancel snowcap.widget.touch_area.Finger?
+
+---@class snowcap.widget.touch_area.Finger
+---@field id integer?
+
+---@class snowcap.widget.touch_area.Point
+---@field x number?
+---@field y number?
+
+---@class snowcap.widget.touch_area.DownEvent
+---@field finger snowcap.widget.touch_area.Finger?
+---@field point snowcap.widget.touch_area.Point?
+
+---@class snowcap.widget.touch_area.MoveEvent
+---@field finger snowcap.widget.touch_area.Finger?
+---@field point snowcap.widget.touch_area.Point?
+
+---@enum snowcap.widget.touch_area.event.Type
+local touch_area_event_type = {
+    DOWN = "down",
+    UP = "up",
+    ENTER = "enter",
+    MOVE = "move",
+    EXIT = "exit",
+    CANCEL = "cancel",
 }
 
 ---@class snowcap.widget.Length
@@ -851,6 +904,22 @@ local function text_input_into_api(def)
     }
 end
 
+---@param def snowcap.widget.TouchArea
+---@return snowcap.widget.v1.TouchArea
+local function touch_area_into_api(def)
+    ---@type snowcap.widget.v1.TouchArea
+    return {
+        widget_id = def.widget_id,
+        child = widget.widget_def_into_api(def.child),
+        on_down = def.on_down ~= nil,
+        on_up = def.on_up ~= nil,
+        on_enter = def.on_enter ~= nil,
+        on_move = def.on_move ~= nil,
+        on_exit = def.on_exit ~= nil,
+        on_cancel = def.on_cancel ~= nil,
+    }
+end
+
 ---@param def snowcap.widget.WidgetDef
 ---@return snowcap.widget.v1.WidgetDef
 function widget.widget_def_into_api(def)
@@ -883,6 +952,9 @@ function widget.widget_def_into_api(def)
     end
     if def.text_input then
         def.text_input = text_input_into_api(def.text_input)
+    end
+    if def.touch_area then
+        def.touch_area = touch_area_into_api(def.touch_area)
     end
 
     return def --[[@as snowcap.widget.v1.WidgetDef]]
@@ -1020,6 +1092,31 @@ function widget.text_input(text_input)
     }
 end
 
+---Create a new TouchArea widget.
+---@param touch_area snowcap.widget.TouchArea
+---
+---@return snowcap.widget.WidgetDef
+function widget.touch_area(touch_area)
+    local has_cb = false
+
+    has_cb = has_cb or touch_area.on_down ~= nil
+    has_cb = has_cb or touch_area.on_up ~= nil
+    has_cb = has_cb or touch_area.on_enter ~= nil
+    has_cb = has_cb or touch_area.on_move ~= nil
+    has_cb = has_cb or touch_area.on_exit ~= nil
+    has_cb = has_cb or touch_area.on_cancel ~= nil
+
+    if has_cb then
+        touch_area.widget_id = widget_id_counter
+        widget_id_counter = widget_id_counter + 1
+    end
+
+    ---@type snowcap.widget.WidgetDef
+    return {
+        touch_area = touch_area,
+    }
+end
+
 ---@private
 ---@lcat nodoc
 ---@param wgt snowcap.widget.WidgetDef
@@ -1045,6 +1142,8 @@ function widget._traverse_widget_tree(wgt, callbacks, with_widget)
         widget._traverse_widget_tree(wgt.input_region.child, callbacks, with_widget)
     elseif wgt.mouse_area then
         widget._traverse_widget_tree(wgt.mouse_area.child, callbacks, with_widget)
+    elseif wgt.touch_area then
+        widget._traverse_widget_tree(wgt.touch_area.child, callbacks, with_widget)
     end
 end
 
@@ -1084,6 +1183,23 @@ local function collect_text_input_callbacks(text_input)
     }
 end
 
+---@package
+---@lcat nodoc
+---
+---Collect event callbacks from a `snowcap.widget.TouchArea`
+---@param touch_area snowcap.widget.TouchArea
+---@return snowcap.widget.touch_area.Callbacks
+local function collect_touch_area_callbacks(touch_area)
+    return {
+        on_down = touch_area.on_down,
+        on_up = touch_area.on_up,
+        on_enter = touch_area.on_enter,
+        on_move = touch_area.on_move,
+        on_exit = touch_area.on_exit,
+        on_cancel = touch_area.on_cancel,
+    }
+end
+
 ---@private
 ---@lcat nodoc
 ---@param callbacks any[]
@@ -1099,6 +1215,10 @@ function widget._collect_callbacks(callbacks, wgt)
 
     if wgt.text_input and wgt.text_input.widget_id then
         callbacks[wgt.text_input.widget_id] = collect_text_input_callbacks(wgt.text_input)
+    end
+
+    if wgt.touch_area and wgt.touch_area.widget_id then
+        callbacks[wgt.touch_area.widget_id] = collect_touch_area_callbacks(wgt.touch_area)
     end
 end
 
@@ -1213,6 +1333,48 @@ end
 
 ---@private
 ---@lcat nodoc
+---
+---@param callbacks snowcap.widget.touch_area.Callbacks
+---@param event snowcap.widget.touch_area.Event
+---@return any?
+function widget._touch_area_process_event(callbacks, event)
+    callbacks = callbacks or {}
+    local translate = {
+        [touch_area_event_type.DOWN] = "on_down",
+        [touch_area_event_type.UP] = "on_up",
+        [touch_area_event_type.ENTER] = "on_enter",
+        [touch_area_event_type.MOVE] = "on_move",
+        [touch_area_event_type.EXIT] = "on_exit",
+        [touch_area_event_type.CANCEL] = "on_cancel",
+    }
+
+    local event_type = nil
+    local cb = nil
+
+    for k, v in pairs(translate) do
+        if event[k] ~= nil then
+            event_type = k
+            cb = callbacks[v]
+
+            break
+        end
+    end
+
+    if cb == nil then
+        return nil
+    end
+
+    local ok, val = pcall(cb, event[event_type])
+
+    if not ok then
+        require("snowcap.log").error(val)
+    end
+
+    return val
+end
+
+---@private
+---@lcat nodoc
 ---@param callbacks any[]
 ---@param event snowcap.widget.v1.WidgetEvent
 function widget._message_from_event(callbacks, event)
@@ -1230,6 +1392,11 @@ function widget._message_from_event(callbacks, event)
         if callbacks[widget_id] ~= nil then
             ---@diagnostic disable-next-line:param-type-mismatch
             msg = widget._text_input_process_event(callbacks[widget_id], event.text_input)
+        end
+    elseif event.touch_area then
+        if callbacks[widget_id] ~= nil then
+            ---@diagnostic disable-next-line:param-type-mismatch
+            msg = widget._touch_area_process_event(callbacks[widget_id], event.touch_area)
         end
     end
 

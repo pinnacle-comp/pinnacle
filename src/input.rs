@@ -20,7 +20,7 @@ use smithay::{
             GestureBeginEvent, GestureEndEvent, InputBackend, InputEvent, KeyState,
             KeyboardKeyEvent, PointerAxisEvent, PointerButtonEvent, PointerMotionEvent,
             ProximityState, TabletToolButtonEvent, TabletToolEvent, TabletToolProximityEvent,
-            TabletToolTipEvent, TabletToolTipState, TouchEvent,
+            TabletToolTipEvent, TabletToolTipState, TouchEvent, TouchSlot,
         },
         renderer::utils::with_renderer_surface_state,
         winit::WinitVirtualDevice,
@@ -324,6 +324,43 @@ impl State {
         }
     }
 
+    pub fn update_surface_focus(
+        &mut self,
+        target: Option<(PointerFocusTarget, Point<f64, Logical>)>,
+    ) {
+        if let Some((focus, _)) = target {
+            if let Some(window) = focus.window_for(&self.pinnacle) {
+                self.pinnacle.raise_window(window.clone());
+                for output in self.pinnacle.space.outputs_for_element(&window) {
+                    self.schedule_render(&output);
+                }
+                if !window.is_x11_override_redirect() {
+                    self.pinnacle.keyboard_focus_stack.set_focus(window.clone());
+                }
+                self.pinnacle.on_demand_layer_focus = None;
+            } else if let Some(layer) = focus.layer_for(&self.pinnacle) {
+                if layer.can_receive_keyboard_focus() {
+                    self.pinnacle.on_demand_layer_focus = Some(layer);
+                } else if let wlr_layer::Layer::Bottom | wlr_layer::Layer::Background =
+                    layer.layer()
+                {
+                    // Only unset focus when clicking on background stuff
+                    self.pinnacle.keyboard_focus_stack.unset_focus();
+                    self.pinnacle.on_demand_layer_focus = None;
+                }
+            } else if !self.pinnacle.lock_state.is_unlocked() {
+                if let Some(lock_surface) = focus.lock_surface_for(&self.pinnacle) {
+                    self.pinnacle.lock_surface_focus = Some(lock_surface);
+                } else {
+                    self.pinnacle.keyboard_focus_stack.unset_focus();
+                }
+            }
+        } else {
+            self.pinnacle.keyboard_focus_stack.unset_focus();
+            self.pinnacle.on_demand_layer_focus = None;
+        }
+    }
+
     /// Update the pointer focus if it's different from the previous one.
     pub fn update_pointer_focus(&mut self) {
         let _span = tracy_client::span!("State::update_pointer_focus");
@@ -581,37 +618,7 @@ impl State {
                 self.pinnacle.focus_output(&output_under);
             }
 
-            if let Some((focus, _)) = self.pinnacle.pointer_contents.focus_under.as_ref() {
-                if let Some(window) = focus.window_for(&self.pinnacle) {
-                    self.pinnacle.raise_window(window.clone());
-                    for output in self.pinnacle.space.outputs_for_element(&window) {
-                        self.schedule_render(&output);
-                    }
-                    if !window.is_x11_override_redirect() {
-                        self.pinnacle.keyboard_focus_stack.set_focus(window.clone());
-                    }
-                    self.pinnacle.on_demand_layer_focus = None;
-                } else if let Some(layer) = focus.layer_for(&self.pinnacle) {
-                    if layer.can_receive_keyboard_focus() {
-                        self.pinnacle.on_demand_layer_focus = Some(layer);
-                    } else if let wlr_layer::Layer::Bottom | wlr_layer::Layer::Background =
-                        layer.layer()
-                    {
-                        // Only unset focus when clicking on background stuff
-                        self.pinnacle.keyboard_focus_stack.unset_focus();
-                        self.pinnacle.on_demand_layer_focus = None;
-                    }
-                } else if !self.pinnacle.lock_state.is_unlocked() {
-                    if let Some(lock_surface) = focus.lock_surface_for(&self.pinnacle) {
-                        self.pinnacle.lock_surface_focus = Some(lock_surface);
-                    } else {
-                        self.pinnacle.keyboard_focus_stack.unset_focus();
-                    }
-                }
-            } else {
-                self.pinnacle.keyboard_focus_stack.unset_focus();
-                self.pinnacle.on_demand_layer_focus = None;
-            }
+            self.update_surface_focus(self.pinnacle.pointer_contents.focus_under.clone());
         };
 
         pointer.button(
@@ -1028,6 +1035,19 @@ impl State {
         );
     }
 
+    fn update_touch_locs(&mut self, slot: TouchSlot, loc: Point<f64, Logical>) {
+        if let Some(entry) = self
+            .pinnacle
+            .touch_positions
+            .iter_mut()
+            .find(|(s, _)| s == &slot)
+        {
+            entry.1 = loc;
+        } else {
+            self.pinnacle.touch_positions.push((slot, loc));
+        }
+    }
+
     fn on_touch_down<I: InputBackend>(&mut self, event: I::TouchDownEvent)
     where
         I::Device: 'static,
@@ -1040,7 +1060,16 @@ impl State {
             return;
         };
 
+        self.update_touch_locs(event.slot(), touch_loc);
+
+        let output_under = self.pinnacle.space.output_under(touch_loc).next().cloned();
+
+        if let Some(output_under) = output_under {
+            self.pinnacle.focus_output(&output_under);
+        }
+
         let focus = self.pinnacle.pointer_contents_under(touch_loc);
+        self.update_surface_focus(focus.focus_under.clone());
 
         touch.down(
             self,
@@ -1066,6 +1095,7 @@ impl State {
             return;
         };
 
+        self.update_touch_locs(event.slot(), touch_loc);
         let focus = self.pinnacle.pointer_contents_under(touch_loc);
 
         touch.motion(
@@ -1083,6 +1113,10 @@ impl State {
         let Some(touch) = self.pinnacle.seat.get_touch() else {
             return;
         };
+
+        self.pinnacle
+            .touch_positions
+            .retain(|(s, _)| s != &event.slot());
 
         touch.up(
             self,
@@ -1102,10 +1136,15 @@ impl State {
         touch.frame(self);
     }
 
-    fn on_touch_cancel<I: InputBackend>(&mut self, _event: I::TouchCancelEvent) {
+    fn on_touch_cancel<I: InputBackend>(&mut self, event: I::TouchCancelEvent) {
         let Some(touch) = self.pinnacle.seat.get_touch() else {
             return;
         };
+
+        // I assume libinput sends a cancel for every touch slot.
+        self.pinnacle
+            .touch_positions
+            .retain(|(s, _)| s != &event.slot());
 
         touch.cancel(self);
     }

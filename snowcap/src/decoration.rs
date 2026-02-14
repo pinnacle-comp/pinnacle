@@ -45,7 +45,15 @@ impl State {
             self.popup_destroy(popup_id);
         }
 
-        self.decorations.retain(|d| d.decoration_id != id);
+        let Some(deco) = self
+            .decorations
+            .extract_if(.., |d| d.decoration_id == id)
+            .next()
+        else {
+            return;
+        };
+
+        self.flush_touch_for_surface(&deco.surface.wl_surface);
     }
 }
 
