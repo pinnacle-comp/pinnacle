@@ -103,9 +103,9 @@ function decoration.new_widget(args)
 
     args.program:created(widget.SurfaceHandle.from_decoration_handle(handle))
 
-    local err = client:snowcap_widget_v1_WidgetService_GetWidgetEvents({
+    err = client:snowcap_widget_v1_WidgetService_GetWidgetEvents({
         decoration_id = decoration_id,
-    }, function(response)
+    }, function(response) ---@diagnostic disable-line: redefined-local
         for _, event in ipairs(response.widget_events) do
             ---@diagnostic disable-next-line:invisible
             local msg = widget._message_from_event(callbacks, event)
@@ -120,15 +120,21 @@ function decoration.new_widget(args)
             end
         end
 
+        ---@diagnostic disable-next-line:redefined-local
         local widget_def = args.program:view()
         callbacks = {}
 
         widget._traverse_widget_tree(widget_def, callbacks, widget._collect_callbacks)
 
+        ---@diagnostic disable-next-line:redefined-local
         local _, err = client:snowcap_decoration_v1_DecorationService_UpdateDecoration({
             decoration_id = decoration_id,
             widget_def = widget.widget_def_into_api(widget_def),
         })
+
+        if err then
+            log.error(err)
+        end
     end)
 
     return handle
@@ -160,7 +166,7 @@ end
 function DecorationHandle:operate(operation)
     local _, err = client:snowcap_decoration_v1_DecorationService_OperateDecoration({
         decoration_id = self.id,
-        operation = require("snowcap.widget.operation")._to_api(operation),
+        operation = require("snowcap.widget.operation")._to_api(operation), ---@diagnostic disable-line: invisible
     })
 
     if err then
