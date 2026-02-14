@@ -1321,23 +1321,6 @@ function SurfaceHandle.from_popup_handle(handle)
     return setmetatable(self, SurfaceHandle_mt)
 end
 
----Sends a message to this surface.
----
----@param message any
-function SurfaceHandle:send_message(message)
-    if self.layer then
-        self.layer:send_message(message)
-    end
-
-    if self.decoration then
-        self.decoration:send_message(message)
-    end
-
-    if self.popup then
-        self.popup:send_message(message)
-    end
-end
-
 ---Converts this surface handle into a popup parent.
 ---
 ---@return snowcap.popup.ParentHandle
