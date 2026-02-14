@@ -96,7 +96,7 @@ function layer.new_widget(args)
     ---@type table<integer, any>
     local callbacks = {}
 
-    local widget_def = args.program:view()
+    local widget_def = args.program:view() or widget.row({ children = {} })
 
     widget._traverse_widget_tree(widget_def, callbacks, widget._collect_callbacks)
 
@@ -180,7 +180,7 @@ function layer.new_widget(args)
         end
 
         ---@diagnostic disable-next-line:redefined-local
-        local widget_def = args.program:view()
+        local widget_def = args.program:view() or widget.row({ children = {} })
         callbacks = {}
 
         widget._traverse_widget_tree(widget_def, callbacks, widget._collect_callbacks)
