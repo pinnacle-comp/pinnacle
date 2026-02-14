@@ -86,15 +86,6 @@ impl<Msg> From<PopupHandle<Msg>> for SurfaceHandle<Msg> {
 }
 
 impl<Msg> SurfaceHandle<Msg> {
-    /// Sends a message to this surface.
-    pub fn send_message(&self, message: Msg) {
-        match &self.0 {
-            Inner::Layer(layer_handle) => layer_handle.send_message(message),
-            Inner::Decoration(decoration_handle) => decoration_handle.send_message(message),
-            Inner::Popup(popup_handle) => popup_handle.send_message(message),
-        }
-    }
-
     /// Forces this surface to redraw.
     pub fn force_redraw(&self) {
         match &self.0 {
