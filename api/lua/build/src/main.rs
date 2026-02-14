@@ -289,11 +289,12 @@ fn populate_service_defs(prefix: &str, service: &ServiceDescriptorProto) -> Stri
 ---@nodiscard
 ---
 ---@param callback fun(response: {ret_ty}, stream: grpc_client.h2.Stream)
+---@param done? fun()
 ---
 ---@return grpc_client.h2.Stream | nil
 ---@return string | nil An error string, if any
-function Client:{client_method_name}(callback)
-    return self:bidirectional_streaming_request({name}.{method_name}, callback)
+function Client:{client_method_name}(callback, done)
+    return self:bidirectional_streaming_request({name}.{method_name}, callback, done)
 end"#,
                     ret_ty = method.output_type().trim_start_matches('.'),
                 ));
@@ -314,10 +315,11 @@ end"#,
 ---
 ---@param data {data_ty}
 ---@param callback fun(response: {ret_ty})
+---@param done? fun()
 ---
 ---@return string | nil An error string, if any
-function Client:{client_method_name}(data, callback)
-    return self:server_streaming_request({name}.{method_name}, data, callback)
+function Client:{client_method_name}(data, callback, done)
+    return self:server_streaming_request({name}.{method_name}, data, callback, done)
 end"#,
                     data_ty = method.input_type().trim_start_matches('.'),
                     ret_ty = method.output_type().trim_start_matches('.'),
