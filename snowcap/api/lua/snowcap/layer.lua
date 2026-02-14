@@ -148,9 +148,17 @@ function layer.new_widget(args)
         handle:operate(oper)
     end
 
+    ---@type fun(): snowcap.signal.HandlerPolicy
+    local close_surface = function()
+        handle:close()
+
+        return require("snowcap.signal").HandlerPolicy.Discard
+    end
+
     args.program:connect(widget_signal.redraw_needed, update_on_msg)
     args.program:connect(widget_signal.send_message, update_on_msg)
     args.program:connect(widget_signal.operation, forward_operation)
+    args.program:connect(widget_signal.request_close, close_surface)
 
     args.program:created(widget.SurfaceHandle.from_layer_handle(handle))
 

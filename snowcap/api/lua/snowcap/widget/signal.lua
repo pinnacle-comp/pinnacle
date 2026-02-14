@@ -15,4 +15,7 @@ return {
 
     ---Update widgets' internal state.
     operation = "widget::operation",
+
+    ---Request the surface to close itself.
+    request_close = "widget::request_close",
 }
