@@ -30,9 +30,9 @@ Base.__index = Base
 ---the surface. This handle should be passed to any child programs
 ---to allow them to use it as well.
 ---
----@param handle snowcap.widget.SurfaceHandle
+---@param event snowcap.widget.SurfaceEvent
 ---@diagnostic disable-next-line: unused-local
-function Base:created(handle) end
+function Base:event(event) end
 
 ---Registers a child program to this program, allowing it to
 ---bubble up emitted redraw and message signals.
@@ -45,6 +45,14 @@ function Base:register_child(child)
 
     child:connect(widget_signal.send_message, function(...)
         self:emit(widget_signal.send_message, ...)
+    end)
+
+    child:connect(widget_signal.operation, function(...)
+        self:emit(widget_signal.operation, ...)
+    end)
+
+    child:connect(widget_signal.request_close, function()
+        self:emit(widget_signal.request_close)
     end)
 end
 

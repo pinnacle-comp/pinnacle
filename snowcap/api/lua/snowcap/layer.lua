@@ -64,6 +64,13 @@ local zlayer = {
     OVERLAY = 4,
 }
 
+---@package
+---@enum snowcap.layer.FocusEvent
+local focus_event = {
+    GAINED = 1,
+    LOST = 2,
+}
+
 ---@alias snowcap.layer.ExclusiveZone
 ---| integer
 ---| "respect"
@@ -96,7 +103,7 @@ function layer.new_widget(args)
     ---@type table<integer, any>
     local callbacks = {}
 
-    local widget_def = args.program:view()
+    local widget_def = args.program:view() or widget.row({ children = {} })
 
     widget._traverse_widget_tree(widget_def, callbacks, widget._collect_callbacks)
 
@@ -141,16 +148,67 @@ function layer.new_widget(args)
         end
     end
 
-    args.program:connect(widget_signal.redraw_needed, update_on_msg)
-    args.program:connect(widget_signal.send_message, update_on_msg)
-
     local handle = layer_handle.new(layer_id, update_on_msg)
 
-    args.program:created(widget.SurfaceHandle.from_layer_handle(handle))
+    ---@type fun(oper: snowcap.widget.operation.Operation)
+    local forward_operation = function(oper)
+        handle:operate(oper)
+    end
 
-    local err = client:snowcap_widget_v1_WidgetService_GetWidgetEvents({
+    ---@type fun(): snowcap.signal.HandlerPolicy
+    local close_surface = function()
+        handle:close()
+
+        return require("snowcap.signal").HandlerPolicy.Discard
+    end
+
+    args.program:connect(widget_signal.redraw_needed, update_on_msg)
+    args.program:connect(widget_signal.send_message, update_on_msg)
+    args.program:connect(widget_signal.operation, forward_operation)
+    args.program:connect(widget_signal.request_close, close_surface)
+
+    args.program:event({
+        created = widget.SurfaceHandle.from_layer_handle(handle),
+    })
+
+    err = client:snowcap_layer_v1_LayerService_GetLayerEvents({
         layer_id = layer_id,
-    }, function(response)
+    }, function(response) ---@diagnostic disable-line:redefined-local
+        if response.layer_events == nil then
+            return
+        end
+
+        local focus = response.layer_events.focus --[[@as snowcap.layer.FocusEvent]]
+        ---@type snowcap.widget.SurfaceEvent?
+        local event = nil
+
+        if focus == focus_event.GAINED then
+            event = {
+                focus_gained = {},
+            }
+        elseif focus == focus_event.LOST then
+            event = {
+                focus_lost = {},
+            }
+        end
+
+        if event then
+            args.program:event(event)
+
+            ---@diagnostic disable-next-line: redefined-local
+            local _, err = client:snowcap_layer_v1_LayerService_RequestView({
+                layer_id = layer_id,
+            })
+
+            if err then
+                log.error(err)
+            end
+        end
+    end)
+
+    err = client:snowcap_widget_v1_WidgetService_GetWidgetEvents({
+        layer_id = layer_id,
+    }, function(response) ---@diagnostic disable-line:redefined-local
         for _, event in ipairs(response.widget_events) do
             ---@diagnostic disable-next-line:invisible
             local msg = widget._message_from_event(callbacks, event)
@@ -165,14 +223,24 @@ function layer.new_widget(args)
             end
         end
 
-        local widget_def = args.program:view()
+        ---@diagnostic disable-next-line:redefined-local
+        local widget_def = args.program:view() or widget.row({ children = {} })
         callbacks = {}
 
         widget._traverse_widget_tree(widget_def, callbacks, widget._collect_callbacks)
 
+        ---@diagnostic disable-next-line:redefined-local
         local _, err = client:snowcap_layer_v1_LayerService_UpdateLayer({
             layer_id = layer_id,
             widget_def = widget.widget_def_into_api(widget_def),
+        })
+
+        if err then
+            log.error(err)
+        end
+    end, function()
+        args.program:event({
+            closing = {},
         })
     end)
 
@@ -266,13 +334,32 @@ end
 ---Sends an `Operation` to this layer.
 ---@param operation snowcap.widget.operation.Operation
 function LayerHandle:operate(operation)
+    if operation.focusable ~= nil then
+        self:handle_focus(operation.focusable)
+    end
+
     local _, err = client:snowcap_layer_v1_LayerService_OperateLayer({
         layer_id = self.id,
-        operation = require("snowcap.widget.operation")._to_api(operation),
+        operation = require("snowcap.widget.operation")._to_api(operation), ---@diagnostic disable-line: invisible
     })
 
     if err then
         log.error(err)
+    end
+end
+
+---@lcat nodoc
+---@private
+---@param focusable snowcap.widget.operation.Focusable
+function LayerHandle:handle_focus(focusable)
+    if focusable.unfocus ~= nil then
+        self:update({
+            keyboard_interactivity = keyboard_interactivity.NONE,
+        })
+    else
+        self:update({
+            keyboard_interactivity = keyboard_interactivity.EXCLUSIVE,
+        })
     end
 end
 

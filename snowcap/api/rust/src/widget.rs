@@ -37,7 +37,7 @@ use text_input::TextInput;
 
 use crate::{
     signal::{HandlerPolicy, Signaler},
-    surface::SurfaceHandle,
+    surface::SurfaceEvent,
     widget::{input_region::InputRegion, utils::Radians},
 };
 
@@ -653,15 +653,19 @@ pub trait Program {
     fn update(&mut self, msg: Self::Message);
 
     /// Creates a widget definition for display by Snowcap.
-    fn view(&self) -> WidgetDef<Self::Message>;
-
-    /// Called when a surface has been created with this program.
     ///
-    /// A [`SurfaceHandle`] is provided to allow the program to manipulate
-    /// the surface. This handle should be cloned and passed to any child programs
-    /// to allow them to use it as well.
-    fn created(&mut self, handle: SurfaceHandle<Self::Message>) {
-        let _ = handle;
+    /// A widget may return [None] to notify its parent program that it has
+    /// nothing to display. It's up to the parent to decide whether to display a
+    /// placeholder or to remove the widget from the tree.
+    fn view(&self) -> Option<WidgetDef<Self::Message>>;
+
+    /// Called to notify programs about the surface's state change.
+    ///
+    /// The [`SurfaceEvent`] contains information that programs may want to
+    /// react to. As such it should be cloned and passed to child programs to
+    /// allow them to react to the event accordingly.
+    fn event(&mut self, event: SurfaceEvent<Self::Message>) {
+        let _ = event;
     }
 
     /// Returns a possibly held [`Signaler`].
@@ -700,6 +704,22 @@ pub trait Program {
                     HandlerPolicy::Keep
                 }
             });
+
+            child_signaler.connect({
+                let self_signaler = self_signaler.clone();
+                move |sig: operation::Operation| {
+                    self_signaler.emit(sig);
+                    HandlerPolicy::Keep
+                }
+            });
+
+            child_signaler.connect({
+                let self_signaler = self_signaler.clone();
+                move |sig: signal::RequestClose| {
+                    self_signaler.emit(sig);
+                    HandlerPolicy::Keep
+                }
+            });
         }
     }
 }
@@ -711,7 +731,7 @@ impl<Msg> Program for Box<dyn Program<Message = Msg>> {
         (**self).update(msg);
     }
 
-    fn view(&self) -> WidgetDef<Self::Message> {
+    fn view(&self) -> Option<WidgetDef<Self::Message>> {
         (**self).view()
     }
 
@@ -719,8 +739,8 @@ impl<Msg> Program for Box<dyn Program<Message = Msg>> {
         (**self).signaler()
     }
 
-    fn created(&mut self, handle: SurfaceHandle<Self::Message>) {
-        (**self).created(handle);
+    fn event(&mut self, event: SurfaceEvent<Self::Message>) {
+        (**self).event(event);
     }
 
     fn register_child(&self, child: &dyn Program<Message = Self::Message>)
@@ -738,7 +758,7 @@ impl<Msg> Program for Box<dyn Program<Message = Msg> + Send> {
         (**self).update(msg);
     }
 
-    fn view(&self) -> WidgetDef<Self::Message> {
+    fn view(&self) -> Option<WidgetDef<Self::Message>> {
         (**self).view()
     }
 
@@ -746,8 +766,8 @@ impl<Msg> Program for Box<dyn Program<Message = Msg> + Send> {
         (**self).signaler()
     }
 
-    fn created(&mut self, handle: SurfaceHandle<Self::Message>) {
-        (**self).created(handle);
+    fn event(&mut self, event: SurfaceEvent<Self::Message>) {
+        (**self).event(event);
     }
 
     fn register_child(&self, child: &dyn Program<Message = Self::Message>)
@@ -765,7 +785,7 @@ impl<Msg> Program for Box<dyn Program<Message = Msg> + Send + Sync> {
         (**self).update(msg);
     }
 
-    fn view(&self) -> WidgetDef<Self::Message> {
+    fn view(&self) -> Option<WidgetDef<Self::Message>> {
         (**self).view()
     }
 
@@ -773,8 +793,8 @@ impl<Msg> Program for Box<dyn Program<Message = Msg> + Send + Sync> {
         (**self).signaler()
     }
 
-    fn created(&mut self, handle: SurfaceHandle<Self::Message>) {
-        (**self).created(handle);
+    fn event(&mut self, event: SurfaceEvent<Self::Message>) {
+        (**self).event(event);
     }
 
     fn register_child(&self, child: &dyn Program<Message = Self::Message>)

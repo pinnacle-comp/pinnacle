@@ -6,6 +6,12 @@ pub struct RedrawNeeded;
 
 impl Signal for RedrawNeeded {}
 
+/// Request the surface to close itself.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct RequestClose;
+
+impl Signal for RequestClose {}
+
 /// Emits a message that will update widgets.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Message<Msg>(pub Msg);

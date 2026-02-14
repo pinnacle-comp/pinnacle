@@ -43,6 +43,8 @@
 
 use snowcap_api_defs::snowcap::operation;
 
+use crate::signal::Signal;
+
 /// Update widgets' internal state.
 #[derive(Debug, Clone, PartialEq)]
 #[non_exhaustive]
@@ -207,3 +209,5 @@ impl From<Operation> for operation::v1::operation::Target {
         }
     }
 }
+
+impl Signal for Operation {}
