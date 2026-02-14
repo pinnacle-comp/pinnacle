@@ -329,6 +329,10 @@ function popup.new_widget(args)
         if err then
             log.error(err)
         end
+    end, function()
+        args.program:event({
+            closing = {},
+        })
     end)
 
     return handle
