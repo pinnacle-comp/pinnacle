@@ -214,6 +214,10 @@ function popup.new_widget(args)
     local callbacks = {}
 
     local widget_def = args.program:view()
+    if widget_def == nil then
+        log.error("TopLevel program must return a view.")
+        return nil
+    end
 
     widget._traverse_widget_tree(widget_def, callbacks, widget._collect_callbacks)
 
@@ -300,6 +304,9 @@ function popup.new_widget(args)
 
         ---@diagnostic disable-next-line:redefined-local
         local widget_def = args.program:view()
+        if widget_def == nil then
+            error("TopLevel program must return a view")
+        end
         callbacks = {}
 
         widget._traverse_widget_tree(widget_def, callbacks, widget._collect_callbacks)

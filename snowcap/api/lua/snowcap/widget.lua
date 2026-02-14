@@ -4,7 +4,7 @@
 
 ---@class snowcap.widget.Program : snowcap.widget.base.Base
 ---@field update fun(self: self, message: any)
----@field view fun(self: self): snowcap.widget.WidgetDef
+---@field view fun(self: self): snowcap.widget.WidgetDef?
 ---Called when a surface has been created with this program.
 ---
 ---A surface handle is provided to allow the program to manipulate
