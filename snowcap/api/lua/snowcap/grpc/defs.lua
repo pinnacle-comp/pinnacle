@@ -726,6 +726,13 @@ local snowcap_popup_v1_Gravity = {
     GRAVITY_NONE = 9,
 }
 
+---@enum snowcap.popup.v1.PopupEvent.Focus
+local snowcap_popup_v1_PopupEvent_Focus = {
+    FOCUS_UNSPECIFIED = 0,
+    FOCUS_GAINED = 1,
+    FOCUS_LOST = 2,
+}
+
 
 ---@alias google.protobuf.Empty nil
 
@@ -1399,6 +1406,15 @@ local snowcap_popup_v1_Gravity = {
 
 ---@class snowcap.popup.v1.ViewResponse
 
+---@class snowcap.popup.v1.GetPopupEventsRequest
+---@field popup_id integer?
+
+---@class snowcap.popup.v1.PopupEvent
+---@field focus snowcap.popup.v1.PopupEvent.Focus?
+
+---@class snowcap.popup.v1.GetPopupEventsResponse
+---@field popup_events snowcap.popup.v1.PopupEvent[]?
+
 ---@class snowcap.v0alpha1.Nothing
 
 ---@class snowcap.v1.Nothing
@@ -1542,6 +1558,9 @@ snowcap.popup.v1.UpdatePopupRequest = {}
 snowcap.popup.v1.UpdatePopupResponse = {}
 snowcap.popup.v1.ViewRequest = {}
 snowcap.popup.v1.ViewResponse = {}
+snowcap.popup.v1.GetPopupEventsRequest = {}
+snowcap.popup.v1.PopupEvent = {}
+snowcap.popup.v1.GetPopupEventsResponse = {}
 snowcap.v0alpha1 = {}
 snowcap.v0alpha1.Nothing = {}
 snowcap.v1 = {}
@@ -1567,6 +1586,7 @@ snowcap.layer.v1.Layer = snowcap_layer_v1_Layer
 snowcap.layer.v1.LayerEvent.Focus = snowcap_layer_v1_LayerEvent_Focus
 snowcap.popup.v1.Anchor = snowcap_popup_v1_Anchor
 snowcap.popup.v1.Gravity = snowcap_popup_v1_Gravity
+snowcap.popup.v1.PopupEvent.Focus = snowcap_popup_v1_PopupEvent_Focus
 
 snowcap.widget.v1.WidgetService = {}
 snowcap.widget.v1.WidgetService.GetWidgetEvents = {}
@@ -1983,6 +2003,26 @@ snowcap.popup.v1.PopupService.RequestView.response = ".snowcap.popup.v1.ViewResp
 ---@return string | nil error An error string, if any
 function Client:snowcap_popup_v1_PopupService_RequestView(data)
     return self:unary_request(snowcap.popup.v1.PopupService.RequestView, data)
+end
+snowcap.popup.v1.PopupService.GetPopupEvents = {}
+snowcap.popup.v1.PopupService.GetPopupEvents.service = "snowcap.popup.v1.PopupService"
+snowcap.popup.v1.PopupService.GetPopupEvents.method = "GetPopupEvents"
+snowcap.popup.v1.PopupService.GetPopupEvents.request = ".snowcap.popup.v1.GetPopupEventsRequest"
+snowcap.popup.v1.PopupService.GetPopupEvents.response = ".snowcap.popup.v1.GetPopupEventsResponse"
+
+---Performs a server-streaming request.
+---
+---`callback` will be called with every streamed response.
+---
+---@nodiscard
+---
+---@param data snowcap.popup.v1.GetPopupEventsRequest
+---@param callback fun(response: snowcap.popup.v1.GetPopupEventsResponse)
+---@param done? fun()
+---
+---@return string | nil An error string, if any
+function Client:snowcap_popup_v1_PopupService_GetPopupEvents(data, callback, done)
+    return self:server_streaming_request(snowcap.popup.v1.PopupService.GetPopupEvents, data, callback, done)
 end
 return {
     google = google,

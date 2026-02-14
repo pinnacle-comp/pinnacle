@@ -175,6 +175,13 @@ local gravity = {
 }
 popup.gravity = gravity
 
+---@package
+---@enum snowcap.popup.FocusEvent
+local focus_event = {
+    GAINED = 1,
+    LOST = 2,
+}
+
 ---Popup position offset
 ---@class snowcap.popup.Offset
 ---@field x number
@@ -296,6 +303,41 @@ function popup.new_widget(args)
     args.program:event({
         created = widget.SurfaceHandle.from_popup_handle(handle),
     })
+
+    err = client:snowcap_popup_v1_PopupService_GetPopupEvents({
+        popup_id = popup_id,
+    }, function(response) ---@diagnostic disable-line:redefined-local
+        response.popup_events = response.popup_events or {}
+
+        for _, popup_event in ipairs(response.popup_events) do
+            local focus = popup_event.focus --[[@as snowcap.popup.FocusEvent]]
+            ---@type snowcap.widget.SurfaceEvent?
+            local event = nil
+
+            if focus == focus_event.GAINED then
+                event = {
+                    focus_gained = {},
+                }
+            elseif focus == focus_event.LOST then
+                event = {
+                    focus_lost = {},
+                }
+            end
+
+            if event then
+                args.program:event(event)
+            end
+        end
+
+        ---@diagnostic disable-next-line: redefined-local
+        local _, err = client:snowcap_popup_v1_PopupService_RequestView({
+            popup_id = popup_id,
+        })
+
+        if err then
+            log.error(err)
+        end
+    end)
 
     err = client:snowcap_widget_v1_WidgetService_GetWidgetEvents({
         popup_id = popup_id,
