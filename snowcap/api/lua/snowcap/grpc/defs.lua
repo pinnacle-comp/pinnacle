@@ -317,9 +317,10 @@ end
 ---@param request_specifier grpc_client.RequestSpecifier
 ---@param data table The message to send. This should be in the structure of `request_specifier.request`.
 ---@param callback fun(response: table) A callback that will be run with every response
+---@param done? fun() A callback that will be run when the stream closes.
 ---
 ---@return string|nil error An error string, if any.
-function Client:server_streaming_request(request_specifier, data, callback)
+function Client:server_streaming_request(request_specifier, data, callback, done)
     local stream = StreamExtension.extend(self.conn:new_stream())
 
     local service = request_specifier.service
@@ -376,6 +377,10 @@ function Client:server_streaming_request(request_specifier, data, callback)
             end
         end
 
+        if done then
+            done()
+        end
+
         local trailers = stream:get_headers_with_retries(0.5, 5)
         if trailers then
             for name, value, never_index in trailers:each() do
@@ -397,10 +402,11 @@ end
 ---
 ---@param request_specifier grpc_client.RequestSpecifier
 ---@param callback fun(response: table, stream: grpc_client.h2.Stream) A callback that will be run with every response
+---@param done? fun() A callback that will be run when the stream closes.
 ---
 ---@return grpc_client.h2.Stream|nil
 ---@return string|nil error An error string, if any.
-function Client:bidirectional_streaming_request(request_specifier, callback)
+function Client:bidirectional_streaming_request(request_specifier, callback, done)
     local stream = StreamExtension.extend(self.conn:new_stream())
 
     local service = request_specifier.service
@@ -447,6 +453,10 @@ function Client:bidirectional_streaming_request(request_specifier, callback)
 
                 response_body = response_body:sub(msg_len + 6)
             end
+        end
+
+        if done then
+            done()
         end
 
         local trailers = stream:get_headers_with_retries(0.5, 5)
@@ -1553,10 +1563,11 @@ snowcap.widget.v1.WidgetService.GetWidgetEvents.response = ".snowcap.widget.v1.G
 ---
 ---@param data snowcap.widget.v1.GetWidgetEventsRequest
 ---@param callback fun(response: snowcap.widget.v1.GetWidgetEventsResponse)
+---@param done? fun()
 ---
 ---@return string | nil An error string, if any
-function Client:snowcap_widget_v1_WidgetService_GetWidgetEvents(data, callback)
-    return self:server_streaming_request(snowcap.widget.v1.WidgetService.GetWidgetEvents, data, callback)
+function Client:snowcap_widget_v1_WidgetService_GetWidgetEvents(data, callback, done)
+    return self:server_streaming_request(snowcap.widget.v1.WidgetService.GetWidgetEvents, data, callback, done)
 end
 snowcap.decoration.v1.DecorationService = {}
 snowcap.decoration.v1.DecorationService.NewDecoration = {}
@@ -1659,10 +1670,11 @@ snowcap.input.v0alpha1.InputService.KeyboardKey.response = ".snowcap.input.v0alp
 ---
 ---@param data snowcap.input.v0alpha1.KeyboardKeyRequest
 ---@param callback fun(response: snowcap.input.v0alpha1.KeyboardKeyResponse)
+---@param done? fun()
 ---
 ---@return string | nil An error string, if any
-function Client:snowcap_input_v0alpha1_InputService_KeyboardKey(data, callback)
-    return self:server_streaming_request(snowcap.input.v0alpha1.InputService.KeyboardKey, data, callback)
+function Client:snowcap_input_v0alpha1_InputService_KeyboardKey(data, callback, done)
+    return self:server_streaming_request(snowcap.input.v0alpha1.InputService.KeyboardKey, data, callback, done)
 end
 snowcap.input.v0alpha1.InputService.PointerButton = {}
 snowcap.input.v0alpha1.InputService.PointerButton.service = "snowcap.input.v0alpha1.InputService"
@@ -1678,10 +1690,11 @@ snowcap.input.v0alpha1.InputService.PointerButton.response = ".snowcap.input.v0a
 ---
 ---@param data snowcap.input.v0alpha1.PointerButtonRequest
 ---@param callback fun(response: snowcap.input.v0alpha1.PointerButtonResponse)
+---@param done? fun()
 ---
 ---@return string | nil An error string, if any
-function Client:snowcap_input_v0alpha1_InputService_PointerButton(data, callback)
-    return self:server_streaming_request(snowcap.input.v0alpha1.InputService.PointerButton, data, callback)
+function Client:snowcap_input_v0alpha1_InputService_PointerButton(data, callback, done)
+    return self:server_streaming_request(snowcap.input.v0alpha1.InputService.PointerButton, data, callback, done)
 end
 snowcap.input.v1.InputService = {}
 snowcap.input.v1.InputService.KeyboardKey = {}
@@ -1698,10 +1711,11 @@ snowcap.input.v1.InputService.KeyboardKey.response = ".snowcap.input.v1.Keyboard
 ---
 ---@param data snowcap.input.v1.KeyboardKeyRequest
 ---@param callback fun(response: snowcap.input.v1.KeyboardKeyResponse)
+---@param done? fun()
 ---
 ---@return string | nil An error string, if any
-function Client:snowcap_input_v1_InputService_KeyboardKey(data, callback)
-    return self:server_streaming_request(snowcap.input.v1.InputService.KeyboardKey, data, callback)
+function Client:snowcap_input_v1_InputService_KeyboardKey(data, callback, done)
+    return self:server_streaming_request(snowcap.input.v1.InputService.KeyboardKey, data, callback, done)
 end
 snowcap.input.v1.InputService.PointerButton = {}
 snowcap.input.v1.InputService.PointerButton.service = "snowcap.input.v1.InputService"
@@ -1717,10 +1731,11 @@ snowcap.input.v1.InputService.PointerButton.response = ".snowcap.input.v1.Pointe
 ---
 ---@param data snowcap.input.v1.PointerButtonRequest
 ---@param callback fun(response: snowcap.input.v1.PointerButtonResponse)
+---@param done? fun()
 ---
 ---@return string | nil An error string, if any
-function Client:snowcap_input_v1_InputService_PointerButton(data, callback)
-    return self:server_streaming_request(snowcap.input.v1.InputService.PointerButton, data, callback)
+function Client:snowcap_input_v1_InputService_PointerButton(data, callback, done)
+    return self:server_streaming_request(snowcap.input.v1.InputService.PointerButton, data, callback, done)
 end
 snowcap.layer.v0alpha1.LayerService = {}
 snowcap.layer.v0alpha1.LayerService.NewLayer = {}

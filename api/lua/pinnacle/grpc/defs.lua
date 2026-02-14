@@ -317,9 +317,10 @@ end
 ---@param request_specifier grpc_client.RequestSpecifier
 ---@param data table The message to send. This should be in the structure of `request_specifier.request`.
 ---@param callback fun(response: table) A callback that will be run with every response
+---@param done? fun() A callback that will be run when the stream closes.
 ---
 ---@return string|nil error An error string, if any.
-function Client:server_streaming_request(request_specifier, data, callback)
+function Client:server_streaming_request(request_specifier, data, callback, done)
     local stream = StreamExtension.extend(self.conn:new_stream())
 
     local service = request_specifier.service
@@ -376,6 +377,10 @@ function Client:server_streaming_request(request_specifier, data, callback)
             end
         end
 
+        if done then
+            done()
+        end
+
         local trailers = stream:get_headers_with_retries(0.5, 5)
         if trailers then
             for name, value, never_index in trailers:each() do
@@ -397,10 +402,11 @@ end
 ---
 ---@param request_specifier grpc_client.RequestSpecifier
 ---@param callback fun(response: table, stream: grpc_client.h2.Stream) A callback that will be run with every response
+---@param done? fun() A callback that will be run when the stream closes.
 ---
 ---@return grpc_client.h2.Stream|nil
 ---@return string|nil error An error string, if any.
-function Client:bidirectional_streaming_request(request_specifier, callback)
+function Client:bidirectional_streaming_request(request_specifier, callback, done)
     local stream = StreamExtension.extend(self.conn:new_stream())
 
     local service = request_specifier.service
@@ -447,6 +453,10 @@ function Client:bidirectional_streaming_request(request_specifier, callback)
 
                 response_body = response_body:sub(msg_len + 6)
             end
+        end
+
+        if done then
+            done()
         end
 
         local trailers = stream:get_headers_with_retries(0.5, 5)
@@ -1826,10 +1836,11 @@ pinnacle.input.v1.InputService.KeybindStream.response = ".pinnacle.input.v1.Keyb
 ---
 ---@param data pinnacle.input.v1.KeybindStreamRequest
 ---@param callback fun(response: pinnacle.input.v1.KeybindStreamResponse)
+---@param done? fun()
 ---
 ---@return string | nil An error string, if any
-function Client:pinnacle_input_v1_InputService_KeybindStream(data, callback)
-    return self:server_streaming_request(pinnacle.input.v1.InputService.KeybindStream, data, callback)
+function Client:pinnacle_input_v1_InputService_KeybindStream(data, callback, done)
+    return self:server_streaming_request(pinnacle.input.v1.InputService.KeybindStream, data, callback, done)
 end
 pinnacle.input.v1.InputService.MousebindStream = {}
 pinnacle.input.v1.InputService.MousebindStream.service = "pinnacle.input.v1.InputService"
@@ -1845,10 +1856,11 @@ pinnacle.input.v1.InputService.MousebindStream.response = ".pinnacle.input.v1.Mo
 ---
 ---@param data pinnacle.input.v1.MousebindStreamRequest
 ---@param callback fun(response: pinnacle.input.v1.MousebindStreamResponse)
+---@param done? fun()
 ---
 ---@return string | nil An error string, if any
-function Client:pinnacle_input_v1_InputService_MousebindStream(data, callback)
-    return self:server_streaming_request(pinnacle.input.v1.InputService.MousebindStream, data, callback)
+function Client:pinnacle_input_v1_InputService_MousebindStream(data, callback, done)
+    return self:server_streaming_request(pinnacle.input.v1.InputService.MousebindStream, data, callback, done)
 end
 pinnacle.input.v1.InputService.KeybindOnPress = {}
 pinnacle.input.v1.InputService.KeybindOnPress.service = "pinnacle.input.v1.InputService"
@@ -2087,11 +2099,12 @@ pinnacle.layout.v1.LayoutService.Layout.response = ".pinnacle.layout.v1.LayoutRe
 ---@nodiscard
 ---
 ---@param callback fun(response: pinnacle.layout.v1.LayoutResponse, stream: grpc_client.h2.Stream)
+---@param done? fun()
 ---
 ---@return grpc_client.h2.Stream | nil
 ---@return string | nil An error string, if any
-function Client:pinnacle_layout_v1_LayoutService_Layout(callback)
-    return self:bidirectional_streaming_request(pinnacle.layout.v1.LayoutService.Layout, callback)
+function Client:pinnacle_layout_v1_LayoutService_Layout(callback, done)
+    return self:bidirectional_streaming_request(pinnacle.layout.v1.LayoutService.Layout, callback, done)
 end
 pinnacle.output.v1.OutputService = {}
 pinnacle.output.v1.OutputService.Get = {}
@@ -2500,10 +2513,11 @@ pinnacle.process.v1.ProcessService.WaitOnSpawn.response = ".pinnacle.process.v1.
 ---
 ---@param data pinnacle.process.v1.WaitOnSpawnRequest
 ---@param callback fun(response: pinnacle.process.v1.WaitOnSpawnResponse)
+---@param done? fun()
 ---
 ---@return string | nil An error string, if any
-function Client:pinnacle_process_v1_ProcessService_WaitOnSpawn(data, callback)
-    return self:server_streaming_request(pinnacle.process.v1.ProcessService.WaitOnSpawn, data, callback)
+function Client:pinnacle_process_v1_ProcessService_WaitOnSpawn(data, callback, done)
+    return self:server_streaming_request(pinnacle.process.v1.ProcessService.WaitOnSpawn, data, callback, done)
 end
 pinnacle.process.v1.ProcessService.SetEnv = {}
 pinnacle.process.v1.ProcessService.SetEnv.service = "pinnacle.process.v1.ProcessService"
@@ -3049,11 +3063,12 @@ pinnacle.window.v1.WindowService.WindowRule.response = ".pinnacle.window.v1.Wind
 ---@nodiscard
 ---
 ---@param callback fun(response: pinnacle.window.v1.WindowRuleResponse, stream: grpc_client.h2.Stream)
+---@param done? fun()
 ---
 ---@return grpc_client.h2.Stream | nil
 ---@return string | nil An error string, if any
-function Client:pinnacle_window_v1_WindowService_WindowRule(callback)
-    return self:bidirectional_streaming_request(pinnacle.window.v1.WindowService.WindowRule, callback)
+function Client:pinnacle_window_v1_WindowService_WindowRule(callback, done)
+    return self:bidirectional_streaming_request(pinnacle.window.v1.WindowService.WindowRule, callback, done)
 end
 pinnacle.signal.v1.SignalService = {}
 pinnacle.signal.v1.SignalService.OutputConnect = {}
@@ -3071,11 +3086,12 @@ pinnacle.signal.v1.SignalService.OutputConnect.response = ".pinnacle.signal.v1.O
 ---@nodiscard
 ---
 ---@param callback fun(response: pinnacle.signal.v1.OutputConnectResponse, stream: grpc_client.h2.Stream)
+---@param done? fun()
 ---
 ---@return grpc_client.h2.Stream | nil
 ---@return string | nil An error string, if any
-function Client:pinnacle_signal_v1_SignalService_OutputConnect(callback)
-    return self:bidirectional_streaming_request(pinnacle.signal.v1.SignalService.OutputConnect, callback)
+function Client:pinnacle_signal_v1_SignalService_OutputConnect(callback, done)
+    return self:bidirectional_streaming_request(pinnacle.signal.v1.SignalService.OutputConnect, callback, done)
 end
 pinnacle.signal.v1.SignalService.OutputDisconnect = {}
 pinnacle.signal.v1.SignalService.OutputDisconnect.service = "pinnacle.signal.v1.SignalService"
@@ -3092,11 +3108,12 @@ pinnacle.signal.v1.SignalService.OutputDisconnect.response = ".pinnacle.signal.v
 ---@nodiscard
 ---
 ---@param callback fun(response: pinnacle.signal.v1.OutputDisconnectResponse, stream: grpc_client.h2.Stream)
+---@param done? fun()
 ---
 ---@return grpc_client.h2.Stream | nil
 ---@return string | nil An error string, if any
-function Client:pinnacle_signal_v1_SignalService_OutputDisconnect(callback)
-    return self:bidirectional_streaming_request(pinnacle.signal.v1.SignalService.OutputDisconnect, callback)
+function Client:pinnacle_signal_v1_SignalService_OutputDisconnect(callback, done)
+    return self:bidirectional_streaming_request(pinnacle.signal.v1.SignalService.OutputDisconnect, callback, done)
 end
 pinnacle.signal.v1.SignalService.OutputResize = {}
 pinnacle.signal.v1.SignalService.OutputResize.service = "pinnacle.signal.v1.SignalService"
@@ -3113,11 +3130,12 @@ pinnacle.signal.v1.SignalService.OutputResize.response = ".pinnacle.signal.v1.Ou
 ---@nodiscard
 ---
 ---@param callback fun(response: pinnacle.signal.v1.OutputResizeResponse, stream: grpc_client.h2.Stream)
+---@param done? fun()
 ---
 ---@return grpc_client.h2.Stream | nil
 ---@return string | nil An error string, if any
-function Client:pinnacle_signal_v1_SignalService_OutputResize(callback)
-    return self:bidirectional_streaming_request(pinnacle.signal.v1.SignalService.OutputResize, callback)
+function Client:pinnacle_signal_v1_SignalService_OutputResize(callback, done)
+    return self:bidirectional_streaming_request(pinnacle.signal.v1.SignalService.OutputResize, callback, done)
 end
 pinnacle.signal.v1.SignalService.OutputMove = {}
 pinnacle.signal.v1.SignalService.OutputMove.service = "pinnacle.signal.v1.SignalService"
@@ -3134,11 +3152,12 @@ pinnacle.signal.v1.SignalService.OutputMove.response = ".pinnacle.signal.v1.Outp
 ---@nodiscard
 ---
 ---@param callback fun(response: pinnacle.signal.v1.OutputMoveResponse, stream: grpc_client.h2.Stream)
+---@param done? fun()
 ---
 ---@return grpc_client.h2.Stream | nil
 ---@return string | nil An error string, if any
-function Client:pinnacle_signal_v1_SignalService_OutputMove(callback)
-    return self:bidirectional_streaming_request(pinnacle.signal.v1.SignalService.OutputMove, callback)
+function Client:pinnacle_signal_v1_SignalService_OutputMove(callback, done)
+    return self:bidirectional_streaming_request(pinnacle.signal.v1.SignalService.OutputMove, callback, done)
 end
 pinnacle.signal.v1.SignalService.OutputPointerEnter = {}
 pinnacle.signal.v1.SignalService.OutputPointerEnter.service = "pinnacle.signal.v1.SignalService"
@@ -3155,11 +3174,12 @@ pinnacle.signal.v1.SignalService.OutputPointerEnter.response = ".pinnacle.signal
 ---@nodiscard
 ---
 ---@param callback fun(response: pinnacle.signal.v1.OutputPointerEnterResponse, stream: grpc_client.h2.Stream)
+---@param done? fun()
 ---
 ---@return grpc_client.h2.Stream | nil
 ---@return string | nil An error string, if any
-function Client:pinnacle_signal_v1_SignalService_OutputPointerEnter(callback)
-    return self:bidirectional_streaming_request(pinnacle.signal.v1.SignalService.OutputPointerEnter, callback)
+function Client:pinnacle_signal_v1_SignalService_OutputPointerEnter(callback, done)
+    return self:bidirectional_streaming_request(pinnacle.signal.v1.SignalService.OutputPointerEnter, callback, done)
 end
 pinnacle.signal.v1.SignalService.OutputPointerLeave = {}
 pinnacle.signal.v1.SignalService.OutputPointerLeave.service = "pinnacle.signal.v1.SignalService"
@@ -3176,11 +3196,12 @@ pinnacle.signal.v1.SignalService.OutputPointerLeave.response = ".pinnacle.signal
 ---@nodiscard
 ---
 ---@param callback fun(response: pinnacle.signal.v1.OutputPointerLeaveResponse, stream: grpc_client.h2.Stream)
+---@param done? fun()
 ---
 ---@return grpc_client.h2.Stream | nil
 ---@return string | nil An error string, if any
-function Client:pinnacle_signal_v1_SignalService_OutputPointerLeave(callback)
-    return self:bidirectional_streaming_request(pinnacle.signal.v1.SignalService.OutputPointerLeave, callback)
+function Client:pinnacle_signal_v1_SignalService_OutputPointerLeave(callback, done)
+    return self:bidirectional_streaming_request(pinnacle.signal.v1.SignalService.OutputPointerLeave, callback, done)
 end
 pinnacle.signal.v1.SignalService.OutputFocused = {}
 pinnacle.signal.v1.SignalService.OutputFocused.service = "pinnacle.signal.v1.SignalService"
@@ -3197,11 +3218,12 @@ pinnacle.signal.v1.SignalService.OutputFocused.response = ".pinnacle.signal.v1.O
 ---@nodiscard
 ---
 ---@param callback fun(response: pinnacle.signal.v1.OutputFocusedResponse, stream: grpc_client.h2.Stream)
+---@param done? fun()
 ---
 ---@return grpc_client.h2.Stream | nil
 ---@return string | nil An error string, if any
-function Client:pinnacle_signal_v1_SignalService_OutputFocused(callback)
-    return self:bidirectional_streaming_request(pinnacle.signal.v1.SignalService.OutputFocused, callback)
+function Client:pinnacle_signal_v1_SignalService_OutputFocused(callback, done)
+    return self:bidirectional_streaming_request(pinnacle.signal.v1.SignalService.OutputFocused, callback, done)
 end
 pinnacle.signal.v1.SignalService.WindowPointerEnter = {}
 pinnacle.signal.v1.SignalService.WindowPointerEnter.service = "pinnacle.signal.v1.SignalService"
@@ -3218,11 +3240,12 @@ pinnacle.signal.v1.SignalService.WindowPointerEnter.response = ".pinnacle.signal
 ---@nodiscard
 ---
 ---@param callback fun(response: pinnacle.signal.v1.WindowPointerEnterResponse, stream: grpc_client.h2.Stream)
+---@param done? fun()
 ---
 ---@return grpc_client.h2.Stream | nil
 ---@return string | nil An error string, if any
-function Client:pinnacle_signal_v1_SignalService_WindowPointerEnter(callback)
-    return self:bidirectional_streaming_request(pinnacle.signal.v1.SignalService.WindowPointerEnter, callback)
+function Client:pinnacle_signal_v1_SignalService_WindowPointerEnter(callback, done)
+    return self:bidirectional_streaming_request(pinnacle.signal.v1.SignalService.WindowPointerEnter, callback, done)
 end
 pinnacle.signal.v1.SignalService.WindowPointerLeave = {}
 pinnacle.signal.v1.SignalService.WindowPointerLeave.service = "pinnacle.signal.v1.SignalService"
@@ -3239,11 +3262,12 @@ pinnacle.signal.v1.SignalService.WindowPointerLeave.response = ".pinnacle.signal
 ---@nodiscard
 ---
 ---@param callback fun(response: pinnacle.signal.v1.WindowPointerLeaveResponse, stream: grpc_client.h2.Stream)
+---@param done? fun()
 ---
 ---@return grpc_client.h2.Stream | nil
 ---@return string | nil An error string, if any
-function Client:pinnacle_signal_v1_SignalService_WindowPointerLeave(callback)
-    return self:bidirectional_streaming_request(pinnacle.signal.v1.SignalService.WindowPointerLeave, callback)
+function Client:pinnacle_signal_v1_SignalService_WindowPointerLeave(callback, done)
+    return self:bidirectional_streaming_request(pinnacle.signal.v1.SignalService.WindowPointerLeave, callback, done)
 end
 pinnacle.signal.v1.SignalService.WindowFocused = {}
 pinnacle.signal.v1.SignalService.WindowFocused.service = "pinnacle.signal.v1.SignalService"
@@ -3260,11 +3284,12 @@ pinnacle.signal.v1.SignalService.WindowFocused.response = ".pinnacle.signal.v1.W
 ---@nodiscard
 ---
 ---@param callback fun(response: pinnacle.signal.v1.WindowFocusedResponse, stream: grpc_client.h2.Stream)
+---@param done? fun()
 ---
 ---@return grpc_client.h2.Stream | nil
 ---@return string | nil An error string, if any
-function Client:pinnacle_signal_v1_SignalService_WindowFocused(callback)
-    return self:bidirectional_streaming_request(pinnacle.signal.v1.SignalService.WindowFocused, callback)
+function Client:pinnacle_signal_v1_SignalService_WindowFocused(callback, done)
+    return self:bidirectional_streaming_request(pinnacle.signal.v1.SignalService.WindowFocused, callback, done)
 end
 pinnacle.signal.v1.SignalService.WindowTitleChanged = {}
 pinnacle.signal.v1.SignalService.WindowTitleChanged.service = "pinnacle.signal.v1.SignalService"
@@ -3281,11 +3306,12 @@ pinnacle.signal.v1.SignalService.WindowTitleChanged.response = ".pinnacle.signal
 ---@nodiscard
 ---
 ---@param callback fun(response: pinnacle.signal.v1.WindowTitleChangedResponse, stream: grpc_client.h2.Stream)
+---@param done? fun()
 ---
 ---@return grpc_client.h2.Stream | nil
 ---@return string | nil An error string, if any
-function Client:pinnacle_signal_v1_SignalService_WindowTitleChanged(callback)
-    return self:bidirectional_streaming_request(pinnacle.signal.v1.SignalService.WindowTitleChanged, callback)
+function Client:pinnacle_signal_v1_SignalService_WindowTitleChanged(callback, done)
+    return self:bidirectional_streaming_request(pinnacle.signal.v1.SignalService.WindowTitleChanged, callback, done)
 end
 pinnacle.signal.v1.SignalService.WindowLayoutModeChanged = {}
 pinnacle.signal.v1.SignalService.WindowLayoutModeChanged.service = "pinnacle.signal.v1.SignalService"
@@ -3302,11 +3328,12 @@ pinnacle.signal.v1.SignalService.WindowLayoutModeChanged.response = ".pinnacle.s
 ---@nodiscard
 ---
 ---@param callback fun(response: pinnacle.signal.v1.WindowLayoutModeChangedResponse, stream: grpc_client.h2.Stream)
+---@param done? fun()
 ---
 ---@return grpc_client.h2.Stream | nil
 ---@return string | nil An error string, if any
-function Client:pinnacle_signal_v1_SignalService_WindowLayoutModeChanged(callback)
-    return self:bidirectional_streaming_request(pinnacle.signal.v1.SignalService.WindowLayoutModeChanged, callback)
+function Client:pinnacle_signal_v1_SignalService_WindowLayoutModeChanged(callback, done)
+    return self:bidirectional_streaming_request(pinnacle.signal.v1.SignalService.WindowLayoutModeChanged, callback, done)
 end
 pinnacle.signal.v1.SignalService.WindowCreated = {}
 pinnacle.signal.v1.SignalService.WindowCreated.service = "pinnacle.signal.v1.SignalService"
@@ -3323,11 +3350,12 @@ pinnacle.signal.v1.SignalService.WindowCreated.response = ".pinnacle.signal.v1.W
 ---@nodiscard
 ---
 ---@param callback fun(response: pinnacle.signal.v1.WindowCreatedResponse, stream: grpc_client.h2.Stream)
+---@param done? fun()
 ---
 ---@return grpc_client.h2.Stream | nil
 ---@return string | nil An error string, if any
-function Client:pinnacle_signal_v1_SignalService_WindowCreated(callback)
-    return self:bidirectional_streaming_request(pinnacle.signal.v1.SignalService.WindowCreated, callback)
+function Client:pinnacle_signal_v1_SignalService_WindowCreated(callback, done)
+    return self:bidirectional_streaming_request(pinnacle.signal.v1.SignalService.WindowCreated, callback, done)
 end
 pinnacle.signal.v1.SignalService.WindowDestroyed = {}
 pinnacle.signal.v1.SignalService.WindowDestroyed.service = "pinnacle.signal.v1.SignalService"
@@ -3344,11 +3372,12 @@ pinnacle.signal.v1.SignalService.WindowDestroyed.response = ".pinnacle.signal.v1
 ---@nodiscard
 ---
 ---@param callback fun(response: pinnacle.signal.v1.WindowDestroyedResponse, stream: grpc_client.h2.Stream)
+---@param done? fun()
 ---
 ---@return grpc_client.h2.Stream | nil
 ---@return string | nil An error string, if any
-function Client:pinnacle_signal_v1_SignalService_WindowDestroyed(callback)
-    return self:bidirectional_streaming_request(pinnacle.signal.v1.SignalService.WindowDestroyed, callback)
+function Client:pinnacle_signal_v1_SignalService_WindowDestroyed(callback, done)
+    return self:bidirectional_streaming_request(pinnacle.signal.v1.SignalService.WindowDestroyed, callback, done)
 end
 pinnacle.signal.v1.SignalService.TagActive = {}
 pinnacle.signal.v1.SignalService.TagActive.service = "pinnacle.signal.v1.SignalService"
@@ -3365,11 +3394,12 @@ pinnacle.signal.v1.SignalService.TagActive.response = ".pinnacle.signal.v1.TagAc
 ---@nodiscard
 ---
 ---@param callback fun(response: pinnacle.signal.v1.TagActiveResponse, stream: grpc_client.h2.Stream)
+---@param done? fun()
 ---
 ---@return grpc_client.h2.Stream | nil
 ---@return string | nil An error string, if any
-function Client:pinnacle_signal_v1_SignalService_TagActive(callback)
-    return self:bidirectional_streaming_request(pinnacle.signal.v1.SignalService.TagActive, callback)
+function Client:pinnacle_signal_v1_SignalService_TagActive(callback, done)
+    return self:bidirectional_streaming_request(pinnacle.signal.v1.SignalService.TagActive, callback, done)
 end
 pinnacle.signal.v1.SignalService.TagCreated = {}
 pinnacle.signal.v1.SignalService.TagCreated.service = "pinnacle.signal.v1.SignalService"
@@ -3386,11 +3416,12 @@ pinnacle.signal.v1.SignalService.TagCreated.response = ".pinnacle.signal.v1.TagC
 ---@nodiscard
 ---
 ---@param callback fun(response: pinnacle.signal.v1.TagCreatedResponse, stream: grpc_client.h2.Stream)
+---@param done? fun()
 ---
 ---@return grpc_client.h2.Stream | nil
 ---@return string | nil An error string, if any
-function Client:pinnacle_signal_v1_SignalService_TagCreated(callback)
-    return self:bidirectional_streaming_request(pinnacle.signal.v1.SignalService.TagCreated, callback)
+function Client:pinnacle_signal_v1_SignalService_TagCreated(callback, done)
+    return self:bidirectional_streaming_request(pinnacle.signal.v1.SignalService.TagCreated, callback, done)
 end
 pinnacle.signal.v1.SignalService.TagRemoved = {}
 pinnacle.signal.v1.SignalService.TagRemoved.service = "pinnacle.signal.v1.SignalService"
@@ -3407,11 +3438,12 @@ pinnacle.signal.v1.SignalService.TagRemoved.response = ".pinnacle.signal.v1.TagR
 ---@nodiscard
 ---
 ---@param callback fun(response: pinnacle.signal.v1.TagRemovedResponse, stream: grpc_client.h2.Stream)
+---@param done? fun()
 ---
 ---@return grpc_client.h2.Stream | nil
 ---@return string | nil An error string, if any
-function Client:pinnacle_signal_v1_SignalService_TagRemoved(callback)
-    return self:bidirectional_streaming_request(pinnacle.signal.v1.SignalService.TagRemoved, callback)
+function Client:pinnacle_signal_v1_SignalService_TagRemoved(callback, done)
+    return self:bidirectional_streaming_request(pinnacle.signal.v1.SignalService.TagRemoved, callback, done)
 end
 pinnacle.signal.v1.SignalService.InputDeviceAdded = {}
 pinnacle.signal.v1.SignalService.InputDeviceAdded.service = "pinnacle.signal.v1.SignalService"
@@ -3428,11 +3460,12 @@ pinnacle.signal.v1.SignalService.InputDeviceAdded.response = ".pinnacle.signal.v
 ---@nodiscard
 ---
 ---@param callback fun(response: pinnacle.signal.v1.InputDeviceAddedResponse, stream: grpc_client.h2.Stream)
+---@param done? fun()
 ---
 ---@return grpc_client.h2.Stream | nil
 ---@return string | nil An error string, if any
-function Client:pinnacle_signal_v1_SignalService_InputDeviceAdded(callback)
-    return self:bidirectional_streaming_request(pinnacle.signal.v1.SignalService.InputDeviceAdded, callback)
+function Client:pinnacle_signal_v1_SignalService_InputDeviceAdded(callback, done)
+    return self:bidirectional_streaming_request(pinnacle.signal.v1.SignalService.InputDeviceAdded, callback, done)
 end
 pinnacle.tag.v1.TagService = {}
 pinnacle.tag.v1.TagService.Get = {}
@@ -3638,11 +3671,12 @@ pinnacle.v1.PinnacleService.Keepalive.response = ".pinnacle.v1.KeepaliveResponse
 ---@nodiscard
 ---
 ---@param callback fun(response: pinnacle.v1.KeepaliveResponse, stream: grpc_client.h2.Stream)
+---@param done? fun()
 ---
 ---@return grpc_client.h2.Stream | nil
 ---@return string | nil An error string, if any
-function Client:pinnacle_v1_PinnacleService_Keepalive(callback)
-    return self:bidirectional_streaming_request(pinnacle.v1.PinnacleService.Keepalive, callback)
+function Client:pinnacle_v1_PinnacleService_Keepalive(callback, done)
+    return self:bidirectional_streaming_request(pinnacle.v1.PinnacleService.Keepalive, callback, done)
 end
 pinnacle.v1.PinnacleService.Backend = {}
 pinnacle.v1.PinnacleService.Backend.service = "pinnacle.v1.PinnacleService"
