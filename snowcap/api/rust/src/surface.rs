@@ -37,7 +37,6 @@ pub enum SurfaceEvent<Msg> {
 }
 
 /// Implementation detail for [`SurfaceHandle`]
-#[derive(Clone)]
 enum Inner<Msg> {
     /// A handle to a layer surface.
     Layer(LayerHandle<Msg>),
@@ -47,9 +46,24 @@ enum Inner<Msg> {
     Popup(PopupHandle<Msg>),
 }
 
+impl<Msg> Clone for Inner<Msg> {
+    fn clone(&self) -> Self {
+        match &self {
+            Self::Layer(handle) => Self::Layer(handle.clone()),
+            Self::Decoration(handle) => Self::Decoration(handle.clone()),
+            Self::Popup(handle) => Self::Popup(handle.clone()),
+        }
+    }
+}
+
 /// A handle to a surface.
-#[derive(Clone)]
 pub struct SurfaceHandle<Msg>(Inner<Msg>);
+
+impl<Msg> Clone for SurfaceHandle<Msg> {
+    fn clone(&self) -> Self {
+        Self(self.0.clone())
+    }
+}
 
 impl<Msg> std::fmt::Debug for Inner<Msg> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

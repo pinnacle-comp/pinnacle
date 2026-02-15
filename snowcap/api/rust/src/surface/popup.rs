@@ -377,10 +377,18 @@ where
 }
 
 /// A handle to a popup surface.
-#[derive(Clone)]
 pub struct PopupHandle<Msg> {
     id: WidgetId,
     msg_sender: UnboundedSender<Option<Msg>>,
+}
+
+impl<Msg> Clone for PopupHandle<Msg> {
+    fn clone(&self) -> Self {
+        Self {
+            id: self.id,
+            msg_sender: self.msg_sender.clone(),
+        }
+    }
 }
 
 impl<Msg> PopupHandle<Msg> {

@@ -348,10 +348,18 @@ where
 }
 
 /// A handle to a layer surface.
-#[derive(Clone)]
 pub struct LayerHandle<Msg> {
     id: WidgetId,
     msg_sender: UnboundedSender<Option<Msg>>,
+}
+
+impl<Msg> Clone for LayerHandle<Msg> {
+    fn clone(&self) -> Self {
+        Self {
+            id: self.id,
+            msg_sender: self.msg_sender.clone(),
+        }
+    }
 }
 
 impl<Msg> std::fmt::Debug for LayerHandle<Msg> {
