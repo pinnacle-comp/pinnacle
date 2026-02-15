@@ -4566,6 +4566,7 @@ dependencies = [
  "futures",
  "hyper-util",
  "snowcap-api-defs",
+ "snowcap-derive",
  "thiserror 2.0.18",
  "tokio",
  "tokio-stream",
@@ -4584,6 +4585,14 @@ dependencies = [
  "tonic",
  "tonic-build",
  "walkdir",
+]
+
+[[package]]
+name = "snowcap-derive"
+version = "0.1.0"
+dependencies = [
+ "quote",
+ "syn 2.0.115",
 ]
 
 [[package]]
