@@ -220,10 +220,18 @@ where
 }
 
 /// A handle to a decoration surface.
-#[derive(Clone)]
 pub struct DecorationHandle<Msg> {
     id: WidgetId,
     msg_sender: UnboundedSender<Option<Msg>>,
+}
+
+impl<Msg> Clone for DecorationHandle<Msg> {
+    fn clone(&self) -> Self {
+        Self {
+            id: self.id,
+            msg_sender: self.msg_sender.clone(),
+        }
+    }
 }
 
 impl<Msg> std::fmt::Debug for DecorationHandle<Msg> {
