@@ -11,7 +11,7 @@ pub mod layer;
 pub mod popup;
 
 /// Events emitted by the surface to notify [`Program`] of state changes.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 #[non_exhaustive]
 pub enum SurfaceEvent<Msg> {
     /// Emitted when the surface is created.
@@ -34,6 +34,19 @@ pub enum SurfaceEvent<Msg> {
     FocusGained,
     /// Emitted when the surface loses focus.
     FocusLost,
+}
+
+impl<Msg> Clone for SurfaceEvent<Msg> {
+    fn clone(&self) -> Self {
+        match self {
+            Self::Created { surface } => Self::Created {
+                surface: surface.clone(),
+            },
+            Self::Closing => Self::Closing,
+            Self::FocusGained => Self::FocusGained,
+            Self::FocusLost => Self::FocusLost,
+        }
+    }
 }
 
 /// Implementation detail for [`SurfaceHandle`]
