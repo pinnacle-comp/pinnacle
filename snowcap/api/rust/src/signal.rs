@@ -1,5 +1,7 @@
 //! Widget signals.
 
+pub use snowcap_derive::Signal;
+
 use std::{
     any::{Any, TypeId},
     collections::HashMap,
