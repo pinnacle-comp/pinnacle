@@ -11,6 +11,7 @@ from_variants = "1.0.2"
 futures = { workspace = true }
 hyper-util = { workspace = true }
 snowcap-api-defs = { workspace = true }
+snowcap-derive = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 tokio-stream = { workspace = true }
