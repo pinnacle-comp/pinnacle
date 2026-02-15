@@ -51,7 +51,7 @@ function decoration.new_widget(args)
     ---@type table<integer, any>
     local callbacks = {}
 
-    local widget_def = args.program:view()
+    local widget_def = args.program:view() or widget.row({ children = {} })
 
     widget._traverse_widget_tree(widget_def, callbacks, widget._collect_callbacks)
 
@@ -96,16 +96,32 @@ function decoration.new_widget(args)
         end
     end
 
-    args.program:connect(widget_signal.redraw_needed, update_on_msg)
-    args.program:connect(widget_signal.send_message, update_on_msg)
-
     local handle = decoration_handle.new(decoration_id, update_on_msg)
 
-    args.program:created(widget.SurfaceHandle.from_decoration_handle(handle))
+    ---@type fun(oper: snowcap.widget.operation.Operation)
+    local forward_operation = function(oper)
+        handle:operate(oper)
+    end
 
-    local err = client:snowcap_widget_v1_WidgetService_GetWidgetEvents({
+    ---@type fun(): snowcap.signal.HandlerPolicy
+    local close_surface = function()
+        handle:close()
+
+        return require("snowcap.signal").HandlerPolicy.Discard
+    end
+
+    args.program:connect(widget_signal.redraw_needed, update_on_msg)
+    args.program:connect(widget_signal.send_message, update_on_msg)
+    args.program:connect(widget_signal.operation, forward_operation)
+    args.program:connect(widget_signal.request_close, close_surface)
+
+    args.program:event({
+        created = widget.SurfaceHandle.from_decoration_handle(handle),
+    })
+
+    err = client:snowcap_widget_v1_WidgetService_GetWidgetEvents({
         decoration_id = decoration_id,
-    }, function(response)
+    }, function(response) ---@diagnostic disable-line: redefined-local
         for _, event in ipairs(response.widget_events) do
             ---@diagnostic disable-next-line:invisible
             local msg = widget._message_from_event(callbacks, event)
@@ -120,14 +136,24 @@ function decoration.new_widget(args)
             end
         end
 
-        local widget_def = args.program:view()
+        ---@diagnostic disable-next-line:redefined-local
+        local widget_def = args.program:view() or widget.row({ children = {} })
         callbacks = {}
 
         widget._traverse_widget_tree(widget_def, callbacks, widget._collect_callbacks)
 
+        ---@diagnostic disable-next-line:redefined-local
         local _, err = client:snowcap_decoration_v1_DecorationService_UpdateDecoration({
             decoration_id = decoration_id,
             widget_def = widget.widget_def_into_api(widget_def),
+        })
+
+        if err then
+            log.error(err)
+        end
+    end, function()
+        args.program:event({
+            closing = {},
         })
     end)
 
@@ -160,7 +186,7 @@ end
 function DecorationHandle:operate(operation)
     local _, err = client:snowcap_decoration_v1_DecorationService_OperateDecoration({
         decoration_id = self.id,
-        operation = require("snowcap.widget.operation")._to_api(operation),
+        operation = require("snowcap.widget.operation")._to_api(operation), ---@diagnostic disable-line: invisible
     })
 
     if err then

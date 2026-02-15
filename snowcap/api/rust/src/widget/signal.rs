@@ -1,13 +1,15 @@
 use crate::signal::Signal;
 
 /// Notifies that a redraw is needed.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Signal, Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct RedrawNeeded;
 
-impl Signal for RedrawNeeded {}
+/// Request the surface to close itself.
+#[derive(Signal, Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct RequestClose;
 
 /// Emits a message that will update widgets.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Signal, Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Message<Msg>(pub Msg);
 
 impl<Msg> Message<Msg> {
@@ -28,10 +30,6 @@ impl<Msg> From<Msg> for Message<Msg> {
     }
 }
 
-impl<Msg: Clone + 'static> Signal for Message<Msg> {}
-
 /// Notifies that a widget closed.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Signal, Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Closed;
-
-impl Signal for Closed {}
