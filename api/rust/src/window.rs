@@ -38,7 +38,10 @@ use crate::{
     output::OutputHandle,
     signal::{SignalHandle, WindowSignal},
     tag::TagHandle,
-    util::{Batch, Direction, Point, ResultExt, Size},
+    util::{
+        Batch, Direction, Point, Size,
+        convert::{TryFromApi, TryIntoNative},
+    },
 };
 
 /// Gets handles to all windows.
@@ -242,20 +245,16 @@ pub enum TrySetFocusedError {
     WindowMinimized,
 }
 
-// We perform this bizarre construction because of Orphan rules that prevent us from implementing
-// `From` on the normal [`core::result::Result`] value
-impl TryFrom<pinnacle_api_defs::pinnacle::window::v1::TrySetFocusedResponse>
-    for TrySetFocusedError
-{
-    type Error = ();
+impl TryFromApi<pinnacle_api_defs::pinnacle::window::v1::TrySetFocusedResponse> for () {
+    type Error = TrySetFocusedError;
 
-    fn try_from(
-        value: pinnacle_api_defs::pinnacle::window::v1::TrySetFocusedResponse,
+    fn try_from_api(
+        api_value: pinnacle_api_defs::pinnacle::window::v1::TrySetFocusedResponse,
     ) -> Result<Self, Self::Error> {
         use pinnacle_api_defs::pinnacle::window::v1::try_set_focused_response::TrySetFocusedStatus;
-        match value.status() {
-            TrySetFocusedStatus::Success => Err(()),
-            TrySetFocusedStatus::WindowMinimized => Ok(Self::WindowMinimized),
+        match api_value.status() {
+            TrySetFocusedStatus::Success => Ok(()),
+            TrySetFocusedStatus::WindowMinimized => Err(TrySetFocusedError::WindowMinimized),
         }
     }
 }
@@ -475,8 +474,7 @@ impl WindowHandle {
             .block_on_tokio()
             .expect("successful rpc communication is expected")
             .into_inner()
-            .try_into()
-            .swap_ok_err()
+            .try_into_native()
     }
 
     /// Toggles this window between focused and unfocused.
@@ -500,8 +498,7 @@ impl WindowHandle {
             .block_on_tokio()
             .expect("successful rpc communication is expected")
             .into_inner()
-            .try_into()
-            .swap_ok_err()
+            .try_into_native()
     }
 
     /// Sets this window's decoration mode.
