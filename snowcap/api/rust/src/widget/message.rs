@@ -1,5 +1,7 @@
 use std::any::Any;
 
+pub use snowcap_derive::Universal;
+
 /// A universal message type.
 ///
 /// This is a suitable catch-all message for all built-in widget programs.
