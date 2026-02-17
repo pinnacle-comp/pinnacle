@@ -48,7 +48,11 @@
         };
 
         devShell = pkgs.mkShell {
-          nativeBuildInputs = [ pkgs.pkg-config pkgs.lua5_4 pkgs.libgbm ];
+          nativeBuildInputs = [
+            pkgs.pkg-config
+            pkgs.lua5_4
+            pkgs.libgbm
+          ];
           buildInputs = with pkgs; [
             # rust devel tools
             combinedToolchain
@@ -81,10 +85,10 @@
             pkg-config
 
             # winit on x11
-            xorg.libXcursor
-            xorg.libXrandr
-            xorg.libXi
-            xorg.libX11
+            libxcursor
+            libxrandr
+            libxi
+            libx11
           ];
 
           runtimeDependencies = with pkgs; [

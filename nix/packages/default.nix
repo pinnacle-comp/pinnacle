@@ -2,11 +2,10 @@
   rustPlatform,
   lib,
   pkg-config,
-  xorg,
   wayland,
   lua54Packages,
   lua5_4,
-  extraLuaPackages ? [],
+  extraLuaPackages ? [ ],
   protobuf,
   seatd,
   systemdLibs,
@@ -26,6 +25,10 @@
   fetchzip,
   fetchurl,
   libxcrypt,
+  libxcursor,
+  libxi,
+  libxrandr,
+  libx11,
 }:
 let
   pinnacle = ../..;
@@ -125,10 +128,10 @@ rustPlatform.buildRustPackage (finalAttrs: {
     lua5_4
 
     # winit on x11
-    xorg.libXcursor
-    xorg.libXrandr
-    xorg.libXi
-    xorg.libX11
+    libxcursor
+    libxrandr
+    libxi
+    libx11
   ];
 
   nativeBuildInputs = [
