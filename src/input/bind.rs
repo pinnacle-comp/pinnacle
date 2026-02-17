@@ -243,29 +243,35 @@ impl Keybinds {
                     should_clear_releases = true;
                 }
 
-                match edge {
-                    Edge::Press => {
-                        self.last_pressed_triggered_binds
-                            .entry(key)
-                            .or_default()
-                            .push(keybind.bind_data.id);
-                    }
-                    Edge::Release => unreachable!(),
-                }
-
                 let mut retain = true;
+                let mut captured = false;
 
                 if keybind.bind_data.is_quit_bind {
                     bind_action = BindAction::Quit;
+                    captured = true;
                 } else if keybind.bind_data.is_reload_config_bind {
                     bind_action = BindAction::ReloadConfig;
+                    captured = true;
                 } else if keybind.has_on_press
                     && same_layer
                     && (!shortcuts_inhibited && (!is_locked || keybind.bind_data.allow_when_locked))
                 {
                     retain = keybind.sender.send(edge).is_ok();
                     bind_action = BindAction::Suppress;
-                };
+                    captured = true;
+                }
+
+                if captured {
+                    match edge {
+                        Edge::Press => {
+                            self.last_pressed_triggered_binds
+                                .entry(key)
+                                .or_default()
+                                .push(keybind.bind_data.id);
+                        }
+                        Edge::Release => unreachable!(),
+                    }
+                }
 
                 retain
             } else {
