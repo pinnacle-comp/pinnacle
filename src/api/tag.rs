@@ -3,7 +3,6 @@ pub mod v1;
 use std::mem;
 
 use indexmap::IndexSet;
-use tracing::warn;
 
 use crate::{
     output::OutputName,
@@ -69,13 +68,9 @@ pub fn add(
     state: &mut State,
     tag_names: impl IntoIterator<Item = String>,
     output_name: OutputName,
-) -> Vec<Tag> {
+) -> Result<Vec<Tag>, TagAddError> {
     let Some(output) = output_name.output(&state.pinnacle) else {
-        warn!(
-            "Tried to add tags to output {} but it doesn't exist",
-            output_name.0
-        );
-        return Vec::new();
+        return Err(TagAddError::OutputDoesNotExist);
     };
 
     let new_tags = tag_names.into_iter().map(Tag::new).collect::<Vec<_>>();
@@ -106,7 +101,13 @@ pub fn add(
         state.pinnacle.signal_state.tag_created.signal(tag);
     }
 
-    new_tags
+    Ok(new_tags)
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub enum TagAddError {
+    /// Its impossible to add tags to an output that does not exist. Create it first
+    OutputDoesNotExist,
 }
 
 pub fn remove(state: &mut State, tags_to_remove: Vec<Tag>) {
