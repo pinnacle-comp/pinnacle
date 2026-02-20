@@ -680,6 +680,7 @@ local snowcap_layer_v1_KeyboardInteractivity = {
     KEYBOARD_INTERACTIVITY_NONE = 1,
     KEYBOARD_INTERACTIVITY_ON_DEMAND = 2,
     KEYBOARD_INTERACTIVITY_EXCLUSIVE = 3,
+    KEYBOARD_INTERACTIVITY_DEFAULT = 4,
 }
 
 ---@enum snowcap.layer.v1.Layer

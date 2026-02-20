@@ -54,6 +54,7 @@ local keyboard_interactivity = {
     NONE = 1,
     ON_DEMAND = 2,
     EXCLUSIVE = 3,
+    DEFAULT = 4,
 }
 
 ---@enum snowcap.layer.ZLayer
@@ -354,7 +355,7 @@ end
 function LayerHandle:handle_focus(focusable)
     if focusable.unfocus ~= nil then
         self:update({
-            keyboard_interactivity = keyboard_interactivity.NONE,
+            keyboard_interactivity = keyboard_interactivity.DEFAULT,
         })
     else
         self:update({
