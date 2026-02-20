@@ -59,7 +59,8 @@ impl layer_service_server::LayerService for super::LayerService {
 
         let keyboard_interactivity = match keyboard_interactivity {
             layer::v1::KeyboardInteractivity::Unspecified
-            | layer::v1::KeyboardInteractivity::None => wlr_layer::KeyboardInteractivity::None,
+            | layer::v1::KeyboardInteractivity::None
+            | layer::v1::KeyboardInteractivity::Default => wlr_layer::KeyboardInteractivity::None,
             layer::v1::KeyboardInteractivity::OnDemand => {
                 wlr_layer::KeyboardInteractivity::OnDemand
             }
@@ -184,16 +185,7 @@ impl layer_service_server::LayerService for super::LayerService {
                 }
                 _ => ExclusiveZone::Ignore,
             });
-        let keyboard_interactivity = match request.keyboard_interactivity() {
-            layer::v1::KeyboardInteractivity::Unspecified => None,
-            layer::v1::KeyboardInteractivity::None => Some(wlr_layer::KeyboardInteractivity::None),
-            layer::v1::KeyboardInteractivity::OnDemand => {
-                Some(wlr_layer::KeyboardInteractivity::OnDemand)
-            }
-            layer::v1::KeyboardInteractivity::Exclusive => {
-                Some(wlr_layer::KeyboardInteractivity::Exclusive)
-            }
-        };
+        let keyboard_interactivity = request.keyboard_interactivity();
         let z_layer = match request.layer() {
             layer::v1::Layer::Unspecified => None,
             layer::v1::Layer::Background => Some(wlr_layer::Layer::Background),
@@ -207,6 +199,22 @@ impl layer_service_server::LayerService for super::LayerService {
         run_unary(&self.sender, move |state| {
             let Some(layer) = state.layers.iter_mut().find(|layer| layer.layer_id == id) else {
                 return Ok(UpdateLayerResponse {});
+            };
+
+            let keyboard_interactivity = match keyboard_interactivity {
+                layer::v1::KeyboardInteractivity::Unspecified => None,
+                layer::v1::KeyboardInteractivity::None => {
+                    Some(wlr_layer::KeyboardInteractivity::None)
+                }
+                layer::v1::KeyboardInteractivity::OnDemand => {
+                    Some(wlr_layer::KeyboardInteractivity::OnDemand)
+                }
+                layer::v1::KeyboardInteractivity::Exclusive => {
+                    Some(wlr_layer::KeyboardInteractivity::Exclusive)
+                }
+                layer::v1::KeyboardInteractivity::Default => {
+                    Some(layer.default_keyboard_interactivity)
+                }
             };
 
             layer.update_properties(

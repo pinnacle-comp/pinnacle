@@ -78,7 +78,7 @@ pub struct SnowcapLayer {
     // COMPAT: 0.1
     max_size: Option<iced::Size<u32>>,
 
-    keyboard_interactivity: wlr_layer::KeyboardInteractivity,
+    pub default_keyboard_interactivity: wlr_layer::KeyboardInteractivity,
 
     pub layer_id: LayerId,
 
@@ -146,7 +146,7 @@ impl SnowcapLayer {
             surface,
             layer,
             max_size: max_size.map(|(w, h)| iced::Size::new(w, h)),
-            keyboard_interactivity,
+            default_keyboard_interactivity: keyboard_interactivity,
             output_size: iced::Size::new(1, 1),
             pending_output_size: None,
             wl_output: None,
@@ -195,8 +195,6 @@ impl SnowcapLayer {
         }
 
         if let Some(keyboard_interactivity) = keyboard_interactivity {
-            self.keyboard_interactivity = keyboard_interactivity;
-
             self.layer
                 .set_keyboard_interactivity(keyboard_interactivity);
         }

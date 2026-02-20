@@ -70,6 +70,8 @@ pub enum KeyboardInteractivity {
     OnDemand,
     /// This layer surface will take exclusive keyboard focus.
     Exclusive,
+    /// This layer surface will go back to the keyboard interactivity used on creation.
+    Default,
 }
 
 impl From<KeyboardInteractivity> for layer::v1::KeyboardInteractivity {
@@ -78,6 +80,7 @@ impl From<KeyboardInteractivity> for layer::v1::KeyboardInteractivity {
             KeyboardInteractivity::None => layer::v1::KeyboardInteractivity::None,
             KeyboardInteractivity::OnDemand => layer::v1::KeyboardInteractivity::OnDemand,
             KeyboardInteractivity::Exclusive => layer::v1::KeyboardInteractivity::Exclusive,
+            KeyboardInteractivity::Default => layer::v1::KeyboardInteractivity::Default,
         }
     }
 }
@@ -479,7 +482,7 @@ impl<Msg> LayerHandle<Msg> {
     fn handle_focus(&self, operation: &focusable::Focusable) {
         let _ = match operation {
             focusable::Focusable::Unfocus => {
-                self.set_keyboard_interactivity(KeyboardInteractivity::None)
+                self.set_keyboard_interactivity(KeyboardInteractivity::Default)
             }
             _ => self.set_keyboard_interactivity(KeyboardInteractivity::Exclusive),
         };
