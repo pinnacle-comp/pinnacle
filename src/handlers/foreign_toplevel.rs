@@ -21,6 +21,9 @@ impl ForeignToplevelHandler for State {
             return;
         };
 
+        // TODO make a nice `self.pinnacle` function somewhere for this?? IDK though >.<
+        let was_minimized = window.with_state(|state| state.minimized);
+        window.with_state_mut(|state| state.minimized = false);
         self.pinnacle.keyboard_focus_stack.set_focus(window.clone());
         self.pinnacle.raise_window(window.clone());
 
@@ -37,6 +40,11 @@ impl ForeignToplevelHandler for State {
                 crate::api::tag::switch_to(self, &tag);
             }
         } else {
+            // Need to re-layout things if the window was un-minimized.
+            if was_minimized {
+                self.pinnacle.update_xwayland_stacking_order();
+                self.pinnacle.request_layout(&output);
+            }
             self.schedule_render(&output);
         }
     }
@@ -103,7 +111,6 @@ impl ForeignToplevelHandler for State {
             });
     }
 
-    // TODO:
     fn set_minimized(&mut self, wl_surface: WlSurface) {
         let _span = tracy_client::span!("ForeignToplevelHandler::set_minimized");
 
@@ -121,7 +128,6 @@ impl ForeignToplevelHandler for State {
         self.schedule_render(&output);
     }
 
-    // TODO:
     fn unset_minimized(&mut self, wl_surface: WlSurface) {
         let _span = tracy_client::span!("ForeignToplevelHandler::unset_minimized");
 
