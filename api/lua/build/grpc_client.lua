@@ -315,9 +315,10 @@ end
 ---@param request_specifier grpc_client.RequestSpecifier
 ---@param data table The message to send. This should be in the structure of `request_specifier.request`.
 ---@param callback fun(response: table) A callback that will be run with every response
+---@param done? fun() A callback that will be run when the stream closes.
 ---
 ---@return string|nil error An error string, if any.
-function Client:server_streaming_request(request_specifier, data, callback)
+function Client:server_streaming_request(request_specifier, data, callback, done)
     local stream = StreamExtension.extend(self.conn:new_stream())
 
     local service = request_specifier.service
@@ -374,6 +375,10 @@ function Client:server_streaming_request(request_specifier, data, callback)
             end
         end
 
+        if done then
+            done()
+        end
+
         local trailers = stream:get_headers_with_retries(0.5, 5)
         if trailers then
             for name, value, never_index in trailers:each() do
@@ -395,10 +400,11 @@ end
 ---
 ---@param request_specifier grpc_client.RequestSpecifier
 ---@param callback fun(response: table, stream: grpc_client.h2.Stream) A callback that will be run with every response
+---@param done? fun() A callback that will be run when the stream closes.
 ---
 ---@return grpc_client.h2.Stream|nil
 ---@return string|nil error An error string, if any.
-function Client:bidirectional_streaming_request(request_specifier, callback)
+function Client:bidirectional_streaming_request(request_specifier, callback, done)
     local stream = StreamExtension.extend(self.conn:new_stream())
 
     local service = request_specifier.service
@@ -445,6 +451,10 @@ function Client:bidirectional_streaming_request(request_specifier, callback)
 
                 response_body = response_body:sub(msg_len + 6)
             end
+        end
+
+        if done then
+            done()
         end
 
         local trailers = stream:get_headers_with_retries(0.5, 5)

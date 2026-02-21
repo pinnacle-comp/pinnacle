@@ -20,7 +20,8 @@ use crate::{
     BlockOnTokio,
     client::Client,
     popup::{self, AsParent},
-    widget::{self, Program, WidgetDef, WidgetId, WidgetMessage, signal},
+    surface::SurfaceEvent,
+    widget::{self, Program, WidgetDef, WidgetId, WidgetMessage, operation, signal},
 };
 
 /// The bounds of a window or decoration.
@@ -81,7 +82,9 @@ where
 {
     let mut callbacks = HashMap::<WidgetId, WidgetMessage<Msg>>::new();
 
-    let widget_def = program.view();
+    let widget_def = program
+        .view()
+        .unwrap_or_else(|| widget::row::Row::new().into());
 
     widget_def.collect_messages(&mut callbacks, WidgetDef::message_collector);
 
@@ -105,6 +108,11 @@ where
         .into_inner();
 
     let (msg_send, mut msg_recv) = tokio::sync::mpsc::unbounded_channel::<Option<Msg>>();
+
+    let handle = DecorationHandle {
+        id: decoration_id.into(),
+        msg_sender: msg_send.clone(),
+    };
 
     if let Some(signaler) = program.signaler() {
         signaler.connect({
@@ -132,14 +140,29 @@ where
                 }
             }
         });
+
+        signaler.connect({
+            let handle = handle.clone();
+
+            move |operation: operation::Operation| {
+                handle.operate(operation);
+                crate::signal::HandlerPolicy::Keep
+            }
+        });
+
+        signaler.connect({
+            let handle = handle.clone();
+
+            move |_: signal::RequestClose| {
+                handle.close();
+                crate::signal::HandlerPolicy::Discard
+            }
+        });
     }
 
-    let handle = DecorationHandle {
-        id: decoration_id.into(),
-        msg_sender: msg_send,
-    };
-
-    program.created(handle.clone().into());
+    program.event(SurfaceEvent::Created {
+        surface: handle.clone().into(),
+    });
 
     tokio::spawn(async move {
         loop {
@@ -170,7 +193,9 @@ where
                 else => break,
             };
 
-            let widget_def = program.view();
+            let widget_def = program
+                .view()
+                .unwrap_or_else(|| widget::row::Row::new().into());
 
             callbacks.clear();
 
@@ -187,16 +212,26 @@ where
                 .await
                 .unwrap();
         }
+
+        program.event(SurfaceEvent::Closing);
     });
 
     Ok(handle)
 }
 
 /// A handle to a decoration surface.
-#[derive(Clone)]
 pub struct DecorationHandle<Msg> {
     id: WidgetId,
     msg_sender: UnboundedSender<Option<Msg>>,
+}
+
+impl<Msg> Clone for DecorationHandle<Msg> {
+    fn clone(&self) -> Self {
+        Self {
+            id: self.id,
+            msg_sender: self.msg_sender.clone(),
+        }
+    }
 }
 
 impl<Msg> std::fmt::Debug for DecorationHandle<Msg> {
