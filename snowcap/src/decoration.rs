@@ -192,11 +192,13 @@ impl SnowcapDecoration {
         self.surface.operate(operation)
     }
 
+    /// Returns whether the mouse interaction changed.
+    #[must_use]
     pub fn update(
         &mut self,
         runtime: &mut crate::runtime::Runtime,
         compositor: &mut crate::compositor::Compositor,
-    ) {
+    ) -> bool {
         let _span = tracy_client::span!("SnowcapDecoration::update");
 
         if let Some(extents) = self.pending_extents.take()
@@ -220,7 +222,9 @@ impl SnowcapDecoration {
 
         self.surface.bounds_changed(self.widget_bounds());
 
-        self.surface.update(runtime, compositor);
+        let update_status = self.surface.update(runtime, compositor);
+
+        update_status.interaction_changed
     }
 
     pub fn widget_bounds(&self) -> iced::Size<u32> {

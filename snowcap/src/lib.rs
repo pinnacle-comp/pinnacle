@@ -14,10 +14,17 @@ pub mod util;
 pub mod wgpu;
 pub mod widget;
 
+use iced::mouse::Interaction;
 use server::socket_dir;
-use smithay_client_toolkit::reexports::calloop::{self, EventLoop};
+use smithay_client_toolkit::reexports::{
+    calloop::{self, EventLoop},
+    client::protocol::wl_pointer::WlPointer,
+    protocols::wp::cursor_shape::v1::client::wp_cursor_shape_device_v1::WpCursorShapeDeviceV1,
+};
 use state::State;
 use tracing::info;
+
+use crate::handlers::pointer::iced_interaction_to_shape;
 
 /// A handle to the running Snowcap instance.
 #[derive(Debug, Clone)]
@@ -97,22 +104,77 @@ pub fn start(stop_signal_sender: Option<tokio::sync::oneshot::Sender<SnowcapHand
                 state.keyboard_focus = None;
             }
 
-            for layer in state.layers.iter_mut() {
-                layer.update(&mut state.runtime, state.compositor.as_mut().unwrap());
-                layer.draw_if_scheduled();
-            }
-
-            for deco in state.decorations.iter_mut() {
-                // INFO: Currently forcing tiny-skia on decorations because vulkan
-                // uses a lot of vram
-                deco.update(&mut state.runtime, state.tiny_skia.as_mut().unwrap());
-                deco.draw_if_scheduled();
-            }
-
-            for popup in state.popups.iter_mut() {
-                popup.update(&mut state.runtime, state.compositor.as_mut().unwrap());
-                popup.draw_if_scheduled();
-            }
+            state.update_surfaces();
         })
         .unwrap();
+}
+
+impl State {
+    fn update_surfaces(&mut self) {
+        for layer in self.layers.iter_mut() {
+            let interaction_changed =
+                layer.update(&mut self.runtime, self.compositor.as_mut().unwrap());
+
+            if interaction_changed
+                && let Some(pointer_focus) = self.pointer_focus.as_ref()
+                && &layer.surface.wl_surface == pointer_focus
+                && let Some(pointer) = self.pointer.as_ref()
+                && let Some(device) = self.cursor_shape_device.as_ref()
+                && let Some(serial) = self.last_pointer_enter_serial
+            {
+                Self::set_cursor_shape(layer.surface.mouse_interaction, device, serial, pointer);
+            }
+
+            layer.draw_if_scheduled();
+        }
+
+        for deco in self.decorations.iter_mut() {
+            // INFO: Currently forcing tiny-skia on decorations because vulkan
+            // uses a lot of vram
+            let interaction_changed =
+                deco.update(&mut self.runtime, self.tiny_skia.as_mut().unwrap());
+
+            if interaction_changed
+                && let Some(pointer_focus) = self.pointer_focus.as_ref()
+                && &deco.surface.wl_surface == pointer_focus
+                && let Some(pointer) = self.pointer.as_ref()
+                && let Some(device) = self.cursor_shape_device.as_ref()
+                && let Some(serial) = self.last_pointer_enter_serial
+            {
+                Self::set_cursor_shape(deco.surface.mouse_interaction, device, serial, pointer);
+            }
+
+            deco.draw_if_scheduled();
+        }
+
+        for popup in self.popups.iter_mut() {
+            let interaction_changed =
+                popup.update(&mut self.runtime, self.compositor.as_mut().unwrap());
+
+            if interaction_changed
+                && let Some(pointer_focus) = self.pointer_focus.as_ref()
+                && &popup.surface.wl_surface == pointer_focus
+                && let Some(pointer) = self.pointer.as_ref()
+                && let Some(device) = self.cursor_shape_device.as_ref()
+                && let Some(serial) = self.last_pointer_enter_serial
+            {
+                Self::set_cursor_shape(popup.surface.mouse_interaction, device, serial, pointer);
+            }
+
+            popup.draw_if_scheduled();
+        }
+    }
+
+    fn set_cursor_shape(
+        interaction: Interaction,
+        device: &WpCursorShapeDeviceV1,
+        last_enter_serial: u32,
+        wl_pointer: &WlPointer,
+    ) {
+        let shape = iced_interaction_to_shape(interaction);
+        match shape {
+            Some(shape) => device.set_shape(last_enter_serial, shape),
+            None => wl_pointer.set_cursor(last_enter_serial, None, 0, 0),
+        }
+    }
 }

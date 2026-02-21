@@ -90,7 +90,12 @@ impl SeatHandler for State {
 
         if capability == Capability::Pointer && self.pointer.is_none() {
             let pointer = self.seat_state.get_pointer(qh, &seat).unwrap();
+            let cursor_shape_device = self
+                .cursor_shape_manager
+                .get_shape_device(&pointer, &self.queue_handle);
+
             self.pointer = Some(pointer);
+            self.cursor_shape_device = Some(cursor_shape_device);
         }
     }
 
@@ -107,10 +112,13 @@ impl SeatHandler for State {
             keyboard.release();
         }
 
-        if capability == Capability::Pointer
-            && let Some(pointer) = self.pointer.take()
-        {
-            pointer.release();
+        if capability == Capability::Pointer {
+            if let Some(pointer) = self.pointer.take() {
+                pointer.release();
+            }
+            if let Some(device) = self.cursor_shape_device.take() {
+                device.destroy();
+            }
         }
     }
 
