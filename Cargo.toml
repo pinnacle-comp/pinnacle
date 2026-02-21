@@ -32,6 +32,7 @@ passfd = "0.1.6"
 pinnacle-api-defs = { path = "./pinnacle-api-defs" }
 prost = "0.13.5"
 snowcap-api-defs = { path = "./snowcap/snowcap-api-defs" }
+snowcap-derive = { path = "./snowcap/snowcap-derive" }
 snowcap-protocols = { path = "./snowcap/snowcap-protocols" }
 tempfile = "3.25.0"
 thiserror = "2.0.18"

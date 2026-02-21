@@ -1,22 +1,27 @@
 use anyhow::Context;
 use smithay_client_toolkit::reexports::protocols::xdg::shell::client::xdg_positioner;
 use snowcap_api_defs::snowcap::popup::v1::{
-    self, CloseRequest, NewPopupRequest, NewPopupResponse, OperatePopupRequest,
-    OperatePopupResponse, UpdatePopupRequest, UpdatePopupResponse, ViewRequest, ViewResponse,
-    new_popup_request, popup_service_server,
+    self, CloseRequest, GetPopupEventsRequest, GetPopupEventsResponse, NewPopupRequest,
+    NewPopupResponse, OperatePopupRequest, OperatePopupResponse, UpdatePopupRequest,
+    UpdatePopupResponse, ViewRequest, ViewResponse, new_popup_request, popup_service_server,
 };
 use tonic::{Request, Response, Status};
 
 use crate::{
-    api::{run_unary, run_unary_no_response, widget::v1::widget_def_to_fn},
+    api::{
+        ResponseStream, run_server_streaming_mapped, run_unary, run_unary_no_response,
+        widget::v1::widget_def_to_fn,
+    },
     decoration::DecorationId,
     layer::LayerId,
-    popup::{self, PopupId, SnowcapPopup},
+    popup::{self, PopupEvent, PopupId, SnowcapPopup},
     util::convert::{FromApi, TryFromApi},
 };
 
 #[tonic::async_trait]
 impl popup_service_server::PopupService for super::PopupService {
+    type GetPopupEventsStream = ResponseStream<GetPopupEventsResponse>;
+
     async fn new_popup(
         &self,
         request: Request<NewPopupRequest>,
@@ -263,6 +268,29 @@ impl popup_service_server::PopupService for super::PopupService {
         .await
     }
 
+    async fn get_popup_events(
+        &self,
+        request: Request<GetPopupEventsRequest>,
+    ) -> Result<Response<Self::GetPopupEventsStream>, Status> {
+        let request = request.into_inner();
+
+        let id = request.popup_id;
+
+        run_server_streaming_mapped(
+            &self.sender,
+            move |state, sender| {
+                if let Some(popup) = state.popup_for_id(PopupId(id)) {
+                    popup.popup_event_sender = Some(sender);
+                }
+            },
+            move |events| {
+                Ok(GetPopupEventsResponse {
+                    popup_events: events.into_iter().map(Into::into).collect(),
+                })
+            },
+        )
+    }
+
     async fn request_view(
         &self,
         request: Request<ViewRequest>,
@@ -419,5 +447,23 @@ impl FromApi<v1::ConstraintsAdjust> for xdg_positioner::ConstraintAdjustment {
         }
 
         ret
+    }
+}
+
+impl From<PopupEvent> for snowcap_api_defs::snowcap::popup::v1::PopupEvent {
+    fn from(value: PopupEvent) -> Self {
+        use crate::handlers::keyboard::KeyboardFocusEvent;
+        use snowcap_api_defs::snowcap::popup::v1::popup_event::{self, Focus};
+
+        let PopupEvent::Focus(f) = value;
+
+        match f {
+            KeyboardFocusEvent::FocusGained => Self {
+                event: Some(popup_event::Event::Focus(Focus::Gained.into())),
+            },
+            KeyboardFocusEvent::FocusLost => Self {
+                event: Some(popup_event::Event::Focus(Focus::Lost.into())),
+            },
+        }
     }
 }

@@ -6,7 +6,10 @@ use snowcap_api_defs::snowcap::{
     input::v1::{KeyboardKeyRequest, keyboard_key_request::Target},
     layer::{
         self,
-        v1::{CloseRequest, NewLayerRequest, OperateLayerRequest, UpdateLayerRequest, ViewRequest},
+        v1::{
+            CloseRequest, GetLayerEventsRequest, NewLayerRequest, OperateLayerRequest,
+            UpdateLayerRequest, ViewRequest,
+        },
     },
     widget::v1::{GetWidgetEventsRequest, get_widget_events_request},
 };
@@ -20,7 +23,8 @@ use crate::{
     client::Client,
     input::{KeyEvent, Modifiers},
     popup::{self, AsParent},
-    widget::{self, Program, WidgetDef, WidgetId, WidgetMessage, signal},
+    surface::SurfaceEvent,
+    widget::{self, Program, WidgetDef, WidgetId, WidgetMessage, operation, signal},
 };
 
 // TODO: change to bitflag
@@ -62,6 +66,8 @@ pub enum KeyboardInteractivity {
     OnDemand,
     /// This layer surface will take exclusive keyboard focus.
     Exclusive,
+    /// This layer surface will go back to the keyboard interactivity used on creation.
+    Default,
 }
 
 impl From<KeyboardInteractivity> for layer::v1::KeyboardInteractivity {
@@ -70,6 +76,7 @@ impl From<KeyboardInteractivity> for layer::v1::KeyboardInteractivity {
             KeyboardInteractivity::None => layer::v1::KeyboardInteractivity::None,
             KeyboardInteractivity::OnDemand => layer::v1::KeyboardInteractivity::OnDemand,
             KeyboardInteractivity::Exclusive => layer::v1::KeyboardInteractivity::Exclusive,
+            KeyboardInteractivity::Default => layer::v1::KeyboardInteractivity::Default,
         }
     }
 }
@@ -118,6 +125,31 @@ impl From<ZLayer> for layer::v1::Layer {
     }
 }
 
+/// The error type for layer event conversion.
+#[allow(missing_docs)]
+#[derive(Debug)]
+pub enum LayerEventError {
+    Unspecified,
+    Unknown,
+}
+
+impl<Msg> TryFrom<layer::v1::layer_event::Event> for SurfaceEvent<Msg> {
+    type Error = LayerEventError;
+
+    fn try_from(value: layer::v1::layer_event::Event) -> Result<Self, Self::Error> {
+        use layer::v1::layer_event::{Event, Focus};
+
+        let Event::Focus(f) = value;
+
+        match Focus::try_from(f) {
+            Ok(Focus::Gained) => Ok(Self::FocusGained),
+            Ok(Focus::Lost) => Ok(Self::FocusLost),
+            Ok(_) => Err(LayerEventError::Unspecified),
+            Err(_) => Err(LayerEventError::Unknown),
+        }
+    }
+}
+
 /// The error type for [`new_widget`].
 #[derive(thiserror::Error, Debug)]
 pub enum NewLayerError {
@@ -148,7 +180,9 @@ where
 {
     let mut callbacks = HashMap::<WidgetId, WidgetMessage<Msg>>::new();
 
-    let widget_def = program.view();
+    let widget_def = program
+        .view()
+        .unwrap_or_else(|| widget::row::Row::new().into());
 
     widget_def.collect_messages(&mut callbacks, WidgetDef::message_collector);
 
@@ -167,14 +201,24 @@ where
 
     let layer_id = response.into_inner().layer_id;
 
-    let mut event_stream = Client::widget()
+    let mut widget_event_stream = Client::widget()
         .get_widget_events(GetWidgetEventsRequest {
             id: Some(get_widget_events_request::Id::LayerId(layer_id)),
         })
         .block_on_tokio()?
         .into_inner();
 
+    let mut layer_event_stream = Client::layer()
+        .get_layer_events(GetLayerEventsRequest { layer_id })
+        .block_on_tokio()?
+        .into_inner();
+
     let (msg_send, mut msg_recv) = tokio::sync::mpsc::unbounded_channel::<Option<Msg>>();
+
+    let handle = LayerHandle {
+        id: layer_id.into(),
+        msg_sender: msg_send.clone(),
+    };
 
     if let Some(signaler) = program.signaler() {
         signaler.connect({
@@ -202,19 +246,34 @@ where
                 }
             }
         });
+
+        signaler.connect({
+            let handle = handle.clone();
+
+            move |operation: operation::Operation| {
+                handle.operate(operation);
+                crate::signal::HandlerPolicy::Keep
+            }
+        });
+
+        signaler.connect({
+            let handle = handle.clone();
+
+            move |_: signal::RequestClose| {
+                handle.close();
+                crate::signal::HandlerPolicy::Discard
+            }
+        });
     }
 
-    let handle = LayerHandle {
-        id: layer_id.into(),
-        msg_sender: msg_send,
-    };
-
-    program.created(handle.clone().into());
+    program.event(SurfaceEvent::Created {
+        surface: handle.clone().into(),
+    });
 
     tokio::spawn(async move {
         loop {
             tokio::select! {
-                Some(Ok(response)) = event_stream.next() => {
+                Some(Ok(response)) = widget_event_stream.next() => {
                     for widget_event in response.widget_events {
                         let Some(msg) = widget::message_from_event(&callbacks, widget_event) else {
                             continue;
@@ -237,10 +296,32 @@ where
 
                     continue;
                 }
+                Some(Ok(response)) = layer_event_stream.next() => {
+                    for layer_event in response.layer_events {
+                        let Some(event) = layer_event
+                            .event
+                            .and_then(|e| e.try_into().ok()) else {
+                                continue;
+                            };
+
+                        program.event(event);
+                    }
+
+                    if let Err(status) = Client::layer()
+                        .request_view(ViewRequest { layer_id })
+                        .block_on_tokio()
+                    {
+                        error!("Failed to request view for {layer_id}: {status}");
+                    }
+
+                    continue;
+                }
                 else => break,
             };
 
-            let widget_def = program.view();
+            let widget_def = program
+                .view()
+                .unwrap_or_else(|| widget::row::Row::new().into());
 
             callbacks.clear();
 
@@ -258,16 +339,26 @@ where
                 .await
                 .unwrap();
         }
+
+        program.event(SurfaceEvent::Closing);
     });
 
     Ok(handle)
 }
 
 /// A handle to a layer surface.
-#[derive(Clone)]
 pub struct LayerHandle<Msg> {
     id: WidgetId,
     msg_sender: UnboundedSender<Option<Msg>>,
+}
+
+impl<Msg> Clone for LayerHandle<Msg> {
+    fn clone(&self) -> Self {
+        Self {
+            id: self.id,
+            msg_sender: self.msg_sender.clone(),
+        }
+    }
 }
 
 impl<Msg> std::fmt::Debug for LayerHandle<Msg> {

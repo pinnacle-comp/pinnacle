@@ -24,6 +24,7 @@ enum KeyboardInteractivity {
   KEYBOARD_INTERACTIVITY_NONE = 1;
   KEYBOARD_INTERACTIVITY_ON_DEMAND = 2;
   KEYBOARD_INTERACTIVITY_EXCLUSIVE = 3;
+  KEYBOARD_INTERACTIVITY_DEFAULT = 4;
 }
 
 enum Layer {
@@ -71,10 +72,31 @@ message ViewRequest {
 }
 message ViewResponse {}
 
+message GetLayerEventsRequest {
+  uint32 layer_id = 1;
+}
+
+message LayerEvent {
+  enum Focus {
+    FOCUS_UNSPECIFIED = 0;
+    FOCUS_GAINED = 1;
+    FOCUS_LOST = 2;
+  }
+
+  oneof event {
+    Focus focus = 1;
+  }
+}
+
+message GetLayerEventsResponse {
+  repeated LayerEvent layer_events = 1;
+}
+
 service LayerService {
   rpc NewLayer(NewLayerRequest) returns (NewLayerResponse);
   rpc Close(CloseRequest) returns (google.protobuf.Empty);
   rpc OperateLayer(OperateLayerRequest) returns (OperateLayerResponse);
   rpc UpdateLayer(UpdateLayerRequest) returns (UpdateLayerResponse);
   rpc RequestView(ViewRequest) returns (ViewResponse);
+  rpc GetLayerEvents(GetLayerEventsRequest) returns (stream GetLayerEventsResponse);
 }

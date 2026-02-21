@@ -5,20 +5,26 @@ use smithay_client_toolkit::shell::wlr_layer;
 use snowcap_api_defs::snowcap::layer::{
     self,
     v1::{
-        CloseRequest, NewLayerRequest, NewLayerResponse, OperateLayerRequest, OperateLayerResponse,
-        UpdateLayerRequest, UpdateLayerResponse, ViewRequest, ViewResponse, layer_service_server,
+        CloseRequest, GetLayerEventsRequest, GetLayerEventsResponse, NewLayerRequest,
+        NewLayerResponse, OperateLayerRequest, OperateLayerResponse, UpdateLayerRequest,
+        UpdateLayerResponse, ViewRequest, ViewResponse, layer_service_server,
     },
 };
 use tonic::{Request, Response, Status};
 
 use crate::{
-    api::{run_unary, run_unary_no_response, widget::v1::widget_def_to_fn},
-    layer::{ExclusiveZone, LayerId, SnowcapLayer},
+    api::{
+        ResponseStream, run_server_streaming_mapped, run_unary, run_unary_no_response,
+        widget::v1::widget_def_to_fn,
+    },
+    layer::{ExclusiveZone, LayerEvent, LayerId, SnowcapLayer},
     util::convert::TryFromApi,
 };
 
 #[tonic::async_trait]
 impl layer_service_server::LayerService for super::LayerService {
+    type GetLayerEventsStream = ResponseStream<GetLayerEventsResponse>;
+
     async fn new_layer(
         &self,
         request: Request<NewLayerRequest>,
@@ -53,7 +59,8 @@ impl layer_service_server::LayerService for super::LayerService {
 
         let keyboard_interactivity = match keyboard_interactivity {
             layer::v1::KeyboardInteractivity::Unspecified
-            | layer::v1::KeyboardInteractivity::None => wlr_layer::KeyboardInteractivity::None,
+            | layer::v1::KeyboardInteractivity::None
+            | layer::v1::KeyboardInteractivity::Default => wlr_layer::KeyboardInteractivity::None,
             layer::v1::KeyboardInteractivity::OnDemand => {
                 wlr_layer::KeyboardInteractivity::OnDemand
             }
@@ -178,16 +185,7 @@ impl layer_service_server::LayerService for super::LayerService {
                 }
                 _ => ExclusiveZone::Ignore,
             });
-        let keyboard_interactivity = match request.keyboard_interactivity() {
-            layer::v1::KeyboardInteractivity::Unspecified => None,
-            layer::v1::KeyboardInteractivity::None => Some(wlr_layer::KeyboardInteractivity::None),
-            layer::v1::KeyboardInteractivity::OnDemand => {
-                Some(wlr_layer::KeyboardInteractivity::OnDemand)
-            }
-            layer::v1::KeyboardInteractivity::Exclusive => {
-                Some(wlr_layer::KeyboardInteractivity::Exclusive)
-            }
-        };
+        let keyboard_interactivity = request.keyboard_interactivity();
         let z_layer = match request.layer() {
             layer::v1::Layer::Unspecified => None,
             layer::v1::Layer::Background => Some(wlr_layer::Layer::Background),
@@ -203,6 +201,22 @@ impl layer_service_server::LayerService for super::LayerService {
                 return Ok(UpdateLayerResponse {});
             };
 
+            let keyboard_interactivity = match keyboard_interactivity {
+                layer::v1::KeyboardInteractivity::Unspecified => None,
+                layer::v1::KeyboardInteractivity::None => {
+                    Some(wlr_layer::KeyboardInteractivity::None)
+                }
+                layer::v1::KeyboardInteractivity::OnDemand => {
+                    Some(wlr_layer::KeyboardInteractivity::OnDemand)
+                }
+                layer::v1::KeyboardInteractivity::Exclusive => {
+                    Some(wlr_layer::KeyboardInteractivity::Exclusive)
+                }
+                layer::v1::KeyboardInteractivity::Default => {
+                    Some(layer.default_keyboard_interactivity)
+                }
+            };
+
             layer.update_properties(
                 z_layer,
                 anchor,
@@ -214,6 +228,29 @@ impl layer_service_server::LayerService for super::LayerService {
             Ok(UpdateLayerResponse {})
         })
         .await
+    }
+
+    async fn get_layer_events(
+        &self,
+        request: Request<GetLayerEventsRequest>,
+    ) -> Result<Response<Self::GetLayerEventsStream>, Status> {
+        let request = request.into_inner();
+
+        let id = request.layer_id;
+
+        run_server_streaming_mapped(
+            &self.sender,
+            move |state, sender| {
+                if let Some(layer) = state.layer_for_id(LayerId(id)) {
+                    layer.layer_event_sender = Some(sender);
+                }
+            },
+            move |events| {
+                Ok(GetLayerEventsResponse {
+                    layer_events: events.into_iter().map(Into::into).collect(),
+                })
+            },
+        )
     }
 
     async fn request_view(
@@ -236,5 +273,23 @@ impl layer_service_server::LayerService for super::LayerService {
             Ok(ViewResponse {})
         })
         .await
+    }
+}
+
+impl From<LayerEvent> for snowcap_api_defs::snowcap::layer::v1::LayerEvent {
+    fn from(value: LayerEvent) -> Self {
+        use crate::handlers::keyboard::KeyboardFocusEvent;
+        use snowcap_api_defs::snowcap::layer::v1::layer_event::{self, Focus};
+
+        let LayerEvent::Focus(f) = value;
+
+        match f {
+            KeyboardFocusEvent::FocusGained => Self {
+                event: Some(layer_event::Event::Focus(Focus::Gained.into())),
+            },
+            KeyboardFocusEvent::FocusLost => Self {
+                event: Some(layer_event::Event::Focus(Focus::Lost.into())),
+            },
+        }
     }
 }

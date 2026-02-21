@@ -175,6 +175,13 @@ local gravity = {
 }
 popup.gravity = gravity
 
+---@package
+---@enum snowcap.popup.FocusEvent
+local focus_event = {
+    GAINED = 1,
+    LOST = 2,
+}
+
 ---Popup position offset
 ---@class snowcap.popup.Offset
 ---@field x number
@@ -213,7 +220,7 @@ function popup.new_widget(args)
     ---@type table<integer, any>
     local callbacks = {}
 
-    local widget_def = args.program:view()
+    local widget_def = args.program:view() or widget.row({ children = {} })
 
     widget._traverse_widget_tree(widget_def, callbacks, widget._collect_callbacks)
 
@@ -274,12 +281,63 @@ function popup.new_widget(args)
         end
     end
 
-    args.program:connect(widget_signal.redraw_needed, update_on_msg)
-    args.program:connect(widget_signal.send_message, update_on_msg)
-
     local handle = popup_handle.new(popup_id, update_on_msg)
 
-    args.program:created(widget.SurfaceHandle.from_popup_handle(handle))
+    ---@type fun(oper: snowcap.widget.operation.Operation)
+    local forward_operation = function(oper)
+        handle:operate(oper)
+    end
+
+    ---@type fun(): snowcap.signal.HandlerPolicy
+    local close_surface = function()
+        handle:close()
+
+        return require("snowcap.signal").HandlerPolicy.Discard
+    end
+
+    args.program:connect(widget_signal.redraw_needed, update_on_msg)
+    args.program:connect(widget_signal.send_message, update_on_msg)
+    args.program:connect(widget_signal.operation, forward_operation)
+    args.program:connect(widget_signal.request_close, close_surface)
+
+    args.program:event({
+        created = widget.SurfaceHandle.from_popup_handle(handle),
+    })
+
+    err = client:snowcap_popup_v1_PopupService_GetPopupEvents({
+        popup_id = popup_id,
+    }, function(response) ---@diagnostic disable-line:redefined-local
+        response.popup_events = response.popup_events or {}
+
+        for _, popup_event in ipairs(response.popup_events) do
+            local focus = popup_event.focus --[[@as snowcap.popup.FocusEvent]]
+            ---@type snowcap.widget.SurfaceEvent?
+            local event = nil
+
+            if focus == focus_event.GAINED then
+                event = {
+                    focus_gained = {},
+                }
+            elseif focus == focus_event.LOST then
+                event = {
+                    focus_lost = {},
+                }
+            end
+
+            if event then
+                args.program:event(event)
+            end
+        end
+
+        ---@diagnostic disable-next-line: redefined-local
+        local _, err = client:snowcap_popup_v1_PopupService_RequestView({
+            popup_id = popup_id,
+        })
+
+        if err then
+            log.error(err)
+        end
+    end)
 
     err = client:snowcap_widget_v1_WidgetService_GetWidgetEvents({
         popup_id = popup_id,
@@ -299,7 +357,7 @@ function popup.new_widget(args)
         end
 
         ---@diagnostic disable-next-line:redefined-local
-        local widget_def = args.program:view()
+        local widget_def = args.program:view() or widget.row({ children = {} })
         callbacks = {}
 
         widget._traverse_widget_tree(widget_def, callbacks, widget._collect_callbacks)
@@ -313,6 +371,10 @@ function popup.new_widget(args)
         if err then
             log.error(err)
         end
+    end, function()
+        args.program:event({
+            closing = {},
+        })
     end)
 
     return handle

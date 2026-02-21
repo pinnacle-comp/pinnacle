@@ -4,13 +4,13 @@
 
 ---@class snowcap.widget.Program : snowcap.widget.base.Base
 ---@field update fun(self: self, message: any)
----@field view fun(self: self): snowcap.widget.WidgetDef
----Called when a surface has been created with this program.
+---@field view fun(self: self): snowcap.widget.WidgetDef?
+---Called to notify programs about the surface's state changes.
 ---
----A surface handle is provided to allow the program to manipulate
----the surface. This handle should be passed to any child programs
----to allow them to use it as well.
----@field created fun(self: self, handle: snowcap.widget.SurfaceHandle)?
+---The SurfaceEvent contains informations that programs may want to react. As
+---such it should be passed to child programs to allow them to react
+---accordingly.
+---@field event fun(self: self, event: snowcap.widget.SurfaceEvent)?
 
 ---@class snowcap.widget.Palette
 ---@field background snowcap.widget.Color
@@ -1238,15 +1238,33 @@ end
 
 widget.operation = require("snowcap.widget.operation")
 
+---Events emitted by the surface to notify `Program` of state changes.
+---@class snowcap.widget.SurfaceEvent
+---Emitted when the surface is created
+---
+---A SurfaceHandle is provided to allow the program to manipulate the surface.
+---The handle will remain valid for the lifetime of the program.
+---@field created? snowcap.widget.SurfaceHandle
+---Emitted when the surface is being closed.
+---
+---This event is emitted during the surface termination. If the program stored
+---the handle passed via SurfaceEvent.created, this handle should be considered
+---stale.
+---@field closing? {}
+---Emitted when the surface gains focus.
+---@field focus_gained? {}
+---Emitted when the surface loses focus.
+---@field focus_lost? {}
+
 ---A handle to a surface.
 ---
 ---@class snowcap.widget.SurfaceHandle
 ---A handle to a layer surface.
----@field layer snowcap.layer.LayerHandle?
+---@field package layer snowcap.layer.LayerHandle?
 ---A handle to a decoration surface.
----@field decoration snowcap.decoration.DecorationHandle?
+---@field package decoration snowcap.decoration.DecorationHandle?
 ---A handle to a popup surface.
----@field popup snowcap.popup.PopupHandle?
+---@field package popup snowcap.popup.PopupHandle?
 local SurfaceHandle = {}
 
 ---@type metatable
@@ -1301,55 +1319,6 @@ function SurfaceHandle.from_popup_handle(handle)
         popup = handle,
     }
     return setmetatable(self, SurfaceHandle_mt)
-end
-
----Closes this surface.
-function SurfaceHandle:close()
-    if self.layer then
-        self.layer:close()
-    end
-
-    if self.decoration then
-        self.decoration:close()
-    end
-
-    if self.popup then
-        self.popup:close()
-    end
-end
-
----Sends a message to this surface.
----
----@param message any
-function SurfaceHandle:send_message(message)
-    if self.layer then
-        self.layer:send_message(message)
-    end
-
-    if self.decoration then
-        self.decoration:send_message(message)
-    end
-
-    if self.popup then
-        self.popup:send_message(message)
-    end
-end
-
----Sends a operation to this surface.
----
----@param operation snowcap.widget.operation.Operation
-function SurfaceHandle:operate(operation)
-    if self.layer then
-        self.layer:operate(operation)
-    end
-
-    if self.decoration then
-        self.decoration:operate(operation)
-    end
-
-    if self.popup then
-        self.popup:operate(operation)
-    end
 end
 
 ---Converts this surface handle into a popup parent.

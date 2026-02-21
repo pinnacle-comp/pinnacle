@@ -12,4 +12,10 @@ return {
     send_message = "widget::send_message",
     ---Notifies that a widget closed.
     closed = "widget::closed",
+
+    ---Update widgets' internal state.
+    operation = "widget::operation",
+
+    ---Request the surface to close itself.
+    request_close = "widget::request_close",
 }

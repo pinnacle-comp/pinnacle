@@ -101,6 +101,7 @@ impl KeyboardHandler for State {
             .find(|sn_layer| sn_layer.layer.wl_surface() == surface)
         {
             layer.surface.focus_serial = Some(serial);
+            layer.keyboard_focus_changed(true);
             self.keyboard_focus = Some(KeyboardFocus::Layer(layer.layer.clone()));
         } else if let Some(popup) = self
             .popups
@@ -108,6 +109,7 @@ impl KeyboardHandler for State {
             .find(|p| p.popup.wl_surface() == surface)
         {
             popup.surface.focus_serial = Some(serial);
+            popup.keyboard_focus_changed(true);
             self.keyboard_focus = Some(KeyboardFocus::Popup(popup.popup.clone()))
         }
     }
@@ -122,9 +124,24 @@ impl KeyboardHandler for State {
     ) {
         match self.keyboard_focus.as_ref() {
             Some(KeyboardFocus::Layer(layer)) if layer.wl_surface() == surface => {
+                if let Some(sn_layer) = self
+                    .layers
+                    .iter_mut()
+                    .find(|sn_layer| &sn_layer.layer == layer)
+                {
+                    sn_layer.keyboard_focus_changed(false);
+                }
+
                 self.keyboard_focus = None;
             }
             Some(KeyboardFocus::Popup(popup)) if popup.wl_surface() == surface => {
+                if let Some(sn_popup) = self
+                    .popups
+                    .iter_mut()
+                    .find(|sn_popup| &sn_popup.popup == popup)
+                {
+                    sn_popup.keyboard_focus_changed(false);
+                }
                 self.keyboard_focus = None
             }
             _ => (),
@@ -270,4 +287,10 @@ delegate_keyboard!(State);
 pub enum KeyboardFocus {
     Layer(LayerSurface),
     Popup(Popup),
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum KeyboardFocusEvent {
+    FocusGained,
+    FocusLost,
 }

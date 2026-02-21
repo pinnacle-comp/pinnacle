@@ -43,8 +43,10 @@
 
 use snowcap_api_defs::snowcap::operation;
 
+use crate::signal::Signal;
+
 /// Update widgets' internal state.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Signal, Clone, PartialEq)]
 #[non_exhaustive]
 pub enum Operation {
     Focusable(focusable::Focusable),
