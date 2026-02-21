@@ -1,10 +1,11 @@
 mod v1;
 
 use smithay::{
+    backend::input::TouchSlot,
     reexports::wayland_protocols::xdg::{
         decoration::zv1::server::zxdg_toplevel_decoration_v1, shell::server,
     },
-    utils::{Point, SERIAL_COUNTER, Size},
+    utils::{Logical, Point, SERIAL_COUNTER, Size},
     wayland::seat::WaylandFocus,
 };
 use tracing::warn;
@@ -261,32 +262,48 @@ pub fn move_grab(state: &mut State, button: u32) {
     }
 }
 
-pub fn resize_grab(state: &mut State, button: u32) {
-    let Some(pointer_loc) = state
+pub fn touch_move_grab(state: &mut State, finger_id: u32) {
+    let slot = TouchSlot::from(Some(finger_id));
+    let Some(touch_loc) = state
         .pinnacle
-        .seat
-        .get_pointer()
-        .map(|ptr| ptr.current_location())
+        .touch_positions
+        .iter()
+        .find_map(|(s, l)| if s == &slot { Some(l) } else { None })
     else {
         return;
     };
-    let Some((pointer_focus, _window_loc)) = state.pinnacle.pointer_contents.focus_under.as_ref()
-    else {
+
+    let pointer_content = state.pinnacle.pointer_contents_under(*touch_loc);
+    let Some((pointer_focus, _)) = pointer_content.focus_under.as_ref() else {
         return;
     };
+
     let Some(window) = pointer_focus.window_for(&state.pinnacle) else {
         return;
     };
     let Some(wl_surf) = window.wl_surface() else {
         return;
     };
-    let Some(window_loc) = state.pinnacle.space.element_location(&window) else {
-        return;
-    };
+    let seat = state.pinnacle.seat.clone();
 
-    let pointer_loc: Point<i32, _> = pointer_loc.to_i32_round();
+    state.touch_move_request_server(
+        &wl_surf,
+        &seat,
+        SERIAL_COUNTER.next_serial(),
+        slot,
+        *touch_loc,
+    );
 
-    let window_size = window.geometry().size;
+    if let Some(output) = state.pinnacle.focused_output().cloned() {
+        state.schedule_render(&output);
+    }
+}
+
+fn compute_resize_edge(
+    pointer_loc: Point<i32, Logical>,
+    window_loc: Point<i32, Logical>,
+    window_size: Size<i32, Logical>,
+) -> server::xdg_toplevel::ResizeEdge {
     let window_width = Size::new(window_size.w, 0);
     let window_height = Size::new(0, window_size.h);
 
@@ -364,12 +381,88 @@ pub fn resize_grab(state: &mut State, button: u32) {
             .unwrap_or(server::xdg_toplevel::ResizeEdge::None)
     };
 
+    edges
+}
+
+pub fn resize_grab(state: &mut State, button: u32) {
+    let Some(pointer_loc) = state
+        .pinnacle
+        .seat
+        .get_pointer()
+        .map(|ptr| ptr.current_location())
+    else {
+        return;
+    };
+
+    let Some((pointer_focus, _window_loc)) = state.pinnacle.pointer_contents.focus_under.as_ref()
+    else {
+        return;
+    };
+    let Some(window) = pointer_focus.window_for(&state.pinnacle) else {
+        return;
+    };
+    let Some(wl_surf) = window.wl_surface() else {
+        return;
+    };
+    let Some(window_loc) = state.pinnacle.space.element_location(&window) else {
+        return;
+    };
+
+    let pointer_loc: Point<i32, _> = pointer_loc.to_i32_round();
+    let window_size = window.geometry().size;
+
+    let edges = compute_resize_edge(pointer_loc, window_loc, window_size);
+
     state.resize_request_server(
         &wl_surf,
         &state.pinnacle.seat.clone(),
         SERIAL_COUNTER.next_serial(),
         edges.into(),
         button,
+    );
+
+    if let Some(output) = state.pinnacle.focused_output().cloned() {
+        state.schedule_render(&output);
+    }
+}
+
+pub fn touch_resize_grab(state: &mut State, finger_id: u32) {
+    let slot = TouchSlot::from(Some(finger_id));
+
+    let Some(touch_loc) = state
+        .pinnacle
+        .touch_positions
+        .iter()
+        .find_map(|(s, l)| if s == &slot { Some(l) } else { None })
+    else {
+        return;
+    };
+
+    let pointer_content = state.pinnacle.pointer_contents_under(*touch_loc);
+    let Some((pointer_focus, _)) = pointer_content.focus_under.as_ref() else {
+        return;
+    };
+    let Some(window) = pointer_focus.window_for(&state.pinnacle) else {
+        return;
+    };
+    let Some(wl_surf) = window.wl_surface() else {
+        return;
+    };
+    let Some(window_loc) = state.pinnacle.space.element_location(&window) else {
+        return;
+    };
+
+    let window_size = window.geometry().size;
+
+    let edges = compute_resize_edge(touch_loc.to_i32_round(), window_loc, window_size);
+
+    state.touch_resize_request_server(
+        &wl_surf,
+        &state.pinnacle.seat.clone(),
+        SERIAL_COUNTER.next_serial(),
+        edges.into(),
+        slot,
+        *touch_loc,
     );
 
     if let Some(output) = state.pinnacle.focused_output().cloned() {

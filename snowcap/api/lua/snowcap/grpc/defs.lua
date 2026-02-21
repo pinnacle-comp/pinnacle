@@ -801,6 +801,7 @@ local snowcap_popup_v1_Gravity = {
 ---@field input_region snowcap.widget.v1.InputRegion?
 ---@field mouse_area snowcap.widget.v1.MouseArea?
 ---@field text_input snowcap.widget.v1.TextInput?
+---@field touch_area snowcap.widget.v1.TouchArea?
 
 ---@class snowcap.widget.v1.Text
 ---@field text string?
@@ -1021,6 +1022,39 @@ local snowcap_popup_v1_Gravity = {
 ---@field submit google.protobuf.Empty?
 ---@field paste string?
 
+---@class snowcap.widget.v1.TouchArea
+---@field child snowcap.widget.v1.WidgetDef?
+---@field widget_id integer?
+---@field on_down boolean?
+---@field on_up boolean?
+---@field on_enter boolean?
+---@field on_move boolean?
+---@field on_exit boolean?
+---@field on_cancel boolean?
+
+---@class snowcap.widget.v1.TouchArea.Event
+---@field down snowcap.widget.v1.TouchArea.DownEvent?
+---@field up snowcap.widget.v1.TouchArea.Finger?
+---@field enter snowcap.widget.v1.TouchArea.Finger?
+---@field move snowcap.widget.v1.TouchArea.MoveEvent?
+---@field exit snowcap.widget.v1.TouchArea.Finger?
+---@field cancel snowcap.widget.v1.TouchArea.Finger?
+
+---@class snowcap.widget.v1.TouchArea.Finger
+---@field id integer?
+
+---@class snowcap.widget.v1.TouchArea.Point
+---@field x number?
+---@field y number?
+
+---@class snowcap.widget.v1.TouchArea.DownEvent
+---@field finger snowcap.widget.v1.TouchArea.Finger?
+---@field point snowcap.widget.v1.TouchArea.Point?
+
+---@class snowcap.widget.v1.TouchArea.MoveEvent
+---@field finger snowcap.widget.v1.TouchArea.Finger?
+---@field point snowcap.widget.v1.TouchArea.Point?
+
 ---@class snowcap.widget.v1.GetWidgetEventsRequest
 ---@field layer_id integer?
 ---@field decoration_id integer?
@@ -1031,6 +1065,7 @@ local snowcap_popup_v1_Gravity = {
 ---@field button snowcap.widget.v1.Button.Event?
 ---@field mouse_area snowcap.widget.v1.MouseArea.Event?
 ---@field text_input snowcap.widget.v1.TextInput.Event?
+---@field touch_area snowcap.widget.v1.TouchArea.Event?
 
 ---@class snowcap.widget.v1.GetWidgetEventsResponse
 ---@field widget_events snowcap.widget.v1.WidgetEvent[]?
@@ -1427,6 +1462,12 @@ snowcap.widget.v1.TextInput.Icon = {}
 snowcap.widget.v1.TextInput.Style = {}
 snowcap.widget.v1.TextInput.Style.Inner = {}
 snowcap.widget.v1.TextInput.Event = {}
+snowcap.widget.v1.TouchArea = {}
+snowcap.widget.v1.TouchArea.Event = {}
+snowcap.widget.v1.TouchArea.Finger = {}
+snowcap.widget.v1.TouchArea.Point = {}
+snowcap.widget.v1.TouchArea.DownEvent = {}
+snowcap.widget.v1.TouchArea.MoveEvent = {}
 snowcap.widget.v1.GetWidgetEventsRequest = {}
 snowcap.widget.v1.WidgetEvent = {}
 snowcap.widget.v1.GetWidgetEventsResponse = {}
