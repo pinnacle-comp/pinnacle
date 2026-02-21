@@ -1,16 +1,19 @@
+use pinnacle_api::input::GestureType;
 use pinnacle_api_defs::pinnacle::input::{
     self,
     v1::{
         AccelProfile, BindInfo, BindRequest, BindResponse, ClickMethod, EnterBindLayerRequest,
-        GetBindInfosRequest, GetBindInfosResponse, GetBindLayerStackRequest,
-        GetBindLayerStackResponse, GetDeviceCapabilitiesRequest, GetDeviceCapabilitiesResponse,
-        GetDeviceInfoRequest, GetDeviceInfoResponse, GetDeviceTypeRequest, GetDeviceTypeResponse,
-        GetDevicesRequest, GetDevicesResponse, KeybindOnPressRequest, KeybindStreamRequest,
-        KeybindStreamResponse, MousebindOnPressRequest, MousebindStreamRequest,
-        MousebindStreamResponse, ScrollMethod, SendEventsMode, SetBindPropertiesRequest,
-        SetDeviceLibinputSettingRequest, SetDeviceMapTargetRequest, SetRepeatRateRequest,
-        SetXcursorRequest, SetXkbConfigRequest, SetXkbKeymapRequest, SwitchXkbLayoutRequest,
-        TapButtonMap, set_device_map_target_request::Target, switch_xkb_layout_request::Action,
+        GesturebindOnBeginRequest, GesturebindOnFinishRequest, GesturebindStreamRequest,
+        GesturebindStreamResponse, GetBindInfosRequest, GetBindInfosResponse,
+        GetBindLayerStackRequest, GetBindLayerStackResponse, GetDeviceCapabilitiesRequest,
+        GetDeviceCapabilitiesResponse, GetDeviceInfoRequest, GetDeviceInfoResponse,
+        GetDeviceTypeRequest, GetDeviceTypeResponse, GetDevicesRequest, GetDevicesResponse,
+        KeybindOnPressRequest, KeybindStreamRequest, KeybindStreamResponse,
+        MousebindOnPressRequest, MousebindStreamRequest, MousebindStreamResponse, ScrollMethod,
+        SendEventsMode, SetBindPropertiesRequest, SetDeviceLibinputSettingRequest,
+        SetDeviceMapTargetRequest, SetRepeatRateRequest, SetXcursorRequest, SetXkbConfigRequest,
+        SetXkbKeymapRequest, SwipeDirection, SwitchXkbLayoutRequest, TapButtonMap,
+        set_device_map_target_request::Target, switch_xkb_layout_request::Action,
     },
 };
 use smithay::reexports::input as libinput;
@@ -37,6 +40,7 @@ use super::InputService;
 impl input::v1::input_service_server::InputService for InputService {
     type KeybindStreamStream = ResponseStream<KeybindStreamResponse>;
     type MousebindStreamStream = ResponseStream<MousebindStreamResponse>;
+    type GesturebindStreamStream = ResponseStream<GesturebindStreamResponse>;
 
     async fn bind(&self, request: Request<BindRequest>) -> TonicResult<BindResponse> {
         let request = request.into_inner();
@@ -160,6 +164,39 @@ impl input::v1::input_service_server::InputService for InputService {
 
                     bind_id
                 }
+                input::v1::bind::Bind::Gesture(gesturebind) => {
+                    let fingers = gesturebind.fingers;
+
+                    let gesture_type = match gesturebind.gesture_type() {
+                        pinnacle_api_defs::pinnacle::input::v1::GestureType::Hold => {
+                            GestureType::Hold
+                        }
+                        pinnacle_api_defs::pinnacle::input::v1::GestureType::Pinch => {
+                            GestureType::Pinch
+                        }
+                        pinnacle_api_defs::pinnacle::input::v1::GestureType::Swipe => {
+                            GestureType::Swipe(gesturebind.direction.into())
+                        }
+                    };
+                    let bind_id = state
+                        .pinnacle
+                        .input_state
+                        .bind_state
+                        .gesturebinds
+                        .add_gesturebind(
+                            gesture_type,
+                            fingers,
+                            mods,
+                            layer,
+                            group,
+                            desc,
+                            quit,
+                            reload_config,
+                            allow_when_locked,
+                        );
+
+                    bind_id
+                }
             };
 
             Ok(BindResponse { bind_id })
@@ -235,6 +272,7 @@ impl input::v1::input_service_server::InputService for InputService {
             match input::v1::bind::Bind::Key(input::v1::Keybind::default()) {
                 input::v1::bind::Bind::Key(_) => (),
                 input::v1::bind::Bind::Mouse(_) => (),
+                input::v1::bind::Bind::Gesture(_) => (),
             }
 
             let push_mods = |mods: &mut Vec<input::v1::Modifier>,
@@ -389,8 +427,96 @@ impl input::v1::input_service_server::InputService for InputService {
                     }
                 });
 
+            let gesturebind_infos = state
+                .pinnacle
+                .input_state
+                .bind_state
+                .gesturebinds
+                .id_map
+                .values()
+                .map(|gesturebind| {
+                    let gesturebind = gesturebind.borrow();
+
+                    let mut mods = Vec::new();
+                    let mut ignore_mods = Vec::new();
+
+                    push_mods(
+                        &mut mods,
+                        &mut ignore_mods,
+                        gesturebind.bind_data.mods.shift,
+                        input::v1::Modifier::Shift,
+                    );
+                    push_mods(
+                        &mut mods,
+                        &mut ignore_mods,
+                        gesturebind.bind_data.mods.ctrl,
+                        input::v1::Modifier::Ctrl,
+                    );
+                    push_mods(
+                        &mut mods,
+                        &mut ignore_mods,
+                        gesturebind.bind_data.mods.alt,
+                        input::v1::Modifier::Alt,
+                    );
+                    push_mods(
+                        &mut mods,
+                        &mut ignore_mods,
+                        gesturebind.bind_data.mods.super_,
+                        input::v1::Modifier::Super,
+                    );
+                    push_mods(
+                        &mut mods,
+                        &mut ignore_mods,
+                        gesturebind.bind_data.mods.iso_level3_shift,
+                        input::v1::Modifier::IsoLevel3Shift,
+                    );
+                    push_mods(
+                        &mut mods,
+                        &mut ignore_mods,
+                        gesturebind.bind_data.mods.iso_level5_shift,
+                        input::v1::Modifier::IsoLevel5Shift,
+                    );
+
+                    let direction = match gesturebind.gesture_type {
+                        GestureType::Hold => SwipeDirection::None,
+                        GestureType::Pinch => SwipeDirection::None,
+                        GestureType::Swipe(swipe_direction) => swipe_direction.into(),
+                    };
+
+                    let gesture_type: pinnacle_api_defs::pinnacle::input::v1::GestureType =
+                        gesturebind.gesture_type.into();
+
+                    BindInfo {
+                        bind_id: gesturebind.bind_data.id,
+                        bind: Some(input::v1::Bind {
+                            mods: mods.into_iter().map(|m| m.into()).collect(),
+                            ignore_mods: ignore_mods.into_iter().map(|m| m.into()).collect(),
+                            layer_name: gesturebind.bind_data.layer.clone(),
+                            properties: Some(input::v1::BindProperties {
+                                group: Some(gesturebind.bind_data.group.clone()),
+                                description: Some(gesturebind.bind_data.desc.clone()),
+                                quit: Some(gesturebind.bind_data.is_quit_bind),
+                                reload_config: Some(gesturebind.bind_data.is_reload_config_bind),
+                                allow_when_locked: Some(gesturebind.bind_data.allow_when_locked),
+                            }),
+                            #[allow(
+                                clippy::useless_conversion,
+                                clippy::unnecessary_fallible_conversions
+                            )]
+                            bind: Some(input::v1::bind::Bind::Gesture(input::v1::Gesturebind {
+                                fingers: gesturebind.fingers,
+                                direction: direction.into(),
+                                gesture_type: gesture_type.into(),
+                            })),
+                        }),
+                    }
+                });
+
             Ok(GetBindInfosResponse {
-                bind_infos: keybind_infos.chain(mousebind_infos).collect(),
+                bind_infos: keybind_infos
+                    .chain(mousebind_infos)
+                    .chain(gesturebind_infos)
+                    .collect(),
             })
         })
         .await
@@ -517,6 +643,53 @@ impl input::v1::input_service_server::InputService for InputService {
         .await
     }
 
+    async fn gesturebind_stream(
+        &self,
+        request: Request<GesturebindStreamRequest>,
+    ) -> TonicResult<Self::GesturebindStreamStream> {
+        let request = request.into_inner();
+
+        let bind_id = request.bind_id;
+
+        run_server_streaming(&self.sender, move |state, sender| {
+            let Some(bind) = state
+                .pinnacle
+                .input_state
+                .bind_state
+                .gesturebinds
+                .id_map
+                .get(&bind_id)
+            else {
+                return Err(Status::not_found(format!("bind {bind_id} was not found")));
+            };
+
+            let Some(mut recv) = bind.borrow_mut().recv.take() else {
+                return Err(Status::already_exists(format!(
+                    "bind {bind_id} already has a stream set up"
+                )));
+            };
+
+            tokio::spawn(async move {
+                while let Some(edge) = recv.recv().await {
+                    let msg = Ok(GesturebindStreamResponse {
+                        edge: match edge {
+                            Edge::Press => input::v1::Edge::Press,
+                            Edge::Release => input::v1::Edge::Release,
+                        }
+                        .into(),
+                    });
+                    if sender.send(msg).is_err() {
+                        break;
+                    }
+                    tokio::task::yield_now().await;
+                }
+            });
+
+            Ok(())
+        })
+        .await
+    }
+
     async fn keybind_on_press(&self, request: Request<KeybindOnPressRequest>) -> TonicResult<()> {
         let bind_id = request.into_inner().bind_id;
 
@@ -544,6 +717,40 @@ impl input::v1::input_service_server::InputService for InputService {
                 .bind_state
                 .mousebinds
                 .set_mousebind_has_on_press(bind_id);
+        })
+        .await
+    }
+
+    async fn gesturebind_on_begin(
+        &self,
+        request: Request<GesturebindOnBeginRequest>,
+    ) -> TonicResult<()> {
+        let bind_id = request.into_inner().bind_id;
+
+        run_unary_no_response(&self.sender, move |state| {
+            state
+                .pinnacle
+                .input_state
+                .bind_state
+                .gesturebinds
+                .set_gesturebind_has_on_begin(bind_id);
+        })
+        .await
+    }
+
+    async fn gesturebind_on_finish(
+        &self,
+        request: Request<GesturebindOnFinishRequest>,
+    ) -> TonicResult<()> {
+        let bind_id = request.into_inner().bind_id;
+
+        run_unary_no_response(&self.sender, move |state| {
+            state
+                .pinnacle
+                .input_state
+                .bind_state
+                .gesturebinds
+                .set_gesturebind_has_on_finish(bind_id);
         })
         .await
     }

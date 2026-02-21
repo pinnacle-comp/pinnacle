@@ -6,6 +6,7 @@ use std::{
 };
 
 use indexmap::{IndexMap, map::Entry};
+use pinnacle_api::input::GestureType;
 use smithay::input::keyboard::ModifiersState;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use xkbcommon::xkb::Keysym;
@@ -17,6 +18,7 @@ pub struct BindState {
     pub layer_stack: Vec<String>,
     pub keybinds: Keybinds,
     pub mousebinds: Mousebinds,
+    pub gesturebinds: Gesturebinds,
 }
 
 impl BindState {
@@ -25,6 +27,8 @@ impl BindState {
         self.keybinds.keysym_map.clear();
         self.mousebinds.id_map.clear();
         self.mousebinds.button_map.clear();
+        self.gesturebinds.id_map.clear();
+        self.gesturebinds.gesture_map.clear();
     }
 
     pub fn enter_layer(&mut self, layer: Option<String>) {
@@ -50,6 +54,8 @@ impl BindState {
             bind.borrow_mut().bind_data.group = group;
         } else if let Some(bind) = self.mousebinds.id_map.get(&bind_id) {
             bind.borrow_mut().bind_data.group = group;
+        } else if let Some(bind) = self.gesturebinds.id_map.get(&bind_id) {
+            bind.borrow_mut().bind_data.group = group;
         }
     }
 
@@ -57,6 +63,8 @@ impl BindState {
         if let Some(bind) = self.keybinds.id_map.get(&bind_id) {
             bind.borrow_mut().bind_data.desc = desc;
         } else if let Some(bind) = self.mousebinds.id_map.get(&bind_id) {
+            bind.borrow_mut().bind_data.desc = desc;
+        } else if let Some(bind) = self.gesturebinds.id_map.get(&bind_id) {
             bind.borrow_mut().bind_data.desc = desc;
         }
     }
@@ -66,6 +74,8 @@ impl BindState {
             bind.borrow_mut().bind_data.is_quit_bind = quit;
         } else if let Some(bind) = self.mousebinds.id_map.get(&bind_id) {
             bind.borrow_mut().bind_data.is_quit_bind = quit;
+        } else if let Some(bind) = self.gesturebinds.id_map.get(&bind_id) {
+            bind.borrow_mut().bind_data.is_quit_bind = quit;
         }
     }
 
@@ -74,6 +84,8 @@ impl BindState {
             bind.borrow_mut().bind_data.is_reload_config_bind = reload_config;
         } else if let Some(bind) = self.mousebinds.id_map.get(&bind_id) {
             bind.borrow_mut().bind_data.is_reload_config_bind = reload_config;
+        } else if let Some(bind) = self.gesturebinds.id_map.get(&bind_id) {
+            bind.borrow_mut().bind_data.is_reload_config_bind = reload_config;
         }
     }
 
@@ -81,6 +93,8 @@ impl BindState {
         if let Some(bind) = self.keybinds.id_map.get(&bind_id) {
             bind.borrow_mut().bind_data.allow_when_locked = allow_when_locked;
         } else if let Some(bind) = self.mousebinds.id_map.get(&bind_id) {
+            bind.borrow_mut().bind_data.allow_when_locked = allow_when_locked;
+        } else if let Some(bind) = self.gesturebinds.id_map.get(&bind_id) {
             bind.borrow_mut().bind_data.allow_when_locked = allow_when_locked;
         }
     }
@@ -529,5 +543,150 @@ impl Mousebinds {
             return;
         };
         mousebind.borrow_mut().has_on_press = true;
+    }
+}
+
+// Gesturebinds
+
+#[derive(Debug)]
+pub struct Gesturebind {
+    pub bind_data: BindData,
+    pub fingers: u32,
+    pub gesture_type: GestureType,
+    sender: UnboundedSender<Edge>,
+    pub recv: Option<UnboundedReceiver<Edge>>,
+    pub has_on_begin: bool,
+}
+
+#[derive(Debug, Default)]
+pub struct Gesturebinds {
+    pub id_map: IndexMap<u32, Rc<RefCell<Gesturebind>>>,
+    gesture_map: IndexMap<(GestureType, u32), Vec<Weak<RefCell<Gesturebind>>>>,
+
+    pub last_pressed_triggered_binds: HashMap<(GestureType, u32), Vec<u32>>,
+}
+
+// TODO: may be able to dedup with Keybinds above
+impl Gesturebinds {
+    /// Notifies configs that a gesture was executed.
+    ///
+    /// Returns whether the gesture should be suppressed (not sent to the client).
+    pub fn gesture(
+        &mut self,
+        gesture_type: GestureType,
+        fingers: u32,
+        mods: ModifiersState,
+        edge: Edge,
+        current_layer: Option<String>,
+        is_locked: bool,
+    ) -> BindAction {
+        let Some(gesturebinds) = self.gesture_map.get_mut(&(gesture_type, fingers)) else {
+            return BindAction::Forward;
+        };
+
+        if edge == Edge::Release {
+            let mut bind_action = BindAction::Forward;
+
+            for gesturebind in gesturebinds {
+                let Some(gesturebind) = gesturebind.upgrade() else {
+                    continue;
+                };
+
+                if !gesturebind.borrow().bind_data.mods.matches(mods) {
+                    continue;
+                }
+
+                if gesturebind.borrow().gesture_type != gesture_type {
+                    continue;
+                }
+
+                if gesturebind.borrow().bind_data.layer != current_layer {
+                    continue;
+                }
+
+                if gesturebind.borrow().bind_data.is_quit_bind {
+                    return BindAction::Quit;
+                }
+                if gesturebind.borrow().bind_data.is_reload_config_bind {
+                    return BindAction::ReloadConfig;
+                }
+                if is_locked && !gesturebind.borrow().bind_data.allow_when_locked {
+                    return BindAction::Forward;
+                }
+                if gesturebind.borrow().has_on_begin {
+                    bind_action = BindAction::Suppress;
+                }
+                let _sent = gesturebind.borrow().sender.send(Edge::Release).is_ok();
+            }
+
+            return bind_action;
+        }
+
+        BindAction::Forward
+    }
+
+    pub fn add_gesturebind(
+        &mut self,
+        gesture_type: GestureType,
+        fingers: u32,
+        mods: ModMask,
+        layer: Option<String>,
+        group: String,
+        desc: String,
+        is_quit_bind: bool,
+        is_reload_config_bind: bool,
+        allow_when_locked: bool,
+    ) -> u32 {
+        let id = BIND_ID_COUNTER.fetch_add(1, Ordering::Relaxed);
+
+        let (sender, recv) = tokio::sync::mpsc::unbounded_channel::<Edge>();
+
+        let gesturebind = Rc::new(RefCell::new(Gesturebind {
+            bind_data: BindData {
+                id,
+                mods,
+                layer,
+                group,
+                desc,
+                is_quit_bind,
+                is_reload_config_bind,
+                allow_when_locked,
+            },
+            gesture_type,
+            fingers,
+            sender,
+            recv: Some(recv),
+            has_on_begin: false,
+        }));
+
+        assert!(
+            self.id_map.insert(id, gesturebind.clone()).is_none(),
+            "new keybind should have unique id"
+        );
+
+        self.gesture_map
+            .entry((gesture_type, fingers))
+            .or_default()
+            .push(Rc::downgrade(&gesturebind));
+
+        id
+    }
+
+    pub fn remove_gesturebind(&mut self, gesturebind_id: u32) {
+        self.id_map.shift_remove(&gesturebind_id);
+    }
+
+    pub fn set_gesturebind_has_on_begin(&self, gesturebind_id: u32) {
+        let Some(gesturebind) = self.id_map.get(&gesturebind_id) else {
+            return;
+        };
+        gesturebind.borrow_mut().has_on_begin = true;
+    }
+
+    pub fn set_gesturebind_has_on_finish(&self, gesturebind_id: u32) {
+        let Some(gesturebind) = self.id_map.get(&gesturebind_id) else {
+            return;
+        };
+        gesturebind.borrow_mut().has_on_begin = false;
     }
 }

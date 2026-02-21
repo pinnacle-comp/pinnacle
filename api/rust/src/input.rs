@@ -10,7 +10,8 @@ use num_enum::{FromPrimitive, IntoPrimitive};
 use pinnacle_api_defs::pinnacle::input::{
     self,
     v1::{
-        BindProperties, BindRequest, EnterBindLayerRequest, GetBindInfosRequest,
+        BindProperties, BindRequest, EnterBindLayerRequest, GesturebindOnBeginRequest,
+        GesturebindOnFinishRequest, GesturebindStreamRequest, GetBindInfosRequest,
         KeybindOnPressRequest, KeybindStreamRequest, MousebindOnPressRequest,
         MousebindStreamRequest, SetBindPropertiesRequest, SetRepeatRateRequest, SetXcursorRequest,
         SetXkbConfigRequest, SetXkbKeymapRequest, SwitchXkbLayoutRequest,
@@ -174,6 +175,11 @@ impl BindLayer {
     /// Creates a mousebind on this layer.
     pub fn mousebind(&self, mods: Mod, button: MouseButton) -> Mousebind {
         new_mousebind(mods, button, self).block_on_tokio()
+    }
+
+    /// Creates a gesturebind on this layer.
+    pub fn gesturebind(&self, mods: Mod, gesture_type: GestureType, fingers: u32) -> Gesturebind {
+        new_gesturebind(mods, gesture_type, fingers, self).block_on_tokio()
     }
 
     /// Enters this layer, causing only its binds to be in effect.
@@ -524,6 +530,228 @@ async fn new_mousebind_stream(
     send
 }
 
+// Gesturebinds
+
+/// The direction of a swipe gesture
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, FromPrimitive, IntoPrimitive)]
+#[repr(i32)]
+pub enum SwipeDirection {
+    /// Moving Down
+    Down = 0,
+    /// Moving Left
+    Left = 1,
+    /// Moving Right
+    Right = 2,
+    /// Moving Up
+    Up = 3,
+    /// Moving diagonally down to the left
+    DownLeft = 4,
+    /// Moving diagonally down to the right
+    DownRight = 5,
+    /// Moving diagonally up to the left
+    UpLeft = 6,
+    /// Moving diagonally up to the right
+    UpRight = 7,
+    /// No direction
+    None = 8,
+    /// unknown direction
+    #[num_enum(catch_all)]
+    Unknown(i32),
+}
+
+impl From<SwipeDirection> for pinnacle_api_defs::pinnacle::input::v1::SwipeDirection {
+    fn from(other: SwipeDirection) -> pinnacle_api_defs::pinnacle::input::v1::SwipeDirection {
+        match other {
+            SwipeDirection::Down => pinnacle_api_defs::pinnacle::input::v1::SwipeDirection::Down,
+            SwipeDirection::Left => pinnacle_api_defs::pinnacle::input::v1::SwipeDirection::Left,
+            SwipeDirection::Right => pinnacle_api_defs::pinnacle::input::v1::SwipeDirection::Right,
+            SwipeDirection::Up => pinnacle_api_defs::pinnacle::input::v1::SwipeDirection::Up,
+            SwipeDirection::DownLeft => {
+                pinnacle_api_defs::pinnacle::input::v1::SwipeDirection::DownLeft
+            }
+            SwipeDirection::DownRight => {
+                pinnacle_api_defs::pinnacle::input::v1::SwipeDirection::DownRight
+            }
+            SwipeDirection::UpLeft => {
+                pinnacle_api_defs::pinnacle::input::v1::SwipeDirection::UpLeft
+            }
+            SwipeDirection::UpRight => {
+                pinnacle_api_defs::pinnacle::input::v1::SwipeDirection::UpRight
+            }
+            SwipeDirection::None | SwipeDirection::Unknown(_) => {
+                pinnacle_api_defs::pinnacle::input::v1::SwipeDirection::None
+            }
+        }
+    }
+}
+
+/// The type of gesture
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
+pub enum GestureType {
+    /// Hold gesture
+    Hold,
+    /// Pinch gesture
+    Pinch,
+    /// Swipe gesture with direction
+    Swipe(SwipeDirection),
+}
+
+impl From<GestureType> for pinnacle_api_defs::pinnacle::input::v1::GestureType {
+    fn from(value: GestureType) -> Self {
+        match value {
+            GestureType::Hold => Self::Hold,
+            GestureType::Pinch => Self::Pinch,
+            GestureType::Swipe(_) => Self::Swipe,
+        }
+    }
+}
+
+type GesturebindCallback = (Box<dyn FnMut() + Send + 'static>, Edge);
+
+/// A Gesturebind.
+pub struct Gesturebind {
+    bind_id: u32,
+    callback_sender: Option<UnboundedSender<GesturebindCallback>>,
+}
+
+bind_impl!(Gesturebind);
+
+/// Creates a gesturebind on the [`DEFAULT`][BindLayer::DEFAULT] bind layer.
+pub fn gesturebind(mods: Mod, gesture_type: GestureType, fingers: u32) -> Gesturebind {
+    BindLayer::DEFAULT.gesturebind(mods, gesture_type, fingers)
+}
+
+impl Gesturebind {
+    /// Runs a closure whenever this mousebind is pressed.
+    pub fn on_begin<F: FnMut() + Send + 'static>(&mut self, on_begin: F) -> &mut Self {
+        let sender = self
+            .callback_sender
+            .get_or_insert_with(|| new_gesturebind_stream(self.bind_id).block_on_tokio());
+        let _ = sender.send((Box::new(on_begin), Edge::Press));
+
+        Client::input()
+            .gesturebind_on_begin(GesturebindOnBeginRequest {
+                bind_id: self.bind_id,
+            })
+            .block_on_tokio()
+            .unwrap();
+
+        self
+    }
+
+    /// Runs a closure whenever this mousebind is released.
+    pub fn on_finish<F: FnMut() + Send + 'static>(&mut self, on_finish: F) -> &mut Self {
+        let sender = self
+            .callback_sender
+            .get_or_insert_with(|| new_gesturebind_stream(self.bind_id).block_on_tokio());
+        let _ = sender.send((Box::new(on_finish), Edge::Release));
+
+        Client::input()
+            .gesturebind_on_finish(GesturebindOnFinishRequest {
+                bind_id: self.bind_id,
+            })
+            .block_on_tokio()
+            .unwrap();
+
+        self
+    }
+}
+
+async fn new_gesturebind(
+    mods: Mod,
+    gesture_type: GestureType,
+    fingers: u32,
+    layer: &BindLayer,
+) -> Gesturebind {
+    let ignore_mods = mods.api_ignore_mods();
+    let mods = mods.api_mods();
+
+    let bind_id = Client::input()
+        .bind(BindRequest {
+            bind: Some(input::v1::Bind {
+                mods: mods.into_iter().map(|m| m.into()).collect(),
+                ignore_mods: ignore_mods.into_iter().map(|m| m.into()).collect(),
+                layer_name: layer.name.clone(),
+                properties: Some(BindProperties::default()),
+                bind: Some(input::v1::bind::Bind::Gesture(input::v1::Gesturebind {
+                    direction: match gesture_type {
+                        GestureType::Hold | GestureType::Pinch => {
+                            pinnacle_api_defs::pinnacle::input::v1::SwipeDirection::None.into()
+                        }
+                        GestureType::Swipe(direction) => direction.into(),
+                    },
+                    fingers,
+                    gesture_type: match gesture_type {
+                        GestureType::Hold => {
+                            pinnacle_api_defs::pinnacle::input::v1::GestureType::Hold.into()
+                        }
+                        GestureType::Pinch => {
+                            pinnacle_api_defs::pinnacle::input::v1::GestureType::Pinch.into()
+                        }
+                        GestureType::Swipe(_) => {
+                            pinnacle_api_defs::pinnacle::input::v1::GestureType::Swipe.into()
+                        }
+                    },
+                })),
+            }),
+        })
+        .await
+        .unwrap()
+        .into_inner()
+        .bind_id;
+
+    Gesturebind {
+        bind_id,
+        callback_sender: None,
+    }
+}
+
+async fn new_gesturebind_stream(
+    bind_id: u32,
+) -> UnboundedSender<(Box<dyn FnMut() + Send + 'static>, Edge)> {
+    let mut from_server = Client::input()
+        .gesturebind_stream(GesturebindStreamRequest { bind_id })
+        .await
+        .unwrap()
+        .into_inner();
+
+    let (send, mut recv) = unbounded_channel();
+
+    tokio::spawn(async move {
+        let mut on_presses = Vec::<Box<dyn FnMut() + Send + 'static>>::new();
+        let mut on_releases = Vec::<Box<dyn FnMut() + Send + 'static>>::new();
+
+        loop {
+            tokio::select! {
+                Some(Ok(response)) = from_server.next() => {
+                    match response.edge() {
+                        input::v1::Edge::Unspecified => (),
+                        input::v1::Edge::Press => {
+                            for on_press in on_presses.iter_mut() {
+                                on_press();
+                            }
+                        }
+                        input::v1::Edge::Release => {
+                            for on_release in on_releases.iter_mut() {
+                                on_release();
+                            }
+                        }
+                    }
+                }
+                Some((cb, edge)) = recv.recv() => {
+                    match edge {
+                        Edge::Press => on_presses.push(cb),
+                        Edge::Release => on_releases.push(cb),
+                    }
+                }
+                else => break,
+            }
+        }
+    });
+
+    send
+}
+
 /// A struct that lets you define xkeyboard config options.
 ///
 /// See `xkeyboard-config(7)` for more information.
@@ -699,6 +927,13 @@ pub enum BindInfoKind {
         /// Which mouse button this bind uses.
         button: MouseButton,
     },
+    /// This is a gesturebind.
+    Gesture {
+        /// Direction of the gesture.
+        direction: SwipeDirection,
+        /// Fingers used in the gesture.
+        fingers: u32,
+    },
 }
 
 /// Sets the keyboard's repeat rate.
@@ -844,6 +1079,10 @@ pub fn bind_infos() -> impl Iterator<Item = BindInfo> {
             },
             input::v1::bind::Bind::Mouse(mousebind) => BindInfoKind::Mouse {
                 button: MouseButton::from(mousebind.button),
+            },
+            input::v1::bind::Bind::Gesture(gesturebind) => BindInfoKind::Gesture {
+                direction: SwipeDirection::from(gesturebind.direction),
+                fingers: gesturebind.fingers,
             },
         };
 
