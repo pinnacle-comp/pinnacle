@@ -335,10 +335,6 @@ end
 ---Sends an `Operation` to this layer.
 ---@param operation snowcap.widget.operation.Operation
 function LayerHandle:operate(operation)
-    if operation.focusable ~= nil then
-        self:handle_focus(operation.focusable)
-    end
-
     local _, err = client:snowcap_layer_v1_LayerService_OperateLayer({
         layer_id = self.id,
         operation = require("snowcap.widget.operation")._to_api(operation), ---@diagnostic disable-line: invisible
@@ -346,21 +342,6 @@ function LayerHandle:operate(operation)
 
     if err then
         log.error(err)
-    end
-end
-
----@lcat nodoc
----@private
----@param focusable snowcap.widget.operation.Focusable
-function LayerHandle:handle_focus(focusable)
-    if focusable.unfocus ~= nil then
-        self:update({
-            keyboard_interactivity = keyboard_interactivity.DEFAULT,
-        })
-    else
-        self:update({
-            keyboard_interactivity = keyboard_interactivity.EXCLUSIVE,
-        })
     end
 end
 

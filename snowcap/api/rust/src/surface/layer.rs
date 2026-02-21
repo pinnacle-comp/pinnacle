@@ -24,11 +24,7 @@ use crate::{
     input::{KeyEvent, Modifiers},
     popup::{self, AsParent},
     surface::SurfaceEvent,
-    widget::{
-        self, Program, WidgetDef, WidgetId, WidgetMessage,
-        operation::{self, focusable},
-        signal,
-    },
+    widget::{self, Program, WidgetDef, WidgetId, WidgetMessage, operation, signal},
 };
 
 // TODO: change to bitflag
@@ -463,10 +459,6 @@ impl<Msg> LayerHandle<Msg> {
     ///
     /// [`Operation`]: widget::operation::Operation
     pub fn operate(&self, operation: widget::operation::Operation) {
-        if let operation::Operation::Focusable(f) = &operation {
-            self.handle_focus(f);
-        };
-
         if let Err(status) = Client::layer()
             .operate_layer(OperateLayerRequest {
                 layer_id: self.id.to_inner(),
@@ -476,16 +468,6 @@ impl<Msg> LayerHandle<Msg> {
         {
             error!("Failed to send operation to {self:?}: {status}");
         }
-    }
-
-    /// Manage keyboard interactivity on focus change.
-    fn handle_focus(&self, operation: &focusable::Focusable) {
-        let _ = match operation {
-            focusable::Focusable::Unfocus => {
-                self.set_keyboard_interactivity(KeyboardInteractivity::Default)
-            }
-            _ => self.set_keyboard_interactivity(KeyboardInteractivity::Exclusive),
-        };
     }
 }
 
