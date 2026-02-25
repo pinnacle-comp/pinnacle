@@ -50,7 +50,7 @@
         devShell = pkgs.mkShell {
           nativeBuildInputs = [
             pkgs.pkg-config
-            pkgs.lua5_4
+            pkgs.pinnacle.luaEnv
             pkgs.libgbm
           ];
           buildInputs = with pkgs; [
@@ -74,7 +74,7 @@
             lua5_4
 
             # libs
-            seatd.dev
+            seatd
             systemdLibs.dev
             libxkbcommon
             libinput
@@ -82,13 +82,13 @@
             xwayland
             libdisplay-info
             libgbm
-            pkg-config
 
             # winit on x11
             libxcursor
             libxrandr
             libxi
             libx11
+            alacritty
           ];
 
           runtimeDependencies = with pkgs; [
@@ -97,8 +97,22 @@
             libglvnd # libEGL
             libgbm
           ];
-
-          LD_LIBRARY_PATH = "${pkgs.wayland}/lib:${pkgs.libGL}/lib:${pkgs.libxkbcommon}/lib:${pkgs.libgbm}/lib";
+          NIX_LD_LIBRARY_PATH = "${pkgs.lib.makeLibraryPath (
+            with pkgs;
+            [
+              wayland
+              lua5_4
+              libinput
+              libxkbcommon
+              libdisplay-info
+              seatd
+              libgbm
+              udev
+            ]
+          )}";
+          shellHook = ''
+            export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:$NIX_LD_LIBRARY_PATH"
+          '';
         };
       }
     ))

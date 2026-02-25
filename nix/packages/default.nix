@@ -146,15 +146,21 @@ rustPlatform.buildRustPackage (finalAttrs: {
     autoPatchelfHook
   ];
 
-  # integration tests don't work inside the nix sandbox, I think because the wayland socket is inaccessible.
-  cargoTestFlags = [ "--lib" ];
-  # the below is necessary to actually execute the integration tests
-  # TODO:
-  #   1. figure out if it's possible to run the integration tests inside the nix sandbox
-  #   2. fix the RPATH of the test binary prior to execution so LD_LIBRARY_PATH isn't necessary (it should be avoided with nix)
-  # preCheck = ''
-  #   export LD_LIBRARY_PATH="${wayland}/lib:${libGL}/lib:${libxkbcommon}/lib"
-  # '';
+  checkFeatures = [ "testing" ];
+  checkNoDefaultFeatures = true;
+  cargoTestFlags = [
+    "--exclude"
+    "wlcs_pinnacle"
+    "--all"
+    "--"
+    "--skip"
+    "process_spawn"
+  ];
+
+  preCheck = ''
+    export LD_LIBRARY_PATH="${lib.makeLibraryPath [ wayland ]}";
+    export XDG_RUNTIME_DIR=$(mktemp -d)
+  '';
 
   postInstall = ''
     wrapProgram $out/bin/pinnacle --prefix PATH ":" ${
