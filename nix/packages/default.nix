@@ -5,7 +5,7 @@
   wayland,
   lua54Packages,
   lua5_4,
-  extraLuaPackages ? [ ],
+  extraLuaPackages ? (ps: [ ]),
   protobuf,
   seatd,
   systemdLibs,
@@ -22,16 +22,12 @@
   callPackage,
   libglvnd,
   autoPatchelfHook,
-  fetchzip,
-  fetchurl,
-  libxcrypt,
   libxcursor,
   libxi,
   libxrandr,
   libx11,
 }:
 let
-  pinnacle = ../..;
   buildRustConfig = callPackage ./pinnacle-config.nix { };
 
   meta = {
@@ -41,28 +37,6 @@ let
     maintainers = [ "pinnacle-comp" ];
   };
   version = "0.2.3";
-
-  # we need a newer version of luaposix than what's in nixpkgs
-  luaposix = lua54Packages.luaposix.overrideAttrs (old: rec {
-    version = "36.3.0-1";
-    knownRockspec =
-      (fetchurl {
-        url = "mirror://luarocks/luaposix-36.3-1.rockspec";
-        sha256 = "sha256-6/sAsOWrrXjdzPlAp/Z5FetQfzrkrf6TmOz3FZaBiks=";
-      }).outPath;
-    src = fetchzip {
-      url = "http://github.com/luaposix/luaposix/archive/v36.3.zip";
-      sha256 = "sha256-RKDH1sB7r7xDqueByWwps5fBfl5GBL9L86FjzfStBUw=";
-    };
-
-    disabled = lua54Packages.luaOlder "5.1" || lua54Packages.luaAtLeast "5.5";
-    propagatedBuildInputs = with lua54Packages; [
-      bit32
-      std-normalize
-      libxcrypt
-    ];
-    meta.broken = disabled;
-  });
 
   lua-client-api = lua54Packages.buildLuarocksPackage rec {
     inherit meta version;
@@ -87,25 +61,24 @@ let
 
     postInstall = ''
       mkdir -p $out/share/pinnacle/protobuf/pinnacle
-      cp -rL --no-preserve ownership,mode ${../..}/api/protobuf/pinnacle $out/share/pinnacle/protobuf
+      cp -rL --no-preserve ownership,mode ../../api/protobuf/pinnacle $out/share/pinnacle/protobuf
       mkdir -p $out/share/pinnacle/snowcap/protobuf/snowcap
-      cp -rL --no-preserve ownership,mode ${../..}/snowcap/api/protobuf/snowcap $out/share/pinnacle/snowcap/protobuf
+      cp -rL --no-preserve ownership,mode ../../snowcap/api/protobuf/snowcap $out/share/pinnacle/snowcap/protobuf
       mkdir -p $out/share/pinnacle/protobuf/google
-      cp -rL --no-preserve ownership,mode ${../..}/api/protobuf/google $out/share/pinnacle/protobuf
+      cp -rL --no-preserve ownership,mode ../../api/protobuf/google $out/share/pinnacle/protobuf
       mkdir -p $out/share/pinnacle/snowcap/protobuf/google
-      cp -rL --no-preserve ownership,mode ${../..}/snowcap/api/protobuf/google $out/share/pinnacle/snowcap/protobuf
+      cp -rL --no-preserve ownership,mode ../../snowcap/api/protobuf/google $out/share/pinnacle/snowcap/protobuf
       find $out/share/pinnacle
     '';
   };
-  buildLuaConfig = args: callPackage ./pinnacle-lua-config (args // { inherit lua-client-api; });
 in
 rustPlatform.buildRustPackage (finalAttrs: {
   inherit meta version;
 
   pname = "pinnacle-server";
-  src = pinnacle;
+  src = ../..;
   cargoLock = {
-    lockFile = "${pinnacle}/Cargo.lock";
+    lockFile = "${../..}/Cargo.lock";
     # as we're not in-tree in nixpkgs right now, we don't benefit from the public nix subsituters.
     # consequently, we can neither provide a single static `cargoHash` nor a set of hashes for just
     # the dependencies fetched via git (these can change since cargo doesn't pin the git revision).
@@ -171,13 +144,13 @@ rustPlatform.buildRustPackage (finalAttrs: {
         xwayland
       ]
     }
-    install -m755 ${../../resources/pinnacle-session} $out/bin/pinnacle-session
+    install -m755 ./resources/pinnacle-session $out/bin/pinnacle-session
     mkdir -p $out/share/wayland-sessions
-    install -m644 ${../../resources/pinnacle.desktop} $out/share/wayland-sessions/pinnacle.desktop
+    install -m644 ./resources/pinnacle.desktop $out/share/wayland-sessions/pinnacle.desktop
     patchShebangs $out/bin/pinnacle-session
     mkdir -p $out/share/xdg-desktop-portal
-    install -m644 ${../../resources/pinnacle-portals.conf} $out/share/xdg-desktop-portal/pinnacle-portals.conf
-    install -m644 ${../../resources/pinnacle-portals.conf} $out/share/xdg-desktop-portal/pinnacle-uwsm-portals.conf
+    install -m644 ./resources/pinnacle-portals.conf $out/share/xdg-desktop-portal/pinnacle-portals.conf
+    install -m644 ./resources/pinnacle-portals.conf $out/share/xdg-desktop-portal/pinnacle-uwsm-portals.conf
   '';
 
   runtimeDependencies = [
@@ -193,9 +166,9 @@ rustPlatform.buildRustPackage (finalAttrs: {
         finalAttrs.passthru.lua-client-api
         ps.cjson
       ]
-      ++ extraLuaPackages
+      ++ (extraLuaPackages ps)
     );
-    inherit buildRustConfig buildLuaConfig;
+    inherit buildRustConfig;
     providedSessions = [ "pinnacle" ];
     lua-client-api = lua-client-api;
   };
