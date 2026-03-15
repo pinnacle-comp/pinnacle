@@ -4,11 +4,19 @@ use crate::{
     decoration::DecorationHandle,
     layer::LayerHandle,
     popup::{AsParent, Parent, PopupHandle},
+    widget,
 };
 
 pub mod decoration;
 pub mod layer;
 pub mod popup;
+
+/// Internal messages used by the different surfaces.
+pub(crate) enum SurfaceMessage<Msg> {
+    Message(Msg),
+    Operation(widget::operation::Operation),
+    Redraw,
+}
 
 /// Events emitted by the surface to notify [`Program`] of state changes.
 #[derive(Debug)]

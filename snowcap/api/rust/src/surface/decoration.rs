@@ -20,7 +20,7 @@ use crate::{
     BlockOnTokio,
     client::Client,
     popup::{self, AsParent},
-    surface::SurfaceEvent,
+    surface::{SurfaceEvent, SurfaceMessage},
     widget::{self, Program, WidgetDef, WidgetId, WidgetMessage, operation, signal},
 };
 
@@ -124,7 +124,7 @@ where
             let msg_send = msg_send.clone();
 
             move |msg: signal::Message<Msg>| {
-                if let Err(err) = msg_send.send(Some(msg.into_inner())) {
+                if let Err(err) = msg_send.send(SurfaceMessage::Message(msg.into_inner())) {
                     error!("Failed to send emitted msg: {err}");
                     crate::signal::HandlerPolicy::Discard
                 } else {
@@ -137,7 +137,7 @@ where
             let msg_send = msg_send.clone();
 
             move |_: signal::RedrawNeeded| {
-                if let Err(err) = msg_send.send(None) {
+                if let Err(err) = msg_send.send(SurfaceMessage::Redraw) {
                     error!("Failed to send redraw signal: {err}");
                     crate::signal::HandlerPolicy::Discard
                 } else {
@@ -170,6 +170,8 @@ where
     });
 
     tokio::spawn(async move {
+        let mut pending_operations = Vec::new();
+
         'main_loop: loop {
             tokio::select! {
                 Some(Ok(response)) = widget_event_stream.next() => {
@@ -182,8 +184,14 @@ where
                     }
                 }
                 Some(msg) = msg_recv.recv() => {
-                    if let Some(msg) = msg {
-                        program.update(msg);
+                    match msg {
+                        SurfaceMessage::Message(msg) => {
+                            program.update(msg);
+                        },
+                        SurfaceMessage::Operation(operation) => {
+                            pending_operations.push(operation);
+                        },
+                        _ => {}
                     }
 
                     if let Err(status) = Client::decoration()
@@ -223,6 +231,19 @@ where
                 })
                 .await
                 .unwrap();
+
+            let operations = std::mem::take(&mut pending_operations);
+            for operation in operations.into_iter() {
+                if let Err(status) = Client::decoration()
+                    .operate_decoration(OperateDecorationRequest {
+                        decoration_id,
+                        operation: Some(operation.into()),
+                    })
+                    .await
+                {
+                    error!("Failed to send operation to {decoration_id:?}: {status}");
+                }
+            }
         }
 
         program.event(SurfaceEvent::Closing);
@@ -234,7 +255,7 @@ where
 /// A handle to a decoration surface.
 pub struct DecorationHandle<Msg> {
     id: WidgetId,
-    msg_sender: UnboundedSender<Option<Msg>>,
+    msg_sender: UnboundedSender<SurfaceMessage<Msg>>,
 }
 
 impl<Msg> Clone for DecorationHandle<Msg> {
@@ -269,27 +290,19 @@ impl<Msg> DecorationHandle<Msg> {
 
     /// Sends a message to this decoration's [`Program`].
     pub fn send_message(&self, message: Msg) {
-        let _ = self.msg_sender.send(Some(message));
+        let _ = self.msg_sender.send(SurfaceMessage::Message(message));
     }
 
     /// Forces this decoration to redraw.
     pub fn force_redraw(&self) {
-        let _ = self.msg_sender.send(None);
+        let _ = self.msg_sender.send(SurfaceMessage::Redraw);
     }
 
     /// Sends an [`Operation`] to this Decoration.
     ///
     /// [`Operation`]: widget::operation::Operation
     pub fn operate(&self, operation: widget::operation::Operation) {
-        if let Err(status) = Client::decoration()
-            .operate_decoration(OperateDecorationRequest {
-                decoration_id: self.id.to_inner(),
-                operation: Some(operation.into()),
-            })
-            .block_on_tokio()
-        {
-            error!("Failed to send operation to {self:?}: {status}");
-        }
+        let _ = self.msg_sender.send(SurfaceMessage::Operation(operation));
     }
 
     /// Sets the z-index that this decoration will render at.
