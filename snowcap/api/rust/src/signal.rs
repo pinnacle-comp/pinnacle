@@ -34,6 +34,9 @@ struct SignalEntry<S> {
     callbacks: Vec<Arc<dyn Fn(S) -> HandlerPolicy + Sync + Send>>,
 }
 
+/// [`Signaler`] implementation detail.
+type SignalerState = HashMap<(TypeId, &'static str), Box<dyn Any + Sync + Send>>;
+
 /// A typed signal handler.
 ///
 /// [`Signaler`]s holds handlers for signals in a type-erased way. Other types can
@@ -49,8 +52,16 @@ struct SignalEntry<S> {
 /// [emit]: Signaler::emit
 #[derive(Default, Clone, Debug)]
 pub struct Signaler {
-    entries: Arc<Mutex<HashMap<(TypeId, &'static str), Box<dyn Any + Sync + Send>>>>,
+    entries: Arc<Mutex<SignalerState>>,
 }
+
+/// `WeakSignaler` is a non-owning version of [`Signaler`].
+///
+/// The actual signaler is accessed by calling [`upgrade`], which returns a <code>[Option]<[Signaler]></code>.
+///
+/// [`upgrade`]: WeakSignaler::upgrade
+#[derive(Clone, Debug)]
+pub struct WeakSignaler(Weak<Mutex<SignalerState>>);
 
 impl Signaler {
     /// Creates a new default [`Signaler`].
@@ -125,6 +136,11 @@ impl Signaler {
         }
     }
 
+    /// Create a [`WeakSignaler`].
+    pub fn downgrade(&self) -> WeakSignaler {
+        WeakSignaler(Arc::downgrade(&self.entries))
+    }
+
     /// Returns the [`SignalEntry`] for a given type.
     fn get_entry<'a, S>(
         entries: &'a mut HashMap<(TypeId, &'static str), Box<dyn Any + Sync + Send>>,
@@ -183,5 +199,14 @@ where
     fn emit(&mut self, signal: S) {
         self.callbacks
             .retain_mut(|cb| cb(signal.clone()) == HandlerPolicy::Keep);
+    }
+}
+
+impl WeakSignaler {
+    /// Attempts to upgrade the `WeakSignaler` to a [`Signaler`].
+    ///
+    /// Return [`None`] if the original signaler has since been dropped.
+    pub fn upgrade(&self) -> Option<Signaler> {
+        self.0.upgrade().map(|entries| Signaler { entries })
     }
 }
