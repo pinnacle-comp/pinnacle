@@ -127,7 +127,7 @@ pub async fn get_focused_async() -> Option<OutputHandle> {
 /// # use pinnacle_api::tag;
 /// // Add tags 1-3 to all outputs and set tag "1" to active
 /// output::for_each_output(|op| {
-///     let mut tags = tag::add(op, ["1", "2", "3"]);
+///     let Ok(mut tags) = tag::add(op, ["1", "2", "3"]) else { return };
 ///     tags.next().unwrap().set_active(true);
 /// });
 /// ```
