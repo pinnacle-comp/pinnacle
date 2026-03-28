@@ -30,8 +30,11 @@ use crate::{
     window::{Unmapped, WindowElement, ZIndexElement, rules::WindowRuleState},
 };
 use smithay::{
-    backend::renderer::element::{
-        RenderElementState, RenderElementStates, utils::select_dmabuf_feedback,
+    backend::{
+        input::TouchSlot,
+        renderer::element::{
+            RenderElementState, RenderElementStates, utils::select_dmabuf_feedback,
+        },
     },
     desktop::{
         LayerSurface, PopupManager, Space, layer_map_for_output,
@@ -56,7 +59,7 @@ use smithay::{
             protocol::wl_surface::WlSurface,
         },
     },
-    utils::{Clock, HookId, Monotonic},
+    utils::{Clock, HookId, Logical, Monotonic, Point},
     wayland::{
         compositor::{
             self, CompositorClientState, CompositorHandler, CompositorState, SurfaceData,
@@ -239,6 +242,8 @@ pub struct Pinnacle {
 
     pub pointer_contents: PointerContents,
     pub last_pointer_focus: Option<<State as SeatHandler>::PointerFocus>,
+
+    pub touch_positions: Vec<(TouchSlot, Point<f64, Logical>)>,
 
     pub blocker_cleared_tx: std::sync::mpsc::Sender<Client>,
     pub blocker_cleared_rx: std::sync::mpsc::Receiver<Client>,
@@ -546,6 +551,8 @@ impl Pinnacle {
 
             pointer_contents: Default::default(),
             last_pointer_focus: Default::default(),
+
+            touch_positions: Default::default(),
 
             blocker_cleared_tx,
             blocker_cleared_rx,

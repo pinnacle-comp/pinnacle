@@ -183,9 +183,19 @@ message MoveGrabRequest {
   uint32 button = 1;
 }
 
+message TouchMoveGrabRequest {
+  uint32 finger_id = 1;
+}
+message TouchMoveGrabResponse {}
+
 message ResizeGrabRequest {
   uint32 button = 1;
 }
+
+message TouchResizeGrabRequest {
+  uint32 finger_id = 1;
+}
+message TouchResizeGrabResponse {}
 
 message SwapRequest {
   uint32 window_id = 1;
@@ -244,6 +254,8 @@ service WindowService {
   rpc Lower(LowerRequest) returns (LowerResponse);
   rpc MoveGrab(MoveGrabRequest) returns (google.protobuf.Empty);
   rpc ResizeGrab(ResizeGrabRequest) returns (google.protobuf.Empty);
+  rpc TouchMoveGrab(TouchMoveGrabRequest) returns (TouchMoveGrabResponse);
+  rpc TouchResizeGrab(TouchResizeGrabRequest) returns (TouchResizeGrabResponse);
   rpc Swap(SwapRequest) returns (SwapResponse);
 
   rpc WindowRule(stream WindowRuleRequest) returns (stream WindowRuleResponse);

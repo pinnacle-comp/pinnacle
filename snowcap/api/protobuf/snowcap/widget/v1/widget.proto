@@ -168,6 +168,7 @@ message WidgetDef {
     InputRegion input_region = 9;
     MouseArea mouse_area = 10;
     TextInput text_input = 11;
+    TouchArea touch_area = 12;
   }
 }
 
@@ -463,6 +464,47 @@ message TextInput {
   }
 }
 
+message TouchArea {
+  WidgetDef child = 1;
+  optional uint32 widget_id = 2;
+  bool on_down = 3;
+  bool on_up = 4;
+  bool on_enter = 5;
+  bool on_move = 6;
+  bool on_exit = 7;
+  bool on_cancel = 8;
+
+  message Event {
+    oneof data {
+      DownEvent down = 1;
+      Finger up = 2;
+      Finger enter = 3;
+      MoveEvent move = 4;
+      Finger exit = 5;
+      Finger cancel = 6;
+    }
+  }
+
+  message Finger {
+    uint32 id = 1;
+  }
+
+  message Point {
+    float x = 1;
+    float y = 2;
+  }
+
+  message DownEvent {
+    Finger finger = 1;
+    Point point = 2;
+  }
+
+  message MoveEvent {
+    Finger finger = 1;
+    Point point = 2;
+  }
+}
+
 message GetWidgetEventsRequest {
   oneof id {
     uint32 layer_id = 1;
@@ -478,6 +520,7 @@ message WidgetEvent {
     Button.Event button = 2;
     MouseArea.Event mouse_area = 3;
     TextInput.Event text_input = 4;
+    TouchArea.Event touch_area = 5;
   }
 }
 
