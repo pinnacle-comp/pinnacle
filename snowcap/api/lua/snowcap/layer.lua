@@ -177,6 +177,10 @@ function layer.new_widget(args)
         response.layer_events = response.layer_events or {}
 
         for _, layer_event in ipairs(response.layer_events) do
+            if layer_event.closing ~= nil then
+                return true
+            end
+
             local focus = layer_event.focus --[[@as snowcap.layer.FocusEvent]]
             ---@type snowcap.widget.SurfaceEvent?
             local event = nil
@@ -204,6 +208,10 @@ function layer.new_widget(args)
         if err then
             log.error(err)
         end
+    end, function()
+        args.program:event({
+            closing = {},
+        })
     end)
 
     err = client:snowcap_widget_v1_WidgetService_GetWidgetEvents({

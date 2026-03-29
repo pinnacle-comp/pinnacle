@@ -310,6 +310,10 @@ function popup.new_widget(args)
         response.popup_events = response.popup_events or {}
 
         for _, popup_event in ipairs(response.popup_events) do
+            if popup_event.closing ~= nil then
+                return true
+            end
+
             local focus = popup_event.focus --[[@as snowcap.popup.FocusEvent]]
             ---@type snowcap.widget.SurfaceEvent?
             local event = nil
@@ -337,6 +341,10 @@ function popup.new_widget(args)
         if err then
             log.error(err)
         end
+    end, function()
+        args.program:event({
+            closing = {},
+        })
     end)
 
     err = client:snowcap_widget_v1_WidgetService_GetWidgetEvents({

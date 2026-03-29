@@ -316,7 +316,7 @@ end
 ---
 ---@param request_specifier grpc_client.RequestSpecifier
 ---@param data table The message to send. This should be in the structure of `request_specifier.request`.
----@param callback fun(response: table) A callback that will be run with every response
+---@param callback fun(response: table): boolean? A callback that will be run with every response
 ---@param done? fun() A callback that will be run when the stream closes.
 ---
 ---@return string|nil error An error string, if any.
@@ -357,6 +357,7 @@ function Client:server_streaming_request(request_specifier, data, callback, done
 
     self.loop:wrap(function()
         for response_body in stream:each_chunk() do
+            local stop = nil
             while response_body:len() > 0 do
                 local msg_len = string.unpack(">I4", response_body:sub(2, 5))
 
@@ -371,9 +372,17 @@ function Client:server_streaming_request(request_specifier, data, callback, done
                 end
 
                 local response = obj
-                callback(response)
+                local should_stop = callback(response)
+
+                if should_stop then
+                    stop = true
+                end
 
                 response_body = response_body:sub(msg_len + 6)
+            end
+
+            if stop == true then
+                break
             end
         end
 
@@ -1835,7 +1844,7 @@ pinnacle.input.v1.InputService.KeybindStream.response = ".pinnacle.input.v1.Keyb
 ---@nodiscard
 ---
 ---@param data pinnacle.input.v1.KeybindStreamRequest
----@param callback fun(response: pinnacle.input.v1.KeybindStreamResponse)
+---@param callback fun(response: pinnacle.input.v1.KeybindStreamResponse): boolean?
 ---@param done? fun()
 ---
 ---@return string | nil An error string, if any
@@ -1855,7 +1864,7 @@ pinnacle.input.v1.InputService.MousebindStream.response = ".pinnacle.input.v1.Mo
 ---@nodiscard
 ---
 ---@param data pinnacle.input.v1.MousebindStreamRequest
----@param callback fun(response: pinnacle.input.v1.MousebindStreamResponse)
+---@param callback fun(response: pinnacle.input.v1.MousebindStreamResponse): boolean?
 ---@param done? fun()
 ---
 ---@return string | nil An error string, if any
@@ -2512,7 +2521,7 @@ pinnacle.process.v1.ProcessService.WaitOnSpawn.response = ".pinnacle.process.v1.
 ---@nodiscard
 ---
 ---@param data pinnacle.process.v1.WaitOnSpawnRequest
----@param callback fun(response: pinnacle.process.v1.WaitOnSpawnResponse)
+---@param callback fun(response: pinnacle.process.v1.WaitOnSpawnResponse): boolean?
 ---@param done? fun()
 ---
 ---@return string | nil An error string, if any
