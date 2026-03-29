@@ -1159,6 +1159,17 @@ local snowcap_popup_v1_PopupEvent_Focus = {
 
 ---@class snowcap.decoration.v1.ViewResponse
 
+---@class snowcap.decoration.v1.GetDecorationEventsRequest
+---@field decoration_id integer?
+
+---@class snowcap.decoration.v1.DecorationEvent
+---@field closing snowcap.decoration.v1.DecorationEvent.Closing?
+
+---@class snowcap.decoration.v1.DecorationEvent.Closing
+
+---@class snowcap.decoration.v1.GetDecorationEventsResponse
+---@field decoration_events snowcap.decoration.v1.DecorationEvent[]?
+
 ---@class snowcap.input.v0alpha1.Modifiers
 ---@field shift boolean?
 ---@field ctrl boolean?
@@ -1358,6 +1369,9 @@ local snowcap_popup_v1_PopupEvent_Focus = {
 
 ---@class snowcap.layer.v1.LayerEvent
 ---@field focus snowcap.layer.v1.LayerEvent.Focus?
+---@field closing snowcap.layer.v1.LayerEvent.Closing?
+
+---@class snowcap.layer.v1.LayerEvent.Closing
 
 ---@class snowcap.layer.v1.GetLayerEventsResponse
 ---@field layer_events snowcap.layer.v1.LayerEvent[]?
@@ -1432,6 +1446,9 @@ local snowcap_popup_v1_PopupEvent_Focus = {
 
 ---@class snowcap.popup.v1.PopupEvent
 ---@field focus snowcap.popup.v1.PopupEvent.Focus?
+---@field closing snowcap.popup.v1.PopupEvent.Closing?
+
+---@class snowcap.popup.v1.PopupEvent.Closing
 
 ---@class snowcap.popup.v1.GetPopupEventsResponse
 ---@field popup_events snowcap.popup.v1.PopupEvent[]?
@@ -1519,6 +1536,10 @@ snowcap.decoration.v1.UpdateDecorationRequest = {}
 snowcap.decoration.v1.UpdateDecorationResponse = {}
 snowcap.decoration.v1.ViewRequest = {}
 snowcap.decoration.v1.ViewResponse = {}
+snowcap.decoration.v1.GetDecorationEventsRequest = {}
+snowcap.decoration.v1.DecorationEvent = {}
+snowcap.decoration.v1.DecorationEvent.Closing = {}
+snowcap.decoration.v1.GetDecorationEventsResponse = {}
 snowcap.input = {}
 snowcap.input.v0alpha1 = {}
 snowcap.input.v0alpha1.Modifiers = {}
@@ -1563,6 +1584,7 @@ snowcap.layer.v1.ViewRequest = {}
 snowcap.layer.v1.ViewResponse = {}
 snowcap.layer.v1.GetLayerEventsRequest = {}
 snowcap.layer.v1.LayerEvent = {}
+snowcap.layer.v1.LayerEvent.Closing = {}
 snowcap.layer.v1.GetLayerEventsResponse = {}
 snowcap.popup = {}
 snowcap.popup.v1 = {}
@@ -1581,6 +1603,7 @@ snowcap.popup.v1.ViewRequest = {}
 snowcap.popup.v1.ViewResponse = {}
 snowcap.popup.v1.GetPopupEventsRequest = {}
 snowcap.popup.v1.PopupEvent = {}
+snowcap.popup.v1.PopupEvent.Closing = {}
 snowcap.popup.v1.GetPopupEventsResponse = {}
 snowcap.v0alpha1 = {}
 snowcap.v0alpha1.Nothing = {}
@@ -1715,6 +1738,26 @@ snowcap.decoration.v1.DecorationService.RequestView.response = ".snowcap.decorat
 ---@return string | nil error An error string, if any
 function Client:snowcap_decoration_v1_DecorationService_RequestView(data)
     return self:unary_request(snowcap.decoration.v1.DecorationService.RequestView, data)
+end
+snowcap.decoration.v1.DecorationService.GetDecorationEvents = {}
+snowcap.decoration.v1.DecorationService.GetDecorationEvents.service = "snowcap.decoration.v1.DecorationService"
+snowcap.decoration.v1.DecorationService.GetDecorationEvents.method = "GetDecorationEvents"
+snowcap.decoration.v1.DecorationService.GetDecorationEvents.request = ".snowcap.decoration.v1.GetDecorationEventsRequest"
+snowcap.decoration.v1.DecorationService.GetDecorationEvents.response = ".snowcap.decoration.v1.GetDecorationEventsResponse"
+
+---Performs a server-streaming request.
+---
+---`callback` will be called with every streamed response.
+---
+---@nodiscard
+---
+---@param data snowcap.decoration.v1.GetDecorationEventsRequest
+---@param callback fun(response: snowcap.decoration.v1.GetDecorationEventsResponse)
+---@param done? fun()
+---
+---@return string | nil An error string, if any
+function Client:snowcap_decoration_v1_DecorationService_GetDecorationEvents(data, callback, done)
+    return self:server_streaming_request(snowcap.decoration.v1.DecorationService.GetDecorationEvents, data, callback, done)
 end
 snowcap.input.v0alpha1.InputService = {}
 snowcap.input.v0alpha1.InputService.KeyboardKey = {}
