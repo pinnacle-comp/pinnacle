@@ -6,8 +6,8 @@ use snowcap_api_defs::snowcap::{
     decoration::{
         self,
         v1::{
-            CloseRequest, NewDecorationRequest, OperateDecorationRequest, UpdateDecorationRequest,
-            ViewRequest,
+            CloseRequest, GetDecorationEventsRequest, NewDecorationRequest,
+            OperateDecorationRequest, UpdateDecorationRequest, ViewRequest, decoration_event,
         },
     },
     widget::v1::{GetWidgetEventsRequest, get_widget_events_request},
@@ -100,10 +100,15 @@ where
 
     let decoration_id = response.into_inner().decoration_id;
 
-    let mut event_stream = Client::widget()
+    let mut widget_event_stream = Client::widget()
         .get_widget_events(GetWidgetEventsRequest {
             id: Some(get_widget_events_request::Id::DecorationId(decoration_id)),
         })
+        .block_on_tokio()?
+        .into_inner();
+
+    let mut decoration_event_stream = Client::decoration()
+        .get_decoration_events(GetDecorationEventsRequest { decoration_id })
         .block_on_tokio()?
         .into_inner();
 
@@ -165,9 +170,9 @@ where
     });
 
     tokio::spawn(async move {
-        loop {
+        'main_loop: loop {
             tokio::select! {
-                Some(Ok(response)) = event_stream.next() => {
+                Some(Ok(response)) = widget_event_stream.next() => {
                     for widget_event in response.widget_events {
                         let Some(msg) = widget::message_from_event(&callbacks, widget_event) else {
                             continue;
@@ -189,6 +194,13 @@ where
                     }
 
                     continue;
+                }
+                Some(Ok(response)) = decoration_event_stream.next() => {
+                    for decoration_event in response.decoration_events {
+                        if matches!(decoration_event.event, Some(decoration_event::Event::Closing(_))) {
+                            break 'main_loop;
+                        }
+                    }
                 }
                 else => break,
             };

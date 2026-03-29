@@ -9,7 +9,7 @@ use snowcap_api_defs::snowcap::{
         self,
         v1::{
             CloseRequest, GetPopupEventsRequest, NewPopupRequest, OperatePopupRequest,
-            UpdatePopupRequest, ViewRequest,
+            UpdatePopupRequest, ViewRequest, popup_event,
         },
     },
     widget::v1::{GetWidgetEventsRequest, get_widget_events_request},
@@ -162,7 +162,9 @@ impl<Msg> TryFrom<popup::v1::popup_event::Event> for SurfaceEvent<Msg> {
     fn try_from(value: popup::v1::popup_event::Event) -> Result<Self, Self::Error> {
         use popup::v1::popup_event::{Event, Focus};
 
-        let Event::Focus(f) = value;
+        let Event::Focus(f) = value else {
+            return Err(PopupEventError::Unknown);
+        };
 
         match Focus::try_from(f) {
             Ok(Focus::Gained) => Ok(Self::FocusGained),
@@ -305,7 +307,7 @@ where
     });
 
     tokio::spawn(async move {
-        loop {
+        'main_loop: loop {
             tokio::select! {
                 Some(Ok(response)) = widget_event_stream.next() => {
                     for widget_event in response.widget_events {
@@ -332,6 +334,10 @@ where
                 }
                 Some(Ok(response)) = popup_event_stream.next() => {
                     for popup_event in response.popup_events {
+                        if matches!(popup_event.event, Some(popup_event::Event::Closing(_))) {
+                            break 'main_loop;
+                        };
+
                         let Some(event) = popup_event.event
                             .and_then(|e| e.try_into().ok()) else {
                                 continue;
