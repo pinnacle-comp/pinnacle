@@ -3,6 +3,7 @@ use smithay_client_toolkit::reexports::{
     protocols::ext::foreign_toplevel_list::v1::client::ext_foreign_toplevel_handle_v1::ExtForeignToplevelHandleV1,
 };
 use snowcap_protocols::snowcap_decoration_v1::client::snowcap_decoration_surface_v1::SnowcapDecorationSurfaceV1;
+use tokio::sync::mpsc::UnboundedSender;
 
 use crate::{popup::ParentId, state::State, surface::SnowcapSurface, widget::ViewFn};
 
@@ -19,6 +20,11 @@ impl DecorationIdCounter {
         self.0.0 += 1;
         ret
     }
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum DecorationEvent {
+    Closing,
 }
 
 impl State {
@@ -66,11 +72,16 @@ pub struct SnowcapDecoration {
     bounds: Bounds,
     pending_bounds: Option<Bounds>,
     pending_z_index: Option<i32>,
+
+    pub decoration_event_sender: Option<UnboundedSender<Vec<DecorationEvent>>>,
 }
 
 impl Drop for SnowcapDecoration {
     fn drop(&mut self) {
         self.decoration.destroy();
+        if let Some(sender) = self.decoration_event_sender.as_ref() {
+            let _ = sender.send(vec![DecorationEvent::Closing]);
+        }
     }
 }
 
@@ -146,6 +157,7 @@ impl SnowcapDecoration {
             bounds,
             pending_bounds: None,
             pending_z_index: None,
+            decoration_event_sender: None,
         })
     }
 
