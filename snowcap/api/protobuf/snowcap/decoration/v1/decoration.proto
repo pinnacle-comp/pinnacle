@@ -48,10 +48,25 @@ message ViewRequest {
 }
 message ViewResponse {}
 
+message GetDecorationEventsRequest {
+  uint32 decoration_id = 1;
+}
+message DecorationEvent {
+  message Closing {}
+
+  oneof event {
+    Closing closing = 1;
+  }
+}
+message GetDecorationEventsResponse {
+  repeated DecorationEvent decoration_events = 1;
+}
+
 service DecorationService {
   rpc NewDecoration(NewDecorationRequest) returns (NewDecorationResponse);
   rpc Close(CloseRequest) returns (CloseResponse);
   rpc OperateDecoration(OperateDecorationRequest) returns (OperateDecorationResponse);
   rpc UpdateDecoration(UpdateDecorationRequest) returns (UpdateDecorationResponse);
   rpc RequestView(ViewRequest) returns (ViewResponse);
+  rpc GetDecorationEvents(GetDecorationEventsRequest) returns (stream GetDecorationEventsResponse);
 }

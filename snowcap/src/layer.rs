@@ -38,6 +38,7 @@ impl LayerIdCounter {
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum LayerEvent {
     Focus(KeyboardFocusEvent),
+    Closing,
 }
 
 impl State {
@@ -256,6 +257,14 @@ impl SnowcapLayer {
             };
 
             let _ = sender.send(vec![event]);
+        }
+    }
+}
+
+impl Drop for SnowcapLayer {
+    fn drop(&mut self) {
+        if let Some(sender) = self.layer_event_sender.as_ref() {
+            let _ = sender.send(vec![LayerEvent::Closing]);
         }
     }
 }

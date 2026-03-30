@@ -119,6 +119,22 @@ function decoration.new_widget(args)
         created = widget.SurfaceHandle.from_decoration_handle(handle),
     })
 
+    err = client:snowcap_decoration_v1_DecorationService_GetDecorationEvents({
+        decoration_id = decoration_id,
+    }, function(response) ---@diagnostic disable-line:redefined-local
+        response.decoration_events = response.decoration_events or {}
+
+        for _, decoration_event in ipairs(response.decoration_events) do
+            if decoration_event.closing ~= nil then
+                return true
+            end
+        end
+    end, function()
+        args.program:event({
+            closing = {},
+        })
+    end)
+
     err = client:snowcap_widget_v1_WidgetService_GetWidgetEvents({
         decoration_id = decoration_id,
     }, function(response) ---@diagnostic disable-line: redefined-local

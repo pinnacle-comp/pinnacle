@@ -314,7 +314,7 @@ end"#,
 ---@nodiscard
 ---
 ---@param data {data_ty}
----@param callback fun(response: {ret_ty})
+---@param callback fun(response: {ret_ty}): boolean?
 ---@param done? fun()
 ---
 ---@return string | nil An error string, if any

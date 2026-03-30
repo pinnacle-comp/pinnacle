@@ -1,20 +1,23 @@
 use anyhow::Context;
 use snowcap_api_defs::snowcap::decoration::v1::{
-    CloseRequest, CloseResponse, NewDecorationRequest, NewDecorationResponse,
-    OperateDecorationRequest, OperateDecorationResponse, UpdateDecorationRequest,
-    UpdateDecorationResponse, ViewRequest, ViewResponse, decoration_service_server,
+    CloseRequest, CloseResponse, GetDecorationEventsRequest, GetDecorationEventsResponse,
+    NewDecorationRequest, NewDecorationResponse, OperateDecorationRequest,
+    OperateDecorationResponse, UpdateDecorationRequest, UpdateDecorationResponse, ViewRequest,
+    ViewResponse, decoration_service_server,
 };
 use tonic::{Request, Response, Status};
 use tracing::warn;
 
 use crate::{
-    api::{run_unary, widget::v1::widget_def_to_fn},
-    decoration::{DecorationId, SnowcapDecoration},
+    api::{ResponseStream, run_server_streaming_mapped, run_unary, widget::v1::widget_def_to_fn},
+    decoration::{DecorationEvent, DecorationId, SnowcapDecoration},
     util::convert::TryFromApi,
 };
 
 #[tonic::async_trait]
 impl decoration_service_server::DecorationService for super::DecorationService {
+    type GetDecorationEventsStream = ResponseStream<GetDecorationEventsResponse>;
+
     async fn new_decoration(
         &self,
         request: Request<NewDecorationRequest>,
@@ -169,6 +172,29 @@ impl decoration_service_server::DecorationService for super::DecorationService {
         .await
     }
 
+    async fn get_decoration_events(
+        &self,
+        request: Request<GetDecorationEventsRequest>,
+    ) -> Result<Response<Self::GetDecorationEventsStream>, Status> {
+        let request = request.into_inner();
+
+        let id = request.decoration_id;
+
+        run_server_streaming_mapped(
+            &self.sender,
+            move |state, sender| {
+                if let Some(decoration) = state.decoration_for_id(DecorationId(id)) {
+                    decoration.decoration_event_sender = Some(sender);
+                }
+            },
+            move |events| {
+                Ok(GetDecorationEventsResponse {
+                    decoration_events: events.into_iter().map(Into::into).collect(),
+                })
+            },
+        )
+    }
+
     async fn request_view(
         &self,
         request: Request<ViewRequest>,
@@ -193,5 +219,19 @@ impl decoration_service_server::DecorationService for super::DecorationService {
             Ok(ViewResponse {})
         })
         .await
+    }
+}
+
+impl From<DecorationEvent> for snowcap_api_defs::snowcap::decoration::v1::DecorationEvent {
+    fn from(value: DecorationEvent) -> Self {
+        use snowcap_api_defs::snowcap::decoration::v1::decoration_event;
+
+        match value {
+            DecorationEvent::Closing => Self {
+                event: Some(decoration_event::Event::Closing(
+                    decoration_event::Closing {},
+                )),
+            },
+        }
     }
 }
