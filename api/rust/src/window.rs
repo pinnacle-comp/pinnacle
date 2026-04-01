@@ -19,12 +19,12 @@ use pinnacle_api_defs::pinnacle::{
         self,
         v1::{
             GetAppIdRequest, GetFocusedRequest, GetForeignToplevelListIdentifierRequest,
-            GetLayoutModeRequest, GetLocRequest, GetSizeRequest, GetTagIdsRequest, GetTitleRequest,
-            GetWindowsInDirRequest, LowerRequest, MoveGrabRequest, MoveToOutputRequest,
-            MoveToTagRequest, RaiseRequest, ResizeGrabRequest, ResizeTileRequest,
-            SetDecorationModeRequest, SetFloatingRequest, SetFocusedRequest, SetFullscreenRequest,
-            SetGeometryRequest, SetMaximizedRequest, SetTagRequest, SetTagsRequest,
-            SetVrrDemandRequest, SwapRequest,
+            GetLayoutModeRequest, GetLocRequest, GetMinimizedRequest, GetSizeRequest,
+            GetTagIdsRequest, GetTitleRequest, GetWindowsInDirRequest, LowerRequest,
+            MoveGrabRequest, MoveToOutputRequest, MoveToTagRequest, RaiseRequest,
+            ResizeGrabRequest, ResizeTileRequest, SetDecorationModeRequest, SetFloatingRequest,
+            SetFullscreenRequest, SetGeometryRequest, SetMaximizedRequest, SetMinimizedRequest,
+            SetTagRequest, SetTagsRequest, SetVrrDemandRequest, SwapRequest, TrySetFocusedRequest,
         },
     },
 };
@@ -38,7 +38,10 @@ use crate::{
     output::OutputHandle,
     signal::{SignalHandle, WindowSignal},
     tag::TagHandle,
-    util::{Batch, Direction, Point, Size},
+    util::{
+        Batch, Direction, Point, Size,
+        convert::{TryFromApi, TryIntoNative},
+    },
 };
 
 /// Gets handles to all windows.
@@ -235,6 +238,27 @@ impl VrrDemand {
     }
 }
 
+/// Error when trying to focus/unfocus a window.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum TrySetFocusedError {
+    /// Window was minimized and could not be focused.
+    WindowMinimized,
+}
+
+impl TryFromApi<pinnacle_api_defs::pinnacle::window::v1::TrySetFocusedResponse> for () {
+    type Error = TrySetFocusedError;
+
+    fn try_from_api(
+        api_value: pinnacle_api_defs::pinnacle::window::v1::TrySetFocusedResponse,
+    ) -> Result<Self, Self::Error> {
+        use pinnacle_api_defs::pinnacle::window::v1::try_set_focused_response::TrySetFocusedStatus;
+        match api_value.status() {
+            TrySetFocusedStatus::Success => Ok(()),
+            TrySetFocusedStatus::WindowMinimized => Err(TrySetFocusedError::WindowMinimized),
+        }
+    }
+}
+
 impl WindowHandle {
     /// Sends a close request to this window.
     ///
@@ -365,6 +389,34 @@ impl WindowHandle {
             .unwrap();
     }
 
+    /// Sets this window to minimized or not.
+    pub fn set_minimized(&self, set: bool) {
+        let window_id = self.id;
+        Client::window()
+            .set_minimized(SetMinimizedRequest {
+                window_id,
+                set_or_toggle: match set {
+                    true => SetOrToggle::Set,
+                    false => SetOrToggle::Unset,
+                }
+                .into(),
+            })
+            .block_on_tokio()
+            .unwrap();
+    }
+
+    /// Toggles this window between minimized and not.
+    pub fn toggle_minimized(&self) {
+        let window_id = self.id;
+        Client::window()
+            .set_minimized(SetMinimizedRequest {
+                window_id,
+                set_or_toggle: SetOrToggle::Toggle.into(),
+            })
+            .block_on_tokio()
+            .unwrap();
+    }
+
     /// Sets this window to floating or not.
     ///
     /// Floating windows will not be tiled and can be moved around and resized freely.
@@ -398,10 +450,20 @@ impl WindowHandle {
     }
 
     /// Focuses or unfocuses this window.
+    ///
+    /// Silently fails if trying to focus a minimized window.
+    #[deprecated = "use `WindowHandle::try_set_focused` instead"]
     pub fn set_focused(&self, set: bool) {
+        let _ = self.try_set_focused(set);
+    }
+
+    /// Tries to focus or unfocus this window.
+    ///
+    /// Fails if the window is minimized.
+    pub fn try_set_focused(&self, set: bool) -> Result<(), TrySetFocusedError> {
         let window_id = self.id;
         Client::window()
-            .set_focused(SetFocusedRequest {
+            .try_set_focused(TrySetFocusedRequest {
                 window_id,
                 set_or_toggle: match set {
                     true => SetOrToggle::Set,
@@ -410,19 +472,33 @@ impl WindowHandle {
                 .into(),
             })
             .block_on_tokio()
-            .unwrap();
+            .expect("successful rpc communication is expected")
+            .into_inner()
+            .try_into_native()
     }
 
     /// Toggles this window between focused and unfocused.
+    ///
+    /// Silently fails if trying to focus a minimized window.
+    #[deprecated = "use `WindowHandle::try_toggle_focused` instead"]
     pub fn toggle_focused(&self) {
+        let _ = self.try_toggle_focused();
+    }
+
+    /// Tries to toggle this window between focused and unfocused.
+    ///
+    /// Fails if the window is minimized.
+    pub fn try_toggle_focused(&self) -> Result<(), TrySetFocusedError> {
         let window_id = self.id;
         Client::window()
-            .set_focused(SetFocusedRequest {
+            .try_set_focused(TrySetFocusedRequest {
                 window_id,
                 set_or_toggle: SetOrToggle::Toggle.into(),
             })
             .block_on_tokio()
-            .unwrap();
+            .expect("successful rpc communication is expected")
+            .into_inner()
+            .try_into_native()
     }
 
     /// Sets this window's decoration mode.
@@ -805,6 +881,22 @@ impl WindowHandle {
     /// Async impl for [`Self::maximized`].
     pub async fn maximized_async(&self) -> bool {
         self.layout_mode_async().await == LayoutMode::Maximized
+    }
+
+    /// Gets whether or not this window is minimized
+    pub fn minimized(&self) -> bool {
+        self.minimized_async().block_on_tokio()
+    }
+
+    /// Async impl for [`Self::minimized`]
+    pub async fn minimized_async(&self) -> bool {
+        let window_id = self.id;
+        Client::window()
+            .get_minimized(GetMinimizedRequest { window_id })
+            .await
+            .unwrap()
+            .into_inner()
+            .minimized
     }
 
     /// Gets handles to all tags on this window.

@@ -12,6 +12,8 @@ use crate::BlockOnTokio;
 pub use crate::batch_boxed;
 pub use crate::batch_boxed_async;
 
+pub mod convert;
+
 /// A horizontal or vertical axis.
 #[derive(Copy, Clone, Hash, Eq, PartialEq, Debug)]
 pub enum Axis {
