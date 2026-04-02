@@ -118,6 +118,7 @@ cliclack = "0.3.8"
 drm-sys = "0.8.0"
 gag = "1.0.0"
 indexmap = { workspace = true }
+input = { version = "0.9.1", features = ["libinput_1_21"] }
 itertools = "0.14.0"
 libdisplay-info = "0.3.0"
 passfd = { workspace = true }
