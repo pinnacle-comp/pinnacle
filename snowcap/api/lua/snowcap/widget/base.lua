@@ -19,7 +19,7 @@ end
 ---unique identifiers and signals.
 ---
 ---@class snowcap.widget.base.Base
----@field private signaler snowcap.signal.Signaler
+---@field private _signaler snowcap.signal.Signaler
 ---@field private widget_id integer
 local Base = {}
 Base.__index = Base
@@ -61,7 +61,7 @@ end
 ---@param name string The name of the signal you're connecting to.
 ---@return snowcap.signal.SignalHandle
 function Base:connect(name, callback)
-    return self.signaler:connect(name, callback)
+    return self._signaler:connect(name, callback)
 end
 
 ---Emits a signal.
@@ -69,19 +69,19 @@ end
 ---@param name string Signal to emit
 ---@param ... any Parameter to sent to the callbacks
 function Base:emit(name, ...)
-    self.signaler:emit(name, ...)
+    self._signaler:emit(name, ...)
 end
 
 ---Disconnects a given callback.
 ---
 ---@param handle snowcap.signal.SignalHandle Handle to the callback to disconnect.
 function Base:disconnect(handle)
-    self.signaler:disconnect(handle)
+    self._signaler:disconnect(handle)
 end
 
 ---Disconnects all signal handlers.
 function Base:disconnect_all()
-    self.signaler:disconnect_all()
+    self._signaler:disconnect_all()
 end
 
 ---Gets the widget's unique id.
@@ -91,6 +91,13 @@ function Base:id()
     return self.widget_id
 end
 
+---Gets the widget's signaler
+---
+---@return snowcap.signal.Signaler
+function Base:signaler()
+    return self._signaler
+end
+
 ---Creates a new widget base.
 ---
 ---@return snowcap.widget.base.Base
@@ -98,7 +105,7 @@ function Base.new()
     ---@type snowcap.widget.base.Base
     local self = {
         widget_id = next_id(),
-        signaler = signal.Signaler.new(),
+        _signaler = signal.Signaler.new(),
     }
 
     setmetatable(self, Base)
