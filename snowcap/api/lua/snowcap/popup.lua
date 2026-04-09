@@ -66,6 +66,7 @@ popup.parent = parent
 ---@class snowcap.popup.PopupHandle
 ---@field id integer Popup's id.
 ---@field private _update fun(msg:any)
+---@field private _operate fun(oper: snowcap.widget.operation.Operation)
 local PopupHandle = {}
 
 ---Convert a PopupHandle into a Popup's ParentHandle
@@ -79,12 +80,14 @@ end
 ---@package
 ---@param id integer
 ---@param update fun(msg: any)
+---@param operate fun(oper: snowcap.widget.operation.Operation)
 ---@return snowcap.popup.PopupHandle
-function popup_handle.new(id, update)
+function popup_handle.new(id, update, operate)
     ---@type snowcap.popup.PopupHandle
     local self = {
         id = id,
         _update = update,
+        _operate = operate
     }
     setmetatable(self, { __index = PopupHandle })
     return self
@@ -265,28 +268,29 @@ function popup.new_widget(args)
 
     local popup_id = response.popup_id --[[@as integer]]
 
+    local sender, receiver = require("snowcap.util.channel").spsc()
+
     ---@type fun(msg: any?)
     local update_on_msg = function(msg)
         if msg ~= nil then
-            args.program:update(msg)
-        end
-
-        ---@diagnostic disable-next-line: redefined-local
-        local _, err = client:snowcap_popup_v1_PopupService_RequestView({
-            popup_id = popup_id,
-        })
-
-        if err then
-            log.error(err)
+            sender:send({
+                message = msg
+            })
+        else
+            sender:send({
+                redraw = {}
+            })
         end
     end
-
-    local handle = popup_handle.new(popup_id, update_on_msg)
 
     ---@type fun(oper: snowcap.widget.operation.Operation)
-    local forward_operation = function(oper)
-        handle:operate(oper)
+    local operate_surface = function(oper)
+        sender:send({
+            operation = oper,
+        })
     end
+
+    local handle = popup_handle.new(popup_id, update_on_msg, operate_surface)
 
     ---@type fun(): snowcap.signal.HandlerPolicy
     local close_surface = function()
@@ -297,7 +301,7 @@ function popup.new_widget(args)
 
     args.program:connect(widget_signal.redraw_needed, update_on_msg)
     args.program:connect(widget_signal.send_message, update_on_msg)
-    args.program:connect(widget_signal.operation, forward_operation)
+    args.program:connect(widget_signal.operation, operate_surface)
     args.program:connect(widget_signal.request_close, close_surface)
 
     args.program:event({
@@ -307,74 +311,116 @@ function popup.new_widget(args)
     err = client:snowcap_popup_v1_PopupService_GetPopupEvents({
         popup_id = popup_id,
     }, function(response) ---@diagnostic disable-line:redefined-local
-        response.popup_events = response.popup_events or {}
-
-        for _, popup_event in ipairs(response.popup_events) do
-            local focus = popup_event.focus --[[@as snowcap.popup.FocusEvent]]
-            ---@type snowcap.widget.SurfaceEvent?
-            local event = nil
-
-            if focus == focus_event.GAINED then
-                event = {
-                    focus_gained = {},
-                }
-            elseif focus == focus_event.LOST then
-                event = {
-                    focus_lost = {},
-                }
-            end
-
-            if event then
-                args.program:event(event)
-            end
-        end
-
-        ---@diagnostic disable-next-line: redefined-local
-        local _, err = client:snowcap_popup_v1_PopupService_RequestView({
-            popup_id = popup_id,
+        sender:send({
+            popup_events = response.popup_events or {}
         })
-
-        if err then
-            log.error(err)
-        end
     end)
 
     err = client:snowcap_widget_v1_WidgetService_GetWidgetEvents({
         popup_id = popup_id,
     }, function(response) ---@diagnostic disable-line:redefined-local
-        for _, event in ipairs(response.widget_events) do
-            local msg = widget._message_from_event(callbacks, event)
+        sender:send({
+            widget_events = response.widget_events or {}
+        })
+    end)
 
-            if msg then
-                local ok, update_err = pcall(function()
-                    args.program:update(msg)
-                end)
+    client.loop:wrap(function()
+        local pending_operations = {}
 
-                if not ok then
-                    log.error(update_err)
+        local msg = receiver:recv()
+        while msg do
+            local update_view = false
+
+            if msg.widget_events then
+                for _, event in ipairs(msg.widget_events) do
+                    local message = widget._message_from_event(callbacks, event)
+
+                    if message then
+                        local ok, update_err = pcall(function()
+                            args.program:update(message)
+                        end)
+                        if not ok then
+                            log.error(update_err)
+                        end
+                    end
+                end
+            elseif msg.message then
+                args.program:update(msg.message)
+            elseif msg.operation then
+                table.insert(pending_operations, msg.operation)
+            elseif msg.popup_events then
+                for _, popup_event in ipairs(msg.popup_events) do
+                    if popup_event.closing ~= nil then
+                        goto main_loop_break
+                    end
+
+                    local focus = popup_event.focus --[[@as snowcap.popup.FocusEvent]]
+                    ---@type snowcap.widget.SurfaceEvent?
+                    local event = nil
+
+                    if focus == focus_event.GAINED then
+                        event = {
+                            focus_gained = {},
+                        }
+                    elseif focus == focus_event.LOST then
+                        event = {
+                            focus_lost = {},
+                        }
+                    end
+
+                    if event then
+                        args.program:event(event)
+                    end
                 end
             end
+
+            if not update_view then
+                ---@diagnostic disable-next-line: redefined-local
+                local _, err = client:snowcap_popup_v1_PopupService_RequestView({
+                    popup_id = popup_id,
+                })
+
+                if err then
+                    log.error(err)
+                end
+            else
+                ---@diagnostic disable-next-line:redefined-local
+                local widget_def = args.program:view() or widget.row({ children = {} })
+                callbacks = {}
+
+                widget._traverse_widget_tree(widget_def, callbacks, widget._collect_callbacks)
+
+                ---@diagnostic disable-next-line:redefined-local
+                local _, err = client:snowcap_popup_v1_PopupService_UpdatePopup({
+                    popup_id = popup_id,
+                    widget_def = widget.widget_def_into_api(widget_def),
+                })
+
+                if err then
+                    log.error(err)
+                end
+
+                for _, oper in pairs(pending_operations) do
+                    ---@diagnostic disable-next-line:redefined-local
+                    local _, err = client:snowcap_popup_v1_PopupService_OperatePopup({
+                        popup_id = popup_id,
+                        operation = require("snowcap.widget.operation")._to_api(oper), ---@diagnostic disable-line: invisible
+                    })
+
+                    if err then
+                        log.error(err)
+                    end
+                end
+                pending_operations = {}
+            end
+
+            msg = receiver:recv()
         end
 
-        ---@diagnostic disable-next-line:redefined-local
-        local widget_def = args.program:view() or widget.row({ children = {} })
-        callbacks = {}
-
-        widget._traverse_widget_tree(widget_def, callbacks, widget._collect_callbacks)
-
-        ---@diagnostic disable-next-line:redefined-local
-        local _, err = client:snowcap_popup_v1_PopupService_UpdatePopup({
-            popup_id = popup_id,
-            widget_def = widget.widget_def_into_api(widget_def),
-        })
-
-        if err then
-            log.error(err)
-        end
-    end, function()
         args.program:event({
-            closing = {},
+            closing = {}
         })
+        ::main_loop_break::
     end)
 
     return handle
@@ -429,14 +475,7 @@ end
 ---Sends an `Operation` to this popup.
 ---@param operation snowcap.widget.operation.Operation
 function PopupHandle:operate(operation)
-    local _, err = client:snowcap_popup_v1_PopupService_OperatePopup({
-        popup_id = self.id,
-        operation = require("snowcap.widget.operation")._to_api(operation), ---@diagnostic disable-line: invisible
-    })
-
-    if err then
-        log.error(err)
-    end
+    self._operate(operation)
 end
 
 ---PopupHandle:popup parameters.
