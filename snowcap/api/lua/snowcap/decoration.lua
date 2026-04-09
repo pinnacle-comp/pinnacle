@@ -15,17 +15,20 @@ local decoration_handle = {}
 
 ---@class snowcap.decoration.DecorationHandle
 ---@field id integer
----@field private update fun(msg: any)
+---@field private _update fun(msg: any)
+---@field private _operate fun(oper: snowcap.widget.operation.Operation)
 local DecorationHandle = {}
 
 ---@param id integer
 ---@param update fun(msg: any?)
+---@param operate fun(oper: snowcap.widget.operation.Operation)
 ---@return snowcap.decoration.DecorationHandle
-function decoration_handle.new(id, update)
+function decoration_handle.new(id, update, operate)
     ---@type snowcap.decoration.DecorationHandle
     local self = {
         id = id,
-        update = update,
+        _update = update,
+        _operate = operate,
     }
     setmetatable(self, { __index = DecorationHandle })
     return self
@@ -80,28 +83,29 @@ function decoration.new_widget(args)
 
     local decoration_id = response.decoration_id or 0
 
+    local sender, receiver = require("snowcap.util.channel").spsc()
+
     ---@type fun(msg: any?)
     local update_on_msg = function(msg)
         if msg ~= nil then
-            args.program:update(msg)
-        end
-
-        ---@diagnostic disable-next-line: redefined-local
-        local _, err = client:snowcap_decoration_v1_DecorationService_RequestView({
-            decoration_id = decoration_id,
-        })
-
-        if err then
-            log.error(err)
+            sender:send({
+                message = msg,
+            })
+        else
+            sender:send({
+                redraw = {}
+            })
         end
     end
-
-    local handle = decoration_handle.new(decoration_id, update_on_msg)
 
     ---@type fun(oper: snowcap.widget.operation.Operation)
-    local forward_operation = function(oper)
-        handle:operate(oper)
+    local operate_surface = function(oper)
+        sender:send({
+            operation = oper,
+        })
     end
+
+    local handle = decoration_handle.new(decoration_id, update_on_msg, operate_surface)
 
     ---@type fun(): snowcap.signal.HandlerPolicy
     local close_surface = function()
@@ -112,48 +116,110 @@ function decoration.new_widget(args)
 
     args.program:connect(widget_signal.redraw_needed, update_on_msg)
     args.program:connect(widget_signal.send_message, update_on_msg)
-    args.program:connect(widget_signal.operation, forward_operation)
+    args.program:connect(widget_signal.operation, operate_surface)
     args.program:connect(widget_signal.request_close, close_surface)
 
     args.program:event({
         created = widget.SurfaceHandle.from_decoration_handle(handle),
     })
 
+    err = client:snowcap_decoration_v1_DecorationService_GetDecorationEvents({
+        decoration_id = decoration_id,
+    }, function(response) ---@diagnostic disable-line:redefined-local
+        sender:send({
+            decoration_events = response.decoration_events or {}
+        })
+    end)
+
     err = client:snowcap_widget_v1_WidgetService_GetWidgetEvents({
         decoration_id = decoration_id,
     }, function(response) ---@diagnostic disable-line: redefined-local
-        for _, event in ipairs(response.widget_events) do
-            ---@diagnostic disable-next-line:invisible
-            local msg = widget._message_from_event(callbacks, event)
+        sender:send({
+            widget_events = response.widget_events or {}
+        })
+    end)
 
-            if msg then
-                local ok, update_err = pcall(function()
-                    args.program:update(msg)
-                end)
-                if not ok then
-                    log.error(update_err)
+    client.loop:wrap(function()
+        local pending_operations = {}
+
+        local msg = receiver:recv()
+        while msg do
+            local update_view = false
+
+            if msg.widget_events then
+                for _, event in ipairs(msg.widget_events) do
+                    ---@diagnostic disable-next-line:invisible
+                    local msg = widget._message_from_event(callbacks, event)
+
+                    if msg then
+                        local ok, update_err = pcall(function()
+                            args.program:update(msg)
+                        end)
+                        if not ok then
+                            log.error(update_err)
+                        end
+                    end
+                end
+
+                update_view = true
+            elseif msg.message then
+                args.program:update(msg)
+            elseif msg.operation then
+                table.insert(pending_operations, msg.operation)
+            elseif msg.decoration_events then
+                for _, decoration_event in ipairs(msg.decoration_events) do
+                    if decoration_event.closing ~= nil then
+                        goto main_loop_break
+                    end
                 end
             end
+
+            if not update_view then
+                ---@diagnostic disable-next-line: redefined-local
+                local _, err = client:snowcap_decoration_v1_DecorationService_RequestView({
+                    decoration_id = decoration_id,
+                })
+
+                if err then
+                    log.error(err)
+                end
+            else
+                ---@diagnostic disable-next-line:redefined-local
+                local widget_def = args.program:view() or widget.row({ children = {} })
+                callbacks = {}
+
+                widget._traverse_widget_tree(widget_def, callbacks, widget._collect_callbacks)
+
+                ---@diagnostic disable-next-line:redefined-local
+                local _, err = client:snowcap_decoration_v1_DecorationService_UpdateDecoration({
+                    decoration_id = decoration_id,
+                    widget_def = widget.widget_def_into_api(widget_def),
+                })
+
+                if err then
+                    log.error(err)
+                end
+
+                for _, oper in ipairs(pending_operations) do
+                    ---@diagnostic disable-next-line:redefined-local
+                    local _, err = client:snowcap_decoration_v1_DecorationService_OperateDecoration({
+                        decoration_id = decoration_id,
+                        operation = require("snowcap.widget.operation")._to_api(oper), ---@diagnostic disable-line: invisible
+                    })
+
+                    if err then
+                        log.error(err)
+                    end
+                end
+                pending_operations = {}
+            end
+
+            msg = receiver:recv()
         end
+        ::main_loop_break::
 
-        ---@diagnostic disable-next-line:redefined-local
-        local widget_def = args.program:view() or widget.row({ children = {} })
-        callbacks = {}
-
-        widget._traverse_widget_tree(widget_def, callbacks, widget._collect_callbacks)
-
-        ---@diagnostic disable-next-line:redefined-local
-        local _, err = client:snowcap_decoration_v1_DecorationService_UpdateDecoration({
-            decoration_id = decoration_id,
-            widget_def = widget.widget_def_into_api(widget_def),
-        })
-
-        if err then
-            log.error(err)
-        end
-    end, function()
         args.program:event({
-            closing = {},
+            closing = {}
         })
     end)
 
@@ -178,20 +244,13 @@ end
 ---
 ---@param message any
 function DecorationHandle:send_message(message)
-    self.update(message)
+    self._update(message)
 end
 
 ---Sends an `Operation` to this decoration.
 ---@param operation snowcap.widget.operation.Operation
 function DecorationHandle:operate(operation)
-    local _, err = client:snowcap_decoration_v1_DecorationService_OperateDecoration({
-        decoration_id = self.id,
-        operation = require("snowcap.widget.operation")._to_api(operation), ---@diagnostic disable-line: invisible
-    })
-
-    if err then
-        log.error(err)
-    end
+    self._operate(operation)
 end
 
 ---Sets the z-index at which this decoration will render.
