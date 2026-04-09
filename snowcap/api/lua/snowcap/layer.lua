@@ -16,6 +16,7 @@ local layer_handle = {}
 ---@class snowcap.layer.LayerHandle
 ---@field id integer
 ---@field private _update fun(msg:any)
+---@field private _operate fun(oper: snowcap.widget.operation.Operation)
 local LayerHandle = {}
 
 ---Convert a LayerHandle into a Popup's ParentHandle
@@ -26,12 +27,14 @@ end
 
 ---@param id integer
 ---@param update fun(msg: any?)
+---@param operate fun(oper: snowcap.widget.operation.Operation)
 ---@return snowcap.layer.LayerHandle
-function layer_handle.new(id, update)
+function layer_handle.new(id, update, operate)
     ---@type snowcap.layer.LayerHandle
     local self = {
         id = id,
         _update = update,
+        _operate = operate,
     }
     setmetatable(self, { __index = LayerHandle })
     return self
@@ -132,28 +135,29 @@ function layer.new_widget(args)
 
     local layer_id = response.layer_id or 0
 
+    local sender, receiver = require("snowcap.util.channel").spsc()
+
     ---@type fun(msg: any?)
     local update_on_msg = function(msg)
         if msg ~= nil then
-            args.program:update(msg)
-        end
-
-        ---@diagnostic disable-next-line: redefined-local
-        local _, err = client:snowcap_layer_v1_LayerService_RequestView({
-            layer_id = layer_id,
-        })
-
-        if err then
-            log.error(err)
+            sender:send({
+                message = msg
+            })
+        else
+            sender:send({
+                redraw = {}
+            })
         end
     end
-
-    local handle = layer_handle.new(layer_id, update_on_msg)
 
     ---@type fun(oper: snowcap.widget.operation.Operation)
-    local forward_operation = function(oper)
-        handle:operate(oper)
+    local operate_surface = function(oper)
+        sender:send({
+            operation = oper
+        })
     end
+
+    local handle = layer_handle.new(layer_id, update_on_msg, operate_surface)
 
     ---@type fun(): snowcap.signal.HandlerPolicy
     local close_surface = function()
@@ -164,7 +168,7 @@ function layer.new_widget(args)
 
     args.program:connect(widget_signal.redraw_needed, update_on_msg)
     args.program:connect(widget_signal.send_message, update_on_msg)
-    args.program:connect(widget_signal.operation, forward_operation)
+    args.program:connect(widget_signal.operation, operate_surface)
     args.program:connect(widget_signal.request_close, close_surface)
 
     args.program:event({
@@ -174,71 +178,115 @@ function layer.new_widget(args)
     err = client:snowcap_layer_v1_LayerService_GetLayerEvents({
         layer_id = layer_id,
     }, function(response) ---@diagnostic disable-line:redefined-local
-        response.layer_events = response.layer_events or {}
-
-        for _, layer_event in ipairs(response.layer_events) do
-            local focus = layer_event.focus --[[@as snowcap.layer.FocusEvent]]
-            ---@type snowcap.widget.SurfaceEvent?
-            local event = nil
-
-            if focus == focus_event.GAINED then
-                event = {
-                    focus_gained = {},
-                }
-            elseif focus == focus_event.LOST then
-                event = {
-                    focus_lost = {},
-                }
-            end
-
-            if event then
-                args.program:event(event)
-            end
-        end
-
-        ---@diagnostic disable-next-line: redefined-local
-        local _, err = client:snowcap_layer_v1_LayerService_RequestView({
-            layer_id = layer_id,
+        sender:send({
+            layer_events = response.layer_events or {}
         })
-
-        if err then
-            log.error(err)
-        end
     end)
 
     err = client:snowcap_widget_v1_WidgetService_GetWidgetEvents({
         layer_id = layer_id,
     }, function(response) ---@diagnostic disable-line:redefined-local
-        for _, event in ipairs(response.widget_events) do
-            ---@diagnostic disable-next-line:invisible
-            local msg = widget._message_from_event(callbacks, event)
+        sender:send({
+            widget_events = response.widget_events or {}
+        })
+    end)
 
-            if msg then
-                local ok, update_err = pcall(function()
-                    args.program:update(msg)
-                end)
-                if not ok then
-                    log.error(update_err)
+    client.loop:wrap(function()
+        local pending_operations = {}
+
+        local msg = receiver:recv()
+        while msg do
+            local update_view = false;
+
+            if msg.widget_events then
+                for _, event in ipairs(msg.widget_events) do
+                    ---@diagnostic disable-next-line:invisible
+                    local message = widget._message_from_event(callbacks, event)
+
+                    if message then
+                        local ok, update_err = pcall(function()
+                            args.program:update(message)
+                        end)
+                        if not ok then
+                            log.error(update_err)
+                        end
+                    end
+                end
+                update_view = true
+            elseif msg.message then
+                args.program:update(msg.message)
+            elseif msg.operation then
+                table.insert(pending_operations, msg.operation)
+            elseif msg.layer_events then
+                for _, layer_event in ipairs(msg.layer_events) do
+                    if layer_event.closing ~= nil then
+                        goto main_loop_break
+                    end
+
+                    local focus = layer_event.focus --[[@as snowcap.layer.FocusEvent]]
+                    ---@type snowcap.widget.SurfaceEvent?
+                    local event = nil
+
+                    if focus == focus_event.GAINED then
+                        event = {
+                            focus_gained = {},
+                        }
+                    elseif focus == focus_event.LOST then
+                        event = {
+                            focus_lost = {},
+                        }
+                    end
+
+                    if event then
+                        args.program:event(event)
+                    end
                 end
             end
+
+            if not update_view then
+                ---@diagnostic disable-next-line: redefined-local
+                local _, err = client:snowcap_layer_v1_LayerService_RequestView({
+                    layer_id = layer_id,
+                })
+
+                if err then
+                    log.error(err)
+                end
+            else
+                ---@diagnostic disable-next-line:redefined-local
+                local widget_def = args.program:view() or widget.row({ children = {} })
+                callbacks = {}
+
+                widget._traverse_widget_tree(widget_def, callbacks, widget._collect_callbacks)
+
+                ---@diagnostic disable-next-line:redefined-local
+                local _, err = client:snowcap_layer_v1_LayerService_UpdateLayer({
+                    layer_id = layer_id,
+                    widget_def = widget.widget_def_into_api(widget_def),
+                })
+
+                if err then
+                    log.error(err)
+                end
+
+                for _, oper in pairs(pending_operations) do
+                    ---@diagnostic disable-next-line:redefined-local
+                    local _, err = client:snowcap_layer_v1_LayerService_OperateLayer({
+                        layer_id = layer_id,
+                        operation = require("snowcap.widget.operation")._to_api(oper), ---@diagnostic disable-line: invisible
+                    })
+
+                    if err then
+                        log.error(err)
+                    end
+                end
+                pending_operations = {}
+            end
+
+            msg = receiver:recv()
         end
+        ::main_loop_break::
 
-        ---@diagnostic disable-next-line:redefined-local
-        local widget_def = args.program:view() or widget.row({ children = {} })
-        callbacks = {}
-
-        widget._traverse_widget_tree(widget_def, callbacks, widget._collect_callbacks)
-
-        ---@diagnostic disable-next-line:redefined-local
-        local _, err = client:snowcap_layer_v1_LayerService_UpdateLayer({
-            layer_id = layer_id,
-            widget_def = widget.widget_def_into_api(widget_def),
-        })
-
-        if err then
-            log.error(err)
-        end
-    end, function()
         args.program:event({
             closing = {},
         })
@@ -334,14 +382,7 @@ end
 ---Sends an `Operation` to this layer.
 ---@param operation snowcap.widget.operation.Operation
 function LayerHandle:operate(operation)
-    local _, err = client:snowcap_layer_v1_LayerService_OperateLayer({
-        layer_id = self.id,
-        operation = require("snowcap.widget.operation")._to_api(operation), ---@diagnostic disable-line: invisible
-    })
-
-    if err then
-        log.error(err)
-    end
+    self._operate(operation)
 end
 
 layer.anchor = anchor
