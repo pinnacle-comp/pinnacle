@@ -113,7 +113,7 @@ impl TryFrom<layout::v1::LayoutNode> for crate::layout::tree::LayoutNode {
                     top: taffy::LengthPercentageAuto::length(gaps.top),
                     bottom: taffy::LengthPercentageAuto::length(gaps.bottom),
                 })
-                .unwrap_or(taffy::Rect::length(0.0)),
+                .unwrap_or(taffy::Rect::length(0.0_f32)),
             ..Default::default()
         };
 
