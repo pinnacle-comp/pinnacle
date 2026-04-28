@@ -156,7 +156,7 @@ impl LayoutTree {
         if children.is_empty() {
             let mut new_node_style = tree.style(node).unwrap().clone();
             let prev_margin = new_node_style.margin;
-            new_node_style.margin = taffy::Rect::length(0.0);
+            new_node_style.margin = taffy::Rect::length(0.0_f32);
             tree.set_style(node, new_node_style).unwrap();
 
             let leaf_child = tree
