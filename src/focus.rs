@@ -365,7 +365,7 @@ impl WindowKeyboardFocusStack {
     /// Gets the currently focused window on this stack.
     ///
     /// This is the topmost window that is on an active tag and not
-    /// an OR window.
+    /// an OR window, and is not minimized.
     pub fn current_focus(&self) -> Option<&WindowElement> {
         if !self.focused {
             return None;
@@ -375,6 +375,7 @@ impl WindowKeyboardFocusStack {
             .iter()
             .rev()
             .filter(|win| win.is_on_active_tag())
+            .filter(|win| win.with_state(|state| !state.minimized))
             .find(|win| !win.is_x11_override_redirect())
     }
 }
