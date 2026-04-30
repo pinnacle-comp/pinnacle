@@ -82,8 +82,11 @@ message LayerEvent {
     FOCUS_LOST = 2;
   }
 
+  message Closing {}
+
   oneof event {
     Focus focus = 1;
+    Closing closing = 2;
   }
 }
 

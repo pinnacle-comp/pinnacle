@@ -179,16 +179,14 @@ impl<'a, T> ZsTree<'a, T> {
             kr: Vec::new(),
         };
 
-        let mut idx = 1;
         let mut tmp_data = HashMap::new();
-        for n in tree.traverse_post_order() {
+        for (idx, n) in (1..).zip(tree.traverse_post_order()) {
             tmp_data.insert(n, idx);
             this.set_i_tree(idx, n);
             this.set_lld(idx, *tmp_data.get(&get_first_leaf(n)).unwrap());
             if n.children().next().is_none() {
                 this.leaf_count += 1;
             }
-            idx += 1;
         }
 
         this.set_keyroots();

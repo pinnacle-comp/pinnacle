@@ -455,14 +455,15 @@ impl From<PopupEvent> for snowcap_api_defs::snowcap::popup::v1::PopupEvent {
         use crate::handlers::keyboard::KeyboardFocusEvent;
         use snowcap_api_defs::snowcap::popup::v1::popup_event::{self, Focus};
 
-        let PopupEvent::Focus(f) = value;
-
-        match f {
-            KeyboardFocusEvent::FocusGained => Self {
+        match value {
+            PopupEvent::Focus(KeyboardFocusEvent::FocusGained) => Self {
                 event: Some(popup_event::Event::Focus(Focus::Gained.into())),
             },
-            KeyboardFocusEvent::FocusLost => Self {
+            PopupEvent::Focus(KeyboardFocusEvent::FocusLost) => Self {
                 event: Some(popup_event::Event::Focus(Focus::Lost.into())),
+            },
+            PopupEvent::Closing => Self {
+                event: Some(popup_event::Event::Closing(popup_event::Closing {})),
             },
         }
     }

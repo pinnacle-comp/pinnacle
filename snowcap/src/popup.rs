@@ -37,6 +37,7 @@ impl PopupIdCounter {
 
 pub enum PopupEvent {
     Focus(KeyboardFocusEvent),
+    Closing,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
@@ -625,6 +626,14 @@ impl SnowcapPopup {
             };
 
             let _ = sender.send(vec![event]);
+        }
+    }
+}
+
+impl Drop for SnowcapPopup {
+    fn drop(&mut self) {
+        if let Some(sender) = self.popup_event_sender.as_ref() {
+            let _ = sender.send(vec![PopupEvent::Closing]);
         }
     }
 }
