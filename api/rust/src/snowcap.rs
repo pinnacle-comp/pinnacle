@@ -202,12 +202,42 @@ impl Program for BindOverlay {
             }
         }
 
+        #[derive(PartialEq, Eq, Hash)]
+        struct GesturebindRepr {
+            mods: Mod,
+            direction: String,
+            fingers: String,
+            layer: Option<String>,
+        }
+
+        impl std::fmt::Display for GesturebindRepr {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                let mods = format_mods(self.mods);
+
+                let layer = self
+                    .layer
+                    .as_ref()
+                    .map(|layer| format!("[{layer}] "))
+                    .unwrap_or_default();
+
+                let bind = mods
+                    .as_deref()
+                    .into_iter()
+                    .chain([self.direction.as_str(), self.fingers.as_str()])
+                    .collect::<Vec<_>>()
+                    .join(" + ");
+                write!(f, "{layer}{bind}")
+            }
+        }
+
         #[derive(Default)]
         struct GroupBinds {
             /// keybinds to descriptions
             keybinds: IndexMap<KeybindRepr, Vec<String>>,
             /// mousebinds to descriptions
             mousebinds: IndexMap<MousebindRepr, Vec<String>>,
+            /// gesturebinds to descriptions
+            gesturebinds: IndexMap<GesturebindRepr, Vec<String>>,
         }
 
         let bind_infos = crate::input::bind_infos();
@@ -254,6 +284,31 @@ impl Program for BindOverlay {
                         layer,
                     };
                     let descs = group.mousebinds.entry(repr).or_default();
+                    if !desc.is_empty() {
+                        descs.push(desc);
+                    }
+                }
+                BindInfoKind::Gesture { direction, fingers } => {
+                    let repr = GesturebindRepr {
+                        mods,
+                        direction: match direction {
+                            crate::input::SwipeDirection::Down => "Swipe Down",
+                            crate::input::SwipeDirection::Left => "Swipe Left",
+                            crate::input::SwipeDirection::Right => "Swipe Right",
+                            crate::input::SwipeDirection::Up => "Swipe Up",
+                            crate::input::SwipeDirection::DownLeft => "Swipe Down-Left",
+                            crate::input::SwipeDirection::DownRight => "Swipe Down-Right",
+                            crate::input::SwipeDirection::UpLeft => "Swipe Up-Left",
+                            crate::input::SwipeDirection::UpRight => "Swipe Up-Right",
+                            crate::input::SwipeDirection::None => "Swipe None",
+                            crate::input::SwipeDirection::Unknown(_) => "Swipe Unknown",
+                        }
+                        .to_string(),
+                        fingers: format!("{fingers:?} fingers"),
+                        layer,
+                    };
+
+                    let descs = group.gesturebinds.entry(repr).or_default();
                     if !desc.is_empty() {
                         descs.push(desc);
                     }
@@ -350,10 +405,49 @@ impl Program for BindOverlay {
                 }
             });
 
+            let gesturebinds = data.gesturebinds.into_iter().map(|(gesture, descs)| {
+                if descs.is_empty() {
+                    WidgetDef::from(
+                        Text::new(gesture.to_string())
+                            .style(text::Style::new().font(self.font.clone())),
+                    )
+                } else if descs.len() == 1 {
+                    Row::new_with_children([
+                        Text::new(gesture.to_string())
+                            .width(Length::FillPortion(1))
+                            .style(text::Style::new().font(self.font.clone()))
+                            .into(),
+                        Text::new(descs[0].clone())
+                            .width(Length::FillPortion(2))
+                            .style(text::Style::new().font(self.font.clone()))
+                            .into(),
+                    ])
+                    .into()
+                } else {
+                    let mut children = Vec::<WidgetDef<()>>::new();
+                    children.push(
+                        Text::new(gesture.to_string() + ":")
+                            .style(text::Style::new().font(self.font.clone()))
+                            .into(),
+                    );
+
+                    for desc in descs {
+                        children.push(
+                            Text::new(format!("\t{desc}"))
+                                .style(text::Style::new().font(self.font.clone()))
+                                .into(),
+                        );
+                    }
+
+                    Column::new_with_children(children).into()
+                }
+            });
+
             let mut children = Vec::<WidgetDef<()>>::new();
             children.push(group_title.into());
             children.extend(keybinds);
             children.extend(mousebinds);
+            children.extend(gesturebinds);
             children.push(Text::new("").style(text::Style::new().pixels(8.0)).into()); // Spacing because I haven't impl'd that yet
 
             children
