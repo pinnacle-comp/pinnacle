@@ -15,7 +15,14 @@ message AddRequest {
     repeated string tag_names = 2;
 }
 message AddResponse {
+    message Error {
+        oneof kind {
+            google.protobuf.Empty output_does_not_exist = 1;
+        }
+    }
+
     repeated uint32 tag_ids = 1;
+    optional Error error = 2;
 }
 
 message RemoveRequest {

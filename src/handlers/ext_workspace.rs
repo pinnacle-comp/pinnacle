@@ -1,3 +1,4 @@
+use crate::api::tag::TagAddError;
 use crate::delegate_ext_workspace;
 use crate::output::OutputName;
 use crate::protocol::ext_workspace::{ExtWorkspaceHandler, ExtWorkspaceManagerState};
@@ -28,7 +29,15 @@ impl ExtWorkspaceHandler for State {
     }
 
     fn add_workspace(&mut self, output: &Output, name: String) {
-        crate::api::tag::add(self, [name.clone()], OutputName(output.name()));
+        match crate::api::tag::add(self, [name.clone()], OutputName(output.name())) {
+            Err(TagAddError::OutputDoesNotExist) => {
+                tracing::warn!(
+                    output_name = output.name(),
+                    "Tried to add tags to output but it doesn't exist",
+                );
+            }
+            Ok(_) => (),
+        }
     }
 }
 

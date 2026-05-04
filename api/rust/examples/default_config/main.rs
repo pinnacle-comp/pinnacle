@@ -386,7 +386,9 @@ async fn config() {
 
     // Setup all monitors with tags "1" through "9"
     output::for_each_output(move |output| {
-        let mut tags = tag::add(output, tag_names);
+        let Ok(mut tags) = tag::add(output, tag_names) else {
+            return;
+        };
         tags.next().unwrap().set_active(true);
     });
 
