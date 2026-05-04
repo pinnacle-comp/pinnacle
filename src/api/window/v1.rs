@@ -20,7 +20,8 @@ use pinnacle_api_defs::pinnacle::{
             SetDecorationModeRequest, SetFloatingRequest, SetFocusedRequest, SetFullscreenRequest,
             SetGeometryRequest, SetMaximizedRequest, SetTagRequest, SetTagsRequest,
             SetTagsResponse, SetVrrDemandRequest, SetVrrDemandResponse, SwapRequest, SwapResponse,
-            WindowRuleRequest, WindowRuleResponse,
+            TouchMoveGrabRequest, TouchMoveGrabResponse, TouchResizeGrabRequest,
+            TouchResizeGrabResponse, WindowRuleRequest, WindowRuleResponse,
         },
     },
 };
@@ -807,6 +808,36 @@ impl v1::window_service_server::WindowService for super::WindowService {
 
         run_unary_no_response(&self.sender, move |state| {
             crate::api::window::resize_grab(state, button);
+        })
+        .await
+    }
+
+    async fn touch_move_grab(
+        &self,
+        request: Request<TouchMoveGrabRequest>,
+    ) -> TonicResult<TouchMoveGrabResponse> {
+        let request = request.into_inner();
+        let finger = request.finger_id;
+
+        run_unary(&self.sender, move |state| {
+            crate::api::window::touch_move_grab(state, finger);
+
+            Ok(TouchMoveGrabResponse {})
+        })
+        .await
+    }
+
+    async fn touch_resize_grab(
+        &self,
+        request: Request<TouchResizeGrabRequest>,
+    ) -> TonicResult<TouchResizeGrabResponse> {
+        let request = request.into_inner();
+        let finger = request.finger_id;
+
+        run_unary(&self.sender, move |state| {
+            crate::api::window::touch_resize_grab(state, finger);
+
+            Ok(TouchResizeGrabResponse {})
         })
         .await
     }
