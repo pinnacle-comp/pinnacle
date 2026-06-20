@@ -73,7 +73,10 @@ let
   };
 in
 rustPlatform.buildRustPackage (finalAttrs: {
-  inherit meta version;
+  inherit version;
+  meta = meta // {
+    mainProgram = "pinnacle";
+  };
 
   pname = "pinnacle-server";
   src = ../..;
