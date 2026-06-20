@@ -21,7 +21,17 @@ in
 
     config = lib.mkIf cfg.enable (lib.mkMerge [
       {
-        environment.systemPackages = [cfg.package];
+        environment.systemPackages = [
+          cfg.package
+          pkgs.protobuf
+          cfg.package.lua-client-api
+        ];
+        environment.pathsToLink = [
+          # For /run/current-system/sw/share/pinnacle protobuf files - for
+          # pinnacle to be able to launch with a non-default config out of the
+          # box.
+          "/share/pinnacle"
+        ];
         services.dbus.enable = true;
         xdg.portal = lib.mkIf cfg.xdg-portals.enable {
           enable = true;
