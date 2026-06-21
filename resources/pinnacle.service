@@ -12,3 +12,5 @@ Before=xdg-desktop-autostart.target
 Slice=session.slice
 Type=notify
 ExecStart=/usr/bin/pinnacle --session
+
+# vim:ft=systemd
