@@ -1,4 +1,6 @@
 {
+  src,
+  vergen_env ? {},
   rustPlatform,
   lib,
   pkg-config,
@@ -39,18 +41,10 @@ let
   version = "0.2.3";
 
   lua-client-api = lua54Packages.buildLuarocksPackage rec {
-    inherit meta version;
+    inherit src meta version;
     pname = "pinnacle-client-api";
-    src = lib.fileset.toSource {
-      root = ../..;
-      # we should probably filter out parts of the repo that aren't relevant but this at least works
-      fileset = lib.fileset.unions [
-        ../../api
-        ../../snowcap
-      ];
-    };
     sourceRoot = "${src.name}/api/lua";
-    knownRockspec = ../../api/lua/rockspecs/pinnacle-api-0.2.2-1.rockspec;
+    knownRockspec = "rockspecs/pinnacle-api-0.2.2-1.rockspec";
     propagatedBuildInputs = with lua54Packages; [
       cqueues
       http
@@ -73,15 +67,15 @@ let
   };
 in
 rustPlatform.buildRustPackage (finalAttrs: {
-  inherit version;
+  inherit src version;
   meta = meta // {
     mainProgram = "pinnacle";
   };
+  env = vergen_env;
 
   pname = "pinnacle-server";
-  src = ../..;
   cargoLock = {
-    lockFile = "${../..}/Cargo.lock";
+    lockFile = "${src}/Cargo.lock";
     # as we're not in-tree in nixpkgs right now, we don't benefit from the public nix subsituters.
     # consequently, we can neither provide a single static `cargoHash` nor a set of hashes for just
     # the dependencies fetched via git (these can change since cargo doesn't pin the git revision).

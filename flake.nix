@@ -11,15 +11,47 @@
     };
 
     flake-utils.url = "github:numtide/flake-utils";
+    gitignore = {
+      url = "github:hercules-ci/gitignore.nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs =
     {
+      self,
       nixpkgs,
       flake-utils,
+      gitignore,
       fenix,
       ...
     }:
+    let 
+      vergen_env = {
+        VERGEN_GIT_DIRTY = nixpkgs.lib.optionalString (self ? rev) "true";
+        VERGEN_GIT_SHA = if (self ? rev) then self.rev else "<unavailable>(Nix)";
+        VERGEN_GIT_BRANCH = "<unavailable>(Nix)";
+        VERGEN_GIT_COMMIT_MESSAGE = "<unavailable>(Nix)";
+      };
+      src = nixpkgs.lib.cleanSourceWith {
+        # Ignore many files that gitignoreSource doesn't ignore, see:
+        # https://github.com/hercules-ci/gitignore.nix/issues/9#issuecomment-635458762
+        filter =
+          path: type:
+          !(builtins.any (r: (builtins.match r (baseNameOf path)) != null) [
+            # Nix files
+            "flake.nix"
+            "flake.lock"
+            "nix"
+            # CI files
+            ".github"
+            # Docs
+            ".*.md"
+            "wiki"
+          ]);
+        src = gitignore.lib.gitignoreSource ./.;
+      };
+    in
     (flake-utils.lib.eachSystem [ "x86_64-linux" "aarch64-linux" ] (
       system:
       let
@@ -27,7 +59,9 @@
           inherit system;
           overlays = [
             (final: prev: {
-              pinnacle = prev.callPackage ./nix/packages/default.nix { };
+              pinnacle = prev.callPackage ./nix/packages/default.nix {
+                inherit vergen_env src;
+              };
             })
           ];
         };
@@ -118,7 +152,9 @@
     ))
     // {
       overlays.default = final: prev: {
-        pinnacle = prev.callPackage ./nix/packages/default.nix { };
+        pinnacle = prev.callPackage ./nix/packages/default.nix {
+          inherit vergen_env src;
+        };
       };
 
       nixosModules = {
