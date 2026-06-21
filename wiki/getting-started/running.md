@@ -33,7 +33,7 @@ To run Pinnacle as a session outside of a display manager:
 - If you are on a systemd distribution, run `pinnacle-session`. This will start Pinnacle as a systemd service
   in addition to running `pinnacle --session` as mentioned below.
 - Otherwise, run `pinnacle --session`. This will import the necessary environment variables into D-Bus
-  and systemd, it if is running.
+  and systemd, if it is running.
 
 ### Within another graphical environment
 
