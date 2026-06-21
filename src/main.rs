@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use std::{
-    env,
+    env, fmt,
     io::{BufRead, BufReader},
     sync::atomic::Ordering,
     time::Duration,
@@ -33,6 +33,18 @@ use xdg::BaseDirectories;
 #[global_allocator]
 static GLOBAL_ALLOC: tracy_client::ProfiledAllocator<std::alloc::System> =
     tracy_client::ProfiledAllocator::new(std::alloc::System, 100);
+
+struct OptionalTimer(bool);
+
+impl tracing_subscriber::fmt::time::FormatTime for OptionalTimer {
+    fn format_time(&self, w: &mut tracing_subscriber::fmt::format::Writer<'_>) -> fmt::Result {
+        if self.0 {
+            tracing_subscriber::fmt::time::SystemTime.format_time(w)
+        } else {
+            Ok(())
+        }
+    }
+}
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -78,6 +90,11 @@ async fn main() -> anyhow::Result<()> {
     let stdout_env_filter =
         env_filter.unwrap_or_else(|_| EnvFilter::new("warn,pinnacle=info,snowcap=info,sctk=error"));
     let stdout_layer = tracing_subscriber::fmt::layer()
+        .with_timer(OptionalTimer(
+            env::var("PINNACLE_LOG_TIMESTAMPS")
+                .map(|v| v != "0" && v != "false")
+                .unwrap_or(true),
+        ))
         .compact()
         .with_writer(std::io::stdout)
         .with_filter(stdout_env_filter);

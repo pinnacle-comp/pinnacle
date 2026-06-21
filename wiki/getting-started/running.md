@@ -34,6 +34,7 @@ To run Pinnacle as a session outside of a display manager:
   in addition to running `pinnacle --session` as mentioned below.
 - Otherwise, run `pinnacle --session`. This will import the necessary environment variables into D-Bus
   and systemd, if it is running.
+- If you wish to use `systemd-cat`, and run it manually, you will likely want to set `PINNACLE_LOG_TIMESTAMPS=1` in the environment so timestamps will be printed only by systemd and not pinnacle too.
 
 ### Within another graphical environment
 
