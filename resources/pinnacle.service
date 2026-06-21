@@ -11,6 +11,8 @@ Before=xdg-desktop-autostart.target
 [Service]
 Slice=session.slice
 Type=notify
+# Spare duplicate (systemd & pinnacle) timestamps in log output, see src/main.rs
+Environment=PINNACLE_LOG_TIMESTAMPS=0
 ExecStart=/usr/bin/pinnacle --session
 
 # vim:ft=systemd
