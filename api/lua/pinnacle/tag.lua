@@ -139,6 +139,7 @@ end
 ---@param ... string The names of the new tags.
 ---
 ---@return pinnacle.tag.TagHandle[] tags Handles to the created tags.
+---@return pinnacle.tag.AddError|nil err Error on failure.
 ---
 ---@overload fun(output: pinnacle.output.OutputHandle, tag_names: string[]): pinnacle.tag.TagHandle[]
 function tag.add(output, ...)
@@ -154,10 +155,14 @@ function tag.add(output, ...)
 
     if err then
         log.error(err)
-        return {}
+        return {}, nil
     end
 
     assert(response)
+
+    if response.error and response.error.output_does_not_exist then
+        return {}, { output_does_not_exist = true }
+    end
 
     ---@type pinnacle.tag.TagHandle[]
     local handles = {}
@@ -272,6 +277,9 @@ local signal_name_to_SignalName = {
 ---@field output_does_not_exist boolean?
 ---This operation would cause the provided windows to be on multiple outputs.
 ---@field same_window_on_two_outputs pinnacle.window.WindowHandle[]?
+---@class pinnacle.tag.AddError
+---`true` if the output does not exist.
+---@field output_does_not_exist boolean?
 
 ---Connects to a tag signal.
 ---

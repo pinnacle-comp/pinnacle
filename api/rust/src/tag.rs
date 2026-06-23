@@ -28,7 +28,7 @@ use pinnacle_api_defs::pinnacle::{
     tag::v1::{
         AddRequest, GetActiveRequest, GetNameRequest, GetOutputNameRequest, GetRequest,
         MoveToOutputRequest, RemoveRequest, SetActiveRequest, SwitchToRequest,
-        move_to_output_response::error::Kind,
+        add_response::error::Kind as AddErrorKind, move_to_output_response::error::Kind,
     },
     util::v1::SetOrToggle,
 };
@@ -53,11 +53,16 @@ use crate::{
 /// # use pinnacle_api::output;
 /// # use pinnacle_api::tag;
 /// // Add tags 1-5 to the focused output
-/// if let Some(op) = output::get_focused() {
-///     let tags = tag::add(&op, ["1", "2", "3", "4", "5"]);
-/// }
+/// # || -> Result<(), tag::AddError> {
+/// let Some(op) = output::get_focused() else { return Ok(()); };
+/// let tags = tag::add(&op, ["1", "2", "3", "4", "5"])?;
+/// # Ok(())
+/// # };
 /// ```
-pub fn add<I, T>(output: &OutputHandle, tag_names: I) -> impl Iterator<Item = TagHandle> + use<I, T>
+pub fn add<I, T>(
+    output: &OutputHandle,
+    tag_names: I,
+) -> Result<impl Iterator<Item = TagHandle> + use<I, T>, AddError>
 where
     I: IntoIterator<Item = T>,
     T: ToString,
@@ -65,17 +70,20 @@ where
     let output_name = output.name();
     let tag_names = tag_names.into_iter().map(|name| name.to_string()).collect();
 
-    Client::tag()
+    let response = Client::tag()
         .add(AddRequest {
             output_name,
             tag_names,
         })
         .block_on_tokio()
         .unwrap()
-        .into_inner()
-        .tag_ids
-        .into_iter()
-        .map(|id| TagHandle { id })
+        .into_inner();
+
+    let error = response.error.and_then(|error| error.kind);
+    match error {
+        None => Ok(response.tag_ids.into_iter().map(|id| TagHandle { id })),
+        Some(AddErrorKind::OutputDoesNotExist(_)) => Err(AddError::OutputDoesNotExist),
+    }
 }
 
 /// Gets handles to all tags across all outputs.
@@ -167,7 +175,7 @@ pub async fn get_on_output_async(name: impl ToString, output: &OutputHandle) -> 
 /// # use pinnacle_api::tag;
 /// # use pinnacle_api::output;
 /// # || {
-/// let tags = tag::add(&output::get_by_name("DP-1")?, ["1", "2", "Buckle", "Shoe"]);
+/// let tags = tag::add(&output::get_by_name("DP-1")?, ["1", "2", "Buckle", "Shoe"]).ok()?;
 ///
 /// tag::remove(tags); // "DP-1" no longer has any tags
 /// # Some(())
@@ -238,6 +246,13 @@ where
             ))
         }
     }
+}
+
+/// Error that happens when adding tags to a different output.
+#[derive(Debug, PartialEq, Clone)]
+pub enum AddError {
+    /// The requested output to add tags to, does not exist
+    OutputDoesNotExist,
 }
 
 /// Connects to a [`TagSignal`].
@@ -390,8 +405,8 @@ impl TagHandle {
     /// # use pinnacle_api::tag;
     /// # use pinnacle_api::output;
     /// # || {
-    /// let tags =
-    ///     tag::add(&output::get_by_name("DP-1")?, ["1", "2", "Buckle", "Shoe"]).collect::<Vec<_>>();
+    /// let tags = tag::add(&output::get_by_name("DP-1")?, ["1", "2", "Buckle", "Shoe"]).ok()?
+    ///     .collect::<Vec<_>>();
     ///
     /// tags[1].remove();
     /// tags[3].remove();

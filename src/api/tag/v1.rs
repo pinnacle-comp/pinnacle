@@ -131,11 +131,23 @@ impl v1::tag_service_server::TagService for super::TagService {
         let tag_names = request.tag_names;
 
         run_unary(&self.sender, move |state| {
-            let tags = crate::api::tag::add(state, tag_names, output_name);
+            use crate::api::tag::TagAddError;
+            use pinnacle_api_defs::pinnacle::tag::v1::add_response::{Error, error::Kind};
 
-            let tag_ids = tags.into_iter().map(|tag| tag.id().to_inner()).collect();
+            let (tag_ids, error) = match crate::api::tag::add(state, tag_names, output_name) {
+                Ok(tags) => (
+                    tags.into_iter().map(|tag| tag.id().to_inner()).collect(),
+                    None,
+                ),
+                Err(TagAddError::OutputDoesNotExist) => (
+                    Vec::new(),
+                    Some(Error {
+                        kind: Some(Kind::OutputDoesNotExist(())),
+                    }),
+                ),
+            };
 
-            Ok(AddResponse { tag_ids })
+            Ok(AddResponse { tag_ids, error })
         })
         .await
     }
