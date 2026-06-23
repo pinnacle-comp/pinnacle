@@ -33,6 +33,7 @@ message Bind {
   oneof bind {
     Keybind key = 6;
     Mousebind mouse = 7;
+    Gesturebind gesture = 8;
   }
 }
 
@@ -90,6 +91,51 @@ message MousebindStreamResponse {
 }
 
 message MousebindOnPressRequest {
+  uint32 bind_id = 1;
+}
+
+// Gesturebinds
+
+enum SwipeDirection {
+  SWIPE_DIRECTION_DOWN = 0;
+  SWIPE_DIRECTION_LEFT = 1;
+  SWIPE_DIRECTION_RIGHT = 2;
+  SWIPE_DIRECTION_UP = 3;
+  SWIPE_DIRECTION_DOWN_LEFT = 4;
+  SWIPE_DIRECTION_DOWN_RIGHT = 5;
+  SWIPE_DIRECTION_UP_LEFT = 6;
+  SWIPE_DIRECTION_UP_RIGHT = 7;
+  SWIPE_DIRECTION_NONE = 8;
+}
+
+enum GestureType {
+  GESTURE_TYPE_HOLD = 0;
+  GESTURE_TYPE_PINCH = 1;
+  GESTURE_TYPE_SWIPE = 2;
+}
+
+message Gesturebind {
+  SwipeDirection direction = 1;
+  uint32 fingers = 2;
+  GestureType gesture_type = 3;
+}
+
+message GesturebindStreamRequest {
+  uint32 bind_id = 1;
+}
+message GesturebindStreamResponse {
+  Edge edge = 1;
+}
+
+message GesturebindRequest {
+  uint32 bind_id = 1;
+}
+
+message GesturebindOnBeginRequest {
+  uint32 bind_id = 1;
+}
+
+message GesturebindOnFinishRequest {
   uint32 bind_id = 1;
 }
 
@@ -313,9 +359,12 @@ service InputService {
 
   rpc KeybindStream(KeybindStreamRequest) returns (stream KeybindStreamResponse);
   rpc MousebindStream(MousebindStreamRequest) returns (stream MousebindStreamResponse);
+  rpc GesturebindStream(GesturebindStreamRequest) returns (stream GesturebindStreamResponse);
 
   rpc KeybindOnPress(KeybindOnPressRequest) returns (google.protobuf.Empty);
   rpc MousebindOnPress(MousebindOnPressRequest) returns (google.protobuf.Empty);
+  rpc GesturebindOnBegin(GesturebindOnBeginRequest) returns (google.protobuf.Empty);
+  rpc GesturebindOnFinish(GesturebindOnFinishRequest) returns (google.protobuf.Empty);
 
   // Xkb
 
