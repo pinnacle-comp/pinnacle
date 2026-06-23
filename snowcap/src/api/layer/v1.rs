@@ -273,14 +273,15 @@ impl From<LayerEvent> for snowcap_api_defs::snowcap::layer::v1::LayerEvent {
         use crate::handlers::keyboard::KeyboardFocusEvent;
         use snowcap_api_defs::snowcap::layer::v1::layer_event::{self, Focus};
 
-        let LayerEvent::Focus(f) = value;
-
-        match f {
-            KeyboardFocusEvent::FocusGained => Self {
+        match value {
+            LayerEvent::Focus(KeyboardFocusEvent::FocusGained) => Self {
                 event: Some(layer_event::Event::Focus(Focus::Gained.into())),
             },
-            KeyboardFocusEvent::FocusLost => Self {
+            LayerEvent::Focus(KeyboardFocusEvent::FocusLost) => Self {
                 event: Some(layer_event::Event::Focus(Focus::Lost.into())),
+            },
+            LayerEvent::Closing => Self {
+                event: Some(layer_event::Event::Closing(layer_event::Closing {})),
             },
         }
     }

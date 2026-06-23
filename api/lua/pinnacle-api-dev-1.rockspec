@@ -55,6 +55,7 @@ build = {
         ["pinnacle.snowcap.snowcap.popup"] = "pinnacle/snowcap/snowcap/popup.lua",
         ["pinnacle.snowcap.snowcap.signal"] = "pinnacle/snowcap/snowcap/signal.lua",
         ["pinnacle.snowcap.snowcap.util"] = "pinnacle/snowcap/snowcap/util.lua",
+        ["pinnacle.snowcap.snowcap.util.channel"] = "pinnacle/snowcap/snowcap/util/channel.lua",
         ["pinnacle.snowcap.snowcap.log"] = "pinnacle/snowcap/snowcap/log.lua",
     },
 }

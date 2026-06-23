@@ -9,7 +9,7 @@ use snowcap_api_defs::snowcap::{
         self,
         v1::{
             CloseRequest, GetPopupEventsRequest, NewPopupRequest, OperatePopupRequest,
-            UpdatePopupRequest, ViewRequest,
+            UpdatePopupRequest, ViewRequest, popup_event,
         },
     },
     widget::v1::{GetWidgetEventsRequest, get_widget_events_request},
@@ -23,7 +23,7 @@ use crate::{
     BlockOnTokio,
     client::Client,
     input::{KeyEvent, Modifiers},
-    surface::SurfaceEvent,
+    surface::{SurfaceEvent, SurfaceMessage},
     widget::{
         self, Program, WidgetDef, WidgetId, WidgetMessage,
         operation::{self, Operation},
@@ -162,7 +162,9 @@ impl<Msg> TryFrom<popup::v1::popup_event::Event> for SurfaceEvent<Msg> {
     fn try_from(value: popup::v1::popup_event::Event) -> Result<Self, Self::Error> {
         use popup::v1::popup_event::{Event, Focus};
 
-        let Event::Focus(f) = value;
+        let Event::Focus(f) = value else {
+            return Err(PopupEventError::Unknown);
+        };
 
         match Focus::try_from(f) {
             Ok(Focus::Gained) => Ok(Self::FocusGained),
@@ -247,7 +249,7 @@ where
         .block_on_tokio()?
         .into_inner();
 
-    let (msg_send, mut msg_recv) = tokio::sync::mpsc::unbounded_channel::<Option<Msg>>();
+    let (msg_send, mut msg_recv) = tokio::sync::mpsc::unbounded_channel::<SurfaceMessage<Msg>>();
 
     let handle = PopupHandle {
         id: popup_id.into(),
@@ -259,7 +261,7 @@ where
             let msg_send = msg_send.clone();
 
             move |msg: signal::Message<Msg>| {
-                if let Err(err) = msg_send.send(Some(msg.into_inner())) {
+                if let Err(err) = msg_send.send(SurfaceMessage::Message(msg.into_inner())) {
                     error!("Failed to send emitted msg: {err}");
                     crate::signal::HandlerPolicy::Discard
                 } else {
@@ -272,7 +274,7 @@ where
             let msg_send = msg_send.clone();
 
             move |_: signal::RedrawNeeded| {
-                if let Err(err) = msg_send.send(None) {
+                if let Err(err) = msg_send.send(SurfaceMessage::Redraw) {
                     error!("Failed to send redraw signal: {err}");
                     crate::signal::HandlerPolicy::Discard
                 } else {
@@ -305,7 +307,9 @@ where
     });
 
     tokio::spawn(async move {
-        loop {
+        let mut pending_operations = Vec::new();
+
+        'main_loop: loop {
             tokio::select! {
                 Some(Ok(response)) = widget_event_stream.next() => {
                     for widget_event in response.widget_events {
@@ -317,8 +321,14 @@ where
                     }
                 }
                 Some(msg) = msg_recv.recv() => {
-                    if let Some(msg) = msg {
-                        program.update(msg);
+                    match msg {
+                        SurfaceMessage::Message(msg) => {
+                            program.update(msg);
+                        },
+                        SurfaceMessage::Operation(operation) => {
+                            pending_operations.push(operation);
+                        },
+                        _ => {}
                     }
 
                     if let Err(status) = Client::popup()
@@ -332,6 +342,10 @@ where
                 }
                 Some(Ok(response)) = popup_event_stream.next() => {
                     for popup_event in response.popup_events {
+                        if matches!(popup_event.event, Some(popup_event::Event::Closing(_))) {
+                            break 'main_loop;
+                        };
+
                         let Some(event) = popup_event.event
                             .and_then(|e| e.try_into().ok()) else {
                                 continue;
@@ -368,6 +382,19 @@ where
                 })
                 .await
                 .unwrap();
+
+            let operations = std::mem::take(&mut pending_operations);
+            for operation in operations.into_iter() {
+                if let Err(status) = Client::popup()
+                    .operate_popup(OperatePopupRequest {
+                        popup_id,
+                        operation: Some(operation.into()),
+                    })
+                    .await
+                {
+                    tracing::error!("Failed to send operation to {popup_id:?}: {status}");
+                }
+            }
         }
 
         program.event(SurfaceEvent::Closing);
@@ -379,7 +406,7 @@ where
 /// A handle to a popup surface.
 pub struct PopupHandle<Msg> {
     id: WidgetId,
-    msg_sender: UnboundedSender<Option<Msg>>,
+    msg_sender: UnboundedSender<SurfaceMessage<Msg>>,
 }
 
 impl<Msg> Clone for PopupHandle<Msg> {
@@ -466,25 +493,17 @@ impl<Msg> PopupHandle<Msg> {
     ///
     /// [`Operation`]: widget::operation::Operation
     pub fn operate(&self, operation: Operation) {
-        if let Err(status) = Client::popup()
-            .operate_popup(OperatePopupRequest {
-                popup_id: self.id.to_inner(),
-                operation: Some(operation.into()),
-            })
-            .block_on_tokio()
-        {
-            tracing::error!("Failed to send operation to {self:?}: {status}");
-        }
+        let _ = self.msg_sender.send(SurfaceMessage::Operation(operation));
     }
 
     /// Sends a message to this Popup [`Program`].
     pub fn send_message(&self, message: Msg) {
-        let _ = self.msg_sender.send(Some(message));
+        let _ = self.msg_sender.send(SurfaceMessage::Message(message));
     }
 
     /// Forces this popup to redraw.
     pub fn force_redraw(&self) {
-        let _ = self.msg_sender.send(None);
+        let _ = self.msg_sender.send(SurfaceMessage::Redraw);
     }
 }
 

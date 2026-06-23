@@ -8,7 +8,7 @@ use snowcap_api_defs::snowcap::{
         self,
         v1::{
             CloseRequest, GetLayerEventsRequest, NewLayerRequest, OperateLayerRequest,
-            UpdateLayerRequest, ViewRequest,
+            UpdateLayerRequest, ViewRequest, layer_event,
         },
     },
     widget::v1::{GetWidgetEventsRequest, get_widget_events_request},
@@ -23,7 +23,7 @@ use crate::{
     client::Client,
     input::{KeyEvent, Modifiers},
     popup::{self, AsParent},
-    surface::SurfaceEvent,
+    surface::{SurfaceEvent, SurfaceMessage},
     widget::{self, Program, WidgetDef, WidgetId, WidgetMessage, operation, signal},
 };
 
@@ -136,7 +136,9 @@ impl<Msg> TryFrom<layer::v1::layer_event::Event> for SurfaceEvent<Msg> {
     fn try_from(value: layer::v1::layer_event::Event) -> Result<Self, Self::Error> {
         use layer::v1::layer_event::{Event, Focus};
 
-        let Event::Focus(f) = value;
+        let Event::Focus(f) = value else {
+            return Err(LayerEventError::Unknown);
+        };
 
         match Focus::try_from(f) {
             Ok(Focus::Gained) => Ok(Self::FocusGained),
@@ -210,7 +212,7 @@ where
         .block_on_tokio()?
         .into_inner();
 
-    let (msg_send, mut msg_recv) = tokio::sync::mpsc::unbounded_channel::<Option<Msg>>();
+    let (msg_send, mut msg_recv) = tokio::sync::mpsc::unbounded_channel::<SurfaceMessage<Msg>>();
 
     let handle = LayerHandle {
         id: layer_id.into(),
@@ -222,7 +224,7 @@ where
             let msg_send = msg_send.clone();
 
             move |msg: signal::Message<Msg>| {
-                if let Err(err) = msg_send.send(Some(msg.into_inner())) {
+                if let Err(err) = msg_send.send(SurfaceMessage::Message(msg.into_inner())) {
                     error!("Failed to send emitted msg: {err}");
                     crate::signal::HandlerPolicy::Discard
                 } else {
@@ -235,7 +237,7 @@ where
             let msg_send = msg_send.clone();
 
             move |_: signal::RedrawNeeded| {
-                if let Err(err) = msg_send.send(None) {
+                if let Err(err) = msg_send.send(SurfaceMessage::Redraw) {
                     error!("Failed to send redraw signal: {err}");
                     crate::signal::HandlerPolicy::Discard
                 } else {
@@ -268,7 +270,9 @@ where
     });
 
     tokio::spawn(async move {
-        loop {
+        let mut pending_operations = Vec::new();
+
+        'main_loop: loop {
             tokio::select! {
                 Some(Ok(response)) = widget_event_stream.next() => {
                     for widget_event in response.widget_events {
@@ -280,8 +284,14 @@ where
                     }
                 }
                 Some(msg) = msg_recv.recv() => {
-                    if let Some(msg) = msg {
-                        program.update(msg);
+                    match msg {
+                        SurfaceMessage::Message(msg) => {
+                            program.update(msg);
+                        }
+                        SurfaceMessage::Operation(operation) => {
+                            pending_operations.push(operation);
+                        }
+                        _ => {}
                     }
 
                     if let Err(status) = Client::layer()
@@ -295,6 +305,10 @@ where
                 }
                 Some(Ok(response)) = layer_event_stream.next() => {
                     for layer_event in response.layer_events {
+                        if matches!(layer_event.event, Some(layer_event::Event::Closing(_))) {
+                            break 'main_loop;
+                        }
+
                         let Some(event) = layer_event
                             .event
                             .and_then(|e| e.try_into().ok()) else {
@@ -335,6 +349,19 @@ where
                 })
                 .await
                 .unwrap();
+
+            let operations = std::mem::take(&mut pending_operations);
+            for operation in operations.into_iter() {
+                if let Err(status) = Client::layer()
+                    .operate_layer(OperateLayerRequest {
+                        layer_id,
+                        operation: Some(operation.into()),
+                    })
+                    .await
+                {
+                    error!("Failed to send operation to {layer_id}: {status}");
+                }
+            }
         }
 
         program.event(SurfaceEvent::Closing);
@@ -346,7 +373,7 @@ where
 /// A handle to a layer surface.
 pub struct LayerHandle<Msg> {
     id: WidgetId,
-    msg_sender: UnboundedSender<Option<Msg>>,
+    msg_sender: UnboundedSender<SurfaceMessage<Msg>>,
 }
 
 impl<Msg> Clone for LayerHandle<Msg> {
@@ -444,27 +471,19 @@ impl<Msg> LayerHandle<Msg> {
 
     /// Sends a message to this Layer [`Program`].
     pub fn send_message(&self, message: Msg) {
-        let _ = self.msg_sender.send(Some(message));
+        let _ = self.msg_sender.send(SurfaceMessage::Message(message));
     }
 
     /// Forces this layer to redraw.
     pub fn force_redraw(&self) {
-        let _ = self.msg_sender.send(None);
+        let _ = self.msg_sender.send(SurfaceMessage::Redraw);
     }
 
     /// Sends an [`Operation`] to this Layer.
     ///
     /// [`Operation`]: widget::operation::Operation
     pub fn operate(&self, operation: widget::operation::Operation) {
-        if let Err(status) = Client::layer()
-            .operate_layer(OperateLayerRequest {
-                layer_id: self.id.to_inner(),
-                operation: Some(operation.into()),
-            })
-            .block_on_tokio()
-        {
-            error!("Failed to send operation to {self:?}: {status}");
-        }
+        let _ = self.msg_sender.send(SurfaceMessage::Operation(operation));
     }
 }
 
