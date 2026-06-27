@@ -46,8 +46,19 @@ impl tracing_subscriber::fmt::time::FormatTime for OptionalTimer {
     }
 }
 
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
+fn main() -> anyhow::Result<()> {
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()?;
+
+    let ret = runtime.block_on(run());
+
+    runtime.shutdown_background();
+
+    ret
+}
+
+async fn run() -> anyhow::Result<()> {
     if env::var_os("RUST_BACKTRACE").is_none() {
         // SAFETY: All set_vars occur on the event loop thread
         unsafe {
