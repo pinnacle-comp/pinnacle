@@ -57,7 +57,9 @@ impl Pinnacle {
                 .filter(|win| win.output(self).as_ref() == Some(output))
                 .cloned()
                 .partition::<Vec<_>, _>(|win| {
-                    win.with_state(|state| state.tags.intersection(&focused_tags).next().is_some())
+                    win.with_state(|state| {
+                        state.tags.intersection(&focused_tags).next().is_some() && !state.minimized
+                    })
                 })
         });
 
@@ -448,7 +450,12 @@ impl State {
         for win in self.pinnacle.windows.iter() {
             let is_tiled = win.with_state(|state| state.layout_mode.is_tiled());
             let is_on_active_tag = win.is_on_active_tag();
-            if !is_tiled && is_on_active_tag && !self.pinnacle.space.elements().any(|w| w == win) {
+            let is_not_minimized = win.with_state(|state| !state.minimized);
+            if !is_tiled
+                && is_not_minimized
+                && is_on_active_tag
+                && !self.pinnacle.space.elements().any(|w| w == win)
+            {
                 wins_to_update.push(win.clone());
             }
         }
@@ -479,6 +486,7 @@ impl Pinnacle {
                 .filter(|win| {
                     win.with_state(|state| state.tags.intersection(&focused_tags).next().is_some())
                 })
+                .filter(|win| win.with_state(|state| !state.minimized))
                 .cloned()
                 .collect::<Vec<_>>()
         });

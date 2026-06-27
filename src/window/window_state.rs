@@ -382,6 +382,7 @@ pub struct WindowElementState {
     pub tags: IndexSet<Tag>,
     pub layout_mode: LayoutMode,
     pub old_layout_mode: Option<LayoutMode>,
+    /// Whether the window is minimised.
     pub minimized: bool,
     pub decoration_mode: Option<zxdg_toplevel_decoration_v1::Mode>,
     pub floating_x: Option<i32>,
