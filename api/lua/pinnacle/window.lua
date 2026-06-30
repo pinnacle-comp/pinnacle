@@ -134,6 +134,26 @@ function window.begin_resize(button)
     end
 end
 
+---Begins moving this window using the specified touch slot.
+---@param finger_id integer
+function window.begin_touch_move(finger_id)
+    local _, err = client:pinnacle_window_v1_WindowService_TouchMoveGrab({ finger_id = finger_id })
+
+    if err then
+        log.error(err)
+    end
+end
+
+---Begins moving this window using the specified touch slot.
+---@param finger_id integer
+function window.begin_touch_resize(finger_id)
+    local _, err = client:pinnacle_window_v1_WindowService_TouchResizeGrab({ finger_id = finger_id })
+
+    if err then
+        log.error(err)
+    end
+end
+
 ---A window's current layout mode.
 ---@alias pinnacle.window.LayoutMode
 ---| "tiled" The window is tiled.
